@@ -1,0 +1,49 @@
+name: Something doesn't work / Qualcosa non funziona
+description: Report a bug. / Segnala un errore.
+labels: ["errore"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never attach your personal photos, and don't write the names of people or categories from your library.** A description is enough.
+        **Non allegare mai le tue foto, e non scrivere i nomi delle persone o delle categorie del tuo archivio.** Basta la descrizione.
+  - type: input
+    id: versione
+    attributes:
+      label: Version / Versione
+      description: Impostazioni → Il programma → Versione
+      placeholder: 2.0.0-beta.12
+    validations:
+      required: true
+  - type: dropdown
+    id: sistema
+    attributes:
+      label: Windows
+      options:
+        - Windows 11
+        - Windows 10
+    validations:
+      required: true
+  - type: dropdown
+    id: scheda
+    attributes:
+      label: Graphics card / Scheda video
+      options:
+        - NVIDIA
+        - Other or none / Altra o nessuna
+        - I don't know / Non lo so
+    validations:
+      required: true
+  - type: textarea
+    id: cosa
+    attributes:
+      label: What happened? / Cosa è successo?
+      description: What you did, what you expected, what happened instead. / Cosa hai fatto, cosa ti aspettavi, cosa è successo invece.
+    validations:
+      required: true
+  - type: textarea
+    id: messaggio
+    attributes:
+      label: Error message / Messaggio di errore
+      description: If the program showed one, copy its text here. / Se il programma ne ha mostrato uno, copia qui il testo.
+      render: text

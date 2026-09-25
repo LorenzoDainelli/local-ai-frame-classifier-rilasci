@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Guides / Guide
+    url: "https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci#guides"
+    about: Installation, first steps, updates, privacy, FAQ. / Installazione, primi passi, aggiornamenti, privacy, domande frequenti.
+  - name: Security problem / Problema di sicurezza
+    url: "https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/security/advisories/new"
+    about: Report it privately, not here. / Segnalalo in privato, non qui.
