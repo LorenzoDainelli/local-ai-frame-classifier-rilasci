@@ -14,7 +14,7 @@ is slower but gives the same results.
 
 ## Install
 
-1. Download the latest installer: **[local-ai-frame-classifier-2.0.0-beta.14.exe](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.14/local-ai-frame-classifier-2.0.0-beta.14.exe)**.
+1. Download the latest installer: **[local-ai-frame-classifier-2.0.0-beta.15.exe](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.15/local-ai-frame-classifier-2.0.0-beta.15.exe)**.
    Older versions are on the [releases page](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases).
 2. Double-click the file.
 3. Windows may show **"Windows protected your PC"**. This happens because the
@@ -45,7 +45,7 @@ Every release also contains a `.sha256` file with the fingerprint of the
 installer. To compare it, open PowerShell in the download folder and run:
 
 ```powershell
-Get-FileHash .\local-ai-frame-classifier-2.0.0-beta.14.exe
+Get-FileHash .\local-ai-frame-classifier-2.0.0-beta.15.exe
 ```
 
 The value must match the one in the `.sha256` file. This step is optional:

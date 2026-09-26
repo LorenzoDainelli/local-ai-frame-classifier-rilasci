@@ -2,7 +2,7 @@
 
 **Sort your photos and videos with AI, entirely on your own computer.**
 
-**[⬇ Download for Windows](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.14/local-ai-frame-classifier-2.0.0-beta.14.exe)** · version 2.0.0-beta.14 · 38 MB ·
+**[⬇ Download for Windows](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.15/local-ai-frame-classifier-2.0.0-beta.15.exe)** · version 2.0.0-beta.15 · 38 MB ·
 [all versions](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases) · **[Italiano](README.it.md)**
 
 > **Beta.** The program works and updates itself, but it is still being
@@ -45,7 +45,7 @@ development.
 
 ## Install in three steps
 
-1. **[Download the installer](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.14/local-ai-frame-classifier-2.0.0-beta.14.exe)** (38 MB).
+1. **[Download the installer](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.15/local-ai-frame-classifier-2.0.0-beta.15.exe)** (38 MB).
 2. Double-click it. Windows may say *"Windows protected your PC"* because the
    file is not signed yet: click **More info → Run anyway**.
 3. Open **Local AI Frame Classifier** from the Start menu. On the first start
