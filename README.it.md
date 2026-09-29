@@ -37,7 +37,7 @@ etichetti esce mai dal tuo computer.
   sulle *tue* foto e cosa conviene etichettare adesso.
 - **Forziere cifrato**, se lo vuoi: senza la password, sul disco l'archivio
   è solo rumore.
-- **Due computer**: porti il lavoro da un PC all'altro con una chiavetta.
+- **Dispositivi › Altro computer**: porti il lavoro da un PC all'altro con una chiavetta.
   In rete non passa niente.
 - **Usa la scheda video NVIDIA** se c'è, e funziona anche senza.
 - **Si aggiorna da solo.**

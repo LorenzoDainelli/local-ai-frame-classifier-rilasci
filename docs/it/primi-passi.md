@@ -34,12 +34,11 @@ sono scritti dentro le pillole, quindi non c'è niente da imparare a memoria.
 
 | Voce | Cosa ci si fa |
 |---|---|
-| **Foto** | la galleria con i filtri, **Persone** e **Luoghi** |
-| **Lavoro** | **Etichetta**, **Importazione**, **Albero** delle categorie, **Da guardare**, **Doppioni** |
-| **Stato** | **La pagella**, **La misura** (quanto ci prende sulle tue foto), **La salute** (modelli, copie, spazio) |
-| **Telefono** | prepara il pacchetto cifrato per l'app del telefono |
-| **Due computer** | porta il lavoro su un altro PC con una chiavetta |
-| **Impostazioni** | versione, aggiornamenti, motori, chiave di Hugging Face, tasti |
+| **Tutte le foto**, **Persone**, **Luoghi** | la galleria con i filtri, le facce e i posti |
+| **Lavoro** | **Etichetta**, **Da controllare**, **Doppioni**, **Miglioramento** |
+| **Archivio** | **Aggiungi foto**, **Albero dei nodi**, **Stato** (la pagella, la misura, la salute) |
+| **Dispositivi** | il pacchetto cifrato per l'app del telefono, o per portare il lavoro su un altro PC con una chiavetta |
+| **Impostazioni** | versione, aggiornamenti, aspetto, motori, chiave di Hugging Face, tasti |
 
 ## Buone abitudini
 

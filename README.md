@@ -35,7 +35,7 @@ your computer.
   suggestions are right on *your* photos, and what is worth labelling next.
 - **Optional encrypted vault**: without the password, the library on disk is
   just noise.
-- **Two computers**: carry your work from one PC to the other on a USB stick.
+- **Dispositivi › Altro computer** (Devices › Other computer): carry your work from one PC to the other on a USB stick.
   Nothing travels over the network.
 - **Uses an NVIDIA graphics card** when there is one, and works without it.
 - **Updates itself.**

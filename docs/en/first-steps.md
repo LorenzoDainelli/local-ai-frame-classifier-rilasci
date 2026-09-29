@@ -39,12 +39,11 @@ press are written inside the buttons, so there is nothing to memorise.
 
 | Menu | Meaning | What you do there |
 |---|---|---|
-| **Foto** | Photos | the gallery with filters, **Persone** (people) and **Luoghi** (places) |
-| **Lavoro** | Work | **Etichetta** (label), **Importazione** (import), **Albero** (the category tree), **Da guardare** (to review), **Doppioni** (duplicates) |
-| **Stato** | Status | **La pagella** (the report card), **La misura** (how accurate it is on your photos), **La salute** (models, backups, disk space) |
-| **Telefono** | Phone | prepare the encrypted package for the phone app |
-| **Due computer** | Two computers | move your work to another PC with a USB stick |
-| **Impostazioni** | Settings | version, updates, AI engines, Hugging Face key, keyboard shortcuts |
+| **Tutte le foto**, **Persone**, **Luoghi** | All photos, People, Places | the gallery with filters, faces and places |
+| **Lavoro** | Work | **Etichetta** (label), **Da controllare** (to check), **Doppioni** (duplicates), **Miglioramento** (enhancement) |
+| **Archivio** | Archive | **Aggiungi foto** (add photos), **Albero dei nodi** (the category tree), **Stato** (report card, accuracy, health) |
+| **Dispositivi** | Devices | the encrypted package for the phone app, or to move your work to another PC on a USB stick |
+| **Impostazioni** | Settings | version, updates, appearance, AI engines, Hugging Face key, keyboard shortcuts |
 
 ## Good habits
 

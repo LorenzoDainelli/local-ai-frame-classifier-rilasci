@@ -52,13 +52,13 @@ download those models.
 
 ### Can I use it on two computers?
 
-Yes. From **Due computer** (Two computers) you prepare a folder with only
+Yes. From **Dispositivi › Altro computer** (Devices › Other computer) you prepare a folder with only
 what the other PC hasn't seen yet, copy it on a USB stick and apply it on the
 other side. Nothing travels over the network.
 
 ### Is there a phone app?
 
-It is in development. The PC side is ready: **Telefono** (Phone) already
+It is in development. The PC side is ready: **Dispositivi** (Devices) already
 prepares the encrypted package the app will read.
 
 ### I found a bug. How do I report it?

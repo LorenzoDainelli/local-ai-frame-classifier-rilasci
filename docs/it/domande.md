@@ -48,13 +48,13 @@ scaricare quei modelli.
 
 ### Posso usarlo su due computer?
 
-Sì. Da **Due computer** prepari una cartella con solo quello che l'altro PC
+Sì. Da **Dispositivi › Altro computer** prepari una cartella con solo quello che l'altro PC
 non ha ancora visto, la copi su una chiavetta e la applichi dall'altra
 parte. In rete non passa niente.
 
 ### C'è un'app per il telefono?
 
-È in costruzione. La parte del PC è pronta: **Telefono** prepara già il
+È in costruzione. La parte del PC è pronta: **Dispositivi** prepara già il
 pacchetto cifrato che l'app leggerà.
 
 ### Ho trovato un errore. Come lo segnalo?
