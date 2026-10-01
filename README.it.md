@@ -3,7 +3,7 @@
 **Le tue foto e i tuoi video, ordinati dall'intelligenza artificiale, tutto
 sul tuo computer.**
 
-**[⬇ Scarica per Windows](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.57/local-ai-frame-classifier-2.0.0-beta.57.exe)** · versione 2.0.0-beta.57 · 38 MB ·
+**[⬇ Scarica per Windows](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.58/local-ai-frame-classifier-2.0.0-beta.58.exe)** · versione 2.0.0-beta.58 · 38 MB ·
 [tutte le versioni](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases) · **[English](README.md)**
 
 > **Beta.** Il programma funziona e si aggiorna da solo, ma è ancora in
@@ -39,15 +39,6 @@ etichetti esce mai dal tuo computer.
   è solo rumore.
 - **Dispositivi › Altro computer**: porti il lavoro da un PC all'altro con una chiavetta.
   In rete non passa niente.
-- **Migliora foto e video piccoli** fino al Full HD, sul computer, e
-  l'originale resta com'è finché non approvi tu, guardando prima e dopo
-  affiancati. Con la **sfida alla cieca** scegli la versione migliore senza
-  sapere quale modello l'ha fatta.
-- **Il portatile fa da schermo al fisso**: lo abbini con un codice e guardi
-  l'archivio da un'altra stanza, con il collegamento cifrato nella rete di casa.
-- **Si fa a modo tuo**: tema chiaro o scuro, accento arancio o bianco, e in
-  Aspetto scegli com'è fatta ogni pagina e come si muove, con la fotina che ti
-  accompagna.
 - **Usa la scheda video NVIDIA** se c'è, e funziona anche senza.
 - **Si aggiorna da solo.**
 
@@ -56,7 +47,7 @@ senza connessione.
 
 ## Si installa in tre passi
 
-1. **[Scarica l'installatore](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.57/local-ai-frame-classifier-2.0.0-beta.57.exe)** (38 MB).
+1. **[Scarica l'installatore](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.58/local-ai-frame-classifier-2.0.0-beta.58.exe)** (38 MB).
 2. Doppio clic. Windows può dire *«PC protetto»*, perché il file non è ancora
    firmato: premi **Ulteriori informazioni → Esegui comunque**.
 3. Apri **Local AI Frame Classifier** dal menu Start. Al primo avvio prepara i
