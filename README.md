@@ -37,6 +37,16 @@ your computer.
   just noise.
 - **Dispositivi › Altro computer** (Devices › Other computer): carry your work from one PC to the other on a USB stick.
   Nothing travels over the network.
+- **Enhances small photos and videos** up to Full HD, locally, and the
+  original stays untouched until you approve, comparing before and after side
+  by side. The **blind challenge** lets you pick the better version without
+  knowing which model made it.
+- **Your laptop becomes a screen for your desktop**: pair it with a code and
+  browse the library from another room, over an encrypted link on your home
+  network.
+- **Make it yours**: light or dark theme, orange or white accent, and in
+  Aspetto (Appearance) you choose how each page looks and moves, with the
+  little photo mascot keeping you company.
 - **Uses an NVIDIA graphics card** when there is one, and works without it.
 - **Updates itself.**
 

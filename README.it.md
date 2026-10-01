@@ -39,6 +39,15 @@ etichetti esce mai dal tuo computer.
   è solo rumore.
 - **Dispositivi › Altro computer**: porti il lavoro da un PC all'altro con una chiavetta.
   In rete non passa niente.
+- **Migliora foto e video piccoli** fino al Full HD, sul computer, e
+  l'originale resta com'è finché non approvi tu, guardando prima e dopo
+  affiancati. Con la **sfida alla cieca** scegli la versione migliore senza
+  sapere quale modello l'ha fatta.
+- **Il portatile fa da schermo al fisso**: lo abbini con un codice e guardi
+  l'archivio da un'altra stanza, con il collegamento cifrato nella rete di casa.
+- **Si fa a modo tuo**: tema chiaro o scuro, accento arancio o bianco, e in
+  Aspetto scegli com'è fatta ogni pagina e come si muove, con la fotina che ti
+  accompagna.
 - **Usa la scheda video NVIDIA** se c'è, e funziona anche senza.
 - **Si aggiorna da solo.**
 
