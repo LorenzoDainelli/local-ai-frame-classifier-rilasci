@@ -15,7 +15,7 @@ lento, ma i risultati sono gli stessi.
 ## Installa
 
 1. Scarica l'ultimo installatore:
-   **[local-ai-frame-classifier-2.0.0-beta.58.exe](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.58/local-ai-frame-classifier-2.0.0-beta.58.exe)**.
+   **[local-ai-frame-classifier-2.0.0-beta.59.exe](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.59/local-ai-frame-classifier-2.0.0-beta.59.exe)**.
    Le versioni precedenti sono nella [pagina dei rilasci](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases).
 2. Doppio clic sul file.
 3. Windows può mostrare **«PC protetto»**. Succede perché l'installatore non è
@@ -46,7 +46,7 @@ dell'installatore. Per confrontarla apri PowerShell nella cartella dei file
 scaricati e scrivi:
 
 ```powershell
-Get-FileHash .\local-ai-frame-classifier-2.0.0-beta.58.exe
+Get-FileHash .\local-ai-frame-classifier-2.0.0-beta.59.exe
 ```
 
 Il valore deve essere uguale a quello del file `.sha256`. È un passo
