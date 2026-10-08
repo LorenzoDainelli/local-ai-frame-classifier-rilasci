@@ -3,7 +3,7 @@
 **Le tue foto e i tuoi video, ordinati dall'intelligenza artificiale, tutto
 sul tuo computer.**
 
-**[⬇ Scarica per Windows](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.133/local-ai-frame-classifier-2.0.0-beta.133.exe)** · versione 2.0.0-beta.133 · 38 MB ·
+**[⬇ Scarica per Windows](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.134/local-ai-frame-classifier-2.0.0-beta.134.exe)** · versione 2.0.0-beta.134 · 38 MB ·
 [tutte le versioni](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases) · **[English](README.md)**
 
 > **Beta.** Il programma funziona e si aggiorna da solo, ma è ancora in
@@ -56,7 +56,7 @@ senza connessione.
 
 ## Si installa in tre passi
 
-1. **[Scarica l'installatore](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.133/local-ai-frame-classifier-2.0.0-beta.133.exe)** (38 MB).
+1. **[Scarica l'installatore](https://github.com/LorenzoDainelli/local-ai-frame-classifier-rilasci/releases/download/v2.0.0-beta.134/local-ai-frame-classifier-2.0.0-beta.134.exe)** (38 MB).
 2. Doppio clic. Windows può dire *«PC protetto»*, perché il file non è ancora
    firmato: premi **Ulteriori informazioni → Esegui comunque**.
 3. Apri **Local AI Frame Classifier** dal menu Start. Al primo avvio prepara i
