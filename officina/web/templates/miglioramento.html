@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+{% from "_ambito.html" import ambito %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Miglioramento — Local AI Frame Classifier{% endblock %}
+
+{% macro comando() %}
+{% if lavoro.sta_lavorando %}
+<form method="post" action="/miglioramento/ferma">
+    <button class="tasto-comando piccolo" type="submit">Ferma</button>
+</form>
+{% else %}
+<form method="post" action="/miglioramento/avvia">
+    <button class="tasto-comando accento piccolo" type="submit" {% if not pronto or not conti.in_coda %}disabled{% endif %}>Avvia</button>
+</form>
+{% endif %}
+{% endmacro %}
+
+{% macro cosa_fa() %}
+{% if lavoro.sta_lavorando and al_lavoro %}<b>{{ al_lavoro.nome }}</b> <span class="tenue numeri">{{ al_lavoro.prima }} &rarr; {{ al_lavoro.dopo }}</span>
+{% elif lavoro.sta_lavorando %}Sto cominciando.
+{% elif conti.in_coda %}Si lavora quando premi Avvia, e si ferma quando vuoi: un file lasciato a metà ricomincia da capo.
+{% else %}Niente in coda. Nella galleria seleziona le foto o i video e premi &laquo;Migliora&raquo;.
+{% endif %}
+{% endmacro %}
+
+{% macro riga_in_coda(riga) %}
+<li>
+    <img class="miniatura-coda" src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">
+    <span class="nome">
+        {% if riga.scatto_id %}<a href="/scatto/{{ riga.scatto_id }}">{{ riga.nome }}</a>{% else %}<b>{{ riga.nome }}</b>{% endif %}
+        <span class="minuscolo tenue numeri">{{ riga.prima }} &rarr; {{ riga.dopo }}{% if riga.durata %} &middot; {{ riga.durata }}{% endif %}</span>
+    </span>
+    <form method="post" action="/miglioramento/{{ riga.id }}/togli">
+        <button class="tasto-comando nudo piccolo" type="submit">Togli</button>
+    </form>
+</li>
+{% endmacro %}
+
+{% macro riga_fallita(riga) %}
+<li>
+    <img class="miniatura-coda" src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">
+    <span class="nome"><b>{{ riga.nome }}</b>
+        <span class="minuscolo tenue">{{ riga.guasto }}</span></span>
+    <form method="post" action="/miglioramento/{{ riga.id }}/rimetti">
+        <button class="tasto-comando piccolo" type="submit">Rimetti in coda</button>
+    </form>
+</li>
+{% endmacro %}
+
+{% macro riga_ferma(riga) %}
+<li>
+    <img class="miniatura-coda" src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">
+    <span class="nome"><b>{{ riga.nome }}</b>
+        <span class="minuscolo tenue">{{ riga.guasto or "in attesa di finire" }}</span></span>
+</li>
+{% endmacro %}
+
+{% macro spiega_ferme() %}{% call spiega("Cosa vuol dire") %}
+    <p>Lo scambio fra l'originale e la migliorata si è fermato a metà, di
+    solito perché un file è sparito o è cambiato mentre lo si spostava. Niente
+    è perso: il programma riprova da solo alla prossima partenza della coda, e
+    dice qui cosa lo blocca.</p>
+{% endcall %}{% endmacro %}
+
+{% macro la_sfida() %}
+<div class="carta mg-sfida" id="riquadro-sfida">
+    <h2>Sfida alla cieca <span class="tenue numeri">{{ sfida.votate|numero }} di {{ sfida.quante|numero }}</span>{% call spiega("Come funziona") %}
+        <p>SeedVR2 e LucidFlux fanno tutti e due le prime {{ sfida.quante }}
+        foto. Tu le vedi affiancate all'originale, senza sapere chi ha fatto
+        cosa, e scegli la migliore: A, B, Pari o Nessuna delle due.</p>
+        <p><b>Votare non cambia niente sul disco.</b> La versione votata passa
+        in &laquo;Da rivedere&raquo;, dove si approva come sempre. Alla fine si
+        vedono i nomi e il conteggio, e decidi tu quale modello usare per le
+        foto.</p>
+    {% endcall %}</h2>
+    <p class="piccolo attenuato">
+        {% if sfida.da_votare %}
+        Da votare: <span class="numeri">{{ sfida.da_votare|numero }}</span>.
+        I nomi e i punti si vedono solo alla fine.
+        {% elif sfida.si_puo_chiudere %}
+        Finita: adesso si possono vedere i nomi e chi ha vinto.
+        {% else %}
+        Le prossime foto che migliori le fanno tutti e due i modelli, e poi si
+        votano qui.
+        {% endif %}
+    </p>
+    <span class="barretta" aria-hidden="true"><span style="width:{{ sfida.percento }}%"></span></span>
+    {% if sfida.da_votare %}
+    <a class="tasto-comando piccolo" href="/miglioramento/sfida">Vota</a>
+    {% elif sfida.si_puo_chiudere %}
+    <a class="tasto-comando piccolo" href="/miglioramento/sfida/com-e-andata">Com'è andata</a>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% block corpo %}
+{% set versione = aspetto.miglioramento %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-miglioramento mg-{{ versione|lower }}">
+    {{ ambito('miglioramento', gruppi_ambito|default([]), gruppo_ambito|default(none), '/miglioramento') }}
+
+    <div class="mg-testa">
+        <div>
+            <h1 class="titolo-pagina">Miglioramento{% call spiega("Cosa fa, e cosa non tocca") %}
+                <p>Porta le foto e i video piccoli a FHD, cioè a tanti pixel
+                quanti ne ha un 1920 &times; 1080, senza cambiarne la forma. I
+                modelli girano qui sul computer: nessun file passa da
+                internet.</p>
+                <p><b>L'originale non si tocca finché non approvi.</b> La copia
+                migliorata aspetta in una cartella nascosta sullo stesso disco.
+                Se approvi, l'originale va nella cartella &laquo;Originali&raquo;
+                accanto a sé e la migliorata prende il suo posto e il suo nome.
+                Se rifiuti, la copia si cancella e l'originale resta
+                dov'era.</p>
+                <p>Si mette in coda dalla galleria, selezionando e premendo
+                &laquo;Migliora&raquo;, oppure dalla pagina di una foto o di un
+                video.</p>
+            {% endcall %}</h1>
+            <p class="sottotitolo">Porta a FHD foto e video piccoli, qui sul computer. <b>Nessun originale si tocca</b> finché non approvi.</p>
+        </div>
+        {% if versione == 'B' %}
+        <span class="bollino {{ 'bene' if lavoro.sta_lavorando }}">{{ "Al lavoro" if lavoro.sta_lavorando else "Fermo" }}</span>
+        {{ comando() }}
+        {% endif %}
+    </div>
+
+    {% set velo = not pronto or modelli_mg.scarica %}
+    {% if velo %}
+    <div class="mg-velato" data-mg-modelli data-scarica="{{ 1 if modelli_mg.scarica else 0 }}">
+    <section class="carta mg-velato-carta" aria-labelledby="mg-modelli-titolo">
+        {% if modelli_mg.scarica %}
+        <div class="mg-velato-testa">
+            <h2 class="titolo-sezione" id="mg-modelli-titolo" data-titolo>{{ "La rete se n'è andata" if modelli_mg.lavoro.aspetta_la_rete else "Sto scaricando" }}</h2>
+            <p class="piccolo tenue" data-detto>{% if modelli_mg.lavoro.aspetta_la_rete %}Non perdo niente: appena torna riprendo da solo.{% else %}Puoi usare il resto del programma, intanto. Quando finisce la pagina si apre da sola.{% endif %}</p>
+        </div>
+        <div class="mg-lista">
+            {% for voce in modelli_mg.voci if voce.quale in modelli_mg.lavoro.quali %}
+            <div class="mg-mod {{ 'fatto' if voce.quale in modelli_mg.lavoro.fatti_modelli }} {{ 'adesso' if voce.quale == modelli_mg.lavoro.adesso }}" data-mod="{{ voce.quale }}">
+                <span class="mg-segno" aria-hidden="true">{% if voce.quale in modelli_mg.lavoro.fatti_modelli %}{{ icona('spunta', 16) }}{% elif voce.quale == modelli_mg.lavoro.adesso %}{{ icona('scarica', 15) }}{% else %}{{ icona('orologio', 15) }}{% endif %}</span>
+                <span class="mg-dice"><b>{{ voce.nome }}</b><span>{{ voce.dice }}</span></span>
+                <span class="mg-peso numeri">{{ voce.peso }}</span>
+            </div>
+            {% endfor %}
+            <div class="mg-totale">
+                <span class="barretta"><span data-barra style="width:{{ modelli_mg.lavoro.percento_tutto }}%"></span></span>
+                <form method="post" action="/miglioramento/modelli/ferma"><button class="tasto-comando piccolo" type="submit">{{ icona('ferma', 14) }} Ferma</button></form>
+            </div>
+        </div>
+        {% else %}
+        <form method="post" action="/miglioramento/modelli" data-scegli-mg>
+        <div class="mg-velato-testa">
+            <h2 class="titolo-sezione" id="mg-modelli-titolo">I modelli del Miglioramento</h2>
+            <p class="piccolo tenue">Si scaricano una volta sola. Le caselle sono già messe su quello che consiglio.</p>
+        </div>
+        <div class="mg-lista">
+            {% for voce in modelli_mg.voci %}
+            <label class="mg-mod {{ 'fatto' if voce.in_casa }}">
+                {% if voce.in_casa %}
+                <span class="mg-segno bene" aria-hidden="true">{{ icona('spunta', 16) }}</span>
+                {% else %}
+                <input class="casella" type="checkbox" name="scelti" value="{{ voce.quale }}" data-byte="{{ voce.byte }}"
+                       {{ 'checked' if voce.serve or voce.consigliato }} {{ 'disabled' if voce.serve }}
+                       {% if voce.serve %}title="Serve per forza"{% endif %}>
+                {% endif %}
+                <span class="mg-dice"><b>{{ voce.nome }}</b><span>{{ voce.dice }}</span></span>
+                <span class="mg-peso numeri">{{ 'in casa' if voce.in_casa else voce.peso }}</span>
+            </label>
+            {% endfor %}
+            {% if modelli_mg.librerie %}
+            <div class="mg-mod">
+                <span class="mg-segno" aria-hidden="true">{{ icona('scarica', 15) }}</span>
+                <span class="mg-dice"><b>Le librerie del Miglioramento</b><span>Sono cambiate con l'aggiornamento: le rimetto a posto. I modelli restano quelli che hai.</span></span>
+                <span class="mg-peso numeri">da preparare</span>
+            </div>
+            {% endif %}
+            {% if modelli_mg.guasto %}<p class="avviso" role="alert">{{ modelli_mg.guasto }}</p>{% endif %}
+            <div class="mg-totale">
+                <span class="piccolo">In tutto <b class="numeri" data-totale></b></span>
+                <button class="tasto-comando accento" type="submit">{{ icona('scarica', 15) }} <span data-tasto{% if modelli_mg.librerie %} data-librerie{% endif %}>Scarica</span></button>
+            </div>
+        </div>
+        </form>
+        {% endif %}
+    </section>
+    <div class="mg-velato-sotto" inert aria-hidden="true">
+    {% endif %}
+
+    {% if lavoro.guasto %}
+    <p class="avviso" role="alert">{{ lavoro.guasto }}</p>
+    {% endif %}
+
+    {% if versione == 'B' %}
+
+    <div class="mg-colonne">
+        <section class="mg-col">
+            <div class="mg-col-testa"><h2>In coda</h2><span class="tenue numeri">{{ conti.in_coda|numero }}</span></div>
+            {% if in_coda %}
+            <ul class="righe-coda">
+                {% for riga in in_coda %}{{ riga_in_coda(riga) }}{% endfor %}
+            </ul>
+            {% if conti.in_coda > in_coda|length %}
+            <p class="minuscolo tenue">e altri {{ (conti.in_coda - in_coda|length)|numero }}</p>
+            {% endif %}
+            {% else %}
+            <p class="piccolo tenue">{{ cosa_fa() }}</p>
+            {% endif %}
+        </section>
+
+        <section class="mg-col" id="riquadro-miglioramento">
+            <div class="mg-col-testa"><h2>Sta migliorando</h2><span class="tenue numeri">{{ 1 if al_lavoro else 0 }}</span></div>
+            {% if lavoro.sta_lavorando and al_lavoro %}
+            <div class="mg-pezzo">
+                <img src="/miniatura/{{ al_lavoro.file_id }}" alt="">
+                <span><b>{{ al_lavoro.nome }}</b></span>
+                <span class="minuscolo tenue numeri">{{ al_lavoro.prima }} &rarr; {{ al_lavoro.dopo }}</span>
+                <span class="barretta" aria-hidden="true"><span id="fatto-miglioramento" style="width:{{ lavoro.percento or 0 }}%"></span></span>
+                <span class="minuscolo tenue numeri" id="numeri-miglioramento"></span>
+            </div>
+            {% elif lavoro.sta_lavorando %}
+            <p class="piccolo tenue">Sto cominciando.</p>
+            {% else %}
+            <p class="piccolo tenue">Fermo. {{ 'Premi Avvia quando vuoi.' if conti.in_coda else '' }}</p>
+            {% endif %}
+            <p class="minuscolo tenue" id="righe-miglioramento"></p>
+        </section>
+
+        <section class="mg-col">
+            <div class="mg-col-testa"><h2>Da rivedere</h2><span class="tenue numeri">{{ conti.da_rivedere_ora|numero }}</span></div>
+            {% for riga in da_guardare %}
+            <div class="mg-pezzo">
+                <img src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">
+                <span>{{ riga.nome }}</span>
+            </div>
+            {% else %}
+            <p class="piccolo tenue">Niente da rivedere.</p>
+            {% endfor %}
+            {% if conti.da_rivedere_ora %}
+            <a class="tasto-comando accento piccolo" href="/miglioramento/rivedi">Rivedi tutte</a>
+            {% endif %}
+        </section>
+
+        <section class="mg-col">
+            <div class="mg-col-testa"><h2>Non riuscite</h2><span class="tenue numeri">{{ conti.fallita|numero }}</span></div>
+            {% if fallite %}
+            <ul class="righe-coda">
+                {% for riga in fallite %}{{ riga_fallita(riga) }}{% endfor %}
+            </ul>
+            {% else %}
+            <p class="piccolo tenue">Nessuna.</p>
+            {% endif %}
+            {% if ferme %}
+            <h3 class="mg-sotto">Scambi fermi <span class="tenue numeri">{{ ferme|length }}</span>{{ spiega_ferme() }}</h3>
+            <ul class="righe-coda">
+                {% for riga in ferme %}{{ riga_ferma(riga) }}{% endfor %}
+            </ul>
+            {% endif %}
+        </section>
+    </div>
+
+    {% if sfida %}{{ la_sfida() }}{% endif %}
+
+    {% else %}
+
+    {% if conti.da_rivedere_ora %}
+    <div class="carta mg-rivedi">
+        <div class="mg-anteprime">
+            {% for riga in da_guardare %}<img src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">{% endfor %}
+        </div>
+        <div>
+            <h2>{{ conti.da_rivedere_ora|numero }} da rivedere</h2>
+            <p class="piccolo attenuato">Pronte, in una cartella nascosta sullo stesso disco. Guardi prima e dopo e scegli se tenere il miglioramento: <kbd>A</kbd> approva, <kbd>R</kbd> rifiuta.</p>
+        </div>
+        <a class="tasto-comando accento" href="/miglioramento/rivedi">Rivedi</a>
+    </div>
+    {% else %}
+    <div class="carta mg-niente">
+        <span class="bollino bene">Niente da rivedere</span>
+        <span class="piccolo tenue">Quando una foto migliorata è pronta, la trovi qui per dire sì o no.</span>
+    </div>
+    {% endif %}
+
+    <div class="carta mg-motore" id="riquadro-miglioramento">
+        <span class="bollino {{ 'bene' if lavoro.sta_lavorando }}">{{ "Al lavoro" if lavoro.sta_lavorando else "Fermo" }}</span>
+        <span class="mg-motore-cosa">{{ cosa_fa() }}
+            <span class="minuscolo tenue numeri" id="numeri-miglioramento"></span>
+            <span class="minuscolo tenue" id="righe-miglioramento"></span>
+        </span>
+        {% if lavoro.sta_lavorando %}
+        <span class="barretta" aria-hidden="true"><span id="fatto-miglioramento" style="width:{{ lavoro.percento or 0 }}%"></span></span>
+        {% endif %}
+        <span class="piccolo tenue numeri">{{ conti.in_coda|numero }} in coda</span>
+        {{ comando() }}
+    </div>
+
+    <div class="mg-tre">
+        <section class="carta mg-carta">
+            <h2>In coda <span class="tenue numeri">{{ conti.in_coda|numero }}</span></h2>
+            {% if in_coda %}
+            <ul class="righe-coda">
+                {% for riga in in_coda[:5] %}{{ riga_in_coda(riga) }}{% endfor %}
+            </ul>
+            {% if in_coda|length > 5 %}
+            <details class="mg-tutte">
+                <summary class="tasto-comando nudo piccolo">Mostra tutte</summary>
+                <ul class="righe-coda">
+                    {% for riga in in_coda[5:] %}{{ riga_in_coda(riga) }}{% endfor %}
+                </ul>
+                {% if conti.in_coda > in_coda|length %}
+                <p class="minuscolo tenue">e altri {{ (conti.in_coda - in_coda|length)|numero }}</p>
+                {% endif %}
+            </details>
+            {% endif %}
+            {% else %}
+            <p class="piccolo tenue">Vuota.</p>
+            {% endif %}
+        </section>
+
+        <section class="carta mg-carta">
+            <h2>Non riuscite <span class="tenue numeri">{{ conti.fallita|numero }}</span></h2>
+            {% if fallite %}
+            <ul class="righe-coda">
+                {% for riga in fallite %}{{ riga_fallita(riga) }}{% endfor %}
+            </ul>
+            {% else %}
+            <p class="piccolo tenue">Nessuna.</p>
+            {% endif %}
+            {% if ferme %}
+            <h3 class="mg-sotto">Scambi fermi <span class="tenue numeri">{{ ferme|length }}</span>{{ spiega_ferme() }}</h3>
+            <ul class="righe-coda">
+                {% for riga in ferme %}{{ riga_ferma(riga) }}{% endfor %}
+            </ul>
+            {% else %}
+            <p class="minuscolo tenue">Scambi fermi: nessuno.</p>
+            {% endif %}
+        </section>
+
+        {% if sfida %}{{ la_sfida() }}{% endif %}
+    </div>
+
+    {% endif %}
+
+    {% include "_qualita.html" %}
+
+    {% if velo %}</div></div>{% endif %}
+</div>
+</main>
+</div>
+
+<script type="application/json" id="dati-miglioramento">{{ dati|safe }}</script>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/miglioramento.js"></script>
+<script type="module" src="/statici/js/qualita.js"></script>
+{% endblock %}

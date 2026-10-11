@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="it" {{ attributi|safe }}>
+<head>
+<meta charset="utf-8">
+<title>{{ nome }}</title>
+<style>
+{{ fondamenta }}
+{{ componenti }}
+{{ carattere }}
+[hidden] { display: none !important; }
+body { overflow: hidden; user-select: none; }
+.attesa-piena {
+    height: 100vh; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 18px; padding: var(--s8); text-align: center;
+    animation: entra var(--passo) var(--uscita);
+}
+.attesa-piena h1 { font: 400 26px/1.2 var(--serif); letter-spacing: -0.01em; text-wrap: balance; }
+.attesa-piena p { margin: 0; max-width: 52ch; color: var(--tenue); font-size: 13.5px; }
+.passi { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; min-width: 300px; text-align: left; }
+.passi li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--tenue); transition: color var(--passo) var(--uscita); }
+.passi li.fatto, .passi li.adesso { color: var(--ink); }
+.spunta { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 0.5px solid var(--linea-forte); color: transparent; flex: none; transition: background var(--passo) var(--uscita), color var(--passo) var(--uscita), border-color var(--passo) var(--uscita); }
+.passi li.fatto .spunta { background: var(--accento); border-color: var(--accento); color: var(--su-accento); }
+.passi li.adesso .spunta { border-color: var(--accento); box-shadow: 0 0 0 3px var(--alone); }
+.linea { width: 300px; height: 3px; border-radius: 999px; background: var(--pozzo); overflow: hidden; }
+.linea span { display: block; height: 100%; width: 6%; border-radius: inherit; background: var(--accento); transition: width 1.2s var(--uscita); }
+.linea.gira span { width: 30%; animation: va-e-viene 1.4s var(--andirivieni) infinite alternate; }
+@keyframes va-e-viene { from { transform: translateX(-100%); } to { transform: translateX(333%); } }
+.fotina.sveglia .occhi span { animation: si-sveglia 1.2s var(--uscita) both, fotina-batte 4s 1.4s infinite; }
+@keyframes si-sveglia { from { transform: scaleY(.15); } }
+.fotina.addormenta .occhi span { animation: si-addormenta 2.4s var(--uscita) forwards; transform-origin: bottom; }
+@keyframes si-addormenta { 0%, 40% { transform: scaleY(1); } 100% { transform: scaleY(.15); } }
+.fotina.ferma .occhi span { animation: none; }
+.scena-fotina { width: 300px; min-height: 120px; display: grid; place-items: center; }
+</style>
+</head>
+<body>
+<main class="attesa-piena">
+    {% set cornice %}<span class="cornice"><span class="monte"></span><span class="monte due"></span><span class="sole"></span><span class="occhi"><span></span><span></span></span></span>{% endset %}
+    <div class="scena-fotina" id="scena-fotina" aria-hidden="true"><span class="fotina grande {{ fotina }}">{{ cornice }}</span></div>
+    <h1>{{ titolo }}</h1>
+    {% if passi %}
+    <ol class="passi" id="passi">
+        {% for passo in passi %}
+        <li class="{{ 'adesso' if loop.first }}"><span class="spunta"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>{{ passo }}</span></li>
+        {% endfor %}
+    </ol>
+    <div class="linea" id="linea"><span></span></div>
+    {% elif gira %}
+    <div class="linea gira"><span></span></div>
+    {% endif %}
+    {% if detto %}<p>{{ detto }}</p>{% endif %}
+</main>
+<script>{{ scene }}</script>
+<script>
+(function () {
+    var dove = document.getElementById("scena-fotina");
+    if (!window.FotinaScena || !dove) return;
+    var modo = "{{ fotina }}";
+    if (modo === "ferma") return;
+    var scena = window.FotinaScena.monta(dove, "C", { fermaA: modo === "addormenta" ? 12.6 : 7.6 });
+    if (modo === "addormenta") { scena.gioca(7.6, 12.6); return; }
+    var guarda = function () { setTimeout(function () { scena.gioca(6.2, 7.4, guarda); }, 6000); };
+    scena.gioca(0, 7.6, guarda);
+})();
+</script>
+<script>
+window.segna = function (quanti) {
+    var righe = document.querySelectorAll("#passi li");
+    righe.forEach(function (r, i) {
+        r.className = i < quanti ? "fatto" : (i === quanti ? "adesso" : "");
+    });
+    var linea = document.querySelector("#linea span");
+    if (linea && righe.length) { linea.style.width = Math.max(6, Math.round(quanti * 100 / righe.length)) + "%"; }
+};
+</script>
+</body>
+</html>

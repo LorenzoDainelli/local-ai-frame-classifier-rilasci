@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% block titolo %}{{ chi.nome or 'Senza nome' }} — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-persona">
+
+    <a class="ps-torna" href="/persone">{{ icona('indietro', 14) }} Tutte le persone</a>
+
+    <div class="ps-testa">
+        {% if chi.copertina %}
+        <span class="pe-tondo ps-copertina"><img src="/volto/{{ chi.copertina.id }}?lato=220" alt=""></span>
+        {% endif %}
+        <div class="ps-chi">
+            <h1 class="titolo-pagina">{{ chi.nome or 'Senza nome' }}</h1>
+            <p class="sottotitolo">in <b class="numeri">{{ chi.scatti|numero }}</b> {{ 'scatto' if chi.scatti == 1 else 'scatti' }}</p>
+        </div>
+        <a class="tasto-comando principale" href="/?persona={{ chi.id }}">{{ icona('foto', 15) }} Vedi i suoi scatti</a>
+    </div>
+
+    {% if chi.volti %}
+    <section class="ps-sezione">
+        <div class="ps-sez-testa"><h2 class="titolo-sezione">Le sue facce</h2><span class="minuscolo tenue">le più diverse fra loro</span></div>
+        <div class="ps-facce">
+            {% for volto in chi.volti %}
+            <span class="pe-tondo"><img src="/volto/{{ volto.id }}?lato=160" alt="" loading="lazy"></span>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <div class="carta ps-riga">
+        <span class="ps-riga-icona">{{ icona('volto', 20) }}</span>
+        <span class="ps-riga-testo">
+            <b>La riconosce male?</b>
+            <span class="minuscolo tenue">Insegnagli la sua faccia da una cartella di ritratti.
+                {% if insegnate %}{{ insegnate|length|numero }} {{ 'faccia insegnata' if insegnate|length == 1 else 'facce insegnate' }} finora.{% else %}Di solito non serve.{% endif %}</span>
+        </span>
+        <button class="tasto-comando" type="button" data-apri-finestra="insegna">
+            {% if lavoro.sta_lavorando %}<span class="gira-poco"></span> Sta leggendo{% else %}Insegna da una cartella{% endif %}</button>
+    </div>
+
+    <dialog class="finestra" id="insegna" aria-label="Insegna da una cartella">
+        <header>
+            <h2>Insegna da una cartella{% call spiega("Cosa resta, e cosa no") %}
+                <p><b>Quando servono.</b> Quando in archivio viene sempre male &mdash;
+                di tre quarti, controluce, da lontano &mdash; e il riconoscimento
+                esita.</p>
+                <p><b>Cosa resta.</b> Di ogni foto letta restano i numeri e il nome del
+                file, e nient'altro: nessuna immagine copiata qui dentro, nessun
+                ritaglio, nessun indirizzo di cartella ricordato.</p>
+                <p><b>Cosa non sono.</b> Non sono scatti: non si etichettano, non
+                compaiono in Galleria, non contano fra i suoi esempi.</p>
+            {% endcall %}</h2>
+            <button class="tasto-comando nudo piccolo" type="button" data-chiudi-finestra aria-label="Chiudi">{{ icona('x', 18) }}</button>
+        </header>
+        <div class="finestra-dentro">
+            <p class="piccolo attenuato">Facce prese da fotografie che <b>non entrano nell'archivio</b>: una cartella di ritratti buoni, solo perché il programma impari com'è fatta questa persona.</p>
+
+            {% if manca_il_modello %}
+            <div class="avviso" style="white-space:pre-line">{{ manca_il_modello }}</div>
+            {% else %}
+            <form method="post" action="/persone/{{ chi.id }}/insegna" class="ps-modulo">
+                <label class="minuscolo tenue" for="cartella">
+                    Il percorso della cartella, per esempio <span class="numeri">C:\Users\...\ritratti</span>: si copia dalla barra
+                    dell'indirizzo di Esplora file. Solo le immagini lì dentro, non le sottocartelle, e non più di {{ quante_al_massimo }}.
+                </label>
+                <div class="ps-campo">
+                    <input type="text" name="cartella" id="cartella" class="campo"
+                           placeholder="Il percorso della cartella" autocomplete="off">
+                    <button class="tasto-comando principale" type="submit" id="tasto-insegna"
+                            {% if lavoro.sta_lavorando %}disabled{% endif %}>
+                        {% if lavoro.sta_lavorando %}Sta leggendo{% else %}Leggi la cartella{% endif %}
+                    </button>
+                </div>
+            </form>
+
+            <div id="corso-insegna" {% if not lavoro.sta_lavorando and not lavoro.righe %}class="nascosto"{% endif %}>
+                <div class="righe-lavoro" id="righe-insegna">{{ lavoro.righe | join("\n") }}</div>
+                {% if lavoro.guasto %}
+                <div class="avviso" style="white-space:pre-line;margin-top:var(--s3)">{{ lavoro.guasto }}</div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if insegnate %}
+            <div class="ps-insegnate">
+                <span class="etichetta">{{ insegnate|length|numero }} {{ 'faccia insegnata' if insegnate|length == 1 else 'facce insegnate' }}</span>
+                {% for una in insegnate %}
+                <span class="pillola">{{ una.da_file }}
+                    <form method="post" action="/persone/insegnata/{{ una.id }}/togli">
+                        <input type="hidden" name="persona_id" value="{{ chi.id }}">
+                        <button class="via" type="submit" title="Togli questa faccia">{{ icona('x', 13) }}</button>
+                    </form></span>
+                {% endfor %}
+            </div>
+            <p class="minuscolo tenue">Se una è sbagliata &mdash; capita: nella foto c'era qualcun altro &mdash; toglila con la ×: da quel momento smette di contare.</p>
+            {% else %}
+            <p class="minuscolo tenue">Nessuna, per ora. Non è una mancanza: la maggior parte delle persone non ne ha bisogno.</p>
+            {% endif %}
+
+            <p class="minuscolo tenue"><b>Una foto con dentro più di una faccia viene saltata</b>, e ti dico quale.{% call spiega("Perché viene saltata") %}
+                <p>Il senso di una cartella di riferimento è &laquo;queste sono
+                tutte lei&raquo;. Se in una foto ce ne sono due, quale delle due sia
+                lei lo sai solo tu.</p>
+                <p>Tirare a indovinare qui vorrebbe dire insegnare la faccia di
+                un'altra persona: l'errore più difficile da scoprire di tutto il
+                programma, perché non si vede da nessuna parte finché un giorno
+                il filtro non tira fuori qualcun altro.</p>
+            {% endcall %}</p>
+        </div>
+    </dialog>
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+<script type="module">
+
+    const zona = document.getElementById("corso-insegna");
+    const righe = document.getElementById("righe-insegna");
+    const tasto = document.getElementById("tasto-insegna");
+    let orologio = null;
+
+    async function guarda() {
+        const risposta = await fetch("/api/riferimento");
+        if (!risposta.ok) return;
+        const dati = await risposta.json();
+        righe.textContent = dati.righe.join("\n");
+        righe.scrollTop = righe.scrollHeight;
+        if (dati.sta_lavorando) return;
+
+        clearInterval(orologio);
+        if (tasto) { tasto.disabled = false; tasto.textContent = "Leggi la cartella"; }
+
+        if (!dati.guasto) setTimeout(() => window.location.reload(), 1200);
+    }
+
+    if (zona && !zona.classList.contains("nascosto")) {
+        orologio = setInterval(guarda, 1500);
+        guarda();
+    }
+</script>
+{% endblock %}

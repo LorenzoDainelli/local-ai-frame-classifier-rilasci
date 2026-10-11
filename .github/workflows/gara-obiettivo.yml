@@ -1,0 +1,209 @@
+name: Gara dell'obiettivo
+
+on:
+  workflow_dispatch:
+    inputs:
+      quante:
+        description: "foto per ogni insieme"
+        default: "100"
+      solo:
+        description: "quali concorrenti rifare, separati da virgole (tutti = tutti)"
+        default: "tutti"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gara-obiettivo-${{ github.ref }}-${{ github.event.inputs.solo || 'tutti' }}
+  cancel-in-progress: true
+
+jobs:
+  foto:
+    name: Le foto della gara
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install requests
+      - name: Le foto della gara di prima, se ci sono
+        id: prima
+        uses: actions/cache/restore@v4
+        with:
+          path: foto-gara
+          key: gara-foto-${{ github.run_id }}
+          restore-keys: gara-foto-
+      - name: Foto pubbliche con l'obiettivo noto
+        if: steps.prima.outputs.cache-matched-key == '' || github.event.inputs.solo == '' || github.event.inputs.solo == 'tutti'
+        run: |
+          rm -rf foto-gara
+          python strumenti/gara_obiettivo.py foto --cartella foto-gara --quante "${{ github.event.inputs.quante || '100' }}"
+      - name: Quante sono
+        run: python -c "import json; d = json.load(open('foto-gara/elenco.json')); print(len(d['foto']), 'foto', d['problemi'])"
+      - uses: actions/cache/save@v4
+        with:
+          path: foto-gara
+          key: gara-foto-${{ github.run_id }}
+
+  concorrente:
+    name: ${{ matrix.chi }} ${{ matrix.parte }}
+    needs: foto
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { chi: geocalib, parte: 0, parti: 1, python: "3.11" }
+          - { chi: anycalib-pinhole, parte: 0, parti: 1, python: "3.11" }
+          - { chi: anycalib-edit, parte: 0, parti: 1, python: "3.11" }
+          - { chi: moge2, parte: 0, parti: 1, python: "3.11" }
+          - { chi: moge3, parte: 0, parti: 1, python: "3.11" }
+          - { chi: puffin-caption, parte: 0, parti: 3, python: "3.10" }
+          - { chi: puffin-caption, parte: 1, parti: 3, python: "3.10" }
+          - { chi: puffin-caption, parte: 2, parti: 3, python: "3.10" }
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      CHI: ${{ matrix.chi }}
+      SOLO: ${{ github.event.inputs.solo || 'tutti' }}
+    steps:
+      - name: Tocca a questo concorrente?
+        id: scelta
+        run: |
+          if [ "$SOLO" = "tutti" ] || [[ ",$SOLO," == *",$CHI,"* ]]; then echo "fare=si" >> "$GITHUB_OUTPUT"; else echo "fare=no" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.scelta.outputs.fare == 'si'
+      - uses: actions/setup-python@v5
+        if: steps.scelta.outputs.fare == 'si'
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/cache/restore@v4
+        if: steps.scelta.outputs.fare == 'si'
+        with:
+          path: foto-gara
+          key: gara-foto-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - name: Le librerie del concorrente
+        if: steps.scelta.outputs.fare == 'si'
+        run: |
+          python -m pip install --upgrade pip
+          if [ "$CHI" = "puffin-caption" ]; then
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.7.0 torchvision==0.22.0
+          else
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          fi
+          python -m pip install requests pillow numpy huggingface_hub
+          case "$CHI" in
+            geocalib)
+              python -m pip install "git+https://github.com/cvg/GeoCalib@97b8968e7798a66bf04fcf791fb535624241bda7" ;;
+            anycalib-*)
+              python -m pip install "git+https://github.com/javrtg/AnyCalib@027a8497d893f4b2596f23d6324c05e4b81064ed" ;;
+            moge2|moge3)
+              python -m pip install --no-deps "git+https://github.com/microsoft/MoGe@74fbce054ebed49800de42d0ad0e83495065719a"
+              python -m pip install scipy opencv-python-headless trimesh click tqdm \
+                "utils3d_moge @ git+https://github.com/EasternJournalist/utils3d-moge.git@62f09d58509485564e24d5d9f6aac9ee9ebc0c37" ;;
+            puffin-caption)
+              mkdir puffin
+              git -C puffin init -q
+              git -C puffin remote add origin https://github.com/KangLiao929/Puffin
+              git -C puffin fetch -q --depth 1 origin c6d9ae5e63bc79d5d01554235b7c1d3772c327c8
+              git -C puffin checkout -q FETCH_HEAD
+              grep -v -i -E "^(petrel-oss-sdk|embreex|moderngl|glcontext|viser|streamlit|jupyter|notebook|ipykernel|ipywidgets|ipython|widgetsnbextension|debugpy|torch|torchvision|torchaudio|duckduckgo|lagent|arxiv|boto3|botocore|s3transfer|manifold3d|vhacdx|yourdfpy|pydeck|altair)" \
+                puffin/Puffin-World/requirements.txt > richieste-puffin.txt
+              python -m pip install -r richieste-puffin.txt || while read -r riga; do
+                python -m pip install "$riga" || echo "salto $riga"
+              done < richieste-puffin.txt ;;
+          esac
+      - name: La corsa
+        if: steps.scelta.outputs.fare == 'si'
+        run: |
+          python strumenti/gara_obiettivo.py corri --chi "$CHI" --cartella foto-gara \
+            --uscita "esiti-$CHI-${{ matrix.parte }}/esito.json" --puffin puffin/Puffin-World \
+            --parte "${{ matrix.parte }}" --parti "${{ matrix.parti }}"
+      - name: Cosa ha fatto
+        if: always() && steps.scelta.outputs.fare == 'si'
+        run: cat esiti-*/esito.json || true
+      - uses: actions/cache/save@v4
+        if: always() && steps.scelta.outputs.fare == 'si'
+        with:
+          path: esiti-${{ matrix.chi }}-${{ matrix.parte }}
+          key: gara-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ github.run_id }}
+
+  somma:
+    name: Chi ha vinto
+    needs: concorrente
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache/restore@v4
+        with:
+          path: foto-gara
+          key: gara-foto-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - name: Esito di geocalib 0
+        uses: actions/cache/restore@v4
+        with:
+          path: esiti-geocalib-0
+          key: gara-esito-geocalib-0-${{ github.run_id }}
+          restore-keys: gara-esito-geocalib-0-
+      - run: mkdir -p tutti && cp esiti-geocalib-0/esito.json tutti/esiti-geocalib-0.json || true
+      - name: Esito di anycalib-pinhole 0
+        uses: actions/cache/restore@v4
+        with:
+          path: esiti-anycalib-pinhole-0
+          key: gara-esito-anycalib-pinhole-0-${{ github.run_id }}
+          restore-keys: gara-esito-anycalib-pinhole-0-
+      - run: mkdir -p tutti && cp esiti-anycalib-pinhole-0/esito.json tutti/esiti-anycalib-pinhole-0.json || true
+      - name: Esito di anycalib-edit 0
+        uses: actions/cache/restore@v4
+        with:
+          path: esiti-anycalib-edit-0
+          key: gara-esito-anycalib-edit-0-${{ github.run_id }}
+          restore-keys: gara-esito-anycalib-edit-0-
+      - run: mkdir -p tutti && cp esiti-anycalib-edit-0/esito.json tutti/esiti-anycalib-edit-0.json || true
+      - name: Esito di moge2 0
+        uses: actions/cache/restore@v4
+        with:
+          path: esiti-moge2-0
+          key: gara-esito-moge2-0-${{ github.run_id }}
+          restore-keys: gara-esito-moge2-0-
+      - run: mkdir -p tutti && cp esiti-moge2-0/esito.json tutti/esiti-moge2-0.json || true
+      - name: Esito di moge3 0
+        uses: actions/cache/restore@v4
+        with:
+          path: esiti-moge3-0
+          key: gara-esito-moge3-0-${{ github.run_id }}
+          restore-keys: gara-esito-moge3-0-
+      - run: mkdir -p tutti && cp esiti-moge3-0/esito.json tutti/esiti-moge3-0.json || true
+      - name: Esito di puffin-caption 0
+        uses: actions/cache/restore@v4
+        with:
+          path: esiti-puffin-caption-0
+          key: gara-esito-puffin-caption-0-${{ github.run_id }}
+          restore-keys: gara-esito-puffin-caption-0-
+      - run: mkdir -p tutti && cp esiti-puffin-caption-0/esito.json tutti/esiti-puffin-caption-0.json || true
+      - name: Esito di puffin-caption 1
+        uses: actions/cache/restore@v4
+        with:
+          path: esiti-puffin-caption-1
+          key: gara-esito-puffin-caption-1-${{ github.run_id }}
+          restore-keys: gara-esito-puffin-caption-1-
+      - run: mkdir -p tutti && cp esiti-puffin-caption-1/esito.json tutti/esiti-puffin-caption-1.json || true
+      - name: Esito di puffin-caption 2
+        uses: actions/cache/restore@v4
+        with:
+          path: esiti-puffin-caption-2
+          key: gara-esito-puffin-caption-2-${{ github.run_id }}
+          restore-keys: gara-esito-puffin-caption-2-
+      - run: mkdir -p tutti && cp esiti-puffin-caption-2/esito.json tutti/esiti-puffin-caption-2.json || true
+      - name: La classifica
+        run: python strumenti/gara_obiettivo.py somma --cartella foto-gara --risultati tutti --uscita gara-obiettivo.json
+      - run: cat gara-obiettivo.json

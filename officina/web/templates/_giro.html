@@ -1,0 +1,50 @@
+<aside class="assistente" id="assistente" data-bersaglio="{{ giro_passo.bersaglio }}"
+       aria-live="polite" aria-label="Tutorial, passo {{ giro.passo }} di {{ giro_quanti }}">
+    <div class="assistente-nuvola{{ ' larga' if giro_passo.tasti }}">
+        <div class="assistente-testa">
+            <b>{{ giro_passo.titolo }}</b>
+            <span class="minuscolo numeri">{{ giro.passo }} di {{ giro_quanti }}</span>
+        </div>
+        {% if giro_passo.tasti %}
+        <div class="assistente-tasti">
+            {% for gruppo, voci in giro_tasti %}
+            <div>
+                <h4>{{ gruppo }}</h4>
+                <dl>
+                    {% for tasto, cosa in voci %}
+                    <dt>{% for pezzo in tasto.split(" ") %}<kbd>{{ pezzo }}</kbd>{% endfor %}</dt>
+                    <dd>{{ cosa }}</dd>
+                    {% endfor %}
+                </dl>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="assistente-nota">L'elenco intero sta nelle Impostazioni, alla voce Tasti.</p>
+        {% else %}
+        <p class="assistente-dice">{{ giro_passo.prova | safe }}</p>
+        <p class="assistente-nota">{{ giro_passo.nota }}</p>
+        {% endif %}
+        <div class="assistente-scelte">
+            <form method="post" action="/giro/avanti">
+                <button class="assistente-tasto prima" type="submit">
+                    {% if giro.passo < giro_quanti %}Avanti{% else %}Chiudi e torna al tuo archivio{% endif %}
+                </button>
+            </form>
+            {% if giro.passo > 1 %}
+            <form method="post" action="/giro/indietro">
+                <button class="assistente-tasto" type="submit">Indietro</button>
+            </form>
+            {% endif %}
+            {% if not giro_passo.tasti %}
+            <button class="assistente-tasto" type="button" data-rispiega hidden>Rispiegamelo</button>
+            <form method="post" action="/giro/esci">
+                <button class="assistente-tasto" type="submit">Esci</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    <div class="fotina" aria-hidden="true">
+        <div class="cornice"><span class="monte"></span><span class="monte due"></span><span class="sole"></span><span class="occhi"><span></span><span></span></span></div>
+    </div>
+</aside>
+<script type="module" src="/statici/js/assistente.js"></script>

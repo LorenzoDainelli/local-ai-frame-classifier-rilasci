@@ -1,0 +1,113 @@
+# ---------------------------------------------------------------------------
+# Regola 1: il codice sta su GitHub, i dati mai.
+# Regola 110: c'e' anche un blocco automatico prima di ogni commit
+#             (strumenti/blocco_commit.py). Questo file e' la prima rete,
+#             quello e' la seconda. Servono entrambe.
+# ---------------------------------------------------------------------------
+
+# Archivio di lavoro: database, miniature, copie, modelli addestrati.
+# I percorsi cominciano con «/» apposta: senza, «archivio/» escluderebbe anche
+# officina/archivio/, che e' codice e va versionato.
+/archivio/
+/dati/
+/miniature/
+/copie/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+
+# Immagini e video, in qualsiasi forma
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tif
+*.tiff
+*.webp
+*.avif
+*.heic
+*.heif
+*.mov
+*.mp4
+*.m4v
+*.avi
+*.mkv
+
+# Esportazioni e pacchetti per il telefono (regole 85, 311, 67)
+/esportazioni/
+/pacchetti/
+*.pacchetto
+
+# Rapporti della misura (regola 112): sono numeri e si possono mostrare a
+# chiunque - «rapporto.py» si rifiuta di scriverli se dentro finisce un nome
+# di nodo o un percorso. Ma sono il risultato di una corsa su una macchina in
+# un giorno, non codice: si rifanno con «python -m officina misura».
+/misura-*.json
+/misura-*.txt
+
+# Modelli scaricati (regola 74): pesanti e non versionabili
+/modelli/
+*.onnx
+*.pt
+*.pth
+*.safetensors
+
+# Archivio finto generato in locale (regola 111): si rigenera con un comando
+/finto-generato/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Il Visore: quello che Gradle costruisce (regola 386). Il codice si versiona,
+# i risultati della compilazione no — si rifanno con un comando.
+/visore/.gradle/
+/visore/**/build/
+
+# L'avviatore di Gradle («gradlew», «gradlew.bat» e la cartella «gradle/»):
+# non l'abbiamo scritto noi, lo rigenera Android Studio da solo la prima volta
+# che apre la cartella «visore» - e' successo sulla ZenBook e sul PC fisso,
+# senza che nessuno lo scaricasse da GitHub. Dentro c'e' un «.jar», cioe' un
+# binario opaco: in questo repository di binari ce n'e' uno solo, l'icona del
+# programma, e ci sta perche' si ridisegna da un file di testo
+# (strumenti/fai_icona.py). Un «.jar» no, quindi resta fuori.
+/visore/gradle/
+/visore/gradlew
+/visore/gradlew.bat
+
+# Android Studio: le sue impostazioni, non le nostre. In «.idea/» ci sono i
+# pannelli aperti e la disposizione delle finestre di chi programma, e in
+# «local.properties» c'e' scritto dove sta l'SDK su quel computer — cioe' un
+# percorso col nome dell'utente dentro. Sono cose di una macchina sola, e su
+# GitHub non ci vanno (regola 1).
+.idea/
+/visore/local.properties
+
+# Il conto di quante righe le prove attraversano. E' un database SQLite, e il
+# blocco prima del commit lo ferma giustamente (regola 110): meglio dirgli qui
+# che non va versionato, invece di incontrarlo ogni volta.
+.coverage
+.coverage.*
+htmlcov/
+
+# Il banco di lavoro usa e getta: misure, prove al volo, archivi finti grandi.
+# Quello che vale la pena tenere finisce in strumenti/, non qui.
+/scratchpad/
+
+# La versione 2: quello che l'installatore costruisce, e l'installatore stesso.
+/costruzione/
+/uscita/
+/collaudo*.json

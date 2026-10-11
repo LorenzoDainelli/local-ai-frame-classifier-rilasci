@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona, fotina %}
+{% block titolo %}Il banco — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+
+<div class="banco" data-posizione="{{ posizione }}"
+     data-quanti="{{ quanti }}">
+
+    <div class="banco-immagine">
+        {% if scatto %}
+        <img src="/immagine/{{ scatto.file_id }}?lato=1400" alt="">
+        <span class="quando-banco piccolo tenue">{{ scatto.quando }}</span>
+        {% else %}
+        <div class="bn-vuoto">
+            {{ fotina() }}
+            <p class="tenue">Non c'è nessuno scatto da guardare.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <aside class="carta banco-lato">
+        <div class="bn-testa">
+            <span class="minuscolo tenue"><span class="numeri">{{ (posizione + 1)|numero }}</span> di
+                <span class="numeri">{{ quanti|numero }}</span> &middot;
+                <span class="numeri">{{ decisi|numero }}</span> decisi finora</span>
+            <h1 class="bn-titolo">Dove va questo scatto{% call spiega("Perché sono sparsi") %}
+                <p>Gli scatti non arrivano in ordine di data ma sparsi su tutto
+                l'archivio: cento scatti consecutivi sono spesso due giornate, e
+                una misura fatta su quelle direbbe più su di loro che sulle tue
+                foto.</p>
+            {% endcall %}</h1>
+            <p class="minuscolo attenuato">Premi il numero del mucchio. Se non c'entra con nessuno premi
+                <kbd>0</kbd>: è un «no» detto, e vale quanto un «sì». Se non sai, premi <kbd>S</kbd>
+                e resta indeciso, che non è un «no».</p>
+        </div>
+
+        <div class="bn-mucchi">
+            {% for voce in nodi_di_prova %}
+            <button class="tasto-mucchio {{ 'scelto' if gia_deciso.get(voce.id) == 'si' }}
+                           {{ 'negato' if gia_deciso.get(voce.id) == 'no' }}"
+                    data-nodo="{{ voce.id }}" data-tasto="{{ loop.index }}">
+                <span class="numero">{{ loop.index }}</span>
+                <span class="nome">{{ voce.nome }}</span>
+                <span class="conto numeri tenue">{{ voce.esempi|numero }}</span>
+            </button>
+            {% else %}
+            <p class="piccolo tenue">
+                Non hai ancora nessun mucchio. Si creano in
+                <a href="/stato#misura" data-torna>Stato &rsaquo; Laboratorio di misura</a>.
+            </p>
+            {% endfor %}
+
+            {% if nodi_di_prova %}
+            <button class="tasto-mucchio nessuno" id="tasto-nessuno" data-tasto="0">
+                <span class="numero">0</span>
+                <span class="nome">nessuno di questi</span>
+            </button>
+            {% endif %}
+        </div>
+
+        <div class="bn-passi">
+            <button class="tasto-comando nudo piccolo" id="indietro">{{ icona('indietro', 14) }} Precedente</button>
+            <button class="tasto-comando piccolo" id="salta">Salta <kbd>S</kbd></button>
+        </div>
+
+        <nav class="bn-vie minuscolo" aria-label="Altre pagine">
+            <a href="/stato#misura">{{ icona('indietro', 12) }} Torna alla misura</a>
+            {% if scatto %}<a href="/?simili={{ scatto.id }}">Chi gli somiglia</a>{% endif %}
+            <a href="/">Galleria</a>
+        </nav>
+    </aside>
+</div>
+{% endblock %}
+
+{% block coda %}
+<script>
+(function () {
+    const banco = document.querySelector(".banco");
+    if (!banco) return;
+    const scatto = {{ scatto.id if scatto else 'null' }};
+    const posizione = parseInt(banco.dataset.posizione, 10);
+    const quanti = parseInt(banco.dataset.quanti, 10);
+
+    function vai(dove) {
+        const nuova = Math.max(0, Math.min(quanti - 1, dove));
+        location.href = "/misura/banco?da=" + nuova;
+    }
+
+    async function segna(nodo, stato) {
+        const corpo = new FormData();
+        corpo.append("scatto_id", scatto);
+        corpo.append("nodo_id", nodo);
+        corpo.append("stato", stato);
+        await fetch("/misura/segna", {method: "POST", body: corpo});
+        vai(posizione + 1);
+    }
+
+    async function nessuno() {
+        const corpo = new FormData();
+        corpo.append("scatto_id", scatto);
+        await fetch("/misura/nessuno", {method: "POST", body: corpo});
+        vai(posizione + 1);
+    }
+
+    document.querySelectorAll(".tasto-mucchio[data-nodo]").forEach(function (tasto) {
+        tasto.addEventListener("click", function () {
+            segna(tasto.dataset.nodo, tasto.classList.contains("scelto") ? "niente" : "si");
+        });
+    });
+    const zero = document.getElementById("tasto-nessuno");
+    if (zero) zero.addEventListener("click", nessuno);
+    document.getElementById("indietro").addEventListener("click", function () { vai(posizione - 1); });
+    document.getElementById("salta").addEventListener("click", function () { vai(posizione + 1); });
+
+    document.addEventListener("keydown", function (evento) {
+        if (evento.target.tagName === "INPUT") return;
+        const tasto = evento.key;
+        if (tasto >= "1" && tasto <= "9") {
+            const scelto = document.querySelector('.tasto-mucchio[data-tasto="' + tasto + '"]');
+            if (scelto && scatto !== null) { evento.preventDefault(); scelto.click(); }
+        } else if (tasto === "0" && scatto !== null) {
+            evento.preventDefault(); nessuno();
+        } else if (tasto === "s" || tasto === "S" || tasto === " ") {
+            evento.preventDefault(); vai(posizione + 1);
+        } else if (tasto === "ArrowRight") {
+            evento.preventDefault(); vai(posizione + 1);
+        } else if (tasto === "ArrowLeft") {
+            evento.preventDefault(); vai(posizione - 1);
+        } else if (tasto === "Escape") {
+            location.href = "/stato#misura";
+        }
+    });
+})();
+</script>
+{% endblock %}

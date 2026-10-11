@@ -1,0 +1,18 @@
+{
+ "deposito": "modyu-liu/FaceMe",
+ "commit": "8973f65dc4c869f6b2d11a46e5b03d63fbd9241e",
+ "licenza": "Pi-Lab License 1.0",
+ "antelope": {
+  "indirizzo": "https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip",
+  "sha256": "8e182f14fc6e80b3bfa375b33eb6cff7ee05d8ef7633e738d1c89021dcf0c5c5",
+  "byte": 360662982,
+  "file": {
+   "antelopev2/glintr100.onnx": "4ab1d6435d639628a6f3e5008dd4f929edf4c4124b1a7169e1048f9fef534cdf",
+   "antelopev2/scrfd_10g_bnkps.onnx": "5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91"
+  }
+ },
+ "base": "SG161222/RealVisXL_V3.0",
+ "faceme": "thomas2modyu/FaceMe",
+ "photomaker": {"repo": "TencentARC/PhotoMaker", "file": "photomaker-v1.bin"},
+ "byte_circa": 12000000000
+}

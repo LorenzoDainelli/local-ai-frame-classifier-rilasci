@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona, fotina, fotina_passa %}
+{% block titolo %}Rivedi — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-rivedi">
+
+    <div class="rv-testa">
+        <a class="ps-torna" href="/miglioramento">{{ icona('indietro', 14) }} La coda</a>
+        {% if scelta %}
+        <h1 class="rv-titolo">Da rivedere <span class="tenue numeri">{{ scelta.posizione|numero }} di {{ scelta.quante|numero }}</span></h1>
+        <span class="minuscolo tenue rv-nome nome-di-file">
+            {% if scelta.scatto_id %}<a href="/scatto/{{ scelta.scatto_id }}">{{ scelta.nome }}</a>{% else %}{{ scelta.nome }}{% endif %}
+        </span>
+        {% endif %}
+    </div>
+
+    {% if not scelta %}
+    <div class="carta rv-vuoto">
+        {{ fotina_passa() }}
+        {% if da_votare %}
+        {% set chi = 'Una foto aspetta' if da_votare == 1 else da_votare|numero ~ ' foto aspettano' %}
+        <p><b>Non c'è niente da rivedere.</b> <span class="tenue">{{ chi }} il tuo voto nella sfida alla cieca: poi {{ 'arriva' if da_votare == 1 else 'arrivano' }} qui.</span></p>
+        <a class="tasto-comando principale" href="/miglioramento/sfida">Vota</a>
+        {% else %}
+        <p><b>Non c'è niente da rivedere.</b> <span class="tenue">Quando una foto o un video migliorato è pronto, arriva qui.</span></p>
+        <a class="tasto-comando" href="/miglioramento">Torna alla coda</a>
+        {% endif %}
+    </div>
+    {% else %}
+
+    {% if scelta.guasto %}
+    <div class="avviso forte" role="alert">
+        <span>{{ scelta.guasto }}</span>
+    </div>
+    {% endif %}
+
+    {% if scelta.fedelta.sconsigliata %}
+    <div class="avviso forte" role="alert" id="fedelta-sconsigliata">
+        <span>
+            Controllo di fedeltà: ti sconsiglio di approvarla.
+            {% for motivo in scelta.fedelta.motivi %}{{ motivo }} {% endfor %}
+        </span>
+    </div>
+    {% endif %}
+
+    {% if not scelta.ci_sono %}
+    <div class="avviso forte" role="alert">
+        <span>
+            Uno dei due file non è più dov'era, e questa non si può approvare.
+            Rifiutala: l'originale, se c'è, resta com'è.
+        </span>
+    </div>
+    {% elif scelta.mancano_copie %}
+    <div class="carta rv-copie" id="riquadro-copie">
+        <div class="rv-copie-t">
+            <span class="rv-copie-icona">{{ icona('video', 20) }}</span>
+            <div>
+                <h2>Serve una copia da guardare{% call spiega("Perché") %}
+                    <p>Questo video è in un formato che la finestra del programma
+                    non sa far partire, come gli AVI delle macchine fotografiche
+                    vecchie o gli HEVC dell'iPhone. Di solito la copia la fa il
+                    computer da solo alla fine del lavoro: questa volta manca,
+                    forse perché la coda è stata fermata proprio lì.</p>
+                    <p>La copia sta nella cache dell'archivio, non nella cartella
+                    delle foto, e si cancella quando decidi.</p>
+                {% endcall %}</h2>
+                <span class="minuscolo tenue">La finestra non sa far partire questo video: il computer ne prepara una copia, solo per guardarla.</span>
+            </div>
+            <button class="tasto-comando principale" type="button" id="fai-copie">Prepara la copia</button>
+        </div>
+        <span class="barretta" id="avanzamento-copie" aria-hidden="true" hidden><span id="fatto-copie" style="width:0%"></span></span>
+        <p class="minuscolo tenue" id="righe-copie"></p>
+    </div>
+    {% else %}
+
+    <div class="rivedi-due" id="rivedi-due" style="--proporzione: {{ scelta.proporzione }}">
+        <figure class="rivedi-lato" data-lato="prima">
+            <div class="rivedi-quadro">
+                {% if scelta.genere == 'video' %}
+                <video preload="auto" playsinline
+                       src="/miglioramento/{{ scelta.id }}/mostra/prima"></video>
+                {% else %}
+                <img src="/miglioramento/{{ scelta.id }}/mostra/prima"
+                     alt="L'originale" draggable="false">
+                {% endif %}
+            </div>
+            <figcaption>
+                <span class="etichetta-rivedi numeri">Originale &middot; {{ scelta.prima }}</span>
+                <span class="etichetta-rivedi" data-audio-qui hidden>audio</span>
+            </figcaption>
+        </figure>
+        <figure class="rivedi-lato" data-lato="dopo">
+            <div class="rivedi-quadro">
+                {% if scelta.genere == 'video' %}
+                <video preload="auto" playsinline muted
+                       src="/miglioramento/{{ scelta.id }}/mostra/dopo"></video>
+                {% else %}
+                <img src="/miglioramento/{{ scelta.id }}/mostra/dopo"
+                     alt="La migliorata" draggable="false">
+                {% endif %}
+            </div>
+            <figcaption>
+                <span class="etichetta-rivedi numeri">{{ "Migliorato" if scelta.genere == 'video' else "Migliorata" }} &middot; {{ scelta.dopo }}</span>
+                {% if scelta.motori %}
+                <span class="etichetta-rivedi attenuata">{{ scelta.motori }}</span>
+                {% endif %}
+                <span class="etichetta-rivedi" data-audio-qui hidden>audio</span>
+            </figcaption>
+        </figure>
+    </div>
+
+    <div class="rivedi-comandi">
+        <span class="rv-zoom">
+            <button class="tasto-comando nudo piccolo" type="button" data-zoom="meno"
+                    aria-label="Rimpicciolisci">&minus;</button>
+            <span class="minuscolo numeri quanto-zoom" id="quanto-zoom">intera</span>
+            <button class="tasto-comando nudo piccolo" type="button" data-zoom="piu"
+                    aria-label="Ingrandisci">+</button>
+            <button class="tasto-comando nudo piccolo" type="button" data-zoom="intera">Intera</button>
+        </span>
+        {% if scelta.genere == 'video' %}
+        <div class="rivedi-video">
+            <button class="tasto-comando" type="button" id="suona"
+                    aria-label="Fai partire">
+                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" data-icona="suona">
+                    <path d="M7 4.5v15l12-7.5z" fill="currentColor"></path></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" data-icona="pausa" hidden>
+                    <rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor"></rect>
+                    <rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor"></rect></svg>
+            </button>
+            <input class="tempo-rivedi" id="tempo" type="range" min="0" max="1"
+                   step="0.01" value="0" aria-label="Punto del video">
+            <span class="minuscolo numeri" id="quando">0:00</span>
+            <span class="in-fila">
+                <span class="minuscolo tenue">Audio da</span>
+                <button class="pillola piena" type="button" data-audio="prima">originale</button>
+                <button class="pillola" type="button" data-audio="dopo">migliorato</button>
+            </span>
+        </div>
+        {% endif %}
+        <span class="minuscolo tenue spinge">rotella per ingrandire, trascina per spostarti</span>
+    </div>
+    {% endif %}
+
+    <div class="rivedi-decidi">
+        <button class="tasto-comando principale" type="button" data-decidi="approva"
+                {% if not scelta.ci_sono %}disabled{% endif %}>{{ icona('spunta', 15) }} Approva <kbd>A</kbd></button>
+        <button class="tasto-comando" type="button" data-decidi="rifiuta">{{ icona('x', 15) }} Rifiuta <kbd>R</kbd></button>
+        {% if scelta.quante > 1 %}
+        <button class="tasto-comando nudo" type="button" data-decidi="dopo">Dopo <kbd>&rarr;</kbd></button>
+        {% endif %}
+        <span class="minuscolo tenue spinge">se approvi, l'originale va in <span class="nome-di-file">{{ scelta.va_in }}</span></span>
+    </div>
+    <p class="esito-rivedi" id="esito-rivedi" aria-live="polite"></p>
+
+    {% endif %}
+</div>
+</main>
+</div>
+
+<script type="application/json" id="dati-rivedi">{{ dati|safe }}</script>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/rivedi.js"></script>
+{% endblock %}

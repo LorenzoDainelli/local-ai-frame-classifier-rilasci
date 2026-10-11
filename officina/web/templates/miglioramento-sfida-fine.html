@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Com'è andata la sfida — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-sfida-fine">
+
+    <a class="ps-torna" href="/miglioramento">{{ icona('indietro', 14) }} La coda</a>
+
+    <div class="sf-testa">
+        <h1 class="titolo-pagina">Com'è andata la sfida</h1>
+        <p class="sottotitolo"><span class="numeri">{{ esito.votate|numero }}</span> foto votate alla cieca. Adesso i nomi si possono vedere.</p>
+    </div>
+
+    <section class="carta sf-conti">
+        <div class="conti-sfida">
+            {% for chi in ["lucidflux", "seedvr2"] %}
+            <div><b class="numeri">{{ esito[chi]|numero }}</b><span class="sf-voce {{ chi }}">{{ esito.nomi[chi] }}</span></div>
+            {% endfor %}
+            <div><b class="numeri">{{ esito.pari|numero }}</b><span class="sf-voce pari">pari</span></div>
+            <div><b class="numeri">{{ esito.nessuna|numero }}</b><span class="sf-voce pari">nessuna delle due</span></div>
+        </div>
+        <div class="barra-sfida" aria-hidden="true">
+            <span class="lucidflux" style="width:{{ esito.barra.lucidflux }}%"></span>
+            <span class="seedvr2" style="width:{{ esito.barra.seedvr2 }}%"></span>
+            <span class="pari" style="width:{{ esito.barra.pari + esito.barra.nessuna }}%"></span>
+        </div>
+    </section>
+
+    <section class="carta sf-scelta">
+        {% if esito.chiusa %}
+        <span class="bollino bene">Chiusa</span>
+        <p>La sfida è chiusa: per le foto si usa <b>{{ esito.nomi[esito.chiusa.principale] }}</b>.</p>
+        {% else %}
+        <h2>{% if esito.vincitore %}Ha vinto {{ esito.nome_vincitore }}. Da adesso lo uso per le foto?{% else %}Sono pari. Quale uso per le foto?{% endif %}</h2>
+        <p class="piccolo attenuato">L'altro resta installato. I video li fa sempre SeedVR2. Le foto votate &laquo;Pari&raquo; prendono la versione del modello che scegli qui.</p>
+        <form method="post" action="/miglioramento/sfida/chiudi" class="sf-tasti">
+            {% set primo = esito.vincitore or "seedvr2" %}
+            {% set secondo = "seedvr2" if primo == "lucidflux" else "lucidflux" %}
+            <button class="tasto-comando principale" type="submit" name="principale"
+                    value="{{ primo }}">{{ esito.nomi[primo] }} per le foto</button>
+            <button class="tasto-comando" type="submit" name="principale"
+                    value="{{ secondo }}">{{ esito.nomi[secondo] }} per le foto</button>
+        </form>
+        {% endif %}
+    </section>
+</div>
+</main>
+</div>
+{% endblock %}

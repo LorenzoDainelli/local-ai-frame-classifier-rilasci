@@ -1,0 +1,60 @@
+<script type="module">
+
+    const zona = document.getElementById("corso-modelli");
+    const righe = document.getElementById("righe-modelli");
+    const stato = document.getElementById("stato-modelli");
+    const guasto = document.getElementById("guasto-modelli");
+    const zona_barra = document.getElementById("barra-modelli-zona");
+    const barra = document.getElementById("barra-modelli");
+    const quanti = document.getElementById("quanti-modelli");
+    let orologio = null;
+
+    let visto_lavorare = zona && zona.dataset.lavorava === "1";
+
+    async function guarda() {
+        const risposta = await fetch("/api/modelli");
+        if (!risposta.ok) return;
+        const dati = await risposta.json();
+
+        zona.hidden = false;
+        righe.textContent = dati.righe.length ? dati.righe[dati.righe.length - 1] : "";
+
+        if (zona_barra) {
+            const c_e = typeof dati.percento === "number";
+            zona_barra.hidden = !c_e;
+            if (c_e) {
+                barra.style.width = dati.percento + "%";
+                const gb = (n) => {
+                    const quanto = n >= 1e9 ? n / 1e9 : n / 1e6;
+                    return quanto.toFixed(1).replace(".", ",") + (n >= 1e9 ? " GB" : " MB");
+                };
+                quanti.textContent = dati.unita === "pezzi"
+                    ? dati.percento + "% — librerie: " + dati.scaricati + " di " + dati.da_scaricare
+                    : dati.percento + "% — " + gb(dati.scaricati) + " di circa " + gb(dati.da_scaricare);
+            }
+        }
+
+        if (dati.sta_lavorando) {
+            visto_lavorare = true;
+            stato.textContent = "Sto scaricando " + dati.cosa + ".";
+            return;
+        }
+        clearInterval(orologio);
+        stato.textContent = dati.guasto
+            ? "Non è andata."
+            : "Fatto. La pagina si aggiorna.";
+
+        if (guasto) {
+            guasto.textContent = dati.guasto || "";
+            guasto.hidden = !dati.guasto;
+        }
+
+        if (visto_lavorare && !dati.guasto)
+            setTimeout(() => window.location.reload(), 1200);
+    }
+
+    if (zona && !zona.hidden) {
+        orologio = setInterval(guarda, 2000);
+        guarda();
+    }
+</script>

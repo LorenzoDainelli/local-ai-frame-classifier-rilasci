@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona, fotina, fotina_passa %}
+{% block titolo %}Da sistemare — Local AI Frame Classifier{% endblock %}
+
+{% macro scegli(voci, quale) -%}
+<div class="dc-scegli" data-scegli>
+    <div class="dc-barra">
+        <span class="piccolo" data-scelti>Tocca le foto per sceglierle</span>
+        {% if quale in ('senza_data', 'data_indovinata') %}
+        <input class="campo dc-giorno" type="date" data-giorno aria-label="La data da mettere">
+        <button class="tasto-comando principale piccolo" type="button" data-azione="data" disabled>Metti questa data</button>
+        {% if quale == 'data_indovinata' %}
+        <button class="tasto-comando piccolo" type="button" data-azione="data_giusta" disabled>{{ icona('spunta', 14) }} La data è giusta</button>
+        {% else %}
+        <button class="tasto-comando piccolo" type="button" data-azione="lascia_senza_data" disabled>Lascia senza data</button>
+        {% endif %}
+        {% else %}
+        <button class="tasto-comando principale piccolo" type="button" data-azione="non_schermata" disabled>{{ icona('spunta', 14) }} È una foto</button>
+        <button class="tasto-comando piccolo" type="button" data-azione="fuori_archivio" disabled>{{ icona('fuori', 14) }} Fuori archivio</button>
+        {% endif %}
+        <button class="tasto-comando nudo piccolo" type="button" data-tutte>Seleziona tutte</button>
+    </div>
+    <div class="dc-griglia">
+        {% for voce in voci %}{% if voce.file_id %}<button class="dc-voce" type="button" data-scatto="{{ voce.id }}" aria-pressed="false"><img src="/miniatura/{{ voce.file_id }}" alt="" loading="lazy"><span class="dc-spunta" aria-hidden="true">{{ icona('spunta', 12) }}</span></button>{% endif %}{% endfor %}
+    </div>
+    <p class="piccolo" data-detto role="status"></p>
+</div>
+{%- endmacro %}
+
+{% block corpo %}
+{% set n_non_importati = non_importati|length %}
+{% set n_messi = messi_da_parte|length %}
+{% set n_doppioni = doppioni|length %}
+{% set n_spariti = spariti|length %}
+{% set n_coppie = coppie_incerte|length %}
+{% set n_gruppi = conto_doppioni.restano %}
+{% set conti_righe = [n_gruppi, n_non_importati, n_messi, conti.senza_data, conti.data_indovinata, conti.schermate, n_doppioni, n_coppie, n_spariti] %}
+{% set da_fare = conti_righe|select|list|length %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-controllare">
+
+    <div class="dc-testa">
+        <h1 class="titolo-pagina">Da sistemare</h1>
+        <p class="sottotitolo">Il programma non cancella e non nasconde niente da solo: qui c'è quello che ha notato, e decidi tu.</p>
+    </div>
+
+    {% if not da_fare %}
+    <div class="carta dc-vuoto">
+        {{ fotina_passa() }}
+        <p><b>Niente da sistemare.</b> <span class="tenue">Nessun doppione, tutti i file si aprono, hanno una data e stanno dove devono. Quando aggiungi scatti nuovi controllo da solo.</span></p>
+    </div>
+    {% endif %}
+
+    <div class="dc-due">
+    <nav class="carta dc-indice" aria-label="Cose da controllare" data-indice></nav>
+    <div class="carta dc-righe">
+        {% if da_fare and da_fare < conti_righe|length %}
+        <p class="dc-a-posto etichetta">Già a posto</p>
+        {% endif %}
+
+        <section class="dc-riga {{ 'zero' if not n_gruppi }}" id="doppioni" data-pila="{{ pila_doppioni|join(',') }}">
+            <span class="dc-quanti numeri">{{ n_gruppi|numero }}</span>
+            <div class="dc-cosa">
+                <h2>Doppioni{% call spiega("Cosa sono") %}
+                    <p>Foto uguali salvate più volte con byte diversi: passate da
+                    WhatsApp, ridotte o convertite. Le cerco da solo ogni volta che
+                    aggiungi scatti nuovi.</p>
+                    <p><b>Niente viene cancellato</b>: quella che non tieni esce
+                    dall'archivio, e si rimette dentro con un tasto.</p>
+                {% endcall %}</h2>
+                <p>{% if lavoro_doppioni.sta_lavorando %}sto cercando le foto che si somigliano…{% elif n_gruppi %}{{ 'gruppo' if n_gruppi == 1 else 'gruppi' }} di foto che sembrano la stessa{% elif doppioni_mai_contati %}non li ho ancora cercati{% else %}nessun gruppo da decidere{% endif %}</p>
+            </div>
+            {% if n_gruppi %}
+            <a class="tasto-comando accento piccolo" href="/doppioni">{{ icona('doppioni', 14) }} Decidi i gruppi</a>
+            {% elif not lavoro_doppioni.sta_lavorando %}
+            <form method="post" action="/doppioni/guarda">
+                <input type="hidden" name="dove_torno" value="/sistemare#doppioni">
+                <button class="tasto-comando piccolo nudo" type="submit">{{ icona('cerca', 14) }} Cerca adesso</button>
+            </form>
+            {% endif %}
+            {% if lavoro_doppioni.sta_lavorando %}
+            <div class="dc-dentro dc-cerca-doppioni" data-cerca-doppioni>
+                <span class="barretta"><span style="width:{{ lavoro_doppioni.percento or 0 }}%"></span></span>
+            </div>
+            {% elif n_gruppi %}
+            <div class="dc-dentro dc-sotto">
+                <p class="piccolo tenue">{{ conto_doppioni.decisi|numero }} già decisi{% if doppioni_da_guardare %} · {{ doppioni_da_guardare|numero }} immagini ancora da guardare{% endif %}. Si sceglie una copia per gruppo, con i tasti 1, 2, 3.</p>
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="dc-riga {{ 'zero' if not n_non_importati }}" id="non-importati">
+            <span class="dc-quanti numeri">{{ n_non_importati|numero }}</span>
+            <div class="dc-cosa">
+                <h2>Non importati</h2>
+                <p>{{ 'file che non si sono potuti leggere' if n_non_importati else 'nessun file rifiutato' }}</p>
+            </div>
+            {% if n_non_importati %}
+            <form method="post" action="/elenchi/riprova-tutti">
+                <button class="tasto-comando piccolo" type="submit">{{ icona('riprova', 14) }} Riprova tutti</button>
+            </form>
+            <details class="dc-dentro">
+                <summary>Mostra i file {{ icona('giu', 14) }}</summary>
+                <ul class="dc-file">
+                    {% for riga in non_importati %}
+                    <li>
+                        <span class="nome-di-file">{{ riga.nome }}</span>
+                        <span class="dc-perche">{{ riga.dettaglio }}</span>
+                        <form method="post" action="/elenchi/riprova/{{ riga.id }}">
+                            <button class="tasto-comando nudo piccolo" type="submit">Riprova</button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </section>
+
+        <section class="dc-riga {{ 'zero' if not n_messi }}" id="messi-da-parte" data-pila="{{ messi_da_parte|map(attribute='file_id')|select|list|batch(3)|first|default([])|join(',') }}">
+            <span class="dc-quanti numeri">{{ n_messi|numero }}</span>
+            <div class="dc-cosa">
+                <h2>Messi da parte{% call spiega("Perché stanno qui") %}
+                    <p>Un file che non si apre veniva riprovato a ogni passata, per
+                    sempre: il conto degli scatti da guardare non scendeva mai a
+                    zero, e non si capiva perché. Adesso, al primo tentativo andato
+                    male, lo scatto esce dalla coda e viene qui, col motivo scritto
+                    accanto.</p>
+                    <p>Le sue etichette, la sua data e tutto il resto
+                    <b>restano dove sono</b>: messo da parte vuol dire soltanto che
+                    i modelli hanno smesso di provare ad aprirlo.</p>
+                    <p>Se ricopi il file dall'originale e premi
+                    <b>Controlla adesso</b>, nella riga dei file non trovati, torna in coda da solo.
+                    <b>Rimettili in coda</b> lo riprova comunque, anche senza aver
+                    toccato niente.</p>
+                {% endcall %}</h2>
+                <p>{{ 'non si aprono, e i modelli hanno smesso di riprovarci. Niente è stato cancellato.' if n_messi else 'nessuno' }}</p>
+            </div>
+            {% if n_messi %}
+            <form method="post" action="/elenchi/riprova-i-messi-da-parte">
+                <button class="tasto-comando piccolo" type="submit">{{ icona('riprova', 14) }} Rimettili in coda</button>
+            </form>
+            <details class="dc-dentro">
+                <summary>Mostra i file {{ icona('giu', 14) }}</summary>
+                <ul class="dc-file">
+                    {% for riga in messi_da_parte %}
+                    <li class="dc-con-foto dc-con-due">
+                        {% if riga.file_id %}<img class="dc-fotina" src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">{% else %}<span class="dc-fotina"></span>{% endif %}
+                        <span class="dc-nome-e-dove"><span class="nome-di-file">{{ riga.nome }}</span>
+                        <span class="dc-perche">{{ riga.perche }}</span></span>
+                        <a class="tasto-comando nudo piccolo" href="/scatto/{{ riga.scatto_id }}">Guardalo</a>
+                        <form method="post" action="/elenchi/togli-messo-da-parte/{{ riga.scatto_id }}">
+                            <button class="tasto-comando nudo piccolo" type="submit" title="Lo toglie dall'archivio senza cancellare il file dal disco: lo ritrovi in Galleria, filtro «fuori archivio»">Togli dall'archivio</button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </section>
+
+        <section class="dc-riga {{ 'zero' if not conti.senza_data }}" id="senza-data" data-pila="{{ senza_data_voci|map(attribute='file_id')|select|list|batch(3)|first|default([])|join(',') }}">
+            <span class="dc-quanti numeri">{{ conti.senza_data|numero }}</span>
+            <div class="dc-cosa">
+                <h2>Senza data{% call spiega("Da dove viene la data") %}
+                    <p>La data si legge solo dai metadati scritti dentro il file, mai da
+                    quella che il sistema mette sul file stesso: una copia la cambia, e
+                    una foto del 2009 finirebbe a ieri.</p>
+                    <p>Questi si sistemano a mano, anche in blocco. Oppure restano
+                    &laquo;senza data&raquo;, e continuano a essere cercabili per tutto
+                    il resto.</p>
+                {% endcall %}</h2>
+                <p>{{ 'la data si legge solo dai metadati, mai da quella del file' if conti.senza_data else 'hanno tutti una data' }}</p>
+            </div>
+            {% if conti.senza_data %}
+            <a class="tasto-comando piccolo" href="/senza-data">{{ icona('calendario', 14) }} Sistemali</a>
+            <details class="dc-dentro">
+                <summary>Altro {{ icona('giu', 14) }}</summary>
+                <div class="dc-altro">
+                    <a class="tasto-comando nudo piccolo" href="/?senza_data=1">{{ icona('foto', 14) }} Guardali nella griglia</a>
+                </div>
+            </details>
+            {% endif %}
+            {% if senza_data_voci %}{{ scegli(senza_data_voci, 'senza_data') }}{% endif %}
+        </section>
+
+        <section class="dc-riga {{ 'zero' if not conti.data_indovinata }}" id="data-indovinata" data-pila="{{ indovinata_voci|map(attribute='file_id')|select|list|batch(3)|first|default([])|join(',') }}">
+            <span class="dc-quanti numeri">{{ conti.data_indovinata|numero }}</span>
+            <div class="dc-cosa">
+                <h2>Data indovinata{% call spiega("Da dove viene questa data") %}
+                    <p>Dentro il file la data non c'era. Il programma l'ha presa dal nome
+                    del file (per esempio IMG_20190612) oppure, se nemmeno lì c'era, dalla
+                    data che Windows ha messo sul file.</p>
+                    <p>Quella di Windows è la meno sicura: una copia la cambia. Guardale e
+                    tieni la data, oppure mettine una tu.</p>
+                {% endcall %}</h2>
+                <p>{{ 'presa dal nome del file o dalla data di Windows' if conti.data_indovinata else 'nessuna' }}</p>
+            </div>
+            {% if indovinata_voci %}{{ scegli(indovinata_voci, 'data_indovinata') }}{% endif %}
+        </section>
+
+        <section class="dc-riga {{ 'zero' if not conti.schermate }}" id="schermate" data-pila="{{ schermate_voci|map(attribute='file_id')|select|list|batch(3)|first|default([])|join(',') }}">
+            <span class="dc-quanti numeri">{{ conti.schermate|numero }}</span>
+            <div class="dc-cosa">
+                <h2>Sembrano schermate{% call spiega("Perché «sembrano»") %}
+                    <p>Hanno la misura esatta di uno schermo e nessun dato di scatto:
+                    niente obiettivo, niente tempo di posa, niente posto.</p>
+                    <p>Non è il programma a decidere cosa è una tua fotografia. Una
+                    foto scattata a uno schermo somiglia a una schermata, e sarebbe la
+                    prima a essere buttata via per sbaglio.</p>
+                {% endcall %}</h2>
+                <p>{{ 'misura esatta di uno schermo, nessun dato di scatto' if conti.schermate else 'nessuna' }}</p>
+            </div>
+            {% if conti.schermate %}
+            <a class="tasto-comando piccolo" href="/?schermate=1">{{ icona('occhio', 14) }} Guardale</a>
+            <details class="dc-dentro">
+                <summary>Decidi per tutte {{ icona('giu', 14) }}</summary>
+                <div class="dc-altro">
+                    <form method="post" action="/elenchi/schermate-tienile">
+                        <button class="tasto-comando nudo piccolo" type="submit">{{ icona('spunta', 14) }} Tienile</button>
+                    </form>
+                    <form method="post" action="/elenchi/schermate-fuori-archivio">
+                        <button class="tasto-comando nudo piccolo" type="submit">{{ icona('fuori', 14) }} Mettile tutte fuori archivio</button>
+                    </form>
+                </div>
+            </details>
+            {% endif %}
+            {% if schermate_voci %}{{ scegli(schermate_voci, 'schermate') }}{% endif %}
+        </section>
+
+        <section class="dc-riga {{ 'zero' if not n_doppioni }}" id="stesso-file" data-pila="{{ doppioni|map(attribute='file_id')|select|list|batch(3)|first|default([])|join(',') }}">
+            <span class="dc-quanti numeri">{{ n_doppioni|numero }}</span>
+            <div class="dc-cosa">
+                <h2>Lo stesso file in più cartelle{% call spiega("Un file, più cartelle") %}
+                    <p>Lo stesso file trovato in più cartelle è un solo scatto con più
+                    percorsi: si etichetta una volta sola, e se una copia viene
+                    cancellata l'altra continua a funzionare.</p>
+                    <p>Saperlo serve lo stesso, perché un file etichettato due volte
+                    conterebbe come due esempi mentre è uno. Non sono i Doppioni qui
+                    sopra: quelli sono foto uguali salvate più volte con byte diversi.</p>
+                {% endcall %}</h2>
+                <p>{{ 'copie identiche, byte per byte: restano un solo scatto' if n_doppioni else 'nessuno' }}</p>
+            </div>
+            {% if n_doppioni %}
+            <button class="tasto-comando piccolo" type="button" data-apre="elenco-stesso-file" aria-expanded="false">{{ icona('occhio', 14) }} Guardali</button>
+            <details class="dc-dentro dc-solo" id="elenco-stesso-file">
+                <summary>Lo stesso file in più cartelle</summary>
+                <ul class="dc-file">
+                    {% for riga in doppioni %}
+                    <li class="dc-con-foto">
+                        <img class="dc-fotina" src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">
+                        <span class="dc-nome-e-dove"><span class="nome-di-file">{{ riga.nome }}</span>
+                        <span class="dc-perche">in {{ riga.quanti|numero }} cartelle: {% for c in riga.cartelle %}<span class="nome-di-file dc-cartella">{{ c }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</span></span>
+                        {% if riga.scatto_id %}<a class="tasto-comando nudo piccolo" href="/scatto/{{ riga.scatto_id }}">Guardalo</a>{% else %}<span></span>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </section>
+
+        <section class="dc-riga {{ 'zero' if not n_coppie }}" id="coppie">
+            <span class="dc-quanti numeri">{{ n_coppie|numero }}</span>
+            <div class="dc-cosa">
+                <h2>Coppie foto e video incerte</h2>
+                <p>{{ 'meno di due indizi in comune: il video non è stato attaccato a nessuna foto' if n_coppie else 'nessuna' }}</p>
+            </div>
+            {% if n_coppie %}
+            <button class="tasto-comando piccolo" type="button" data-apre="elenco-coppie" aria-expanded="false">{{ icona('occhio', 14) }} Guardale</button>
+            <details class="dc-dentro dc-solo" id="elenco-coppie">
+                <summary>Coppie foto e video incerte</summary>
+                <ul class="dc-file dc-frasi">
+                    {% for riga in coppie_incerte %}<li>{{ riga.dettaglio }}</li>{% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </section>
+
+        <section class="dc-riga {{ 'zero' if not n_spariti }}" id="non-trovati">
+            <span class="dc-quanti numeri">{{ n_spariti|numero }}</span>
+            <div class="dc-cosa">
+                <h2>File non trovati sul disco{% call spiega("Se un file sparisce") %}
+                    <p>Se una foto sparisce dal disco viene segnalata, ma le sue
+                    etichette restano: sono attaccate allo scatto, non al
+                    percorso.</p>
+                    <p>Se torna, anche in un'altra cartella e con un altro nome, si
+                    ricollega da sola. Il programma riconosce i file dal contenuto,
+                    non da dove stanno.</p>
+                {% endcall %}</h2>
+                <p>{{ 'spariscono i file, non le etichette: quelle restano' if n_spariti else 'tutto a posto' }}</p>
+            </div>
+            <form method="post" action="/elenchi/controlla-i-file">
+                <button class="tasto-comando piccolo {{ 'nudo' if not n_spariti }}" type="submit">{{ icona('cerca', 14) }} Controlla adesso</button>
+            </form>
+            {% if n_spariti %}
+            <details class="dc-dentro">
+                <summary>Mostra i file {{ icona('giu', 14) }}</summary>
+                <ul class="dc-file dc-frasi">
+                    {% for riga in spariti %}<li class="nome-di-file">{{ riga.nome }}</li>{% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </section>
+    </div>
+    </div>
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/controllare.js"></script>
+{% endblock %}

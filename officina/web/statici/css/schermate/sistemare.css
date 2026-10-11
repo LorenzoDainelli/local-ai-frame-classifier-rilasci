@@ -1,0 +1,70 @@
+.dc-indice button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; text-align: left; font: inherit; font-size: 14px; color: var(--ink); background: transparent; border: 0; border-radius: 9px; padding: 9px 10px; cursor: pointer; }
+.dc-indice button:hover { background: var(--carta-sopra); }
+.dc-indice button.ora { background: var(--carta-sopra); box-shadow: inset 3px 0 0 var(--accento); }
+.dc-indice button.zero { color: var(--tenue); }
+.dc-indice .q { font: 400 17px/1 var(--serif); }
+.dc-due .dc-righe { padding: 4px 20px 16px; }
+.dc-due .dc-riga:not(.ora) { display: none; }
+.dc-due .dc-riga { border-top: 0; }
+.dc-due .dc-a-posto { display: none; }
+.dc-due .dc-solo { display: block; }
+
+.dc-barra [data-scelti] { margin-right: auto; }
+
+.dc-voce[aria-pressed="true"] { border-color: var(--accento); box-shadow: 0 0 0 3px var(--alone); }
+
+.dc-spunta svg { opacity: 0; }
+.dc-voce[aria-pressed="true"] .dc-spunta svg { opacity: 1; }
+.dc-voce[aria-pressed="true"] .dc-spunta { background: var(--accento); border-color: var(--accento); color: var(--su-accento); }
+
+.dc-testa h1, .dc-testa p { margin: 0; }
+.dc-vuoto { display: flex; align-items: center; gap: 14px; padding: 16px 18px; }
+.dc-vuoto p { margin: 0; }
+
+.dc-riga > form { margin: 0; }
+.dc-quanti { font: 400 26px/1 var(--serif); text-align: right; letter-spacing: var(--tracciato-numero); }
+
+.dc-cosa h2 { margin: 0; font: 400 17px/1.3 var(--serif); text-wrap: balance; }
+.dc-cosa h2 .conchiglia { margin-left: 6px; }
+.dc-cosa p { margin: 0; font-size: var(--testo-minore); color: var(--attenuato); }
+.dc-riga.zero { order: 1; }
+
+.dc-riga.zero { padding: 9px 0; }
+.dc-riga.zero .dc-quanti { font-size: 17px; color: var(--tenue); }
+.dc-riga.zero h2 { font-size: 15px; color: var(--attenuato); }
+.dc-riga.zero p { color: var(--tenue); }
+.dc-dentro { grid-column: 2 / -1; margin-top: 8px; }
+.dc-dentro > summary { list-style: none; display: inline-flex; align-items: center; gap: 4px; font-size: var(--testo-minore); color: var(--attenuato); cursor: pointer; border-radius: 6px; }
+.dc-dentro > summary::-webkit-details-marker { display: none; }
+.dc-dentro > summary:hover { color: var(--ink); }
+.dc-dentro > summary .icona { transition: transform var(--gesto) var(--uscita); }
+.dc-dentro[open] > summary .icona { transform: rotate(180deg); }
+.dc-solo:not([open]) { display: none; }
+.dc-solo > summary { display: none; }
+
+.dc-file li:first-child { border-top: 0; }
+.dc-file li > form { margin: 0; }
+.dc-file .nome-di-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+
+.dc-frasi li { display: block; padding: 8px 0; font-size: var(--testo-minore); color: var(--attenuato); }
+.dc-frasi li.nome-di-file { color: var(--ink); }
+.dc-altro { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.dc-altro form { margin: 0; }
+
+.dc-indice .dc-pila { grid-column: 1 / -1; display: flex; padding-top: 2px; }
+.dc-indice .dc-pila img { width: 30px; height: 30px; object-fit: cover; border-radius: 6px; border: 1.5px solid var(--carta); margin-right: -8px; background: var(--pozzo); }
+.dc-indice button.ora .dc-pila img { border-color: var(--carta-sopra); }
+.dc-cerca-doppioni { align-self: center; max-width: 360px; }
+.dc-sotto p { margin: 0; }
+.dc-sep { display: flex; align-items: center; gap: 8px; margin: 10px 10px 4px; font-size: 12px; color: var(--tenue); }
+.dc-sep::after { content: ""; flex: 1; height: 0.5px; background: var(--linea); }
+
+.dc-file li.dc-con-foto { grid-template-columns: 56px minmax(0, 1fr) auto; }
+.dc-file li.dc-con-foto.dc-con-due { grid-template-columns: 56px minmax(0, 1fr) auto auto; }
+.dc-fotina { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--linea); display: block; }
+.dc-nome-e-dove { display: grid; gap: 2px; min-width: 0; }
+.dc-nome-e-dove .dc-perche { grid-column: auto; grid-row: auto; white-space: normal; }
+.dc-cartella { font-size: 12.5px; }
+@media (max-width: 720px) {
+    .dc-file li.dc-con-foto, .dc-file li.dc-con-foto.dc-con-due { grid-template-columns: 56px minmax(0, 1fr); }
+}

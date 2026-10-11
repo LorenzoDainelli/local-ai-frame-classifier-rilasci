@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Doppioni — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-doppioni">
+
+    <a class="torna-a" href="/sistemare">{{ icona('indietro', 14) }} Da sistemare</a>
+    <div class="dp-testa">
+        <h1 class="titolo-pagina">I doppioni{% call spiega("Perché si sdoppiano") %}
+            <p>Una fotografia che passa da WhatsApp torna indietro <b>ricompressa</b>:
+            stessa immagine, byte diversi. Per il programma sono due fotografie, e
+            nell'archivio ci finiscono tutte e due.</p>
+            <p><b>Cosa riconosce.</b> Una ricompressione, un ridimensionamento, un
+            cambio di formato, un ritocco leggero della luce: sono i modi in cui la
+            stessa fotografia si sdoppia davvero.</p>
+            <p><b>Cosa non riconosce.</b> Un ritaglio, una rotazione, uno specchio.
+            Non è una mancanza da nascondere: una foto ritagliata è un'altra
+            fotografia, e chiamarla doppione vorrebbe dire proporre di buttare via
+            l'unica copia di un'inquadratura. Può anche sbagliare in avanti: due
+            muri bianchi o due cieli si somigliano per questo conto più di quanto
+            si somiglino per un occhio. Per questo c'è sempre
+            &laquo;Sono diverse&raquo;, e per questo niente succede da solo.</p>
+        {% endcall %}</h1>
+        <p class="sottotitolo">Foto uguali passate da WhatsApp, ridotte o convertite. <b>Niente viene cancellato</b>: quello che scegli esce dall'archivio, e si rimette dentro con un tasto.</p>
+    </div>
+
+    {% if mancano_da_guardare %}
+    <div class="carta dp-riga">
+        <span class="bollino attenzione">Da guardare <span class="numeri">{{ mancano_da_guardare|numero }}</span></span>
+        {% call spiega("Cosa fa questo passo") %}
+            <p>Per sapere quali fotografie si somigliano bisogna prima averle
+            guardate tutte una volta. Non si accende nessun modello e non serve
+            la scheda video: si apre ogni immagine, si riduce a settantadue
+            caselle e si chiude.</p>
+            <p>Si può fermare a metà: la volta dopo riprende da dove era.</p>
+        {% endcall %}
+        <span class="piccolo tenue dp-spazio">Sono minuti, non notti, e si può fermare a metà.</span>
+        {% if not lavoro.sta_lavorando %}
+        <form method="post" action="/doppioni/guarda">
+            <button class="tasto-comando principale piccolo" type="submit">Guarda le foto</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="carta dp-riga lavoro-doppioni" id="lavoro-doppioni" {% if not lavoro.sta_lavorando %}hidden{% endif %}>
+        <span class="bollino bene">Sto guardando</span>
+        <span class="barretta dp-spazio" aria-hidden="true"><span id="fatto-doppioni" style="width:0%"></span></span>
+        <span class="piccolo attenuato numeri" id="numeri-doppioni"></span>
+        <form method="post" action="/doppioni/ferma">
+            <button class="tasto-comando piccolo" type="submit">Ferma</button>
+        </form>
+        <p class="piccolo tenue dp-righe" id="righe-doppioni"></p>
+    </div>
+
+    {% if mai_contato %}
+
+    <div class="carta dp-mai">
+        <p class="attenuato">
+            Il conto non è mai stato fatto su questo archivio. Finché non lo si
+            fa, questa pagina non sa niente, che non è la stessa cosa di «non ci
+            sono doppioni».
+        </p>
+        {% if mancano_da_guardare %}
+        <p class="piccolo tenue">
+            Lo fa da sé il tasto <b>&laquo;Guarda le foto&raquo;</b> qui sopra:
+            prima guarda quelle che mancano, poi mette insieme quelle che si
+            somigliano. Non c'è un secondo tasto da premere.
+        </p>
+        {% endif %}
+        {% if not mancano_da_guardare and not lavoro.sta_lavorando %}
+        <form method="post" action="/doppioni/conta">
+            <button class="tasto-comando principale" type="submit">Fai il conto</button>
+        </form>
+        {% endif %}
+    </div>
+
+    {% else %}
+
+    <div class="dp-barra" id="conto-doppioni">
+        <span class="dp-viste" role="group" aria-label="Quali gruppi">
+            <button class="pillola piena" type="button" data-vista="da-decidere" aria-pressed="true">Da decidere <span class="conto numeri" id="dp-restano"></span></button>
+            <button class="pillola" type="button" data-vista="decisi" aria-pressed="false">Decisi <span class="conto numeri" id="dp-decisi"></span></button>
+        </span>
+        <span class="piccolo attenuato dp-spazio" id="scritta-conto"></span>
+        {% if quanti_decisi %}
+        <button class="tasto-comando nudo piccolo" type="button" id="rimetti-tutto">Rimetti a posto tutti ({{ quanti_decisi }})</button>
+        {% endif %}
+        {% if not lavoro.sta_lavorando %}
+        <form method="post" action="/doppioni/conta">
+            <button class="tasto-comando piccolo" type="submit">Rifai il conto</button>
+        </form>
+        {% endif %}
+    </div>
+
+    {% if quando_contato %}
+    <p class="minuscolo tenue dp-quando">
+        Contato l'ultima volta il {{ quando_a_parole }}.
+        {% if arrivate_dopo %}
+        <b>Da allora sono arrivate {{ arrivate_dopo }}
+        {{ "immagine" if arrivate_dopo == 1 else "immagini" }}</b>: hanno già la
+        loro impronta, ma nessuno le ha ancora messe insieme alle vecchie.
+        {% else %}
+        Da allora non è arrivata nessuna immagine nuova: il conto è quello di
+        adesso.
+        {% endif %}
+    </p>
+    {% endif %}
+
+    <div id="elenco-doppioni" class="dp-elenco" data-apertura="{{ aspetto.doppioni }}"></div>
+
+    {% endif %}
+
+</div>
+</main>
+</div>
+
+<script type="application/json" id="dati-doppioni">{{ dati|safe }}</script>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/doppioni.js"></script>
+{% endblock %}

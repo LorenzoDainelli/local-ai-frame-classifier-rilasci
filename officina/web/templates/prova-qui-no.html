@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_icone.html" import fotina %}
+{% block titolo %}Nella prova no — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<main class="prova-pagina">
+    {{ fotina('grande') }}
+    <h1>Questo, nella prova, non si fa.</h1>
+    <p>Aggiungere foto, il telefono, i due computer e i lavori lunghi toccano i file veri.
+        La prova serve a vedere com'è fatto il programma: queste cose si fanno fuori, sul programma vero.</p>
+    <div class="in-fila">
+        <button class="tasto-comando" type="button" data-indietro>Torna indietro</button>
+        <form method="post" action="/prova/esci"><button class="tasto-comando nudo">Esci dalla prova</button></form>
+    </div>
+</main>
+{% endblock %}
+
+{% block coda %}
+<script type="module">
+    document.querySelector("[data-indietro]").addEventListener("click", () => history.back());
+</script>
+{% endblock %}

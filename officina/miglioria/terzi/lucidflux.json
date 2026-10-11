@@ -1,0 +1,69 @@
+{
+ "deposito": "W2GenAI-Lab/LucidFlux",
+ "commit": "3e688aca5a6199e4757c97462ea0ec282d4cafad",
+ "licenza": "FLUX.1 [dev] Non-Commercial License v1.1.1",
+ "file": {
+  "LICENSE": "6f7b3d94ddd94380a4dc2d1211ed57883d320dea96f4393b34d4a454041029e1",
+  "src/flux/__init__.py": "696433629f30a57293621e3b11ed9e3d9039e2beacff79c6e722c65c27fb173f",
+  "src/flux/align_color.py": "18d2ddaca7b41af78c33a28be3d4d5383c2bc449f4c9926f86f180a6818d8d14",
+  "src/flux/condition.py": "42f4fd9923f9e46b4b0279d8f62ae9281036085dc32c49bf0da06872f5417a37",
+  "src/flux/lucidflux.py": "bb72240ff87cd6fecdb60ebcce2eca3d083af50dd70e5d14407ed4b53332755d",
+  "src/flux/math.py": "33fb1a13741a3fc617c73ce277c863b02207fb6fec2281c7a7959001261c431d",
+  "src/flux/model.py": "74516e0a0dc99f9f384bb35375ca31510744fd7a90044de04cfffb78b5ba17ec",
+  "src/flux/modules/autoencoder.py": "48a3d94b1bf7ebb995901cc1e7bec12ea023908d30b4c4942bcbc3f5c620ff29",
+  "src/flux/modules/conditioner.py": "8065dab56ecd561f47c04e7565731d29e661e867913861efe43b55e55167d296",
+  "src/flux/modules/layers.py": "4e43a682354fc64e4225322a61a4787bde614c73e5d94e6db3bd1189cbffe682",
+  "src/flux/sampling.py": "e73a6e6435615880e75301385bc5b8b29bcdb85edfec93477943df9176b0c929",
+  "src/flux/swinir.py": "6146ed29f81f226ed3ac257add5bf7828ef738bd84aa19530db66e4af524d584",
+  "src/flux/util.py": "0d06b252fae6022a1aab1d1a1488b856b5331f096d240cec1b8afce70403da75"
+ },
+ "pesi": [
+  {
+   "repo": "black-forest-labs/FLUX.1-dev",
+   "remoto": "flux1-dev.safetensors",
+   "locale": "flux1-dev.safetensors",
+   "byte_circa": 23802932552,
+   "cancello": true
+  },
+  {
+   "repo": "black-forest-labs/FLUX.1-dev",
+   "remoto": "ae.safetensors",
+   "locale": "ae.safetensors",
+   "byte_circa": 335304388,
+   "cancello": true
+  },
+  {
+   "repo": "W2GenAI/LucidFlux",
+   "remoto": "lucidflux.pth",
+   "locale": "lucidflux.pth",
+   "byte_circa": 3000000000,
+   "converti": true
+  },
+  {
+   "repo": "W2GenAI/LucidFlux",
+   "remoto": "prompt_embeddings.pt",
+   "locale": "prompt_embeddings.pt",
+   "byte_circa": 10000000,
+   "converti": true
+  },
+  {
+   "repo": "lxq007/DiffBIR",
+   "remoto": "general_swinir_v1.ckpt",
+   "locale": "swinir.ckpt",
+   "byte_circa": 72000000,
+   "converti": true
+  },
+  {
+   "repo": "google/siglip2-so400m-patch16-512",
+   "remoto": "config.json",
+   "locale": "siglip/config.json",
+   "byte_circa": 2000
+  },
+  {
+   "repo": "google/siglip2-so400m-patch16-512",
+   "remoto": "model.safetensors",
+   "locale": "siglip/model.safetensors",
+   "byte_circa": 4546000000
+  }
+ ]
+}

@@ -1,0 +1,112 @@
+{% from "_spiega.html" import spiega %}
+{% if forziere_acceso %}
+<div class="riquadro">
+    <div class="riga-fra">
+        <div>
+            <b>L'archivio è dentro il forziere.</b>{% call spiega("Cosa c'è dentro il forziere") %}
+                <p>Database, miniature e quello che il programma ha imparato
+                stanno in un file solo, cifrato con la tua password. Chi guarda
+                il disco senza di lei vede rumore.</p>
+                <p>Le foto originali <b>non sono qui dentro</b>: restano intatte
+                nella loro cartella, dove le hai messe tu.</p>
+            {% endcall %}
+            <p class="piccolo attenuato" style="margin-top:var(--s2);max-width:62ch">
+                Un file solo, cifrato con la tua password.
+            </p>
+        </div>
+        <span class="pillola" style="flex:0 0 auto">{{ forziere_peso }}</span>
+    </div>
+    <p class="minuscolo tenue" style="margin-top:var(--s3)">
+        Per cambiare la password si spegne e si riaccende con quella nuova.
+    </p>
+    <form class="in-fila" id="modulo-spegni-forziere" data-solo-nel-programma hidden
+          style="margin-top:var(--s3);max-width:520px">
+        <input class="campo" type="password" name="password" required
+               autocomplete="current-password" placeholder="la password di adesso">
+        <button class="tasto-comando" type="submit">Spegni il forziere</button>
+    </form>
+</div>
+
+{% else %}
+<div class="riquadro">
+    <div class="riga-fra" style="margin-bottom:var(--s3)">
+        <b>Metti una password all'archivio</b>
+        <span class="pillola" style="flex:0 0 auto">adesso non c'è</span>
+    </div>
+
+    <p class="piccolo attenuato" style="max-width:62ch">
+        Senza password l'archivio è una cartella in chiaro.{% call spiega("Cosa cambia davvero") %}
+            <p>Il disco Windows lo cifra comunque: chi trova il computer
+            <b>spento</b> non legge niente. Chi lo trova <b>acceso</b> legge
+            tutto.</p>
+            <p>Con la password, tutto l'archivio diventa un file solo che senza
+            di lei è rumore &mdash; anche a computer acceso.</p>
+        {% endcall %}
+    </p>
+
+    <div class="avviso" style="flex-direction:column;align-items:flex-start;margin:var(--s4) 0">
+        <p style="margin:0"><b>Non esiste un «password dimenticata».</b>
+        Se ci fosse una via di recupero, quella via sarebbe anche la via di chi
+        non deve entrare.</p>
+        <p class="piccolo" style="margin:var(--s2) 0 0">
+            Le fotografie originali restano fuori dal forziere e non si perdono
+            mai: perdere la password vuol dire perdere il lavoro di
+            catalogazione, non le foto.
+        </p>
+    </div>
+
+    <form method="post" action="/forziere/accendi" class="in-colonna"
+          style="gap:var(--s3)" id="modulo-forziere">
+        <input type="hidden" name="dove_torno" value="{{ dove_torno }}">
+
+        <label class="in-colonna" style="gap:var(--s1)">
+            <span class="maiuscoletto">La password</span>
+            <input class="campo" type="password" name="password" required
+                   minlength="8" autocomplete="new-password" style="max-width:340px" data-misura-forza>
+            <span class="forza-password" data-forza hidden>
+                <span class="forza-barra" aria-hidden="true"><i data-forza-riempie></i></span>
+                <span class="minuscolo" data-forza-parola aria-live="polite"></span>
+            </span>
+        </label>
+
+        <label class="in-colonna" style="gap:var(--s1)">
+            <span class="maiuscoletto">Scrivila di nuovo</span>
+            <input class="campo" type="password" name="ancora" required
+                   minlength="8" autocomplete="new-password" style="max-width:340px">
+        </label>
+
+        <p class="minuscolo tenue" style="margin:0;max-width:62ch">
+            Lunga meglio che complicata: tre parole che ricordi valgono più di
+            otto caratteri strani. Almeno otto caratteri.
+        </p>
+
+        <label style="display:flex;align-items:flex-start;gap:var(--s3);max-width:62ch">
+            <input type="checkbox" name="su_carta" value="1" required
+                   style="margin-top:3px;flex:0 0 auto">
+            <span class="piccolo">
+                Ho scritto la password da qualche parte che non è questo
+                computer, e ho capito che senza di lei l'archivio non si apre
+                più.
+            </span>
+        </label>
+
+        <div class="in-fila" style="margin-top:var(--s2)">
+            <button class="tasto-comando principale" type="submit">
+                Chiudi l'archivio nel forziere</button>
+            {% if nella_guida %}
+            <a class="tasto-comando nudo" href="/benvenuto/chiave">Lo faccio dopo</a>
+            {% endif %}
+        </div>
+    </form>
+
+    <p class="minuscolo tenue" style="margin-top:var(--s4);max-width:62ch">
+        <b>Si può rimandare, e ha senso rimandarlo.</b>{% call spiega("Quando è il momento") %}
+            <p>Il momento giusto è quando avrai messo le prime etichette vere.
+            Prima c'è solo roba che si rifa' in una notte; dopo ci sono mesi di
+            lavoro.</p>
+            <p>Finché non lo fai resta scritto in alto che l'archivio non è
+            protetto, così non si dimentica per sempre.</p>
+        {% endcall %}
+    </p>
+</div>
+{% endif %}

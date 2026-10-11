@@ -1,0 +1,57 @@
+<script type="module">
+(function () {
+    const tasto = document.getElementById("copia-rapporto");
+    const testo = document.getElementById("testo-rapporto");
+    if (!tasto || !testo) return;
+    tasto.addEventListener("click", async function () {
+        try {
+            await navigator.clipboard.writeText(testo.textContent);
+            tasto.textContent = "copiato";
+        } catch (errore) {
+            const scelta = window.getSelection();
+            const pezzo = document.createRange();
+            pezzo.selectNodeContents(testo);
+            scelta.removeAllRanges();
+            scelta.addRange(pezzo);
+            tasto.textContent = "selezionato: Ctrl+C";
+        }
+        setTimeout(function () { tasto.textContent = "Copia"; }, 2500);
+    });
+})();
+</script>
+<script type="module">
+(function () {
+    const zona = document.getElementById("lm-confronto");
+    if (!zona || zona.dataset.corre !== "1") return;
+    const riga = zona.querySelector("[data-misura-riga]");
+    const orologio = setInterval(async function () {
+        let risposta;
+        try { risposta = await fetch("/api/misura"); } catch (errore) { return; }
+        if (!risposta.ok) return;
+        const dati = await risposta.json();
+        if (riga && dati.righe.length) riga.textContent = dati.righe[dati.righe.length - 1];
+        if (!dati.sta_lavorando) {
+            clearInterval(orologio);
+            window.location.hash = "misura";
+            window.location.reload();
+        }
+    }, 1500);
+})();
+</script>
+<script type="module">
+(function () {
+    const zona = document.getElementById("ar-spazio");
+    if (!zona || zona.dataset.conta !== "1") return;
+    const orologio = setInterval(async function () {
+        let risposta;
+        try { risposta = await fetch("/api/spazio"); } catch (errore) { return; }
+        if (!risposta.ok) return;
+        const dati = await risposta.json();
+        if (dati.pronto && !dati.sta_contando) {
+            clearInterval(orologio);
+            window.location.hash = "archivio";
+            window.location.reload();
+        }
+    }, 2000);
+})();
+</script>

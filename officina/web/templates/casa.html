@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona, fotina %}
+{% block titolo %}Casa — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<main class="pagina casa">
+    <div class="casa-dentro">
+        <div class="casa-saluto">{{ fotina() }}<h1>{{ saluto }}. Cosa cerchi oggi?</h1></div>
+
+        <form class="casa-cercone" action="/" method="get" role="search" data-cerca>
+            <input class="casa-cercone-frase cerca-frase" name="parole" type="search" autocomplete="off"
+                   spellcheck="false" placeholder="foto al mare con il cappello…" aria-label="Cerca a parole">
+            <span class="casa-cercone-sotto">
+                <span class="piccolo tenue">Si cerca per quello che c'è dentro, non per il nome del file</span>
+                <kbd>/</kbd>
+                <span class="casa-vai">{{ icona('freccia', 17) }}</span>
+            </span>
+        </form>
+
+        <div class="casa-carte">
+            <section class="carta casa-carta">
+                <span class="etichetta">Da etichettare</span>
+                <span class="casa-quanto numeri">{{ barra[1].stanze[0].conto|numero }}</span>
+                {% if prossimi %}
+                <span class="casa-fila">
+                    {% for s in prossimi %}<img src="/miniatura/{{ s.file_id }}" alt="" loading="lazy">{% endfor %}
+                </span>
+                {% endif %}
+                <a class="tasto-comando principale piccolo" href="/officina">Continua da dove eri {{ icona('freccia', 14) }}</a>
+            </section>
+
+            <section class="carta casa-carta">
+                <span class="etichetta">Aspettano una tua decisione</span>
+                {% set chiamano = barra[1].stanze|selectattr('chiama')|list %}
+                {% for s in chiamano %}
+                <a class="bollino attenzione" href="{{ s.dove }}">{{ s.conto|numero }} · {{ s.nome|lower }}</a>
+                {% else %}
+                <span class="bollino bene">Niente, per adesso</span>
+                <span class="piccolo tenue">Quando qualcosa chiede te, compare qui.</span>
+                {% endfor %}
+                <a class="tasto-comando piccolo" href="/lavoro">Apri il lavoro</a>
+            </section>
+
+            <section class="carta casa-carta">
+                <span class="etichetta">Come sta il programma</span>
+                <span class="bollino {{ 'bene' if va_bene else 'attenzione' }}">{{ 'Tutto a posto' if va_bene else 'Da guardare' }}</span>
+                <span class="piccolo tenue">
+                    {% if ultima_copia %}Copia del {{ ultima_copia.quando }}{% else %}Nessuna copia ancora{% endif %}{% if libero %} · {{ libero }} liberi{% endif %}
+                </span>
+                <a class="tasto-comando piccolo" href="/stato">Apri lo stato</a>
+            </section>
+        </div>
+
+        {% if recenti %}
+        <section class="casa-ultime">
+            <span class="etichetta">Aggiunte di recente</span>
+            <span class="casa-fila lunga">
+                {% for r in recenti %}<a href="/scatto/{{ r.id }}"><img src="/miniatura/{{ r.file_id }}" alt="" loading="lazy"></a>{% endfor %}
+            </span>
+        </section>
+        {% endif %}
+    </div>
+</main>
+{% endblock %}
+
+{% block coda %}
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona, fotina %}
+{% block titolo %}Lavoro — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina lavoro-casa pc">
+    <header class="pc-testa">
+        <h1 class="titolo-pagina">Lavoro</h1>
+        <p class="sottotitolo">Il percorso, dall'arrivo degli scatti alle foto migliorate.{% if prossimo %} Il prossimo passo è segnato in arancio.{% endif %}</p>
+    </header>
+
+    <section class="carta pc-grande">
+        {% if prossimo %}
+        {{ fotina() }}
+        <div class="pc-grande-dice">
+            <span class="pc-eti">Il prossimo passo</span>
+            <h2>{{ prossimo.nome }}</h2>
+            <p>{{ prossimo.detto }}</p>
+        </div>
+        <a class="tasto-comando accento grande" href="{{ prossimo.tasto_dove }}">{{ prossimo.tasto }} {{ icona('freccia', 15) }}</a>
+        {% else %}
+        {{ fotina('dorme') }}
+        <div class="pc-grande-dice">
+            <span class="pc-eti bene">Tutto in pari</span>
+            <h2>Niente aspetta te, oggi</h2>
+            <p>{% if tappe|selectattr('stato', 'equalto', 'gira')|list %}Il programma sta lavorando da solo: puoi lasciarlo fare.{% else %}Quando aggiungi scatti nuovi, il percorso riparte da «Aggiungi scatti».{% endif %}</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <ol class="pc-tappe">
+        {% for t in tappe %}
+        <li class="pc-tappa {{ 'qui' if t.qui }} {{ 'dopo' if t.stato == 'dopo' }}">
+            <div class="pc-segno">
+                <span class="pc-tondo {{ 'fatto' if t.stato == 'fatto' }} {{ 'qui' if t.qui }} {{ 'gira' if t.stato == 'gira' }}">{% if t.stato == 'fatto' %}{{ icona('spunta', 15) }}{% else %}{{ loop.index }}{% endif %}</span>
+            </div>
+            <section class="carta pc-carta">
+                <h2><a href="{{ t.dove }}">{{ t.nome }}</a></h2>
+                <p>{{ t.detto }}</p>
+                <a class="tasto-comando piccolo {{ 'accento' if t.qui }}" href="{{ t.tasto_dove }}">{{ t.tasto }} {{ icona('freccia', 13) }}</a>
+            </section>
+        </li>
+        {% endfor %}
+    </ol>
+
+    {% if prossimi %}
+    <a class="carta pc-sotto" href="/officina">
+        <span class="pc-sotto-dice"><b>{% if ripartenza %}Ripartivi da qui, in Etichetta{% else %}I prossimi da etichettare{% endif %}</b>
+            <span class="piccolo tenue">{% if ripartenza %}I prossimi scatti senza etichetta, dal {{ ripartenza }}.{% else %}Gli scatti che non hanno ancora un nodo.{% endif %}</span></span>
+        <span class="pc-strip">{% for scatto in prossimi %}<img src="/miniatura/{{ scatto.file_id }}" alt="" loading="lazy">{% endfor %}</span>
+    </a>
+    {% endif %}
+</div>
+</main>
+</div>
+{% endblock %}

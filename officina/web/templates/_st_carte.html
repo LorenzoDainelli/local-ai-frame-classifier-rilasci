@@ -1,0 +1,23 @@
+{% set n = pagella.corsie.nutrire|length %}{% set c = pagella.corsie.crescita|length %}{% set s = pagella.corsie.salute|length %}
+<div class="st-carte">
+    <a class="carta st-carta" href="#albero" data-vai-linguetta="albero">
+        <span class="etichetta">L'albero</span>
+        <span class="st-grande"><b class="numeri">{{ s|numero }}</b> {{ 'nodo' if s == 1 else 'nodi' }} su {{ pagella.righe|length|numero }} ci prende bene</span>
+        {% include "_st_tre.html" %}
+        <span class="st-leggenda"><span class="bollino attenzione">{{ n }} da nutrire</span><span class="bollino">{{ c }} in crescita</span><span class="bollino bene">{{ s }} in salute</span></span>
+    </a>
+    <a class="carta st-carta" href="#modelli" data-vai-linguetta="modelli">
+        <span class="etichetta">Modelli e macchina</span>
+        <span class="st-grande"><b class="numeri">{{ modelli|selectattr('in_casa')|list|length }}</b> modelli su {{ modelli|length }} in casa</span>
+        {% set guai = sistemare|selectattr('dove', 'equalto', 'modelli')|list %}
+        {% if guai %}<span class="bollino attenzione">{{ guai[0].titolo }}</span>{% else %}<span class="bollino bene">tutto a posto</span>{% endif %}
+        <span class="minuscolo tenue">{{ macchina_in_breve }}</span>
+    </a>
+    <a class="carta st-carta" href="#archivio" data-vai-linguetta="archivio">
+        <span class="etichetta">L'archivio</span>
+        <span class="st-grande"><b class="numeri">{{ stato_numeri['Scatti']|numero }}</b> scatti</span>
+        {% set persi = stato_numeri['File non trovati sul disco'] %}
+        <span class="bollino {{ 'attenzione' if persi else 'bene' }}">{{ (persi|numero ~ ' file non trovati') if persi else 'tutti i file trovati sul disco' }}</span>
+        <span class="bollino {{ 'bene' if copie else 'attenzione' }}">{{ ('copia del ' ~ copie[0].quando) if copie else 'nessuna copia, ancora' }}</span>
+    </a>
+</div>

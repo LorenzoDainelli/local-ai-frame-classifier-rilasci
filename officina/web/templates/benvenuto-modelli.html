@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% import "_guida.html" as guida_pezzi %}
+{% set guida = true %}
+{% block titolo %}I modelli — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale guida">
+    {{ guida_pezzi.testa(3) }}
+<div class="pagina guida-corpo">
+
+    {% call guida_pezzi.dice("I modelli") %}
+        Sono l'unica cosa che arriva da internet, e l'unica che non è un dato tuo: pesi addestrati da altri su immagini di altri. Arrivano in fila, con una barra sola.
+    {% endcall %}
+    {% set mancanti = modelli | rejectattr("in_casa") | rejectattr("quale", "equalto", "lucidflux") | list %}
+
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('cubo', 18) }}<h1>I modelli, se li vuoi</h1>
+
+            {% if mancanti %}
+            <form method="post" action="/modelli/scarica-quel-che-manca">
+                <input type="hidden" name="dove_torno" value="/benvenuto/modelli">
+                <button class="tasto-comando" type="submit">
+                    Scarica quello che manca
+                    <span class="numeri">{{ mancanti | length }}</span>
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        <p class="piccolo attenuato">
+            Sono facoltativi davvero: <strong>con</strong>, le proposte
+            diventano molto più precise.{% call spiega("E senza?") %}
+                <p>Senza, il programma funziona tutto: usa il descrittore
+                disegnato a mano, che non è intelligenza artificiale &mdash; è
+                un conto sui colori e sui bordi.</p>
+                <p>Costa minuti invece di notti, e serve anche come metro di
+                paragone: un modello grande che non lo batte non sta guadagnando
+                niente.</p>
+            {% endcall %}
+        </p>
+        <p class="piccolo attenuato">
+            È l'unico momento in cui il programma tocca la rete.
+            Si può fare adesso, o fra un mese, o mai.
+        </p>
+
+        {% for modello in modelli %}
+        <div class="riga-modello">
+            <div>
+                <b>{{ modello.titolo }}</b>
+                <div class="minuscolo tenue">{{ modello.a_cosa_serve }}</div>
+                <div class="minuscolo tenue dove numeri">
+                    {% if modello.pesa_davvero %}{{ modello.peso }}{% else %}circa {{ modello.peso }}{% endif %} ·
+                    licenza {{ modello.licenza }}{% if modello.precisione != "nessuna" %} ·
+                    {{ "trentadue bit" if modello.precisione == "piena" else "sedici bit" }}{% endif %}
+                </div>
+                {% if modello.quale == "lucidflux" %}
+                <div class="minuscolo tenue">
+                    Si scarica solo da questo tasto: sono circa 30 GB. Prima
+                    serve un passo su Hugging Face, spiegato nel
+                    <a href="/benvenuto/chiave">passo della chiave</a>.
+                </div>
+                {% endif %}
+                {% if modello.codice_di_terzi %}
+                <div class="minuscolo tenue">
+                    Attenzione: questo modello, per funzionare, scarica ed
+                    <b>esegue</b> del codice scritto da altri su questo
+                    computer. Gli altri sono soltanto numeri, e un file di
+                    numeri non fa niente.
+                </div>
+                {% endif %}
+            </div>
+            <div class="in-fila" style="flex:0 0 auto">
+                {% if modello.in_casa %}
+                <span class="pillola">in casa</span>
+                {% else %}
+                <form method="post" action="/modelli/scarica">
+                    <input type="hidden" name="quale" value="{{ modello.quale }}">
+
+                    <input type="hidden" name="dove_torno" value="/benvenuto/modelli">
+                    <button class="tasto-comando" type="submit">Scaricalo</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <div id="corso-modelli"
+             data-lavorava="{{ 1 if scaricamento.sta_lavorando else 0 }}"
+             {% if not scaricamento.sta_lavorando and not scaricamento.righe %}class="nascosto"{% endif %}
+             style="margin-top:var(--s4)">
+            <p class="piccolo attenuato" id="stato-modelli"></p>
+
+            <div id="barra-modelli-zona" hidden style="margin-bottom:var(--s3)">
+                <div class="avanzamento"><div class="fatto" id="barra-modelli" style="width:0%"></div></div>
+                <p class="piccolo attenuato numeri" id="quanti-modelli" style="margin-top:var(--s2)"></p>
+            </div>
+            <div class="righe-lavoro" id="righe-modelli">{{ scaricamento.righe | join("\n") }}</div>
+            <div class="avviso" style="white-space:pre-line;margin-top:var(--s3)"
+                 id="guasto-modelli"
+                 {% if not scaricamento.guasto %}hidden{% endif %}>{{ scaricamento.guasto }}</div>
+        </div>
+    </section>
+</div>
+    {% call guida_pezzi.piede(3, "puoi andare avanti mentre scarica") %}
+        <a class="tasto-comando principale" href="/benvenuto/cartella">Avanti {{ icona('avanti', 14) }}</a>
+    {% endcall %}
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+{% include "_stato_salute_coda.html" %}
+{% endblock %}

@@ -1,0 +1,131 @@
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+    <p class="sottotitolo">
+        Quale modo di guardare sbaglia meno, misurato <em>sulle tue foto</em> e
+        non dato per scontato.{% call spiega("Cosa si mette a confronto") %}
+            <p>I due modelli grandi, il ritaglio contro la foto intera, il
+            classificatore leggero.</p>
+            <p>Si fa adesso perché adesso cambiare idea costa poco: un
+            pomeriggio. Fra sei mesi costerebbe una notte di ricalcolo su tutto
+            l'archivio.</p>
+        {% endcall %}
+    </p>
+
+    <div class="riquadro lm-parte">
+        <div class="riga-fra">
+            <h3>1 · Le impronte</h3>
+            <a class="tasto-comando" href="/intelligenza">{{ icona('chip', 15) }} Intelligenza artificiale</a>
+        </div>
+        <p class="piccolo attenuato">Si calcolano da Intelligenza artificiale, insieme ai volti e alle scritte. La misura usa quelle già fatte.</p>
+    </div>
+
+    <div class="riquadro lm-parte">
+        <div class="riga-fra">
+            <h3>2 · Le tue decisioni
+                <span class="tenue numeri">{{ scatti_decisi|numero }} scatti</span></h3>
+            <a class="tasto-comando principale" href="/misura/banco">Apri il banco</a>
+        </div>
+        <p class="piccolo attenuato">
+            Servono un centinaio di scatti divisi in due o tre
+            mucchi.{% call spiega("Non è l'etichettatura vera") %}
+                <p>Quella arriva dopo, con l'albero e le proposte.</p>
+                <p>Qui c'è uno scatto per volta e un tasto, perché serve solo
+                materiale su cui misurare.</p>
+            {% endcall %}
+        </p>
+
+        {% if nodi_di_prova %}
+        <div class="mm-elenco">
+            {% for voce in nodi_di_prova %}
+            {% set conto = (quanto_manca|selectattr("nome", "equalto", voce.nome)|first) if quanto_manca else none %}
+            <div class="mm-riga">
+                <div class="mm-dice">
+                    <b>{{ voce.nome }}</b>
+                    <span class="minuscolo tenue">{% if voce.ramo %}in «{{ voce.ramo }}»{% if voce.esclusivo %}, scegline uno{% endif %} · {% endif %}<span class="numeri">{{ voce.esempi|numero }}</span> esempi{% if conto %} · <span class="numeri">{{ conto.gruppi_si|numero }}</span> gruppi «sì», <span class="numeri">{{ conto.gruppi_no|numero }}</span> «no»{% endif %}</span>
+                </div>
+                <div class="mm-azione">
+                {% if conto and conto.pronto %}
+                    <span class="bollino bene">Basta per un voto</span>
+                {% elif conto %}
+                    <span class="bollino attenzione">Mancano {% if conto.manca_si %}{{ conto.manca_si }} «sì»{% endif %}{% if conto.manca_si and conto.manca_no %} e {% endif %}{% if conto.manca_no %}{{ conto.manca_no }} «no»{% endif %}</span>
+                {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="piccolo tenue">Nessun mucchio, ancora. Creane due o tre qui sotto.</p>
+        {% endif %}
+
+        <div class="lm-crea">
+            <form method="post" action="/misura/ramo" class="lm-modulo">
+                <span class="etichetta">Un ramo «scegline uno»</span>
+                <p class="minuscolo tenue">Quando i mucchi si escludono a vicenda: uno scatto messo nel primo diventa un «no» per tutti gli altri, senza dirlo.</p>
+                <div class="lm-in-fila">
+                    <input class="campo" name="nome" placeholder="Come si chiama il ramo" required>
+                    <button class="tasto-comando" type="submit">Crea</button>
+                </div>
+            </form>
+            <form method="post" action="/misura/nodo" class="lm-modulo">
+                <span class="etichetta">Un mucchio</span>
+                <p class="minuscolo tenue">Dentro un ramo se ne mettono due o tre. Da soli funzionano lo stesso, ma ogni «no» va detto a mano.</p>
+                <div class="lm-in-fila">
+                    <input class="campo" name="nome" placeholder="Come si chiama il mucchio" required>
+                    <select class="campo" name="ramo_id" aria-label="In quale ramo">
+                        <option value="">Senza ramo</option>
+                        {% for riga in rami %}
+                        <option value="{{ riga.id }}">{{ riga.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="tasto-comando" type="submit">Crea</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% set corre = misura_lavoro.sta_lavorando %}
+    {% set nel_lavori = (aspetto.misura == "B") %}
+    <div class="riquadro lm-parte" id="lm-confronto" data-corre="{{ 1 if corre else 0 }}">
+        <div class="riga-fra">
+            <h3>3 · Il confronto</h3>
+            {% if corre and not nel_lavori %}
+            <span class="bollino attenzione">Sta misurando</span>
+            {% elif not corre %}
+            <form method="post" action="/misura/esegui">
+                <button class="tasto-comando {{ 'principale' if not ultima_misura else '' }}" type="submit">{{ "Misura di nuovo" if ultima_misura else "Misura adesso" }}</button>
+            </form>
+            {% endif %}
+        </div>
+        {% if corre and nel_lavori %}
+        <p class="piccolo">La misura lavora in sottofondo, insieme agli altri lavori in corso. Puoi usare il programma: quando finisce, il rapporto compare qui.</p>
+        {% elif corre %}
+        <div class="lm-corre">
+            <span class="barretta lm-scorre"><span></span></span>
+            <p class="minuscolo tenue" data-misura-riga>{{ misura_lavoro.righe[-1] if misura_lavoro.righe else "Comincio." }}</p>
+            <p class="minuscolo tenue">Puoi cambiare pagina: la misura continua, e quando finisce il rapporto compare qui.</p>
+        </div>
+        {% elif not ultima_misura %}
+        <p class="piccolo attenuato">
+            Mette a confronto i modi di guardare le foto sugli stessi esempi e
+            con la stessa divisione, così i numeri si possono mettere in
+            colonna. Dura qualche decina di secondi, in sottofondo.
+        </p>
+        {% else %}
+        <p class="piccolo tenue">
+            L'ultima è del {{ ultima_misura.fatta_il }}: {{ ultima_misura.scatti|numero }}
+            scatti in {{ ultima_misura.gruppi|numero }} gruppi, {{ ultima_misura.nodi|numero }} mucchi.
+        </p>
+        {% endif %}
+        {% if misura_lavoro.guasto and not corre %}
+        <p class="mm-guasto">{{ misura_lavoro.guasto }}</p>
+        {% endif %}
+
+        {% if rapporto %}
+        <div class="riga-fra">
+            <span class="etichetta">Il rapporto</span>
+            <button class="tasto-comando piccolo" id="copia-rapporto">Copia</button>
+        </div>
+        <p class="minuscolo tenue">Contiene solo numeri: nessun nome di mucchio, di file o di cartella. È stato riletto prima di mostrartelo, e si può mostrare a chiunque.</p>
+        <pre class="rapporto-misura" id="testo-rapporto">{{ rapporto.testo }}</pre>
+        {% endif %}
+    </div>

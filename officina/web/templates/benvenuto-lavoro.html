@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% import "_guida.html" as guida_pezzi %}
+{% set guida = true %}
+{% block titolo %}L'elaborazione — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale guida">
+    {{ guida_pezzi.testa(5) }}
+<div class="pagina guida-corpo">
+
+    {% call guida_pezzi.dice("L'elaborazione") %}
+        {% if mai_importato %}Qui guardo le foto una per una. Non è ancora partito niente: il passo prima è dirmi dove sono.{% else %}Sto leggendo le foto. Si può chiudere tutto a metà: ogni scatto finito è già scritto, e alla riapertura riprendo dalla riga dopo. Non serve restare a guardare.{% endif %}
+    {% endcall %}
+
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('foto', 18) }}<h1>Le foto</h1></div>
+        {% if mai_importato %}
+        <p class="piccolo tenue" style="margin-top:var(--s3)">
+            Non è ancora partito niente. Il passo prima è
+            <a href="/benvenuto/cartella">dire dove sono le foto</a>.
+        </p>
+        {% else %}
+        <div class="numero-grosso" id="numero-fatti">{{ stato.fatti }}</div>
+        <div class="piccolo attenuato" id="riga-stato">
+            di {{ stato.totale }} file · {{ stato.quanto_manca }}
+        </div>
+        <div class="avanzamento" style="margin-top:var(--s3)">
+            <div class="fatto" id="barra" style="width: {{ stato.percentuale }}%"></div>
+        </div>
+        <dl class="scheda-dati" style="margin-top:var(--s4)">
+            <dt>Scatti nuovi</dt><dd class="numeri" id="conto-scatti">{{ stato.nuovi_scatti|numero }}</dd>
+            <dt>Coppie live</dt><dd class="numeri" id="conto-live">{{ stato.coppie_live|numero }}</dd>
+            <dt>Già presenti</dt><dd class="numeri" id="conto-gia">{{ stato.gia_presenti|numero }}</dd>
+            <dt>Saltati</dt><dd class="numeri" id="conto-saltati">{{ stato.saltati|numero }}</dd>
+        </dl>
+        <div class="in-fila" style="margin-top:var(--s4)">
+            <form method="post" action="/importazione/ferma">
+                <button class="tasto-comando" type="submit">Fermati</button>
+            </form>
+            <form method="post" action="/importazione/riprendi">
+                <button class="tasto-comando" type="submit">Riprendi</button>
+            </form>
+        </div>
+
+        <div class="griglia-che-cresce mosaico-corto" style="margin-top:var(--s4)">
+            <p class="etichetta">Quello che sta arrivando</p>
+            <div class="mosaico-vivo" id="mosaico"></div>
+        </div>
+        {% endif %}
+    </section>
+
+    {% with dove_torno="/benvenuto/lavoro" %}{% include "_impronte.html" %}{% endwith %}
+</div>
+    {% call guida_pezzi.piede(5, "puoi andare avanti mentre lavora: quello che è pronto è pronto") %}
+        <a class="tasto-comando principale" href="/benvenuto/pronto">Avanti {{ icona('avanti', 14) }}</a>
+    {% endcall %}
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+<script type="module">
+    import { chiedi, numeroAParole } from "/statici/js/comune.js";
+
+    const mosaico = document.getElementById("mosaico");
+    const visti = new Set();
+
+    async function guardaLeFoto() {
+        if (!mosaico || document.hidden) return;
+        try {
+            const dati = await chiedi("/api/importazione");
+            document.getElementById("numero-fatti").textContent =
+                numeroAParole(dati.fatti);
+            document.getElementById("riga-stato").textContent =
+                `di ${numeroAParole(dati.totale)} file · ${dati.quanto_manca}`;
+            document.getElementById("barra").style.width = `${dati.percentuale}%`;
+            document.getElementById("conto-scatti").textContent =
+                numeroAParole(dati.nuovi_scatti);
+            document.getElementById("conto-live").textContent =
+                numeroAParole(dati.coppie_live);
+            document.getElementById("conto-gia").textContent =
+                numeroAParole(dati.gia_presenti);
+            document.getElementById("conto-saltati").textContent = dati.saltati;
+
+            (dati.ultime || []).forEach((voce) => {
+                if (visti.has(voce.file_id)) return;
+                visti.add(voce.file_id);
+                const figura = document.createElement("img");
+                figura.src = `/miniatura/${voce.file_id}`;
+                figura.alt = "";
+                mosaico.prepend(figura);
+                while (mosaico.children.length > 120) mosaico.lastChild.remove();
+            });
+        } catch (errore) {  }
+    }
+
+    const zonaModelli = document.getElementById("corso-modelli");
+    const righeModelli = document.getElementById("righe-modelli");
+    const statoModelli = document.getElementById("stato-modelli");
+    const guastoModelli = document.getElementById("guasto-modelli");
+    let orologioModelli = null;
+    let vistoScaricare = zonaModelli && zonaModelli.dataset.lavorava === "1";
+
+    async function guardaIModelli() {
+        try {
+            const dati = await chiedi("/api/modelli");
+            zonaModelli.classList.remove("nascosto");
+            righeModelli.textContent = dati.righe.join("\n");
+            righeModelli.scrollTop = righeModelli.scrollHeight;
+
+            const zonaBarra = document.getElementById("barra-modelli-zona");
+            if (zonaBarra) {
+                const c_e = typeof dati.percento === "number";
+                zonaBarra.hidden = !c_e;
+                if (c_e) {
+                    const gb = (n) => {
+                        const quanto = n >= 1e9 ? n / 1e9 : n / 1e6;
+                        return quanto.toFixed(1).replace(".", ",") + (n >= 1e9 ? " GB" : " MB");
+                    };
+                    document.getElementById("barra-modelli").style.width =
+                        dati.percento + "%";
+                    document.getElementById("quanti-modelli").textContent = dati.unita === "pezzi"
+                        ? dati.percento + "% — librerie: " + dati.scaricati + " di " + dati.da_scaricare
+                        : dati.percento + "% — " + gb(dati.scaricati) + " di circa " + gb(dati.da_scaricare);
+                }
+            }
+            if (dati.sta_lavorando) {
+                vistoScaricare = true;
+                statoModelli.textContent = "Sto scaricando.";
+                return;
+            }
+            clearInterval(orologioModelli);
+            statoModelli.textContent = dati.guasto ? "Non è andata." : "Fatto.";
+
+            if (guastoModelli) {
+                guastoModelli.textContent = dati.guasto || "";
+                guastoModelli.hidden = !dati.guasto;
+            }
+
+            if (vistoScaricare && !dati.guasto)
+                setTimeout(() => window.location.reload(), 1200);
+        } catch (errore) {  }
+    }
+
+    guardaLeFoto();
+    setInterval(guardaLeFoto, 2500);
+    if (zonaModelli && !zonaModelli.classList.contains("nascosto")) {
+        orologioModelli = setInterval(guardaIModelli, 2000);
+        guardaIModelli();
+    }
+</script>
+{% endblock %}

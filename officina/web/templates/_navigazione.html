@@ -1,0 +1,115 @@
+{% from "_icone.html" import icona, fotina, fotina_sbuca %}
+{% macro voce(s) -%}
+<a class="voce {{ 'qui' if s.qui }}" href="{{ s.dove }}" {% if s.dove == '/albero' %}data-apri-albero{% endif %}{% if s.qui %} aria-current="page"{% endif %}>
+    {{ icona(s.icona) }}<span class="voce-nome">{{ s.nome }}</span>
+    {% if s.tasto %}<kbd>{{ s.tasto }}</kbd>
+    {% elif s.conto %}<span class="conto numeri {{ 'chiama' if s.chiama }}">{{ s.conto|numero }}</span>{% endif %}
+</a>
+{%- endmacro %}
+{% macro cerca(classe='') -%}
+<form class="campo cerca-a-parole {{ classe }}" id="apri-lente" action="/" method="get" role="search" data-cerca>
+    <span class="cerca-segno" aria-hidden="true">{{ icona("cerca", 16) }}</span>
+    <input class="cerca-frase" name="parole" type="search" autocomplete="off" spellcheck="false"
+           placeholder="Cerca a parole" aria-label="Cerca a parole"><kbd>/</kbd>
+</form>
+{%- endmacro %}
+{% macro in_corso() -%}
+<div class="in-corso" id="in-corso" hidden aria-live="polite">
+    <span class="in-corso-titolo">In corso</span>
+    <div class="in-corso-lavori" data-lavori></div>
+</div>
+{%- endmacro %}
+{% macro bande() -%}
+{% set e_finto = archivio_nome == 'finto' and not sto_provando %}
+{% if (not forziere_acceso and qui not in ('', 'casa')) or e_finto %}
+<div class="bande">
+    {% if not forziere_acceso and qui not in ('', 'casa') %}
+    <a class="senza-password" href="/impostazioni#c6" title="L'archivio non è dentro il forziere cifrato">{{ icona('scudo', 14) }}<span>senza password</span></a>
+    {% endif %}
+    {% if e_finto %}
+    <span class="archivio-finto" title="Stai lavorando sull'archivio finto">{{ icona('foto', 14) }}<span>archivio finto</span></span>
+    {% endif %}
+</div>
+{% endif %}
+{%- endmacro %}
+{% macro novita_punto() -%}
+{% if novita_da_leggere %}
+<a class="tasto tondo novita-punto" href="/novita" data-apri-novita title="Novità: {{ novita_da_leggere }} da leggere">{{ icona('scintilla', 18) }}<span class="punto-accento"></span></a>
+{% endif %}
+{%- endmacro %}
+{% macro novita_carta() -%}
+{% if novita_da_leggere %}
+<a class="novita-carta" href="/novita" data-apri-novita>
+    {{ fotina_sbuca() }}
+    <span><b>Novità</b><span>{{ novita_da_leggere }} {{ 'versione' if novita_da_leggere == 1 else 'versioni' }} da leggere</span></span>
+    <span class="punto-accento"></span>
+</a>
+{% endif %}
+{%- endmacro %}
+
+{% set nav = aspetto.navigazione %}
+{% if nav == 'B' %}
+<header class="nav-b">
+    <a class="marchio" href="/casa">{{ fotina_sbuca() }}<b>Frame Classifier</b></a>
+    <nav class="nav-b-voci" aria-label="Le parti del programma">
+        <a href="/casa" class="{{ 'qui' if qui == 'casa' }}">{{ icona('casa', 16) }} Casa</a>
+        {% for sez in barra if sez.chiave not in ('impostazioni', 'collegamenti') %}
+        <a href="{{ sez.dove }}" class="{{ 'qui' if sez.qui }}">{{ icona(sez.icona, 16) }} {{ sez.nome }}
+            {% set chiama = sez.stanze|selectattr('chiama')|list %}
+            {% if chiama %}<span class="conto chiama numeri">{{ chiama|sum(attribute='conto')|numero }}</span>{% endif %}
+        </a>
+        {% endfor %}
+    </nav>
+    <div class="nav-b-destra">
+        <span class="pillola in-corso-pillola" id="in-corso-pillola" hidden><span class="gira-poco"></span><span data-quanti></span></span>
+        {{ bande() }}
+        {{ novita_punto() }}
+        {{ cerca('stretto') }}
+        {% for sez in barra if sez.chiave in ('collegamenti', 'impostazioni') %}
+        <a class="tasto nudo tondo {{ 'qui' if sez.qui }}" href="{{ sez.dove }}" title="{{ sez.nome }}">{{ icona(sez.icona) }}</a>
+        {% endfor %}
+    </div>
+</header>
+{% for sez in barra if sez.qui and sez.stanze %}
+<nav class="linguette-sezione" aria-label="{{ sez.nome }}">
+    {% for s in sez.stanze %}
+    <a href="{{ s.dove }}" class="{{ 'qui' if s.qui }}" {% if s.dove == '/albero' %}data-apri-albero{% endif %}>{{ s.nome }}
+        {% if s.conto and s.chiama %}<span class="conto chiama numeri">{{ s.conto|numero }}</span>{% endif %}</a>
+    {% endfor %}
+</nav>
+{% endfor %}
+{% elif nav == 'C' %}
+<nav class="nav-c" aria-label="Le parti del programma">
+    <a class="marchio" href="/" title="Frame Classifier">{{ fotina_sbuca() }}</a>
+    {% for sez in barra if sez.chiave != 'impostazioni' %}
+    <a href="{{ sez.dove }}" class="{{ 'qui' if sez.qui }}">{{ icona(sez.icona, 21) }}<span>{{ sez.nome }}</span>
+        {% if sez.chiama %}<i class="punto-accento"></i>{% endif %}</a>
+    {% endfor %}
+    <span class="nav-c-giu"></span>
+    {{ novita_punto() }}
+    {{ bande() }}
+    <a href="#" class="nav-c-corso" id="in-corso-anello" hidden><span class="anello" style="--p:0"></span><span>In corso</span></a>
+    {% for sez in barra if sez.chiave == 'impostazioni' %}
+    <a href="{{ sez.dove }}" class="{{ 'qui' if sez.qui }}">{{ icona(sez.icona, 21) }}<span>Imposta</span></a>
+    {% endfor %}
+</nav>
+{% else %}
+<aside class="nav-a" aria-label="Le parti del programma">
+    <a class="marchio" href="/">{{ fotina_sbuca() }}<b>Frame Classifier</b></a>
+    {{ cerca() }}
+    <nav class="nav-a-voci">
+        {% for sez in barra if sez.chiave != 'impostazioni' %}
+        {% if not loop.first %}<p class="nav-gruppo"><a href="{{ sez.dove }}">{{ sez.nome }}</a></p>{% endif %}
+        {% for s in sez.stanze %}{{ voce(s) }}{% endfor %}
+        {% endfor %}
+    </nav>
+    {{ in_corso() }}
+    {{ bande() }}
+    <div class="nav-a-fondo">
+        {% for sez in barra if sez.chiave == 'impostazioni' %}
+        {{ voce({'dove': sez.dove, 'nome': sez.nome, 'icona': sez.icona, 'qui': sez.qui, 'conto': None, 'tasto': ''}) }}
+        {% endfor %}
+        {{ novita_carta() }}
+    </div>
+</aside>
+{% endif %}

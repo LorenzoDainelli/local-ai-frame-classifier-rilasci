@@ -1,0 +1,20 @@
+{% from "_icone.html" import icona %}
+{% for cosa in sistemare %}
+<div class="st-problema">
+    <span class="st-problema-segno">{{ icona('avviso', 16) }}</span>
+    <div class="st-problema-dentro">
+        <p><b>{{ cosa.titolo }}.</b> <span class="st-problema-testo">{{ cosa.testo }}</span></p>
+        {% if cosa.azione %}
+        <div class="in-fila">
+            {% if cosa.azione.modulo %}
+            <form method="post" action="{{ cosa.azione.modulo }}"><button class="tasto-comando piccolo principale" type="submit">{{ cosa.azione.nome }}</button></form>
+            {% else %}
+            <a class="tasto-comando piccolo" href="{{ cosa.azione.dove }}">{{ cosa.azione.nome }}</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<p class="bollino bene">Niente da sistemare</p>
+{% endfor %}

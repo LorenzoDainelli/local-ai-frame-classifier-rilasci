@@ -1,0 +1,120 @@
+{% from "_icone.html" import icona %}
+<div class="cn" data-cartella-nuova-riquadro {% if autofocus %}data-autofocus{% endif %}>
+    <ul class="cn-elenco">
+        {% for cartella in cartelle %}
+        <li>
+            {{ icona('cartella', 15) }}
+            <span class="nome-di-file">{{ cartella.percorso }}</span>
+            {% if gruppi is defined %}
+            <form method="post" action="/importazione/cartella/{{ cartella.id }}/gruppo" class="cn-gruppo-riga">
+                <select class="campo piccolo" name="gruppo" data-cambia-gruppo
+                        aria-label="Gruppo della cartella" title="Il gruppo in cui finiscono le foto di questa cartella.">
+                    <option value="" {{ 'selected' if not cartella.gruppo_id }}>Archivio generale</option>
+                    {% for gruppo in gruppi %}
+                    <option value="{{ gruppo.id }}" {{ 'selected' if cartella.gruppo_id == gruppo.id }}>{{ gruppo.nome }}</option>
+                    {% endfor %}
+                </select>
+                <noscript><button class="tasto-comando nudo piccolo" type="submit">Cambia</button></noscript>
+            </form>
+            {% endif %}
+            {% set conto = conti[cartella.id] if conti is defined and cartella.id in conti else none %}
+            {% if conto and conto.file %}
+            <button class="tasto-comando nudo piccolo cn-annulla" type="button" data-apri-annulla="annulla-{{ cartella.id }}"
+                    title="Toglie dall'app la cartella e gli scatti arrivati da lì. I file sul disco restano.">Annulla importazione</button>
+            {% endif %}
+            <form method="post" action="/importazione/cartella/{{ cartella.id }}/togli">
+                {% if dove_torno %}
+                <input type="hidden" name="dove_torno" value="{{ dove_torno }}">
+                {% endif %}
+                <button class="tasto-comando nudo cn-togli" type="submit"
+                        title="Toglie la cartella dall'elenco. Gli scatti restano."
+                        aria-label="Togli la cartella">{{ icona('x', 14) }}</button>
+            </form>
+        </li>
+        {% else %}
+        <li class="cn-vuoto">Nessuna cartella, ancora.</li>
+        {% endfor %}
+    </ul>
+    {% if tolte is defined and tolte %}
+    <div class="cn-tolte">
+        <p class="piccolo attenuato">Cartelle tolte, ma i loro scatti sono ancora nell'app:</p>
+        <ul class="cn-elenco">
+            {% for conto in tolte %}
+            <li>
+                {{ icona('cartella', 15) }}
+                <span class="nome-di-file">{{ conto.percorso }}</span>
+                <button class="tasto-comando nudo piccolo cn-annulla" type="button" data-apri-annulla="annulla-{{ conto.cartella_id }}">Annulla importazione</button>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    {% set da_annullare = [] %}
+    {% if conti is defined %}{% for cartella in cartelle %}{% if conti.get(cartella.id) and conti[cartella.id].file %}{% set _ = da_annullare.append(conti[cartella.id]) %}{% endif %}{% endfor %}{% endif %}
+    {% if tolte is defined %}{% for conto in tolte %}{% set _ = da_annullare.append(conto) %}{% endfor %}{% endif %}
+    {% for conto in da_annullare %}
+    <dialog class="finestra" id="annulla-{{ conto.cartella_id }}" aria-label="Annulla importazione">
+        <header><h2>Annulla importazione</h2><button class="tasto-comando nudo piccolo" type="button" data-chiudi-annulla aria-label="Chiudi">{{ icona('x', 18) }}</button></header>
+        <div class="finestra-dentro">
+            <p class="nome-di-file">{{ conto.percorso }}</p>
+            <p>Escono dall'app <b class="numeri">{{ conto.spariscono|numero }}</b> scatti, con etichette, volti e scritte.</p>
+            {% if conto.restano %}
+            <p class="piccolo attenuato"><span class="numeri">{{ conto.restano|numero }}</span> scatti restano, perché sono anche in un'altra cartella: tolgo solo il legame con questa.</p>
+            {% endif %}
+            <p class="piccolo attenuato">I file sul disco non si toccano. Non si può tornare indietro.</p>
+            <form method="post" action="/importazione/cartella/{{ conto.cartella_id }}/annulla" class="riga-fra">
+                {% if dove_torno %}<input type="hidden" name="dove_torno" value="{{ dove_torno }}">{% endif %}
+                <button class="tasto-comando" type="button" data-chiudi-annulla>Lascia stare</button>
+                <button class="tasto-comando principale" type="submit">Annulla importazione</button>
+            </form>
+        </div>
+    </dialog>
+    {% endfor %}
+    {% if si_puo_sfogliare %}
+    <button class="tasto-comando cn-sfoglia {{ '' if cartelle else 'principale' }}" type="button"
+            data-sfoglia hidden title="Apre la finestra di Windows per scegliere la cartella.">
+        <span class="gira-poco" data-gira hidden></span>
+        <span data-icona>{{ icona('piu' if cartelle else 'cartella', 16) }}</span>
+        <span data-scritta>{{ "Scegli un'altra cartella…" if cartelle else "Scegli una cartella…" }}</span>
+    </button>
+    <p class="cn-nota" data-finestra-aperta hidden>La finestra per scegliere è aperta. Se non la vedi, è finita dietro a questa.</p>
+    <div class="cn-oppure" data-oppure hidden><span></span>oppure scrivi il percorso<span></span></div>
+    {% endif %}
+    {% if gruppi is defined %}
+    <div class="cn-gruppo">
+        <label class="cn-gruppo-scelta">
+            <span class="piccolo tenue">Dove vanno le foto</span>
+            <select class="campo" name="gruppo" form="cn-modulo" data-gruppo-scelta>
+                <option value="" {{ 'selected' if not gruppo_ultimo|default(none) }}>Archivio generale</option>
+                {% for gruppo in gruppi %}
+                <option value="{{ gruppo.id }}" {{ 'selected' if gruppo_ultimo|default(none) == gruppo.id }}>{{ gruppo.nome }}</option>
+                {% endfor %}
+                <option value="nuovo">Nuovo gruppo…</option>
+            </select>
+        </label>
+        <input class="campo" name="gruppo_nuovo" form="cn-modulo" maxlength="40" autocomplete="off"
+               placeholder="Nome del gruppo, per esempio Snapchat" aria-label="Nome del gruppo nuovo"
+               data-gruppo-nuovo hidden>
+        <p class="cn-nota">Tutto resta nello stesso archivio. Il gruppo serve a vederle anche da sole, con il filtro «Gruppi» della galleria.</p>
+    </div>
+    {% endif %}
+    <form method="post" action="/importazione/cartella" class="cn-scrivi" id="cn-modulo" data-cartella-nuova>
+        {% if dove_torno %}
+        <input type="hidden" name="dove_torno" value="{{ dove_torno }}">
+        {% endif %}
+        <label class="campo cn-campo">
+            <input name="percorso" placeholder="C:\Users\…\Foto" required
+                   autocomplete="off" spellcheck="false" aria-label="Percorso della cartella"
+                   {% if autofocus and not si_puo_sfogliare %}autofocus{% endif %}>
+            <button class="tasto-comando nudo cn-dentro" type="button" data-incolla hidden
+                    title="Mette nella casella il percorso che hai copiato."
+                    aria-label="Incolla">{{ icona('incolla', 15) }}</button>
+        </label>
+        <button class="tasto-comando cn-entra" type="submit"
+                title="Aggiunge la cartella. Si può anche premere Invio."
+                aria-label="Aggiungi la cartella">{{ icona('freccia', 16) }}</button>
+    </form>
+    <p class="cn-errore" data-errore role="alert" hidden></p>
+    <p class="cn-nota" data-a-mano>In Esplora risorse il percorso si copia dalla barra in cima alla finestra.</p>
+</div>
+<script type="module" src="/statici/js/cartella_nuova.js"></script>

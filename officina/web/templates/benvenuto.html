@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% import "_guida.html" as guida_pezzi %}
+{% set guida = true %}
+{% block titolo %}La prima volta — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale guida">
+    {{ guida_pezzi.testa(1) }}
+<div class="pagina guida-corpo">
+
+    {% call guida_pezzi.dice("Il computer") %}
+        Prima guardo se questo computer ce la fa: scrivo un file e lo rileggo, faccio una miniatura vera, riapro una copia di sicurezza.
+        {% if prova.tutto_bene %}Ho finito: va tutto.{% else %}Qualcosa non va: accanto a ogni riga c'è cosa fare.{% endif %}
+    {% endcall %}
+
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('disco', 18) }}<h1>Questo computer ce la fa?</h1>
+            {% if prova.tutto_bene %}<span class="bollino bene">Va tutto</span>
+            {% else %}<span class="bollino male">{{ prova.quante_rosse }} {{ 'cosa non va' if prova.quante_rosse == 1 else 'cose non vanno' }}</span>{% endif %}
+        </div>
+        <p class="minuscolo tenue">Non è una promessa: sono controlli che girano adesso. Quello che non si sa, dice che non si sa.</p>
+        <details class="guida-controlli" {% if not prova.tutto_bene %}open{% endif %}>
+            <summary>{{ prova.righe | length }} controlli{% if prova.tutto_bene %}, nessuno rosso{% endif %} · <u>guardali</u></summary>
+            {% for titolo, righe in prova.gruppi %}
+            <p class="etichetta">{{ titolo }}</p>
+            {% for riga in righe %}
+            <div class="riga-prova">
+                <span class="segno-esito {{ 'va' if riga.va is true }}{{ 'no' if riga.va is false }}" aria-hidden="true"></span>
+                <span class="quale">{{ riga.nome }}</span>
+                <span class="detto piccolo tenue">{{ riga.detto }}</span>
+                {% if riga.cosa_fare %}<span class="da-fare minuscolo numeri">{{ riga.cosa_fare }}</span>{% endif %}
+            </div>
+            {% endfor %}
+            {% endfor %}
+        </details>
+    </section>
+
+    <section class="guida-sezione">
+        {% with dove_torno = "/benvenuto", nella_guida = True %}
+        {% include "_forziere.html" %}
+        {% endwith %}
+    </section>
+
+    <div class="guida-promesse">
+        <div><b>{{ icona('foto', 15) }} Le foto non si muovono</b><span>Il programma non sposta, non copia e non modifica un solo file.</span></div>
+        <div><b>{{ icona('scudo', 15) }} Niente esce di qui</b><span>Nessuna connessione, nessun account. Da internet arrivano solo i modelli, e quando premi tu.</span></div>
+        <div><b>{{ icona('occhio', 15) }} Prima si guarda</b><span>Quando gli darai la cartella, prima conta: quanti file, quanto pesano, quanto ci metterà.{% call spiega("Per esteso, con i perché") %}
+            <p>Le foto restano nella loro cartella, identiche fino
+            all'ultimo byte. Quello che nasce è un archivio a parte,
+            fatto di numeri e miniature: se un giorno lo cancelli, le
+            foto sono ancora tutte lì.</p>
+            <p>Il programma funziona a scheda di rete spenta. Non c'è
+            nessun servizio da registrare, nessun dato che parte, e
+            nessun modo di accendere una cosa del genere: non è un
+            interruttore, è come è fatto.</p>
+            <p>Non elabora niente finché non glielo dici tu, e mentre
+            lavora si può fermare e riprendere in qualsiasi momento.
+            Puoi cominciare a etichettare <b>mentre sta ancora lavorando</b>:
+            quello che è già pronto è già pronto.</p>
+        {% endcall %}</span></div>
+    </div>
+</div>
+    {% call guida_pezzi.piede(1, "non c'è niente da configurare: si cambia dopo, se serve") %}
+        <a class="tasto-comando principale" href="/benvenuto/chiave">Avanti {{ icona('avanti', 14) }}</a>
+    {% endcall %}
+</main>
+</div>
+{% endblock %}

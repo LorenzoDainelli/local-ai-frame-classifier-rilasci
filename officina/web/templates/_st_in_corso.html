@@ -1,0 +1,9 @@
+<div class="st-lavori" data-lavori-qui>
+    {% for lavoro in lavori_adesso %}
+    <a class="un-lavoro" href="{{ lavoro.dove }}">
+        <span class="riga"><span>{{ lavoro.nome }}</span><span>{{ (lavoro.percento ~ '%') if lavoro.percento is not none else lavoro.detto }}</span></span>
+        <span class="barretta {{ 'ink sta-girando' if lavoro.percento is none }}"><span style="width:{{ lavoro.percento if lavoro.percento is not none else 35 }}%"></span></span>
+    </a>
+    {% endfor %}
+</div>
+<p class="piccolo tenue" data-lavori-vuoto {% if lavori_adesso %}hidden{% endif %}>Niente in corso: quando parte un lavoro lungo, lo vedi qui.</p>

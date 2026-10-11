@@ -1,0 +1,66 @@
+{% set vq = aspetto.qualita %}
+<section class="carta qa qa-{{ vq|lower }}" id="qualita" data-versione="{{ vq }}">
+    <div class="qa-testa">
+        <div>
+            <h2>Controllo qualità{% call spiega("Come si decide") %}
+                <p>Si guarda il lato corto di ogni foto e video di tutto
+                l'archivio: sotto 1080 è <b>Bassa</b>, da 1080 a 2159 è
+                <b>Media</b>, da 2160 in su è <b>Alta</b>. Per le foto già
+                migliorate conta la misura nuova.</p>
+                <p>Da dove viene si capisce dal nome del file e dalla cartella,
+                senza guardare le immagini: per esempio &laquo;Snapchat-&hellip;&raquo;
+                o &laquo;IMG-&hellip;-WA&hellip;&raquo; di WhatsApp. Quello che non
+                si riconosce va in &laquo;Altro&raquo;.</p>
+                <p>Se di una foto o di un video non so ancora quanto è grande,
+                lo misuro mentre guardi questa pagina. Resta fuori dal conto
+                solo se il file non si apre o non è più sul disco.</p>
+            {% endcall %}</h2>
+            <p class="piccolo attenuato"><span class="qa-grande numeri" data-bassi>&hellip;</span> bassi su <span class="numeri" data-totale>&hellip;</span> foto e video<span data-senza-misura hidden></span></p>
+        </div>
+        <button class="tasto-comando accento" type="button" data-proponi>Controlla gli scatti</button>
+    </div>
+    <div class="qa-controllo" data-controllo hidden>
+        <span class="barretta qa-controllo-barra" aria-hidden="true"><span data-controllo-fatto style="width:0%"></span></span>
+        <span class="piccolo attenuato numeri" data-controllo-detto role="status" aria-live="polite"></span>
+        <button class="tasto-comando piccolo" type="button" data-controllo-ferma>Ferma</button>
+    </div>
+
+    {% if vq == 'C' %}
+    <div class="qa-legenda piccolo attenuato" aria-hidden="true">
+        <span><i class="qa-pallino qa-bassa"></i>Bassa</span>
+        <span><i class="qa-pallino qa-media"></i>Media</span>
+        <span><i class="qa-pallino qa-alta"></i>Alta</span>
+    </div>
+    <div class="qa-barre" data-barre></div>
+    {% else %}
+    <div class="qa-tabella">
+        <table>
+            <thead><tr>
+                <th scope="col">Da dove viene</th>
+                <th scope="col"><i class="qa-pallino qa-bassa"></i> Bassa</th>
+                <th scope="col"><i class="qa-pallino qa-media"></i> Media</th>
+                <th scope="col"><i class="qa-pallino qa-alta"></i> Alta</th>
+                <th scope="col">Totale</th>
+            </tr></thead>
+            <tbody data-tabella></tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="qa-filtri">
+        <div class="qa-gruppo"><span class="qa-etichetta">Da dove viene</span><span class="qa-pillole" data-fonti></span></div>
+        <div class="qa-gruppo"><span class="qa-etichetta">Qualità</span><span class="qa-pillole" data-voti></span></div>
+        <div class="qa-gruppo"><span class="qa-etichetta">Tipo</span><span class="qa-pillole" data-tipi>
+            <button class="pillola piena" type="button" data-tipo="" aria-pressed="true">Foto e video</button>
+            <button class="pillola" type="button" data-tipo="foto" aria-pressed="false">Solo foto</button>
+            <button class="pillola" type="button" data-tipo="video" aria-pressed="false">Solo video</button>
+        </span></div>
+    </div>
+
+    <div class="qa-piede">
+        <span class="piccolo attenuato" data-quanti aria-live="polite"></span>
+        <button class="tasto-comando" type="button" data-metti disabled>Metti in coda questi</button>
+    </div>
+    <p class="piccolo" data-detto role="status"></p>
+    <div class="qa-griglia" data-griglia></div>
+</section>

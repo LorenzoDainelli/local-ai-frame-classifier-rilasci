@@ -1,0 +1,141 @@
+{% from "_icone.html" import icona %}
+{% macro tendina(chiave, nome, icona_nome, accesi=0, cerca='') -%}
+<details class="tendina-filtro" data-gruppo="{{ chiave }}">
+    <summary class="pillola {{ 'accesa' if accesi }}">{{ icona(icona_nome, 14) }}<span>{{ nome }}{% if accesi %} · {{ accesi }}{% endif %}</span>{{ icona('giu', 12, 'tendina-freccia') }}</summary>
+    <div class="tendina-dentro">
+        {% if cerca %}
+        <label class="campo-cerca tendina-cerca">{{ icona('cerca', 14) }}
+            <input type="text" autocomplete="off" spellcheck="false" data-cerca-voci placeholder="{{ cerca }}"></label>
+        {% endif %}
+        {{ caller() }}
+    </div>
+</details>
+{%- endmacro %}
+
+{% macro voce_filtro(voce, gruppo) -%}
+<a class="voce-filtro {{ 'piena' if voce.attivo }}" href="{{ voce.collegamento }}" {% if voce.percorso %}title="{{ voce.percorso }}"{% endif %}>
+    <span class="casella-filtro" aria-hidden="true"></span>
+    {% set sopra = voce.percorso.rsplit(' › ', 1)[0] if voce.percorso and ' › ' in voce.percorso else '' %}
+    <span class="voce-filtro-nome">{% if sopra %}<span class="tenue">{{ sopra }} › </span>{% endif %}{{ voce.nome }}</span>
+    <span class="conto numeri aspetta" data-numero="{{ gruppo }}:{{ voce.id }}" data-svuota>&middot;</span>
+    
+</a>
+{%- endmacro %}
+
+<header class="testa-foto">
+    <div class="testa-foto-titolo">
+        <h1>{{ 'Galleria' if not pillole_attive and not filtro.senza_etichetta else 'Le foto' }}</h1>
+        <p class="sottotitolo conto-risultati">{{ conteggio }}</p>
+    </div>
+
+    <div class="fila-filtri" id="fila-filtri">
+        <a class="pillola cosa-vedi {{ 'piena' if not filtro.senza_etichetta }}" href="{{ collegamenti.tutti }}">Tutti
+            <span class="conto numeri aspetta" data-numero="cosa_vedi:tutti">&middot;</span></a>
+        <a class="pillola cosa-vedi {{ 'piena' if filtro.senza_etichetta }}" href="{{ collegamenti.senza_etichetta }}">Senza etichetta
+            <span class="conto numeri aspetta" data-numero="cosa_vedi:senza_etichetta">&middot;</span></a>
+        <span class="stacco" aria-hidden="true"></span>
+
+        {% for gruppo in gruppi_filtro %}
+        {% call tendina(gruppo.chiave, gruppo.nome, {'nodi': 'etichetta', 'persone': 'persone', 'luoghi': 'luoghi'}[gruppo.chiave], gruppo.quante_accese,
+                        'Cerca ' ~ {'nodi': 'un nodo', 'persone': 'una persona', 'luoghi': 'un luogo'}[gruppo.chiave] if gruppo.quante > 6 else '') %}
+            <div class="tendina-voci">
+                {% for voce in gruppo.subito + gruppo.dopo %}{{ voce_filtro(voce, gruppo.chiave) }}
+                {% else %}
+                <p class="piccolo tenue tendina-vuota">
+                    {% if gruppo.chiave == 'nodi' %}Non c'è ancora nessun nodo: nascono mentre etichetti, oppure dall'albero.
+                    {% elif gruppo.chiave == 'persone' %}Nessuna faccia, ancora: si cercano da «Persone», e da lì nascono i gruppi da nominare.
+                    {% else %}Nessun luogo: nascono da soli dalle coordinate delle foto, alla fine dell'importazione.{% endif %}
+                </p>
+                {% endfor %}
+            </div>
+            <p class="piccolo tenue tendina-vuota" data-nessuna hidden>Nessuna voce con questo nome.</p>
+            <footer>
+                <a class="verso-la-stanza" {% if gruppo.chiave == 'nodi' %}data-apri-albero{% endif %}
+                   href="{{ '/albero?da=foto' if gruppo.chiave == 'nodi' else '/persone' if gruppo.chiave == 'persone' else '/luoghi' }}">
+                    {% if gruppo.chiave == 'nodi' %}Apri l'albero <kbd>A</kbd>{% elif gruppo.chiave == 'persone' %}Gestisci le persone{% else %}Gestisci i luoghi{% endif %}
+                    {{ icona('avanti', 12) }}</a>
+            </footer>
+        {% endcall %}
+        {% endfor %}
+
+        {% call tendina('periodo', 'Periodo', 'calendario', 1 if filtro.dal or filtro.al else 0) %}
+            <form method="get" class="tendina-periodo" data-periodo
+                  data-dal="{{ filtro.dal or '' }}" data-al="{{ filtro.al or '' }}">
+                {% for chiave, valore in campi_nascosti %}<input type="hidden" name="{{ chiave }}" value="{{ valore }}">{% endfor %}
+                <input type="hidden" name="dal" value="{{ filtro.dal or '' }}" data-campo-dal>
+                <input type="hidden" name="al" value="{{ filtro.al or '' }}" data-campo-al>
+                <div class="periodo-anno" data-con-mesi hidden>
+                    <button class="tasto-comando nudo piccolo" type="button" data-anno-prima aria-label="Anno prima">{{ icona('indietro', 14) }}</button>
+                    <b class="periodo-quale numeri" data-anno-nome></b>
+                    <button class="tasto-comando nudo piccolo" type="button" data-anno-dopo aria-label="Anno dopo">{{ icona('avanti', 14) }}</button>
+                </div>
+                <div class="periodo-mesi" data-mesi data-con-mesi hidden></div>
+                <p class="minuscolo tenue numeri periodo-conto" data-conto-anno data-con-mesi hidden></p>
+                <p class="piccolo tenue tendina-vuota" data-senza-mesi hidden>Nessuna foto ha una data, ancora.</p>
+                <p class="piccolo tenue tendina-vuota" data-carico>Guardo in quali mesi ci sono foto…</p>
+                <div class="periodo-piede">
+                    {% if filtro.dal or filtro.al %}<button class="tasto-comando nudo piccolo" type="button" data-togli>Togli</button>{% endif %}
+                    <button class="tasto-comando nudo piccolo" type="button" data-tutto-anno data-con-mesi hidden>Tutto l'anno</button>
+                    <button class="tasto-comando principale piccolo" type="submit">Mostra</button>
+                </div>
+                <p class="minuscolo tenue" data-con-mesi hidden>Un clic su un mese lo sceglie; un clic su un secondo mese sceglie tutti quelli in mezzo.</p>
+                <details class="periodo-esatto">
+                    <summary class="minuscolo tenue">Giorni esatti</summary>
+                    <div class="periodo-giorni">
+                        <label class="piccolo tenue">Dal <input class="campo" type="date" data-giorno-dal value="{{ filtro.dal or '' }}"></label>
+                        <label class="piccolo tenue">Al <input class="campo" type="date" data-giorno-al value="{{ filtro.al or '' }}"></label>
+                    </div>
+                </details>
+            </form>
+        {% endcall %}
+
+        {% call tendina('tipo', 'Foto, video, live', 'foto', 1 if filtro.genere else 0) %}
+            <div class="tendina-voci">
+                {% for voce in generi %}
+                <a class="voce-filtro {{ 'piena' if filtro.genere == voce.chiave }}" href="{{ voce.collegamento }}">
+                    <span class="casella-filtro" aria-hidden="true"></span>
+                    <span class="voce-filtro-nome">{{ voce.nome }}</span>
+                    <span class="conto numeri aspetta" data-numero="generi:{{ voce.chiave }}" data-svuota>&middot;</span>
+                    
+                </a>
+                {% endfor %}
+            </div>
+        {% endcall %}
+
+        {% if gruppi_archivio %}
+        {% call tendina('gruppi', 'Gruppi', 'cartella', 1 if filtro.gruppo else 0) %}
+            <div class="tendina-voci">
+                {% for voce in gruppi_archivio %}
+                <a class="voce-filtro {{ 'piena' if voce.attivo }}" href="{{ voce.collegamento }}">
+                    <span class="casella-filtro" aria-hidden="true"></span>
+                    <span class="voce-filtro-nome">{{ voce.nome }}</span>
+                    <span class="conto numeri">{{ voce.quanti|numero }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            <footer>
+                <a class="verso-la-stanza" href="/importazione">Scegli i gruppi delle cartelle {{ icona('avanti', 12) }}</a>
+            </footer>
+        {% endcall %}
+        {% endif %}
+
+        {% set speciali = [filtro.senza_data, filtro.solo_schermate, filtro.fuori_archivio, filtro.col_cuore, filtro.evidenziati]|select|list|length %}
+        {% call tendina('speciali', 'Casi speciali', 'filtri', speciali) %}
+            <div class="tendina-voci">
+                {% for chiave, nome, acceso, detto in [
+                    ('senza_data', 'Senza data', filtro.senza_data, 'cosa_vedi:senza_data'),
+                    ('schermate', 'Schermate', filtro.solo_schermate, 'cosa_vedi:schermate'),
+                    ('fuori_archivio', 'Fuori archivio', filtro.fuori_archivio, 'cosa_vedi:fuori_archivio'),
+                    ('cuore', 'Preferiti', filtro.col_cuore, 'cosa_vedi:cuore'),
+                    ('evidenziati', 'Messi da parte', filtro.evidenziati, 'cosa_vedi:evidenziati')] %}
+                <a class="voce-filtro {{ 'piena' if acceso }}" href="{{ collegamenti[chiave] }}">
+                    <span class="casella-filtro" aria-hidden="true"></span>
+                    <span class="voce-filtro-nome">{{ nome }}</span>
+                    <span class="conto numeri aspetta" data-numero="{{ detto }}">&middot;</span>
+                    
+                </a>
+                {% endfor %}
+            </div>
+        {% endcall %}
+    </div>
+</header>

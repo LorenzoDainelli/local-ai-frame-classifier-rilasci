@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Stato — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina stato stato-a" id="pagina-stato">
+    <h1>Stato</h1>
+    <p class="sottotitolo">Come stanno l'albero, i modelli e l'archivio. Si aggiorna da sola.</p>
+
+    {% include "_st_carte.html" %}
+
+    {% set guai_modelli = sistemare|selectattr('dove', 'equalto', 'modelli')|list %}
+    <nav class="st-linguette" role="tablist" aria-label="Le stanze dello stato">
+        <button type="button" role="tab" data-linguetta="panoramica" aria-selected="true">Panoramica</button>
+        <button type="button" role="tab" data-linguetta="albero" aria-selected="false">L'albero</button>
+        <button type="button" role="tab" data-linguetta="modelli" aria-selected="false">Modelli e macchina{% if guai_modelli %} <span class="conto chiama numeri">{{ guai_modelli|length }}<span class="st-detto"> da sistemare</span></span>{% endif %}</button>
+        <button type="button" role="tab" data-linguetta="archivio" aria-selected="false">L'archivio</button>
+        <button type="button" role="tab" data-linguetta="misura" aria-selected="false">Laboratorio di misura</button>
+    </nav>
+
+    <section class="st-pannello" data-pannello="panoramica" id="pagella" role="tabpanel">
+        <div class="st-due">
+            <div class="st-sx">
+                <div class="st-titoletto">
+                    <h2>Cosa conviene fare adesso</h2>
+                    <span class="minuscolo tenue">le stime si rifanno dopo ogni riaddestramento</span>
+                </div>
+                <p class="piccolo tenue st-serve">Serve a una cosa sola: sapere cosa etichettare adesso perché migliori il più possibile{% if pagella.descrittore %}, con i voti calcolati da <span class="numeri">{{ pagella.descrittore }}</span>{% endif %}.</p>
+                {% include "_st_compiti.html" %}
+                <div class="st-titoletto">
+                    <h2>Come sta l'albero</h2>
+                    <a class="minuscolo" href="#albero" data-vai-linguetta="albero">tutti i nodi, tutti i numeri {{ icona('avanti', 12) }}</a>
+                </div>
+                {% include "_st_corsie.html" %}
+            </div>
+            <aside class="st-dx">
+                <div class="carta st-lato {{ 'con-guai' if sistemare }}">
+                    <div class="st-titoletto"><h3>Da sistemare</h3>{% if sistemare %}<span class="conto chiama numeri">{{ sistemare|length }}</span>{% endif %}</div>
+                    {% include "_st_sistemare.html" %}
+                </div>
+                <div class="carta st-lato">
+                    <h3>In corso</h3>
+                    {% include "_st_in_corso.html" %}
+                </div>
+                <div class="carta st-lato">
+                    <div class="st-titoletto"><h3>Le ultime copie</h3><a class="minuscolo" href="#archivio" data-vai-linguetta="archivio">tutte</a></div>
+                    {% for copia in copie[:3] %}
+                    <p class="st-riga-copia"><span>{{ copia.quando }}</span><span class="tenue">{{ copia.motivo }}</span></p>
+                    {% else %}
+                    <p class="piccolo tenue">Nessuna copia, ancora: se ne fa una a ogni chiusura.</p>
+                    {% endfor %}
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="st-pannello" data-pannello="albero" id="st-albero" role="tabpanel" hidden>
+        <div class="st-titoletto">
+            <h2>Tutti i nodi, tutti i numeri</h2>
+            <span class="minuscolo tenue numeri">{{ pagella.righe|length|numero }} nodi · dal più affamato</span>
+        </div>
+        <p class="piccolo tenue st-serve">È l'unico posto in cui ci si accorge se le stime della panoramica stanno mentendo:
+            se un giorno la coda manda a lavorare dove non serve, si scopre da qui.</p>
+        {% include "_st_nodi.html" %}
+    </section>
+
+    <section class="st-pannello st-stanze" data-pannello="modelli" id="salute" role="tabpanel" hidden>
+        {% include "_st_macchina.html" %}
+        {% include "_st_modelli.html" %}
+        {% include "_st_impronte.html" %}
+    </section>
+
+    <section class="st-pannello st-stanze" data-pannello="archivio" id="st-archivio" role="tabpanel" hidden>
+        {% include "_st_numeri.html" %}
+        {% include "_st_copie.html" %}
+    </section>
+
+    <section class="st-pannello" data-pannello="misura" id="misura" role="tabpanel" hidden>
+        {% include "_stato_misura.html" %}
+    </section>
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+{% include "_stato_misura_coda.html" %}
+{% include "_stato_salute_coda.html" %}
+<script type="module" src="/statici/js/stato.js"></script>
+{% endblock %}

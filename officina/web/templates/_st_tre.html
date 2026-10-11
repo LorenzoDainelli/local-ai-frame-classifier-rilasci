@@ -1,0 +1,7 @@
+{% set n = pagella.corsie.nutrire|length %}{% set c = pagella.corsie.crescita|length %}{% set s = pagella.corsie.salute|length %}
+<span class="st-tre" role="img" aria-label="{{ n }} da nutrire, {{ c }} in crescita, {{ s }} in salute">
+    {% if n %}<i class="nutrire" style="flex:{{ n }}"></i>{% endif %}
+    {% if c %}<i class="crescita" style="flex:{{ c }}"></i>{% endif %}
+    {% if s %}<i class="salute" style="flex:{{ s }}"></i>{% endif %}
+    {% if not (n or c or s) %}<i class="vuota" style="flex:1"></i>{% endif %}
+</span>

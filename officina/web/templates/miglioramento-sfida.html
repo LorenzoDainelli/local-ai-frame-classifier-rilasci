@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Sfida alla cieca — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-rivedi">
+
+    <div class="rv-testa">
+        <a class="ps-torna" href="/miglioramento">{{ icona('indietro', 14) }} La coda</a>
+        <h1 class="rv-titolo">Sfida alla cieca <span class="tenue numeri">da votare: {{ scelta.mancano|numero }}</span>{% call spiega("Come si vota") %}
+            <p>Le due versioni le hanno fatte due modelli diversi, e qui non si
+            dice quale: chi è A e chi è B si tira a sorte a ogni foto, e anche
+            chi sta a sinistra. L'originale sta sempre al centro.</p>
+            <p>Si vota la foto più fedele e più nitida. <b>Votare non cambia
+            niente sul disco</b>: la versione scelta passa in «Da rivedere», e
+            lì si approva come sempre.</p>
+        {% endcall %}</h1>
+        <span class="minuscolo tenue rv-nome nome-di-file">
+            {% if scelta.scatto_id %}<a href="/scatto/{{ scelta.scatto_id }}">{{ scelta.nome }}</a>{% else %}{{ scelta.nome }}{% endif %}
+        </span>
+    </div>
+
+    {% if not scelta.ci_sono %}
+    <div class="avviso forte" role="alert">
+        <span>
+            Uno dei tre file non è più dov'era. Vota &laquo;Nessuna delle
+            due&raquo;: le versioni si cancellano e l'originale, se c'è,
+            resta com'è.
+        </span>
+    </div>
+    {% endif %}
+
+    <div class="rivedi-tre" id="rivedi-tre" style="--proporzione: {{ scelta.proporzione }}">
+        <figure class="rivedi-lato" data-lato="sinistra">
+            <div class="rivedi-quadro">
+                <img src="/miglioramento/{{ scelta.id }}/sfida/sinistra"
+                     alt="La versione {{ scelta.lettere.sinistra }}" draggable="false">
+            </div>
+            <figcaption>
+                <span class="etichetta-rivedi lettera-sfida">{{ scelta.lettere.sinistra }}</span>
+            </figcaption>
+        </figure>
+        <figure class="rivedi-lato originale-sfida" data-lato="centro">
+            <div class="rivedi-quadro">
+                <img src="/miglioramento/{{ scelta.id }}/mostra/prima"
+                     alt="L'originale" draggable="false">
+            </div>
+            <figcaption>
+                <span class="etichetta-rivedi numeri">Originale &middot; {{ scelta.prima }}</span>
+            </figcaption>
+        </figure>
+        <figure class="rivedi-lato" data-lato="destra">
+            <div class="rivedi-quadro">
+                <img src="/miglioramento/{{ scelta.id }}/sfida/destra"
+                     alt="La versione {{ scelta.lettere.destra }}" draggable="false">
+            </div>
+            <figcaption>
+                <span class="etichetta-rivedi lettera-sfida">{{ scelta.lettere.destra }}</span>
+            </figcaption>
+        </figure>
+    </div>
+
+    <div class="sfida-lente" id="sfida-lente" hidden>
+        {% for lato in ["sinistra", "centro", "destra"] %}
+        <div class="sfida-lente-quadro" data-lente="{{ lato }}"></div>
+        {% endfor %}
+    </div>
+
+    <div class="rivedi-comandi">
+        <span class="rv-zoom">
+            <button class="tasto-comando nudo piccolo" type="button" data-zoom="meno"
+                    aria-label="Rimpicciolisci">&minus;</button>
+            <span class="minuscolo numeri quanto-zoom" id="quanto-zoom">intera</span>
+            <button class="tasto-comando nudo piccolo" type="button" data-zoom="piu"
+                    aria-label="Ingrandisci">+</button>
+            <button class="tasto-comando nudo piccolo" type="button" data-zoom="intera">Intera</button>
+            <button class="tasto-comando nudo piccolo" type="button" id="tasto-lente"
+                    aria-pressed="false" data-tasto-l>{{ icona('cerca', 14) }} Lente <kbd>L</kbd></button>
+        </span>
+        <span class="minuscolo tenue spinge numeri">{{ scelta.dopo }} &middot; rotella per ingrandire, trascina per spostarti</span>
+    </div>
+
+    <div class="rivedi-decidi">
+        <button class="tasto-comando" type="button" data-voto="A"
+                {% if not scelta.ci_sono %}disabled{% endif %}>A <kbd>1</kbd></button>
+        <button class="tasto-comando" type="button" data-voto="B"
+                {% if not scelta.ci_sono %}disabled{% endif %}>B <kbd>2</kbd></button>
+        <button class="tasto-comando nudo" type="button" data-voto="pari"
+                {% if not scelta.ci_sono %}disabled{% endif %}>Pari <kbd>3</kbd></button>
+        <button class="tasto-comando nudo" type="button" data-voto="nessuna">Nessuna delle due <kbd>4</kbd></button>
+        <span class="minuscolo tenue spinge">votare non cambia niente sul disco: si approva dopo</span>
+    </div>
+    <p class="esito-rivedi" id="esito-rivedi" aria-live="polite"></p>
+</div>
+</main>
+</div>
+
+<script type="application/json" id="dati-sfida">{{ dati|safe }}</script>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/sfida.js"></script>
+{% endblock %}

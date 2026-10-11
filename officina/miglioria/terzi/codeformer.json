@@ -1,0 +1,23 @@
+{
+ "deposito": "sczhou/CodeFormer",
+ "commit": "b33cc7d639d6545bfcccc7e0bc6ae51f24e79c2b",
+ "licenza": "S-Lab License 1.0",
+ "pesi": [
+  {
+   "nome": "codeformer.pth",
+   "indirizzo": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth",
+   "sha256": "1009e537e0c2a07d4cabce6355f53cb66767cd4b4297ec7a4a64ca4b8a5684b7",
+   "byte": 376637898,
+   "dentro": "params_ema",
+   "diventa": "codeformer.safetensors"
+  },
+  {
+   "nome": "parsing_parsenet.pth",
+   "indirizzo": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/parsing_parsenet.pth",
+   "sha256": "3d558d8d0e42c20224f13cf5a29c79eba2d59913419f945545d8cf7b72920de2",
+   "byte": 85331193,
+   "dentro": null,
+   "diventa": "sagoma.safetensors"
+  }
+ ]
+}

@@ -1,0 +1,746 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_aspetto.html" import sezione as sezione_aspetto, segmenti %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Impostazioni — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina impostazioni con-indice imp-{{ aspetto.impostazioni|lower }}" id="pagina-impostazioni">
+
+    <div class="due-colonne">
+
+    <nav class="indice" id="indice">
+        <a href="#programma" data-solo-nel-programma hidden>Il programma</a>
+        <a href="#aspetto" class="qui">Aspetto</a>
+        <a href="#c1">Questo computer</a>
+        <a href="#c2">Elaborazione</a>
+        <a href="#c3">Galleria</a>
+        <a href="#c4">Etichettatura</a>
+        <a href="#c5">Dati e copie</a>
+        <a href="#c6">Sicurezza</a>
+        <a href="#portatile">Il portatile</a>
+        <a href="#tasti">Tasti</a>
+        <a href="#novita">Novità e guida</a>
+        <span class="stacco"></span>
+        <a href="#c7" class="pericolo">Cose che fanno danni</a>
+    </nav>
+
+    <div>
+        <h1>Impostazioni{% call spiega("Come si legge questa pagina") %}
+            <p>Tutto sta in una pagina sola: quando non ricordi dove sta una
+            cosa, <kbd>Ctrl+F</kbd> la trova comunque.</p>
+            <p>Ogni modifica è salvata subito: non c'è nessun tasto
+            &laquo;applica&raquo; da cercare.</p>
+            <p>L'etichetta accanto al nome dice se una voce vale <b>solo per
+            questo computer</b> &mdash; che adesso si chiama
+            <span class="numeri">{{ macchina }}</span> &mdash; o per <b>tutto
+            l'archivio</b>, quindi su tutti e due i PC.</p>
+        {% endcall %}</h1>
+        <p class="sottotitolo">
+            {% if aspetto.impostazioni == 'A' %}Un gruppo alla volta: a sinistra scegli quale. Ogni modifica è salvata subito.
+            {% elif aspetto.impostazioni == 'B' %}Scrivi cosa cerchi e restano solo le voci che c'entrano. Ogni modifica è salvata subito.
+            {% else %}In cima le sei cose di tutti i giorni, sotto gli altri gruppi chiusi. Ogni modifica è salvata subito.{% endif %}
+        </p>
+
+        <p class="sd">
+            <a href="/benvenuto">Rivedi la guida del primo avvio</a> — si mostra
+            da sola una volta sola, poi resta qui.
+        </p>
+
+        {% if request.query_params.get('azzerato') %}
+        <div class="avviso forte">Addestramento azzerato. Le etichette e
+            l'albero non sono stati toccati: il sistema li rilegge da capo.</div>
+        {% endif %}
+        {% if request.query_params.get('rimesse') %}
+        <div class="avviso forte">Impostazioni riportate ai valori di partenza.
+            Dati, albero ed etichette non si sono mossi.</div>
+        {% endif %}
+        {% if request.query_params.get('rimesso') %}
+        <div class="avviso forte">Albero rimesso com'era:
+            {{ request.query_params.get('rimesso') }} nodi sono tornati al loro
+            posto. Le foto non si sono mosse.</div>
+        {% endif %}
+
+        {% if aspetto.impostazioni == 'B' %}
+        <label class="imp-cerca">{{ icona('cerca', 17) }}
+            <input type="text" id="imp-cerca" autocomplete="off" spellcheck="false"
+                   placeholder="Cerca un'impostazione: «buio», «copia», «password»…"
+                   aria-label="Cerca un'impostazione"></label>
+        <p class="piccolo tenue" id="imp-niente" hidden>Niente per «<span></span>». Prova con un'altra parola.</p>
+        {% elif aspetto.impostazioni == 'C' %}
+        <div class="imp-sei" aria-label="Le sei di tutti i giorni">
+            <div class="carta imp-una"><span class="etichetta">Tema</span>
+                {{ segmenti('tema', aspetto.tema, [('scuro', 'Scuro'), ('chiaro', 'Chiaro'), ('sistema', 'Come Windows')]) }}</div>
+            <div class="carta imp-una"><span class="etichetta">Accento</span>
+                {{ segmenti('accento', aspetto.accento, [('arancio', 'Arancio'), ('bianco', 'Bianco')]) }}</div>
+            <a class="carta imp-una" href="#c3" data-apri-gruppo><span class="etichetta">Grandezza delle foto</span>
+                <b>{{ {110: 'piccole', 150: 'medie', 220: 'grandi'}.get(impostazioni.griglia_altezza_riga, impostazioni.griglia_altezza_riga) }}</b>
+                <span class="minuscolo tenue">nella galleria, su questo computer</span></a>
+            <a class="carta imp-una" href="#c1" data-apri-gruppo><span class="etichetta">Scheda video</span>
+                <b class="numeri">{{ impostazioni.intensita_scheda }}%</b>
+                <span class="minuscolo tenue">quanta ne usa al massimo mentre elabora</span></a>
+            <a class="carta imp-una" href="#c6" data-apri-gruppo><span class="etichetta">Password</span>
+                <b>{{ 'accesa' if forziere_acceso else 'spenta' }}</b>
+                <span class="minuscolo tenue">{{ "l'archivio è nel forziere cifrato" if forziere_acceso else "l'archivio non è nel forziere" }}</span></a>
+            <div class="carta imp-una"><span class="etichetta">Copia dell'archivio</span>
+                <b class="imp-quando">{{ copie[0].quando if copie else 'nessuna, ancora' }}</b>
+                <form method="post" action="/impostazioni/copia"><button class="tasto-comando piccolo" type="submit">Falla adesso</button></form></div>
+        </div>
+        {% endif %}
+
+        <section id="programma" data-solo-nel-programma hidden>
+            <h2>Il programma</h2>
+            <p class="sd">La versione, gli aggiornamenti, i motori dei modelli e
+                la chiave di Hugging Face. Queste voci passano dalla finestra del
+                programma e non dalla rete.</p>
+            <div class="riquadro scheda-righe">
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Versione</div>
+                        <p class="ds" data-programma="versione"></p>
+                    </div>
+                </div>
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Aggiornamenti</div>
+                        <p class="ds" data-programma="aggiornamento"></p>
+                    </div>
+                    <div class="in-fila">
+                        <button class="tasto-comando principale" type="button"
+                                data-programma-fai="aggiorna" hidden>Aggiorna adesso</button>
+                    </div>
+                </div>
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">I motori dei modelli</div>
+                        <p class="ds" data-programma="motori"></p>
+                        <div class="avanzamento" data-programma="barra-motori" hidden>
+                            <div class="fatto" style="width:0%"></div></div>
+                    </div>
+                    <div class="in-fila">
+                        <button class="tasto-comando" type="button"
+                                data-programma-fai="motori" hidden>Prepara i motori</button>
+                    </div>
+                </div>
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Chiave di Hugging Face</div>
+                        <p class="ds" data-programma="chiave"></p>
+                        <div class="in-fila" data-programma="campo-chiave" hidden>
+                            <input class="campo" type="password" autocomplete="off"
+                                   spellcheck="false" placeholder="hf_..."
+                                   data-programma="nuova-chiave">
+                            <button class="tasto-comando" type="button"
+                                    data-programma-fai="salva-chiave">Salva</button>
+                        </div>
+                    </div>
+                    <div class="in-fila">
+                        <button class="tasto-comando nudo" type="button"
+                                data-programma-fai="togli-chiave" hidden>Togli la chiave</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {{ sezione_aspetto(aspetto, aspetto_vero, voci_aspetto, versioni_pronte, sto_provando, request.query_params.get('tenuta')) }}
+
+        <section id="c1">
+            <h2>Questo computer</h2>
+            <p class="sd">Le cose che dipendono dalla macchina su cui stai
+                lavorando. Sul portatile avranno valori diversi, ed è giusto
+                così.</p>
+            <div class="riquadro scheda-righe">
+
+                {% call riga("Quanta scheda video usare", "intensita_scheda", True,
+                    "Il tetto massimo che il programma può occupare mentre elabora.
+                     Più basso vuol dire più lento ma più fresco. A 100 non si
+                     ferma mai; a 50 un pomeriggio diventa due.") %}
+                <div class="cursore">
+                    <input type="range" min="5" max="100" step="5"
+                           value="{{ impostazioni.intensita_scheda }}"
+                           data-chiave="intensita_scheda" data-legge="intensita">
+                    <div class="riga-fra minuscolo tenue">
+                        <b class="numeri" id="intensita">{{ impostazioni.intensita_scheda }}%</b>
+                        <span id="intensita-stima"></span>
+                    </div>
+                </div>
+                {% endcall %}
+
+                {% call riga("Movimento ridotto", "movimento", True,
+                    "Tutto succede lo stesso, ma senza animazioni.
+                     Il programma rispetta già da solo l'impostazione di sistema:
+                     questo interruttore serve a spegnerlo anche quando il sistema
+                     non lo chiede.") %}
+                {{ interruttore("movimento", not impostazioni.movimento, invertito=True) }}
+                {% endcall %}
+
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Continua a monitor spento
+                            <span class="tacca">non è un'impostazione</span></div>
+                        <p class="ds">Lo schermo si spegne,
+                            l'elaborazione va avanti tutta la notte. Non c'è un
+                            interruttore perché è come è fatto il programma:
+                            il calcolo non guarda mai se c'è qualcuno che lo
+                            guarda.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="c2">
+            <h2>Elaborazione</h2>
+            <p class="sd">Come vengono lette le foto e i video la prima volta
+                che entrano nell'archivio.</p>
+            <div class="riquadro scheda-righe">
+
+                {% call riga("Impronte a più ingrandimenti",
+                             "impronte_a_piu_ingrandimenti", False,
+                    "Oltre alla foto intera, il programma calcola
+                     l'impronta dei ritagli, così un dettaglio piccolo resta
+                     leggibile. <b>Costa circa il triplo del tempo.</b> Spegnerlo
+                     non cancella le impronte già calcolate: vale da qui in
+                     avanti.") %}
+                {{ interruttore("impronte_a_piu_ingrandimenti",
+                                impostazioni.impronte_a_piu_ingrandimenti) }}
+                {% endcall %}
+
+                {% call riga("Guarda le foto anche a pezzi", "impronte_a_griglia",
+                             False,
+                    "La fotografia viene divisa in una griglia — otto
+                     caselle sul lato lungo, e sul corto quante ne servono perché
+                     restino quadrate — e ogni casella viene guardata a parte:
+                     così il cane in fondo alla spiaggia diventa trovabile.
+                     <b>Costa una quarantina di impronte per foto invece di tre,
+                     cioè notti invece di ore.</b> Si accende quando si è pronti
+                     a lasciar lavorare il computer, e si può fermare a metà: la
+                     prossima volta riprende da dove era.") %}
+                {{ interruttore("impronte_a_griglia",
+                                impostazioni.impronte_a_griglia) }}
+                {% endcall %}
+
+                {% call riga("Come si sommano le caselle", "griglia_come_si_somma",
+                             False,
+                    "Quando una foto ha quaranta impronte, il classificatore
+                     risponde quaranta volte. <b>Massimo</b>: basta un pezzo che
+                     dica «cane». <b>Media</b>: conta l'insieme, è più difficile
+                     da ingannare ma diluisce proprio la cosa piccola che si
+                     cercava. Quale dei due sia meglio non lo decide un'opinione:
+                     si prova sui due modi e si tiene quello che sbaglia meno.") %}
+                {{ scelte("griglia_come_si_somma", impostazioni.griglia_come_si_somma,
+                          [("massimo", "massimo"), ("media", "media")]) }}
+                {% endcall %}
+
+                {% call riga("Quanti fotogrammi prendere dai video",
+                             "fotogrammi_per_video", False,
+                    "Il quanto lo decidi tu. Più fotogrammi significa
+                     più possibilità di trovare quello nitido, e più spazio
+                     occupato.") %}
+                {{ scelte("fotogrammi_per_video", impostazioni.fotogrammi_per_video,
+                          [(12, "pochi"), (40, "normale"), (120, "tanti")]) }}
+                {% endcall %}
+
+                {% call riga("Lato della miniatura", "miniatura_lato", False,
+                    "Le miniature non sono mai un dato prezioso e si
+                     rifanno da sole. Più grande vuol dire più nitide sul
+                     monitor grande, e più spazio in cache.") %}
+                {{ scelte("miniatura_lato", impostazioni.miniatura_lato,
+                          [(480, "480"), (640, "640"), (1024, "1024")]) }}
+                {% endcall %}
+
+                {% call riga("Quanto deve essere sicuro sui volti",
+                             "volti_prudenza", False,
+                    "Più alto significa meno errori e più volti lasciati
+                     senza nome. Non c'è un valore giusto: chi ha duecento
+                     foto di quattro persone e chi ne ha diecimila di duecento
+                     persone non vogliono la stessa cosa.") %}
+                {{ scelte("volti_prudenza", impostazioni.volti_prudenza,
+                          [("prudente", "prudente"),
+                           ("equilibrato", "equilibrato"),
+                           ("generoso", "generoso")]) }}
+                {% endcall %}
+
+                {% call riga("I volti nel miglioramento", "miglioria_volti", False,
+                    "Quando migliora una foto, il programma sistema anche i
+                     volti, a parte. <b>Da soli</b>: FaceMe per chi ha un nome,
+                     se è scaricato, e CodeFormer per gli altri; se non c'è
+                     nessuno dei due, i volti restano come li ha fatti SeedVR2.
+                     <b>Solo CodeFormer</b>: tutti con CodeFormer, anche chi ha
+                     un nome. <b>Nessuno</b>: i volti non si toccano. Vale per
+                     le foto: nei video i volti li tiene fermi SeedVR2.") %}
+                {{ scelte("miglioria_volti", impostazioni.miglioria_volti,
+                          [("da_soli", "da soli"),
+                           ("codeformer", "solo CodeFormer"),
+                           ("nessuno", "nessuno")]) }}
+                {% endcall %}
+            </div>
+
+            <p class="sd" style="margin-top:var(--s3)">
+                I modelli — DINOv3, SigLIP 2, i volti, i corpi, quelli del miglioramento — si scaricano da
+                <a href="/stato#salute">Stato</a>, con un tasto solo, e lì c'è
+                anche quanto pesano e con che licenza arrivano.
+            </p>
+        </section>
+
+        <section id="c3">
+            <h2>Galleria</h2>
+            <div class="riquadro scheda-righe">
+
+                {% call riga("Mosaico nella galleria", "griglia_mosaico", False,
+                    "Le schede tengono le proporzioni vere della foto.
+                     Spento, hanno tutte la stessa altezza. Si sceglie solo da
+                     qui: sopra la griglia era una pillola che sembrava
+                     un'etichetta, e nessuno capiva che ci si cliccava.") %}
+                {{ interruttore("griglia_mosaico", impostazioni.griglia_mosaico) }}
+                {% endcall %}
+
+                {% call riga("Dimensione delle schede", "griglia_altezza_riga", True,
+                    "Quante ne stanno per riga. È la dimensione
+                     <b>di partenza</b>: sopra la griglia c'è un cursore che la
+                     cambia al volo, e quella scelta si ricorda per ogni
+                     schermata separatamente. Vale per questo
+                     computer, perché dipende dal monitor che hai davanti.") %}
+                {{ scelte("griglia_altezza_riga", impostazioni.griglia_altezza_riga,
+                          [(110, "piccole"), (150, "medie"), (220, "grandi")]) }}
+                {% endcall %}
+
+                {% call riga("Come si vedono i filtri attivi", "filtri_forma", True,
+                    "Pillole con la × per toglierle una a una, oppure
+                     una frase sola che le dice tutte. Dicono le stesse cose.") %}
+                {{ scelte("filtri_forma", impostazioni.filtri_forma,
+                          [("pillole", "pillole"), ("frase", "una frase")]) }}
+                {% endcall %}
+
+                {% call riga("Su che schermo stai giudicando i colori",
+                             "schermo_del_colore", True,
+                    "Non cambia niente di come il programma lavora:
+                     serve a te, per ricordarti su quale monitor hai deciso che
+                     una foto era troppo scura.") %}
+                <input class="campo" style="width:220px" type="text"
+                       value="{{ impostazioni.schermo_del_colore }}"
+                       data-chiave="schermo_del_colore"
+                       placeholder="il monitor grande, lo ZenBook...">
+                {% endcall %}
+            </div>
+        </section>
+
+        <section id="c4">
+            <h2>Etichettatura</h2>
+            <div class="riquadro scheda-righe">
+
+                {% call riga("Quante proposte mostrare", "quante_proposte", False,
+                    "Sotto il filo restano quelle su cui il sistema
+                     sta indovinando — e il filo non è una percentuale, è la
+                     soglia del singolo nodo.") %}
+                {{ scelte("quante_proposte", impostazioni.quante_proposte,
+                          [(3, "3"), (5, "5"), (8, "8")]) }}
+                {% endcall %}
+
+
+                {% call riga("Il luogo aiuta a indovinare", "luogo_aiuta", False,
+                    "Le foto portano dentro dove sono state
+                     scattate: se tutte quelle che hai messo in un nodo sono
+                     state prese nello stesso posto, una foto presa lì viene
+                     proposta un po' più volentieri. <b>Un po'</b>: la spinta
+                     è limitata per costruzione e non può far vincere un
+                     nodo che l'immagine smentisce. Le foto senza coordinate
+                     non ne risentono in nessun modo.") %}
+                {{ interruttore("luogo_aiuta", impostazioni.luogo_aiuta) }}
+                {% endcall %}
+
+            </div>
+        </section>
+
+        <section id="c5">
+            <h2>Dati e copie</h2>
+            <p class="sd">Dove stanno le cose e come sono protette. Il programma
+                non scrive mai dentro la cartella degli originali.</p>
+
+            <div class="riquadro scheda-righe">
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Cartelle degli originali
+                            <span class="tacca mac">questo computer</span></div>
+                        <p class="ds">Sola lettura, sempre. I nomi non lasciano
+                            mai questa macchina, e nemmeno questa pagina: si
+                            aggiungono e si tolgono dall'importazione.</p>
+                    </div>
+                    <a class="pillola" href="/importazione">
+                        {{ quante_cartelle }}
+                        {{ 'cartella' if quante_cartelle == 1 else 'cartelle' }}
+                        · gestiscile</a>
+                </div>
+
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Miniature in cache</div>
+                        <p class="ds">Non sono mai un dato prezioso e
+                            si rifanno da sole. Cancellarle non perde niente,
+                            solo il tempo di ridisegnarle.</p>
+                    </div>
+                    <form method="post" action="/impostazioni/svuota-miniature"
+                          class="in-fila">
+                        <span class="minuscolo tenue numeri">
+                            {{ quante_miniature|numero }} · {{ peso_miniature }}</span>
+                        <button class="tasto-comando" type="submit">Svuota</button>
+                    </form>
+                </div>
+
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Copia dell'archivio</div>
+                        <p class="ds">Il database con nodi, etichette
+                            e impronte. Gli originali non vengono mai duplicati.</p>
+                    </div>
+                    <form method="post" action="/impostazioni/copia">
+                        <button class="tasto-comando" type="submit">Falla adesso</button>
+                    </form>
+                </div>
+            </div>
+
+            {% if copie %}
+            <p class="sd" style="margin:var(--s6) 0 var(--s3)">Le ultime copie</p>
+            <div class="riquadro scheda-righe">
+                {% for copia in copie %}
+                <div class="riga stretta">
+                    <div class="lato">
+                        <span class="numeri minuscolo tenue">{{ copia.quando }}</span>
+                        <span class="piccolo">{{ copia.nome }}</span>
+                    </div>
+                    <span class="minuscolo tenue numeri">{{ copia.peso }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <p class="sd" style="margin:var(--s6) 0 var(--s3)">
+                Fotografie dell'albero
+                <span class="tenue"></span></p>
+            <div class="riquadro scheda-righe">
+                {% for scatto in fotografie_albero %}
+                <div class="riga stretta">
+                    <div class="lato">
+                        <span class="numeri minuscolo tenue">{{ scatto.quando[:16]|replace('T', ' ') }}</span>
+                        <span class="piccolo"><b class="numeri">{{ scatto.nodi|numero }}</b> nodi
+                            {% if scatto.motivo %}<span class="tenue">— {{ scatto.motivo }}</span>{% endif %}</span>
+                    </div>
+                    <form method="post" action="/impostazioni/albero/ripristina"
+                          data-danno="Rimetto l'albero com'era?"
+                          data-danno-sotto="Nodi e rami tornano come in questa fotografia. Le etichette sulle foto non si toccano."
+                          data-danno-tasto="Tieni premuto per rimetterlo">
+                        <input type="hidden" name="numero" value="{{ scatto.id }}">
+                        <button class="tasto-comando nudo" type="submit">ripristina</button>
+                    </form>
+                </div>
+                {% else %}
+                <div class="riga stretta"><span class="piccolo tenue">
+                    Nessuna ancora: nascono da sole a ogni riorganizzazione
+                    dell'albero.</span></div>
+                {% endfor %}
+                <div class="riga stretta">
+                    <span class="minuscolo tenue">le fotografie sono solo testo, e
+                        contengono la forma dell'albero — mai le etichette</span>
+                </div>
+            </div>
+
+            <p class="sd" style="margin:var(--s6) 0 var(--s3)">
+                Nodi archiviati
+                <span class="tenue"></span></p>
+            <div class="riquadro scheda-righe">
+                {% for nodo in nodi_archiviati %}
+                <div class="riga stretta">
+                    <div class="lato">
+                        <span class="piccolo"><b>{{ nodo.nome }}</b>
+                            <span class="tenue">— {{ nodo.percorso }} ·
+                                {{ nodo.scatti }} foto conservate</span></span>
+                    </div>
+                    <button class="tasto-comando nudo" type="button"
+                            data-ripesca="{{ nodo.nodo_id }}">ripristina</button>
+                </div>
+                {% else %}
+                <div class="riga stretta"><span class="piccolo tenue">
+                    Nessuno archiviato.</span></div>
+                {% endfor %}
+                <div class="riga stretta">
+                    <span class="minuscolo tenue">per rimetterli al loro posto
+                        guardando, usa «mostra archiviati» nella mappa</span>
+                </div>
+            </div>
+
+            <p class="sd" style="margin:var(--s6) 0 var(--s3)">
+                Nel cestino
+                <span class="tenue"></span></p>
+            <div class="riquadro scheda-righe" id="nel-cestino">
+                {% for nodo in nodi_nel_cestino %}
+                <div class="riga stretta">
+                    <div class="lato">
+                        <span class="piccolo"><b>{{ nodo.nome }}</b>
+                            <span class="tenue">— {{ nodo.percorso }}{% if nodo.sotto %} ·
+                                {{ nodo.sotto }} {{ 'nodo' if nodo.sotto == 1 else 'nodi' }} sotto{% endif %} ·
+                                {{ nodo.scatti }} foto con l'etichetta</span></span>
+                    </div>
+                    <button class="tasto-comando nudo" type="button"
+                            data-dal-cestino="{{ nodo.nodo_id }}">rimetti a posto</button>
+                </div>
+                {% else %}
+                <div class="riga stretta"><span class="piccolo tenue">
+                    Il cestino è vuoto.</span></div>
+                {% endfor %}
+                <div class="riga stretta">
+                    <span class="minuscolo tenue">tornano dove erano, con le loro
+                        etichette e i nodi sotto</span>
+                </div>
+            </div>
+        </section>
+
+        <section id="c6">
+            <h2>Sicurezza</h2>
+            <div class="riquadro scheda-righe">
+                {% call riga("Accesso dagli altri computer di casa",
+                             "accesso_dalla_rete", True,
+                    "Spento di base. Acceso, apri l'officina dal
+                     browser dello ZenBook — <b>e solo dalla rete di casa, mai da
+                     internet</b>, e solo dai dispositivi che approvi qui sotto.") %}
+                {{ interruttore("accesso_dalla_rete", impostazioni.accesso_dalla_rete) }}
+                {% endcall %}
+            </div>
+
+            {% if dispositivi %}
+            <p class="sd" style="margin:var(--s6) 0 var(--s3)">
+                Dispositivi che hanno bussato <span class="tenue"></span></p>
+            <div class="riquadro scheda-righe">
+                {% for dispositivo in dispositivi %}
+                <div class="riga stretta">
+                    <div class="lato">
+                        <span class="numeri piccolo">{{ dispositivo.indirizzo }}</span>
+                        <span class="minuscolo tenue">{{ dispositivo.stato }} ·
+                            {{ dispositivo.contatti }} volte</span>
+                    </div>
+                    <form method="post" class="in-fila"
+                          action="/impostazioni/dispositivo/{{ dispositivo.id }}">
+                        <button class="tasto-comando nudo" name="stato" value="approvato"
+                                type="submit">approva</button>
+                        <button class="tasto-comando nudo" name="stato" value="rifiutato"
+                                type="submit">rifiuta</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <p class="sd" style="margin:var(--s6) 0 var(--s3)">
+                Il forziere <span class="tenue"></span></p>
+
+            {% with dove_torno = "/impostazioni#c6", nella_guida = False %}
+            {% include "_forziere.html" %}
+            {% endwith %}
+
+            <p class="sd" style="margin:var(--s6) 0 var(--s3)">
+                Il blocco automatico <span class="tenue"></span></p>
+
+            {% call riga("Chiudi lo schermo dopo", "blocco_dopo_minuti", True,
+                "Copre lo scenario \"mi sono alzato e ho lasciato il
+                 PC acceso\". Lo schermo si copre e per rientrare serve la
+                 password del forziere; il lavoro sotto — importazioni,
+                 impronte, riaddestramenti — continua senza fermarsi.
+                 Vale per questo computer: il portatile che esce
+                 di casa e il fisso che sta in camera non corrono lo stesso
+                 rischio.") %}
+            {{ scelte("blocco_dopo_minuti", impostazioni.blocco_dopo_minuti,
+                      [(0, "mai"), (5, "5 minuti"), (15, "15 minuti"),
+                       (30, "30 minuti"), (60, "un'ora")]) }}
+            {% endcall %}
+
+            {% if not forziere_acceso %}
+
+            <p class="nota-a-margine">
+                Finché non c'è un forziere questa scelta non fa
+                niente.{% call spiega("Perché non fa niente") %}
+                    <p>Non ci sarebbe nessuna password da chiedere per
+                    rientrare, e uno schermo che si riapre con un tasto
+                    qualunque non protegge da niente.</p>
+                {% endcall %}
+            </p>
+            {% endif %}
+
+            <p class="nota-a-margine">
+                <b>Le cose che non sono impostazioni.</b> Che i dati non escano
+                mai da qui non è un interruttore: è come è fatto il programma.
+                Non troverai un modo di accenderlo, e non è una
+                dimenticanza.
+            </p>
+        </section>
+
+        <section id="portatile">
+            <h2>Il portatile</h2>
+            <p class="sd">Adesso sta in <a href="/fuori?dove=portatile">Dispositivi</a>, insieme al telefono e all'altro computer.</p>
+        </section>
+
+        <section id="tasti">
+            <h2>Tasti</h2>
+            <p class="sd">
+                Tutti i comandi si raggiungono con la sola mano destra.
+                Il fisso ha il tastierino numerico, lo ZenBook no:
+                sulla fila di numeri in alto i tasti logici sono gli stessi.
+            </p>
+
+            {% for gruppo in scorciatoie %}
+            <div class="riquadro" style="margin-bottom:var(--s4)">
+                <h3>{{ gruppo.nome }}</h3>
+                <table class="tabella" style="margin-top:var(--s3)">
+                    {% for tasto, cosa in gruppo.voci %}
+                    <tr>
+                        <td style="width:170px"><span class="pillola">{{ tasto }}</span></td>
+                        <td class="attenuato">{{ cosa }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+            {% endfor %}
+
+            <p class="nota-a-margine">
+                <b>Non si cambiano ancora.</b>{% call spiega("Quando si potranno cambiare") %}
+                    <p>Quando ce ne saranno abbastanza da doverle cambiare.</p>
+                    <p>Finché sono queste, un campo per riscriverle sarebbe
+                    più roba da leggere che tempo risparmiato.</p>
+                {% endcall %}
+            </p>
+        </section>
+
+        <section id="novita">
+            <h2>Novità e guida</h2>
+            <div class="riquadro scheda-righe">
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Le novità</div>
+                        <p class="ds">Cosa è cambiato a ogni versione, raccontato in breve e, per chi vuole, per esteso.</p>
+                    </div>
+                    <div><a class="tasto-comando" href="/novita">Rileggi le novità</a></div>
+                </div>
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">La guida del primo avvio</div>
+                        <p class="ds">I passi dell'inizio e il giro sulle foto finte, da rifare quando vuoi.</p>
+                    </div>
+                    <div><a class="tasto-comando" href="/benvenuto">Rivedi la guida</a></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="c7">
+            <h2>Cose che fanno danni</h2>
+            <p class="sd">Stanno tutte qui in fondo, e ognuna dice <strong>quanto
+                tempo costa</strong> e <strong>cosa perdi</strong>. Nessuna parte
+                senza che tu scriva una parola.</p>
+
+            <div class="zona-pericolosa">
+                <div class="testata-pericolo">da qui in giu' si perde qualcosa</div>
+
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Azzera l'addestramento</div>
+                        <p class="ds">Il sistema dimentica quello che ha imparato
+                            e riparte dalle tue etichette. <b>Le etichette e
+                            l'albero restano.</b></p>
+                        <span class="costo">qualche minuto · perdi solo
+                            l'apprendimento, non il lavoro</span>
+                    </div>
+                    <button class="tasto-pericolo" type="button"
+                            data-pericolo="Azzera l'addestramento|azzera|Le tue etichette e l'albero non si toccano: il sistema le rilegge da capo.|/impostazioni/azzera-addestramento">avvia</button>
+                </div>
+
+                {% if persone_vive %}
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Dimentica una persona</div>
+                        <p class="ds">Cancella il volto e tutti i collegamenti
+                            di quella persona. <b>Le foto
+                            restano.</b>{% call spiega("L'unica cosa che cancella davvero") %}
+                                <p>È l'unica cosa di tutto il programma che
+                                cancella sul serio, e ha una ragione che le
+                                altre non hanno: &laquo;congelato&raquo; e
+                                &laquo;cancellato&raquo; non sono equivalenti
+                                dal punto di vista della privacy.</p>
+                            {% endcall %}</p>
+                        <span class="costo">immediato · non si annulla</span>
+                    </div>
+                    <div class="in-fila" style="justify-content:flex-end">
+                        <select class="campo" id="chi-dimenticare" style="width:auto">
+                            {% for voce in persone_vive %}
+                            <option value="{{ voce.id }}">
+                                {{ voce.nome or 'senza nome' }} — {{ voce.scatti }} scatti
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button class="tasto-pericolo" type="button"
+                                id="dimentica-persona">scegli</button>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="riga">
+                    <div class="lato">
+                        <div class="nome">Riporta le impostazioni come erano</div>
+                        <p class="ds">Solo le impostazioni di questa pagina. Non
+                            tocca né i dati né l'albero.</p>
+                        <span class="costo">immediato · nessun dato perso</span>
+                    </div>
+                    <button class="tasto-pericolo" type="button"
+                            data-pericolo="Riporta le impostazioni come erano|reimposta|Torna tutto ai valori di partenza. Dati, albero ed etichette non si toccano.|/impostazioni/riporta-i-valori">avvia</button>
+                </div>
+            </div>
+
+            <p class="nota-a-margine">
+                <b>Quello che non c'è qui:</b> non esiste &laquo;cancella tutte
+                le etichette&raquo; e non esiste &laquo;cancella
+                l'archivio&raquo;.{% call spiega("Perché non ci sono") %}
+                    <p>Un pulsante che butta via mesi di lavoro non deve stare
+                    in una pagina che si scorre distrattamente.</p>
+                    <p>Se un giorno servira' davvero, si cancella la cartella a
+                    mano, guardandola.</p>
+                {% endcall %}
+            </p>
+        </section>
+    </div>
+    </div>
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% macro interruttore(chiave, acceso, invertito=False) %}
+<button class="commuta {{ 'acceso' if acceso }}" type="button"
+        role="switch" aria-checked="{{ 'true' if acceso else 'false' }}"
+        data-chiave="{{ chiave }}"
+        {% if invertito %}data-invertito="1"{% endif %}><i></i></button>
+{% endmacro %}
+
+{% macro scelte(chiave, valore, voci) %}
+<div class="scelte">
+    {% for quale, testo in voci %}
+    <button class="pillola {{ 'piena' if valore == quale }}" type="button"
+            data-chiave="{{ chiave }}" data-valore="{{ quale }}">{{ testo }}</button>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro riga(nome, chiave, solo_qui, spiegazione) %}
+<div class="riga">
+    <div class="lato">
+        <div class="nome">{{ nome }}
+            <span class="tacca {{ 'mac' if solo_qui }}">
+                {{ 'questo computer' if solo_qui else "tutto l'archivio" }}</span>
+            <span class="salvato" data-salvato="{{ chiave }}">salvato</span>
+        </div>
+        <p class="ds">{{ spiegazione|safe }}</p>
+    </div>
+    <div>{{ caller() }}</div>
+</div>
+{% endmacro %}
+
+{% block coda %}
+<script type="module" src="/statici/js/impostazioni.js"></script>
+<script type="module" src="/statici/js/impostazioni_versioni.js"></script>
+{% endblock %}

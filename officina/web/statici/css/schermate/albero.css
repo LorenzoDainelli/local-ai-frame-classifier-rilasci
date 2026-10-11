@@ -1,0 +1,46 @@
+.mappa.insieme .mappa-testa { grid-column: 1 / -1; }
+
+.mappa-testa .pillola[aria-selected="true"]:hover {
+    background: var(--ink);
+    border-color: var(--ink);
+}
+
+.muro-facce a { display: block; text-align: center; }
+
+.muro-facce .faccia-grande {
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--linea);
+    background: var(--superficie);
+    margin: 0 auto var(--s2);
+    display: block;
+}
+
+.muro-facce .faccia-grande.vuota { border-style: dashed; }
+.muro-facce a:hover .faccia-grande { border-color: var(--tenue); }
+
+.muro-facce .come-si-chiama { display: block; font-size: var(--testo-comando); }
+.muro-facce .quanti { display: block; }
+
+.pannello-nodo .conti { display: flex; flex-direction: column; }
+
+.angolo b { color: var(--ink); font-weight: 500; }
+
+.suggerimenti b { color: var(--attenuato); font-weight: 500; }
+
+.mappa-corpo[hidden], .mappa-testa [hidden] { display: none !important; }
+.mappa .mappa-testa { gap: 10px; padding: 10px 18px; background: var(--fondo); border-bottom: 0.5px solid var(--linea); }
+.mappa-testa .campo-cerca { width: 280px; }
+.mappa-schede button { display: inline-flex; align-items: center; gap: 6px; }
+.mappa-schede button[aria-selected="true"] { background: var(--carta); color: var(--ink); font-weight: 500; box-shadow: inset 0 0 0 0.5px var(--linea-forte); }
+.mappa-testa #mostra-archiviati.piena { background: var(--carta-sopra); color: var(--ink); }
+
+.mappa .angolo { left: auto; right: 14px; bottom: 14px; display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border: 0.5px solid var(--linea); background: var(--carta); }
+.mappa .angolo .icona { color: var(--tenue); }
+
+.mappa .suggerimenti { left: 16px; right: auto; bottom: 18px; transform: none; max-width: calc(100% - 320px); }
+.mappa .pannello-nodo { width: 340px; gap: 14px; padding: 22px 22px 18px; border-left: 0.5px solid var(--linea); background: var(--fondo); }
+
+.mappa .pannello-nodo h2 { margin: -6px 0 0; font: 400 26px/1.2 var(--serif); }
+.mappa .pannello-nodo .bollino { justify-self: start; }

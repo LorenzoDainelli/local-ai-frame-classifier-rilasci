@@ -1,0 +1,23 @@
+{% from "_icone.html" import icona %}
+{% if pagella.motivo_vuota %}
+<p class="avviso">{{ pagella.motivo_vuota }}</p>
+{% elif pagella.coda %}
+<ol class="st-compiti">
+    {% for compito in pagella.coda %}
+    <li class="st-compito">
+        <span class="st-numero numeri">{{ loop.index }}</span>
+        <div class="st-compito-cosa">
+            <p class="st-compito-testo">{{ compito.testo }}</p>
+            <p class="piccolo tenue">{{ compito.perche }}</p>
+        </div>
+        <div class="st-compito-dx">
+            <span class="minuscolo tenue">{{ compito.guadagno }}</span>
+            <a class="tasto-comando piccolo" href="{{ compito.dove }}">Portami lì {{ icona('freccia', 13) }}</a>
+        </div>
+    </li>
+    {% endfor %}
+</ol>
+{% else %}
+<p class="piccolo tenue">Non ho niente da consigliarti: o l'albero è in salute, o non ci sono ancora
+    abbastanza etichette per capirlo. La tabella dei nodi dice quale delle due.</p>
+{% endif %}

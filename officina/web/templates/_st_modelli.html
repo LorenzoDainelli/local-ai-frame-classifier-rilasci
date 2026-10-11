@@ -1,0 +1,66 @@
+{% from "_spiega.html" import spiega %}
+    <div class="carta st-stanza mm-modelli">
+        <div class="riga-fra">
+            <h3>I modelli</h3>
+            {% set mancano = modelli | rejectattr("in_casa") | list %}
+            {% if mancano %}
+            <form method="post" action="/modelli/scarica-quel-che-manca" style="flex:0 0 auto">
+                <button class="tasto-comando principale" type="submit">
+                    Scarica quello che manca <span class="numeri">{{ mancano|length }}</span>
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        <p class="piccolo attenuato">
+            Sono l'unica cosa del programma che arriva da internet, e l'unica che si può buttare senza perdere niente.{% call spiega("Perché si possono buttare") %}
+                <p>Sono pesi addestrati da altri su immagini di altri: non c'è niente di tuo.</p>
+                <p>Si riscaricano quando si vuole.</p>
+            {% endcall %}
+        </p>
+
+        <div id="corso-modelli" class="mm-corso"
+             data-lavorava="{{ 1 if scaricamento.sta_lavorando else 0 }}" {% if not scaricamento.sta_lavorando and not scaricamento.guasto %}hidden{% endif %}>
+            <div class="riga-fra">
+                <span class="piccolo" id="stato-modelli">{% if scaricamento.sta_lavorando %}Sto scaricando {{ scaricamento.cosa }}.{% endif %}</span>
+                <span class="minuscolo tenue numeri" id="quanti-modelli"></span>
+            </div>
+            <span class="barretta" id="barra-modelli-zona" hidden><span id="barra-modelli" style="width:0%"></span></span>
+            <p class="minuscolo tenue" id="righe-modelli">{{ scaricamento.righe[-1] if scaricamento.righe else "" }}</p>
+            <p class="mm-guasto" id="guasto-modelli" {% if not scaricamento.guasto %}hidden{% endif %}>{{ scaricamento.guasto }}</p>
+        </div>
+
+        <div class="mm-elenco">
+            {% for modello in modelli %}
+            <div class="mm-riga">
+                <div class="mm-dice">
+                    <b>{{ modello.titolo }}</b>
+                    <span class="minuscolo tenue">{{ modello.a_cosa_serve|senza_regole|maiuscola }}.</span>
+                    {% if modello.codice_di_terzi %}
+                    <span class="minuscolo tenue">Per funzionare esegue del codice scritto da altri su questo computer.</span>
+                    {% endif %}
+                    <details class="mm-dettagli">
+                        <summary class="minuscolo tenue">Nome, licenza, peso</summary>
+                        <span class="minuscolo tenue numeri">{{ modello.si_chiama }} · {% if not modello.pesa_davvero %}circa {% endif %}{{ modello.peso }} · licenza {{ modello.licenza|senza_regole }}{% if modello.precisione != "nessuna" %} · {{ "trentadue bit" if modello.precisione == "piena" else "sedici bit" }}{% endif %}</span>
+                    </details>
+                </div>
+                <span class="minuscolo tenue numeri mm-peso">{% if not modello.pesa_davvero %}circa {% endif %}{{ modello.peso }}</span>
+                <div class="mm-azione">
+                    {% if modello.in_casa %}
+                    <span class="bollino bene">Pronto</span>
+                    {% else %}
+                    <form method="post" action="/modelli/scarica">
+                        <input type="hidden" name="quale" value="{{ modello.quale }}">
+                        <button class="tasto-comando piccolo" type="submit"{% if modello.solo_librerie %} title="Il modello c'è già: dopo l'aggiornamento vanno rimesse a posto solo le sue librerie."{% endif %}>{{ "Prepara le librerie" if modello.solo_librerie else "Scarica" }}</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <p class="minuscolo tenue">
+            Prima di riconoscere una faccia il programma la gira dritta:
+            <a href="/volti/raddrizzamento">guarda come</a>, con facce inventate.
+            I modelli stanno in <span class="numeri">{{ dove_stanno_i_modelli }}</span>.
+        </p>
+    </div>

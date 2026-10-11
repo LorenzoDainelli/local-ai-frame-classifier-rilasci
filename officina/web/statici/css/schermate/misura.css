@@ -1,0 +1,53 @@
+.banco-immagine img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+.bn-testa { display: grid; gap: 6px; }
+.bn-testa p { margin: 0; }
+
+.bn-testa kbd, .bn-passi kbd { font-family: var(--mono); font-size: var(--testo-minimo); padding: 0 5px; border: 0.5px solid var(--linea-forte); border-radius: 5px; color: var(--attenuato); }
+.bn-mucchi { display: grid; gap: 8px; }
+
+.bn-vie a { display: inline-flex; align-items: center; gap: 3px; color: var(--tenue); }
+.bn-vie a:hover { color: var(--ink); }
+.bn-vuoto { display: grid; justify-items: center; gap: 10px; }
+.bn-vuoto p { margin: 0; }
+
+.tasto-mucchio {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    width: 100%;
+    padding: var(--s3) var(--s4);
+    background: var(--carta-sopra);
+    color: var(--ink);
+    border: 0.5px solid var(--linea);
+    border-radius: var(--raggio-controllo);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--gesto) var(--uscita),
+                border-color var(--gesto) var(--uscita);
+}
+.tasto-mucchio:hover { border-color: var(--attenuato); }
+
+.tasto-mucchio.scelto {
+    background: var(--fill);
+    color: var(--su-fill);
+    border-color: var(--fill);
+}
+.tasto-mucchio.negato { opacity: 0.5; border-style: dashed; }
+.tasto-mucchio.nessuno { border-style: dashed; color: var(--attenuato); }
+
+.tasto-mucchio .numero {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: var(--raggio-pillola);
+    border: 1px solid currentColor;
+    font-size: var(--testo-minore);
+    font-variant-numeric: tabular-nums;
+    flex: none;
+    opacity: 0.75;
+}
+.tasto-mucchio .nome { flex: 1; }
+.tasto-mucchio .conto { font-size: var(--testo-minore); }

@@ -1,0 +1,32 @@
+{% from "_icone.html" import icona, fotina %}
+{% set PASSI_DELLA_GUIDA = [
+    (1, "Il computer", "/benvenuto"),
+    (2, "La chiave", "/benvenuto/chiave"),
+    (3, "I modelli", "/benvenuto/modelli"),
+    (4, "La cartella", "/benvenuto/cartella"),
+    (5, "L'elaborazione", "/benvenuto/lavoro"),
+    (6, "Il tutorial", "/benvenuto/pronto")] %}
+
+{% macro testa(passo) -%}
+<header class="guida-su">
+    <span class="guida-marchio">{{ fotina('piccola') }}<b>Frame Classifier</b></span>
+    <nav class="guida-passi" aria-label="I sei passi della guida">
+        {% for numero, nome, dove in PASSI_DELLA_GUIDA %}
+        <a href="{{ dove }}" class="{{ 'qui' if numero == passo }} {{ 'fatto' if numero < passo }}"
+           {% if numero == passo %}aria-current="step"{% endif %}><b class="numeri">{% if numero < passo %}{{ icona('spunta', 11) }}{% else %}{{ numero }}{% endif %}</b><span>{{ nome }}</span></a>
+        {% endfor %}
+    </nav>
+    <a class="tasto-comando nudo piccolo guida-salta" href="/">Salta e vai alle foto</a>
+</header>
+{%- endmacro %}
+
+{% macro dice(titolo) -%}
+<div class="guida-dice">{{ fotina() }}<div class="nuvola"><b>{{ titolo }}</b>{{ caller() }}</div></div>
+{%- endmacro %}
+
+{% macro piede(passo, nota='') -%}
+<footer class="guida-giu">
+    <span class="minuscolo tenue">Passo {{ passo }} di 6{% if nota %} · {{ nota }}{% endif %}</span>
+    <span class="guida-giu-tasti">{{ caller() }}</span>
+</footer>
+{%- endmacro %}

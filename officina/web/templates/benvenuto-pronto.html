@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% import "_guida.html" as guida_pezzi %}
+{% set guida = true %}
+{% block titolo %}Si comincia — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale guida">
+    {{ guida_pezzi.testa(6) }}
+<div class="pagina guida-corpo">
+
+    {% if request.query_params.get('giro') == 'finito' %}
+    <div class="avviso forte">
+        Tutorial finito, e sei tornato al tuo archivio.
+        {% if request.query_params.get('detto') %}
+        {{ request.query_params.get('detto') }}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% call guida_pezzi.dice("Il tutorial") %}
+        {% if quanti %}Ci siamo: nell'archivio ci sono {{ quanti|numero }} scatti, e da qui in poi il programma smette di chiedere tempo e comincia a farne risparmiare. Se vuoi, prima facciamo un giro insieme sulle foto finte.
+        {% else %}Nell'archivio non c'è ancora nessuno scatto: manca il passo in cui mi dici dove sono le foto. Il giro sulle foto finte si può fare lo stesso.{% endif %}
+    {% endcall %}
+
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('guida', 18) }}<h1>Il tutorial, sulle foto finte{% call spiega("Cosa c'è nelle foto finte") %}
+            <p>Il programma ne disegna una ventina, con dentro apposta i
+            casi difficili: live photo, video, schermate, foto senza
+            data, doppioni, file rotti.</p>
+            <p>Poi la fotina ti porta nelle schermate facendoti fare i gesti
+            veri, e alla fine ti lascia i tasti da ricordare.</p>
+        {% endcall %}</h1></div>
+        <p class="piccolo attenuato"><b>È un archivio a parte, con un database suo, e non tocca mai il tuo.</b></p>
+        <form method="post" action="/giro/parti">
+            <button class="tasto-comando {{ 'principale' if not quanti }}" type="submit">Comincia il tutorial</button>
+        </form>
+        <p class="minuscolo tenue">
+            Si esce quando vuoi, e alla fine le foto finte si buttano da sole: te lo dico quando succede.
+            {% if giro_gia_costruito %}
+            Un archivio finto ce l'hai già: quello <b>non lo tocco</b>, perché potrebbe esserci dentro del lavoro tuo.
+            {% endif %}
+        </p>
+    </section>
+
+    {% if quanti %}
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('etichetta', 18) }}<h2>Come si etichetta{% call spiega("Le tre scelte") %}
+            <p>Le scelte sono tre e non due: <b>sì</b>, <b>no</b>, e
+            <em>non lo so</em>.</p>
+            <p>&laquo;Non lo so&raquo; è una risposta vera, e il programma la
+            tratta come tale invece di insistere: una foto incerta che resta
+            incerta vale più di una decisione tirata a caso.</p>
+        {% endcall %}</h2></div>
+        <p class="piccolo attenuato">Un giro corto: <b>guardo, decido, passo al successivo</b>, senza che la pagina si ricarichi mai.</p>
+        <p class="piccolo attenuato">I tasti della tastiera sono scritti dentro le pillole, così non c'è niente da imparare a memoria. L'elenco intero è in <a href="/impostazioni#tasti">Tasti</a>, dentro le impostazioni.</p>
+    </section>
+
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('scintilla', 18) }}<h2>All'inizio non propone niente, ed è giusto così{% call spiega("Quando comincia a proporre") %}
+            <p>Dopo una manciata di scatti. E ogni proposta porta con sé il
+            <em>perché</em>, fatto di scatti veri che si aprono
+            &mdash; &laquo;assomiglia a cinque scatti che hai
+            confermato&raquo; &mdash; e non di una percentuale.</p>
+        {% endcall %}</h2></div>
+        <p class="piccolo attenuato">Il programma comincia sapendo <b>niente</b>: non ha visto nessuna delle tue decisioni. Le prime volte etichetti tu e basta.</p>
+        {% if not con_impronta %}
+        <p class="piccolo attenuato">
+            Le proposte hanno bisogno delle <b>impronte</b>, che non sono ancora state calcolate.{% call spiega("Dove si calcolano") %}
+                <p>Dal <a href="/benvenuto/lavoro">passo prima</a>, oppure dalla
+                pagina Misura quando vorrai.</p>
+                <p>Senza, si etichetta lo stesso: solo senza aiuto.</p>
+            {% endcall %}
+        </p>
+        {% endif %}
+        <p class="piccolo attenuato">
+            La <a href="/stato#pagella">Pagella</a> serve a una cosa sola: dire cosa etichettare adesso perché migliori il più possibile.{% call spiega("Se dice sempre «troppo pochi esempi»") %}
+                <p>Per un po' lo dirà quasi dappertutto, ed è il
+                comportamento giusto, non un difetto: una percentuale su quattro
+                scatti non è una misura.</p>
+            {% endcall %}
+        </p>
+    </section>
+
+    <p class="minuscolo tenue">
+        <b>Questa guida non si rivede più</b>, e non serve ricordarsela.{% call spiega("Dove finisce quello che c'era scritto") %}
+            <p>Tutto quello che c'era qui dentro sta anche nelle pagine dove
+            serve: le cartelle in <a href="/importazione">Aggiungi foto</a>, i
+            modelli e le copie in <a href="/stato#salute">Stato</a>, le persone
+            in <a href="/persone">Persone</a>.</p>
+            <p>Se un giorno vuoi rileggerla, si riapre dalle Impostazioni.</p>
+        {% endcall %}
+    </p>
+    {% endif %}
+</div>
+    {% call guida_pezzi.piede(6) %}
+        {% if quanti %}
+        <a class="tasto-comando" href="/">Prima guardo le foto</a>
+        <a class="tasto-comando principale" href="/officina{% if primo %}?scatto={{ primo }}{% endif %}">Comincia a etichettare {{ icona('avanti', 14) }}</a>
+        {% else %}
+        <a class="tasto-comando principale" href="/benvenuto/cartella">{{ icona('indietro', 14) }} Torna alla cartella</a>
+        {% endif %}
+    {% endcall %}
+</main>
+</div>
+{% endblock %}

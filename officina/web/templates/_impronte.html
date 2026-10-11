@@ -1,0 +1,131 @@
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona, fotina %}
+{% set PAROLE = {
+    "fatte": ("bene", "fatte"),
+    "a_meta": ("attenzione", "a metà"),
+    "nessuna": ("", "nessuna"),
+    "da_scaricare": ("", "da scaricare"),
+} %}
+{% set racconto = (aspetto.impronte == "C") %}
+<div class="riquadro im im-{{ 'c' if racconto else 'a' }}" id="impronte" data-impronte
+     data-lavora="{{ '1' if sta_calcolando else '0' }}">
+    <div class="im-testa">
+        <div class="im-titolo">
+            <h3>{{ numero_impronte or '' }}Le impronte{% if peso_impronte %} <span class="tenue numeri">{{ peso_impronte }}</span>{% endif %}</h3>
+            <p class="piccolo attenuato">Il passo pesante, e si fa una volta
+                sola.{% call spiega("Cosa succede qui") %}
+                    <p>Ogni scatto diventa una descrizione numerica, e da lì in poi
+                    si lavora su quelle invece che sulle immagini.</p>
+                    <p>Si può interrompere: la volta dopo riprende da dove era.</p>
+                {% endcall %}</p>
+        </div>
+        <div class="im-tasto">
+            <form method="post" action="/misura/impronte" data-calcola {% if sta_calcolando %}hidden{% endif %}>
+                {% if dove_torno %}
+                <input type="hidden" name="dove_torno" value="{{ dove_torno }}">
+                {% endif %}
+                <button class="tasto-comando principale" type="submit">
+                    {% if guasto_impronte %}{{ icona('riprova', 15) }} Riprova{% else %}Calcola le impronte{% endif %}</button>
+            </form>
+            <form method="post" action="/misura/impronte/ferma" data-ferma {% if not sta_calcolando %}hidden{% endif %}>
+                <button class="tasto-comando" type="submit">{{ icona('ferma', 14) }} Ferma</button>
+            </form>
+            <span class="im-fermando" data-fermando hidden><span class="gira-poco"></span> Mi sto fermando…</span>
+        </div>
+    </div>
+
+    {% if racconto %}
+    {% set a_meta = righe_impronte|selectattr("stato", "equalto", "a_meta")|list %}
+    {% set pronte = righe_impronte|selectattr("pronto")|list %}
+    {% set finite = pronte|selectattr("stato", "equalto", "fatte")|list %}
+    {% set totale = righe_impronte[0].totale if righe_impronte else 0 %}
+    <div class="im-racconto">
+        {{ fotina() }}
+        <div class="im-racconto-testo">
+            {% set frase %}{% if guasto_impronte %}
+                Mi sono fermato per un guasto. Qui sotto c'è cosa è successo; quando hai sistemato, premi «Riprova» e riparto da dove ero.
+                {% elif not totale %}
+                Non ci sono ancora foto da guardare. Prima si aggiungono, da <a href="/importazione">Aggiungi foto</a>.
+                {% elif a_meta %}
+                Le impronte di <b>{{ a_meta[0].titolo }}</b> sono a metà: <b class="numeri">{{ a_meta[0].scatti|numero }}</b> su <b class="numeri">{{ totale|numero }}</b>. Quando vuoi, riprendo da lì.
+                {% elif pronte and finite|length == pronte|length %}
+                Le impronte sono tutte fatte: <b class="numeri">{{ totale|numero }}</b> scatti, con {{ 'un modello' if pronte|length == 1 else (pronte|length|string) + ' modelli' }}.
+                {% else %}
+                Non ho ancora calcolato nessuna impronta. È il passo pesante: si fa una volta sola, e dopo le foto si possono cercare e confrontare.
+                {% endif %}{% endset %}
+            <p class="prosa" data-racconto>{{ frase|trim }}</p>
+            <p class="piccolo tenue" data-dove hidden></p>
+        </div>
+        {% set di_chi = a_meta[0] if a_meta else (finite[0] if finite else none) %}
+        <div class="im-pct">
+            <b class="numeri"><span data-pct>{{ ('%g'|format(di_chi.percentuale if di_chi else 0)).replace('.', ',') }}</span>%</b>
+            <span class="piccolo tenue" data-pct-di>{{ 'di ' + di_chi.titolo if di_chi else '' }}</span>
+        </div>
+    </div>
+    <span class="barretta im-sottile"><span data-barra-grande style="width:{{ di_chi.percentuale if di_chi else 0 }}%"></span></span>
+    <div class="im-pillole">
+        <span class="etichetta">Tutti i modelli</span>
+        {% for riga in righe_impronte %}
+        <span class="pillola" data-pillola="{{ riga.nome }}">
+            <span data-pillola-spunta {% if riga.stato != 'fatte' %}hidden{% endif %}>{{ icona('spunta', 13) }}</span>
+            {{ riga.titolo }}
+            <span class="conto" data-pillola-stato>{{ PAROLE[riga.stato][1] }}</span>
+        </span>
+        {% endfor %}
+    </div>
+    <details class="im-numeri">
+        <summary>I numeri, modello per modello</summary>
+        <table class="tabella">
+            <tr><th>Modello</th><th>Impronte</th><th>Scatti</th><th>Mancano</th></tr>
+            {% for riga in righe_impronte %}
+            <tr data-riga="{{ riga.nome }}" data-totale="{{ riga.totale }}" data-impronte-base="{{ riga.impronte }}">
+                <td>{{ riga.titolo }}</td>
+                <td class="numeri" data-impronte>{{ riga.impronte|numero }}</td>
+                <td class="numeri" data-fatti>{{ riga.scatti|numero }}</td>
+                <td class="numeri" data-mancano>{{ (riga.totale - riga.scatti)|numero }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </details>
+    {% else %}
+    <div class="im-righe">
+        {% for riga in righe_impronte %}
+        <div class="im-riga" data-riga="{{ riga.nome }}" data-titolo="{{ riga.titolo }}"
+             data-totale="{{ riga.totale }}" data-impronte-base="{{ riga.impronte }}">
+            <span class="im-nome">{{ riga.titolo }}<span>{{ riga.sotto }}</span></span>
+            <span class="bollino {{ PAROLE[riga.stato][0] }}" data-stato-scritta>{{ PAROLE[riga.stato][1] }}</span>
+            <span class="barretta {{ 'ink' if riga.stato == 'fatte' }}"><span data-barra style="width:{{ riga.percentuale }}%"></span></span>
+            <span class="im-num">
+                <b class="numeri"><span data-fatti>{{ riga.scatti|numero }}</span> di {{ riga.totale|numero }}</b>
+                <span class="numeri"><span data-impronte>{{ riga.impronte|numero }}</span> impronte</span>
+            </span>
+            <span class="im-dettaglio" data-dettaglio hidden></span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="im-saltati" data-saltati hidden>
+        <span class="bollino attenzione"><span data-saltati-testo></span></span>
+        <span class="piccolo tenue">Alla prossima passata si riprova da soli.</span>
+        <details data-quali hidden><summary>Quali sono</summary><p class="piccolo" data-quali-elenco></p></details>
+    </div>
+
+    <div class="im-guasto" role="alert" data-guasto {% if not guasto_impronte %}hidden{% endif %}>
+        <span class="bollino male">Si è fermato per un guasto</span>
+        <p data-guasto-testo>{{ guasto_impronte }}</p>
+        <p class="piccolo tenue">Quando hai sistemato, premi «Riprova» qui sopra: riparte da dove era.</p>
+    </div>
+
+    <p class="piccolo tenue im-piede">
+        Si calcolano sempre con tutti i modelli, uno dopo l'altro.
+        I modelli grandi si scaricano una volta sola, con
+        <a href="/stato#salute">Scarica quello che manca</a>.{% call spiega("E finché non ci sono?") %}
+            <p>Si lavora con il descrittore disegnato a mano, che non è
+            intelligenza artificiale: è un conto sui colori e sui bordi.</p>
+            <p>Serve anche da metro di paragone: un modello grande che non
+            lo batte non sta guadagnando niente.</p>
+        {% endcall %}
+    </p>
+</div>
+<script type="module" src="/statici/js/impronte.js"></script>

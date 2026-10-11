@@ -1,0 +1,51 @@
+    <div class="ar-tre">
+        <div class="carta st-stanza ar-numero">
+            <span class="etichetta">Foto</span>
+            <span class="ar-grande numeri">{{ in_breve.foto|numero }}</span>
+            <span class="minuscolo tenue">{% if in_breve.cartelle == 1 %}in una cartella{% else %}in <span class="numeri">{{ in_breve.cartelle|numero }}</span> cartelle{% endif %}</span>
+        </div>
+        <div class="carta st-stanza ar-numero">
+            <span class="etichetta">Video</span>
+            <span class="ar-grande numeri">{{ in_breve.video|numero }}</span>
+            <span class="minuscolo tenue">guardati come le foto</span>
+        </div>
+        <div class="carta st-stanza ar-numero">
+            <span class="etichetta">Con l'impronta</span>
+            <span class="ar-grande numeri">{{ in_breve.quota_impronta }}%</span>
+            <span class="minuscolo tenue">{% if in_breve.senza_impronta %}<span class="numeri">{{ in_breve.senza_impronta|numero }}</span> da fare{% else %}tutti fatti{% endif %}</span>
+        </div>
+    </div>
+
+    <div class="carta st-stanza ar-spazio" id="ar-spazio" data-conta="{{ 1 if spazio.sta_contando else 0 }}">
+        <div class="riga-fra">
+            <h3>Spazio usato dal programma</h3>
+            <span class="minuscolo tenue" data-spazio-quando>{% if spazio.sta_contando %}lo sto contando…{% else %}contato {{ spazio.quando }}{% endif %}</span>
+        </div>
+        {% if spazio.pronto %}
+        <span class="ar-barra" aria-hidden="true">
+            <span class="ar-pezzo-miniature" style="width:{{ spazio.quota_miniature }}%"></span>
+            <span class="ar-pezzo-video" style="width:{{ spazio.quota_video }}%"></span>
+            <span class="ar-pezzo-archivio" style="width:{{ spazio.quota_archivio }}%"></span>
+        </span>
+        <div class="ar-legenda">
+            <span class="ar-voce ar-pezzo-miniature">Miniature <b class="numeri">{{ spazio.miniature }}</b></span>
+            <span class="ar-voce ar-pezzo-video">Copie dei video che si vedono <b class="numeri">{{ spazio.video }}</b></span>
+            <span class="ar-voce ar-pezzo-archivio">Archivio e impronte <b class="numeri">{{ spazio.archivio }}</b></span>
+            <form method="post" action="/archivio/ricalcola-spazio" class="ar-ricalcola">
+                <button class="tasto-comando nudo piccolo" type="submit" {% if spazio.sta_contando %}disabled{% endif %}>Ricalcola</button>
+            </form>
+        </div>
+        {% else %}
+        <span class="barretta lm-scorre"><span></span></span>
+        {% endif %}
+        <p class="minuscolo tenue">Le tue foto e i tuoi video non sono contati: restano dove sono, e il programma non li sposta.</p>
+    </div>
+
+    <details class="carta st-stanza ar-tutti">
+        <summary class="piccolo">Tutti i numeri dell'archivio</summary>
+        <div class="mm-elenco">
+            {% for voce, valore in numeri %}
+            <div class="mm-riga"><span class="mm-dice">{{ voce }}</span><span class="numeri">{{ valore|numero if valore is number else valore }}</span></div>
+            {% endfor %}
+        </div>
+    </details>

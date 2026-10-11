@@ -1,0 +1,25 @@
+# Regola 1: dipendenze poche, pinnate e ispezionabili.
+# Regola 15/19: Python + FastAPI + Jinja + SQLite, zero npm.
+#
+# Questo e' tutto quello che serve per **usare** il programma: importare,
+# guardare, misurare. I modelli grandi si installano a parte (regola 74),
+# in requirements-modelli.txt, perche' pesano qualche GB e perche' chi vuole
+# solo guardare le proprie foto non deve scaricarli.
+
+fastapi==0.141.1          # server web
+uvicorn==0.52.4           # motore che fa girare il server
+jinja2==3.1.6             # pagine HTML scritte a mano
+pillow==12.3.0            # lettura immagini, miniature, AVIF (regola 327)
+pillow-heif==1.5.0        # lettura HEIC senza conversioni (regola 51)
+python-multipart==0.0.32  # legge i moduli delle pagine (note, date, scelte)
+numpy==2.4.6              # i conti sulle impronte e sul classificatore
+cryptography==46.0.3      # il forziere: AES-256-GCM (regole 331, 340)
+spake2==0.9               # abbina il portatile al fisso con un codice di sei cifre
+
+# «cryptography» serve **solo** se accendi il forziere. Senza, tutto il resto
+# del programma funziona e l'archivio resta una cartella in chiaro su un disco
+# che Windows cifra comunque (regola 9): il programma se ne accorge e lo dice
+# col nome della libreria, invece di rifiutarsi di partire.
+#
+# La derivazione della chiave dalla password (scrypt) non e' qui dentro: sta
+# nella libreria standard di Python, e quindi non e' una dipendenza in piu'.

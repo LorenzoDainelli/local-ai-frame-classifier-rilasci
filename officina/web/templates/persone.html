@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import fotina, icona %}
+{% block titolo %}Persone — Local AI Frame Classifier{% endblock %}
+
+{% macro faccia(voce, grande) %}
+<a class="pe-faccia {{ 'grande' if grande }}" href="/persone/{{ voce.id }}" data-gruppo="{{ voce.id }}" data-ha-nome="{{ '1' if voce.nome else '' }}" data-nome="{{ (voce.nome or '')|lower }}">
+    <span class="pe-tondo">
+        {% if voce.copertina %}<img src="/volto/{{ voce.copertina.id }}?lato=180" alt="" loading="lazy">{% endif %}
+    </span>
+    <b>{{ voce.nome or 'senza nome' }}</b>
+    <span class="minuscolo tenue numeri">{{ voce.scatti|numero }} scatti</span>
+</a>
+{% endmacro %}
+
+{% macro vuota() %}
+<section class="carta pe-vuota">
+    {{ fotina() }}
+    <p class="prosa">Non ho ancora cercato i volti nelle tue foto.</p>
+    <a class="tasto-comando accento" href="/intelligenza">Vai a Intelligenza artificiale {{ icona('freccia', 14) }}</a>
+    <p class="piccolo tenue">Lì accendi «I volti» e premi Avvia. Mentre cerco puoi continuare a usare il programma.</p>
+</section>
+{% endmacro %}
+
+{% macro nessuno_trovato() %}
+<section class="carta pe-vuota" id="pe-nessuno" hidden>
+    <p class="prosa">Nessuna persona si chiama «<span data-cercato></span>».</p>
+    {% if resta.senza_nome %}
+    <p class="piccolo tenue">Forse è tra i gruppi senza nome: dagli un nome e la trovi.</p>
+    <a class="tasto-comando" href="/persone/mazzo">Vedi i gruppi senza nome</a>
+    {% else %}
+    <p class="piccolo tenue">Prova con un altro nome, o con solo le prime lettere.</p>
+    {% endif %}
+</section>
+{% endmacro %}
+
+{% macro cerca_le_facce() %}
+<div class="carta pe-riga" id="riquadro-volti">
+    {% if passata.sta_lavorando %}
+    <span class="bollino bene">Sto cercando i volti</span>
+    <span class="piccolo tenue pe-spazio">Le persone nuove compaiono qui man mano. Come va lo vedi in Intelligenza artificiale.</span>
+    {% else %}
+    <span class="piccolo tenue pe-spazio">I volti delle foto nuove si cercano da Intelligenza artificiale, insieme alle impronte e alle scritte.</span>
+    {% endif %}
+    <a class="tasto-comando piccolo" href="/intelligenza">{{ icona('chip', 15) }} Intelligenza artificiale</a>
+</div>
+{% endmacro %}
+
+{% macro gli_ignorati() %}
+{% if ignorate %}
+<details class="pe-ignorati">
+    <summary><span class="etichetta">Ignorati <span class="numeri">{{ ignorate|length }}</span></span> <span class="tasto-comando nudo piccolo">Mostra</span></summary>
+    <p class="piccolo tenue">Passanti, riflessi, facce sui manifesti. Non tornano nel mazzo, ma non sono cancellati.</p>
+    <div class="in-fila">
+        {% for voce in ignorate %}
+        <span class="pillola">{{ voce.nome or 'senza nome' }}
+            <span class="conto numeri">{{ voce.scatti|numero }}</span>
+            <button class="via" type="button" data-riprendi="{{ voce.id }}" title="rimettilo fra le persone">&#8630;</button></span>
+        {% endfor %}
+    </div>
+</details>
+{% endif %}
+{% endmacro %}
+
+{% macro unisci_gruppi() %}
+{% if persone|length > 1 %}
+<button class="tasto-comando" type="button" data-unisci-via>Unisci i gruppi</button>
+{% endif %}
+{% endmacro %}
+
+{% macro barra_unisci() %}
+{% if persone|length > 1 %}
+<div class="carta pe-barra-unisci" id="pe-barra-unisci" hidden>
+    <span class="piccolo" data-unisci-testo></span>
+    <div class="in-fila">
+        <button class="tasto-comando principale piccolo" type="button" data-unisci-avanti disabled>Avanti</button>
+        <button class="tasto-comando nudo piccolo" type="button" data-unisci-annulla>Annulla</button>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro la_nota() %}
+<p class="nota-a-margine pe-nota">
+    <b>Qui dentro c'è il dato più sensibile del progetto.</b>{% call spiega("Dove stanno i volti") %}
+        <p>I ritagli dei volti <b>non vengono mai scritti su disco</b>: si
+        tagliano al volo dall'originale, e il browser ha l'ordine di non
+        tenerli.</p>
+        <p>E &laquo;dimentica una persona&raquo;, nelle impostazioni, cancella
+        davvero. Non nasconde.</p>
+    {% endcall %}
+</p>
+{% endmacro %}
+
+{% block corpo %}
+{% set versione = aspetto.persone %}
+{% set con_nome = persone | selectattr('nome') | list %}
+{% set senza = persone | rejectattr('nome') | list %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-persone persone-{{ versione|lower }}">
+
+    <div class="pe-testa">
+        <div>
+            <h1 class="titolo-pagina">Le persone</h1>
+            <p class="sottotitolo">Un gruppo senza nome è <b>già utile</b>: ci si filtra anche quando non si sa come si chiama.{% call spiega("Senza nome") %}
+                <p>&laquo;Quello che compare in queste quaranta foto&raquo; è già
+                una cosa con cui si cerca. Il nome si aggiunge quando si ha
+                voglia, e se non arriva mai il gruppo resta utile lo stesso.</p>
+            {% endcall %}</p>
+        </div>
+        {% if resta.forse %}
+        <a class="tasto-comando piccolo" href="/persone/cassetto">Forse la stessa persona <span class="numeri">{{ resta.forse|numero }}</span></a>
+        {% endif %}
+        {% if con_nome %}
+        <label class="campo pe-cerca">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input type="search" id="pe-cerca" placeholder="Cerca una persona" autocomplete="off" aria-label="Cerca una persona">
+        </label>
+        {% endif %}
+    </div>
+    {{ nessuno_trovato() }}
+
+    {% if versione == 'C' %}
+
+    <div class="pe-c">
+        <section class="carta pe-mazzo">
+            {% if gruppo %}
+            <div data-persona="{{ gruppo.id }}" data-senza-fuoco>
+                <div class="pe-mazzo-testa">
+                    <h2>Chi è?</h2>
+                    <span class="minuscolo tenue numeri">{{ resta.senza_nome|numero }} senza nome</span>
+                </div>
+                <p class="piccolo attenuato">Compare in <b class="numeri">{{ gruppo.scatti|numero }}</b> scatti. Qui i suoi volti più diversi fra loro.</p>
+                <div class="facce pe-facce-mazzo">
+                    {% for volto in gruppo.volti %}
+                    <label class="faccia sceglibile">
+                        <input type="checkbox" value="{{ volto.id }}" data-volto>
+                        <img src="/volto/{{ volto.id }}?lato=160" alt="" loading="lazy">
+                    </label>
+                    {% endfor %}
+                </div>
+                <input class="campo" id="nome" type="text" autocomplete="off" placeholder="Come si chiama?">
+                <div class="in-fila">
+                    <button class="tasto-comando principale piccolo" id="dai-il-nome" type="button">Salva</button>
+                    <button class="tasto-comando piccolo" id="salta" type="button" title="Torna in fondo al mazzo: «salta» non vuol dire «non m'interessa»">Non lo so, dopo</button>
+                    <button class="tasto-comando nudo piccolo" id="ignora" type="button" title="Passanti, riflessi, facce sui manifesti">Ignora</button>
+                </div>
+                <div id="domanda-omonimo" hidden></div>
+                <p class="minuscolo tenue">
+                    Se qualcuno di questi volti non è lui, spuntalo e premi
+                    <button class="tasto-comando nudo minuscolo" id="non-e-lui" type="button" disabled>non è lui</button>:
+                    diventa un gruppo nuovo senza nome, e nessun volto viene cancellato.
+                </p>
+            </div>
+            {% else %}
+            <div class="pe-mazzo-testa"><h2>Nessun nome da dare</h2></div>
+            <p class="piccolo attenuato">Tutti i gruppi hanno un nome, oppure le facce non sono ancora state cercate.</p>
+            {% endif %}
+        </section>
+
+        <section class="pe-destra">
+            {{ cerca_le_facce() }}
+            <h2 class="etichetta">Già con un nome <span class="numeri">{{ con_nome|length }}</span></h2>
+            {% if con_nome %}
+            <div class="pe-griglia">{% for voce in con_nome %}{{ faccia(voce, False) }}{% endfor %}</div>
+            {% else %}
+            <p class="piccolo tenue">Ancora nessuno: il primo nome lo dai qui a fianco.</p>
+            {% endif %}
+            {% if senza %}
+            <h2 class="etichetta">Senza nome, già utili <span class="numeri">{{ senza|length }}</span></h2>
+            <div class="pe-griglia piccola">{% for voce in senza %}{{ faccia(voce, False) }}{% endfor %}</div>
+            {% endif %}
+            {{ unisci_gruppi() }}
+            {{ gli_ignorati() }}
+        </section>
+    </div>
+
+    {% else %}
+
+    {% if resta.senza_nome %}
+    <div class="carta pe-invito">
+        <div class="pe-invito-facce" aria-hidden="true">
+            {% for voce in senza[:3] %}<span class="pe-tondo">{% if voce.copertina %}<img src="/volto/{{ voce.copertina.id }}?lato=120" alt="" loading="lazy">{% endif %}</span>{% endfor %}
+        </div>
+        <div>
+            <h2>{% if resta.senza_nome == 1 %}C'è un gruppo senza nome{% else %}Ci sono {{ resta.senza_nome|numero }} gruppi senza nome{% endif %}</h2>
+            <p class="piccolo attenuato">Uno alla volta, dal più grande: sono le foto che dopo si cercano meglio.</p>
+        </div>
+        <div class="in-fila">
+            <a class="tasto-comando accento" href="/persone/mazzo">Dai i nomi</a>
+            {{ unisci_gruppi() }}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if persone or passata.sta_lavorando %}{{ cerca_le_facce() }}{% endif %}
+
+    {% if con_nome %}
+    <div class="pe-griglia grande">{% for voce in con_nome %}{{ faccia(voce, True) }}{% endfor %}</div>
+    {% endif %}
+    {% if senza %}
+    <h2 class="etichetta">Senza nome, già utili <span class="numeri">{{ senza|length }}</span></h2>
+    <div class="pe-griglia piccola">{% for voce in senza %}{{ faccia(voce, False) }}{% endfor %}</div>
+    {% endif %}
+    {% if not persone and not passata.sta_lavorando %}{{ vuota() }}{% endif %}
+    {% if not resta.senza_nome %}<div class="in-fila">{{ unisci_gruppi() }}</div>{% endif %}
+            {{ gli_ignorati() }}
+
+    {% endif %}
+
+    {{ barra_unisci() }}
+    {{ la_nota() }}
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/unisci_persone.js"></script>
+{% if aspetto.persone == 'C' and gruppo %}
+<script type="module" src="/statici/js/mazzo.js"></script>
+{% endif %}
+<script type="module">
+    const casella = document.getElementById("pe-cerca");
+    if (casella) {
+        const nessuno = document.getElementById("pe-nessuno");
+        const facce = [...document.querySelectorAll(".pe-faccia[data-nome]")];
+        casella.addEventListener("input", function () {
+            const cerco = casella.value.trim().toLowerCase();
+            let quante = 0;
+            facce.forEach(function (faccia) {
+                const va = !cerco || faccia.dataset.nome.includes(cerco);
+                faccia.hidden = !va;
+                if (va) quante += 1;
+            });
+            nessuno.hidden = !cerco || quante > 0;
+            nessuno.querySelector("[data-cercato]").textContent = casella.value.trim();
+        });
+    }
+</script>
+<script type="module">
+    import { mandaModulo } from "/statici/js/comune.js";
+    document.querySelectorAll("[data-riprendi]").forEach((tasto) => {
+        tasto.addEventListener("click", async (evento) => {
+            evento.preventDefault();
+            await mandaModulo(`/api/persone/${tasto.dataset.riprendi}/riprendi`, {});
+            window.location.reload();
+        });
+    });
+
+    {% if passata.sta_lavorando %}
+    const orologio = setInterval(async () => {
+        const risposta = await fetch("/api/volti");
+        if (!risposta.ok) return;
+        const dati = await risposta.json();
+        if (dati.sta_lavorando) return;
+        clearInterval(orologio);
+        window.location.reload();
+    }, 3000);
+    {% endif %}
+</script>
+{% endblock %}

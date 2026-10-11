@@ -1,0 +1,31 @@
+# Le librerie del miglioramento (sezione 33 delle regole): servono a SeedVR2
+# per ingrandire foto e video. Si installano da sole, dal programma, solo
+# quando si accende il miglioramento, sopra a torch e alle librerie dei
+# modelli. Nessuno deve scrivere questo comando a mano.
+#
+# Le versioni sono state controllate una per una contro PyPI il 26 settembre
+# 2026. diffusers resta apposta sulla 0.37.1: dalla 0.38 vuole safetensors
+# 0.8 e dalla 0.40 huggingface-hub 1.23, e tutte e due litigherebbero con le
+# versioni che usano gia' i modelli dell'etichettatura.
+#
+# antlr4-python3-runtime e' l'unica senza pacchetto gia' pronto: esiste solo
+# come sorgente, ed e' tutta Python. Il Python del programma non sa preparare
+# i sorgenti, quindi il programma la scarica da PyPI, controlla l'impronta e
+# ne copia la cartella al suo posto (librerie.SOLO_SORGENTE). omegaconf si
+# installa senza dipendenze per non farla cercare a pip; PyYAML, l'altra sua
+# dipendenza, e' scritta qui sotto.
+#
+# rotary-embedding-torch, accelerate e bitsandbytes chiedono torch fra le dipendenze: si
+# installano senza, perche' torch c'e' gia' nella sua parte e una seconda
+# copia costerebbe 2,5 GB (librerie.SENZA_DIPENDENZE).
+
+-r requirements-modelli.txt
+
+diffusers==0.37.1                 # i pezzi della rete di SeedVR2
+omegaconf==2.3.1                  # legge la configurazione del modello
+PyYAML==6.0.3                     # serve a omegaconf
+antlr4-python3-runtime==4.9.3     # serve a omegaconf per leggere le formule
+rotary-embedding-torch==0.9.1     # la posizione dei pezzi nell'immagine
+einops==0.8.2                     # rimescola i tensori
+gguf==0.19.0                      # importato dal codice di SeedVR2, anche se qui non si usa
+tqdm==4.70.1                      # importato dal codice di SeedVR2

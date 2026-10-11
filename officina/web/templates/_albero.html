@@ -1,0 +1,81 @@
+{% from "_icone.html" import icona %}
+{% import "_mappa_luoghi.html" as mappa_luoghi %}
+<div class="mappa">
+
+    <div class="mappa-testa">
+        <span class="segmenti mappa-schede" role="tablist">
+            <button id="scheda-cose" type="button" role="tab" aria-selected="true">{{ icona('albero', 14) }} Cose</button>
+            <button id="scheda-persone" type="button" role="tab" aria-selected="false">{{ icona('persona', 14) }} Persone</button>
+            <button id="scheda-luoghi" type="button" role="tab" aria-selected="false">{{ icona('luoghi', 14) }} Luoghi</button>
+        </span>
+        <div class="campo-cerca" id="cerca-nella-mappa">
+            <span class="segno">{{ icona('cerca', 15) }}</span>
+            <input id="cerca-mappa" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="Cerca un nodo">
+        </div>
+        <span class="solo-cose" style="flex:1"></span>
+        {{ mappa_luoghi.testa("luoghi-") }}
+
+        <button class="tasto-comando nudo piccolo solo-cose" id="mostra-archiviati" type="button">mostra archiviati</button>
+        <button class="tasto-comando nudo piccolo solo-cose" id="rimetti-a-fuoco" type="button">{{ icona('bersaglio', 14) }} Rimetti a fuoco</button>
+        <button class="tasto-comando piccolo solo-cose" id="nuovo-nodo" type="button">{{ icona('piu', 14) }} Nuovo nodo <kbd>N</kbd></button>
+        <button class="tasto-comando nudo piccolo" id="chiudi-albero" type="button"
+                title="Richiudi la mappa e torna dov'eri">Chiudi <kbd>Esc</kbd></button>
+    </div>
+
+    <div class="mappa-corpo" id="mappa-cose">
+        <div class="tela" id="albero-tela">
+            <div class="mondo" id="albero-mondo">
+                <svg class="fili" id="fili"></svg>
+            </div>
+
+            <div class="leggenda-salute minuscolo">
+                <span class="bollino attenzione">da nutrire</span>
+                <span class="bollino">in crescita</span>
+                <span class="bollino bene">in salute</span>
+            </div>
+
+            <a class="angolo" href="/officina?da_fare=1">{{ icona('etichetta', 14) }}
+                <b class="numeri">{{ senza_etichetta|numero }}</b> scatti senza etichetta</a>
+
+            <div class="suggerimenti minuscolo" id="suggerimenti"></div>
+        </div>
+
+        <aside class="pannello-nodo" id="pannello">
+            <p class="tenue minuscolo" style="text-align:center;padding:var(--s8) 0">
+                Nessun nodo scelto.<br>Clicca un nodo per vedere come sta.
+            </p>
+        </aside>
+    </div>
+
+    <div class="mappa-corpo" id="mappa-persone" hidden>
+        <div class="tela-persone">
+
+            <div class="muro-facce">
+                {% for chi in persone %}
+                <a href="/?persona={{ chi.id }}"
+                   title="Tutti gli scatti in cui compare">
+                    {% if chi.volto %}
+
+                    <img class="faccia-grande" src="/volto/{{ chi.volto }}?lato=192" alt="">
+                    {% else %}
+                    <span class="faccia-grande vuota"></span>
+                    {% endif %}
+                    <span class="come-si-chiama">{{ chi.nome }}</span>
+                    <span class="quanti minuscolo tenue numeri">{{ chi.scatti|numero }} scatti</span>
+                </a>
+                {% else %}
+                <p class="tenue piccolo">
+                    Ancora nessuna persona. I nomi si danno in «Persone»,
+                    guardando le facce che il programma ha messo insieme.
+                </p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+{{ mappa_luoghi.corpo("luoghi-", dati_luoghi) }}
+
+</div>
+
+<script id="dati-albero" type="application/json">{{ dati|safe }}</script>

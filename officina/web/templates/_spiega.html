@@ -1,0 +1,10 @@
+{% macro spiega(titolo) %}
+<span class="conchiglia">
+    <button type="button" class="chiedi" aria-expanded="false"
+            aria-label="{{ titolo }}">?</button>
+    <span class="pannello" role="note" hidden>
+        <span class="pannello-titolo">{{ titolo }}</span>
+        {{ caller()|righe_del_pannello }}
+    </span>
+</span>
+{% endmacro %}

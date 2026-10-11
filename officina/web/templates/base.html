@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="it" {{ attributi_aspetto|safe }}>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>{% block titolo %}Local AI Frame Classifier{% endblock %}</title>
+
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3CclipPath id='c'%3E%3Crect width='200' height='200' rx='44'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23c)'%3E%3Crect width='200' height='200' fill='%23D97757'/%3E%3Crect x='34' y='114' width='132' height='132' rx='20' fill='%23FAF9F5' stroke='%23141413' stroke-width='5'/%3E%3Ccircle cx='140' cy='142' r='11' fill='%23D97757'/%3E%3Cellipse cx='78' cy='170' rx='8.8' ry='11' fill='%23141413'/%3E%3Cellipse cx='112' cy='170' rx='8.8' ry='11' fill='%23141413'/%3E%3C/g%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/statici/css/fondamenta.css">
+    <link rel="stylesheet" href="/statici/css/componenti.css">
+    {% for foglio in fogli_delle_schermate %}
+    <link rel="stylesheet" href="/statici/css/schermate/{{ foglio }}.css">
+    {% endfor %}
+    <link rel="stylesheet" href="/statici/css/telaio.css">
+    <link rel="stylesheet" href="/statici/css/movimenti.css">
+    <script src="/statici/js/foto_aperta.js"></script>
+    <script src="/statici/js/fotina_scene.js" defer></script>
+    <script type="speculationrules">{"prefetch": [{"where": {"and": [{"href_matches": "/*"}, {"not": {"href_matches": ["/fuori*", "/esci*", "/chiudi*", "/giro/*", "/immagine/*", "/video/*", "/api/*", "/prova/*", "/blocco*", "/una-foto*", "/originale/*", "/fotogramma/*", "/live/*", "/schermo/*", "/benvenuto*", "/novita*", "/sincronia*", "/volti/*", "/miniatura/*"]}}, {"not": {"selector_matches": "[data-no-prefetch], [download]"}}]}, "eagerness": "moderate"}]}</script>
+    <script type="module" src="/statici/js/torna.js"></script>
+    <script type="module" src="/statici/js/movimenti.js"></script>
+    <script type="module" src="/statici/js/movimenti_pagine.js"></script>
+
+</head>
+
+<body class="nav-{{ aspetto.navigazione }} {% if not impostazioni.movimento %}senza-movimento{% endif %} {{ 'in-prova' if sto_provando }}"
+
+      style="--gesto: {{ impostazioni.durata_gesto_ms }}ms; --scena: {{ impostazioni.durata_scena_ms }}ms"
+      data-dove="{{ voce_attiva }}" data-qui="{{ qui }}"
+      {% if forziere_acceso and impostazioni.blocco_dopo_minuti %}
+      data-blocco-dopo="{{ impostazioni.blocco_dopo_minuti }}"{% endif %}>
+{% from "_icone.html" import icona, fotina %}
+{% if sto_provando %}{% include "_prova.html" %}{% endif %}
+<div class="guscio {{ 'guscio-guida' if guida or pieno else 'guscio-' ~ aspetto.navigazione }} {{ 'col-travaso' if travaso }}">
+    {% if aspetto.navigazione != 'B' and not guida and not pieno %}{% include "_navigazione.html" %}{% endif %}
+    <div class="colonna-app">
+        {% if aspetto.navigazione == 'B' and not guida and not pieno %}{% include "_navigazione.html" %}{% endif %}
+        {% if aspetto.lavoro == 'C' and aspetto.navigazione == 'A' and not guida and not pieno %}
+        {% for sez in barra if sez.chiave == 'officina' and sez.qui %}
+        <nav class="linguette-sezione" aria-label="{{ sez.nome }}">
+            {% for s in sez.stanze %}
+            <a href="{{ s.dove }}" class="{{ 'qui' if s.qui }}">{{ s.nome }}
+                {% if s.conto and s.chiama %}<span class="conto chiama numeri">{{ s.conto|numero }}</span>{% endif %}</a>
+            {% endfor %}
+        </nav>
+        {% endfor %}
+        {% endif %}
+        {% if aspetto.navigazione == 'C' and not guida and not pieno %}
+        <div class="nav-c-testa">
+            {% for sez in barra if sez.qui and sez.stanze %}
+            <nav class="linguette-sezione" aria-label="{{ sez.nome }}">
+                {% for s in sez.stanze %}
+                <a href="{{ s.dove }}" class="{{ 'qui' if s.qui }}" {% if s.dove == '/albero' %}data-apri-albero{% endif %}>{{ s.nome }}
+                    {% if s.conto and s.chiama %}<span class="conto chiama numeri">{{ s.conto|numero }}</span>{% endif %}</a>
+                {% endfor %}
+            </nav>
+            {% endfor %}
+            <button class="campo vai-a" type="button" data-apri-vai>{{ icona('cerca', 15) }}<span>Cerca o vai a…</span><kbd>Ctrl K</kbd></button>
+        </div>
+        {% endif %}
+
+        <div class="avviso forte striscia-aggiornamento" id="striscia-aggiornamento" hidden>
+            <span data-aggiornamento="testo"></span>
+            <span class="in-fila" style="margin-left:auto">
+                <button class="tasto-comando principale" type="button"
+                        data-aggiornamento="aggiorna">Aggiorna</button>
+                <button class="tasto-comando nudo" type="button"
+                        data-aggiornamento="rifiuta">Rifiuta</button>
+            </span>
+        </div>
+
+        {% if giro_passo %}{% include "_giro.html" %}{% endif %}
+        {% if travaso %}{% include "_travaso.html" %}{% endif %}
+
+        <div class="contenuto" id="contenuto">
+            <span class="linea-caricamento" id="linea-caricamento" aria-hidden="true"></span>
+            <div class="un-attimo" id="un-attimo" hidden role="status">{{ fotina('piccola') }}<span data-detto>Un attimo…</span></div>
+            {% block corpo %}{% endblock %}
+        </div>
+    </div>
+</div>
+
+
+<script type="module" src="/statici/js/lente.js"></script>
+
+{% include "_novita.html" %}
+
+<div class="velo-albero" id="velo-albero" hidden
+     role="dialog" aria-modal="true" aria-label="La mappa dell'albero"></div>
+<script type="module" src="/statici/js/albero_sopra.js"></script>
+
+<script type="module" src="/statici/js/navigazione.js"></script>
+<script type="module" src="/statici/js/programma.js"></script>
+<script type="module" src="/statici/js/spiega.js"></script>
+<script type="module" src="/statici/js/finestre.js"></script>
+
+{% if forziere_acceso and impostazioni.blocco_dopo_minuti %}
+<script type="module" src="/statici/js/blocco.js"></script>
+{% endif %}
+{% if aspetta_il_portatile %}
+<script type="module" src="/statici/js/arriva_il_portatile.js"></script>
+{% endif %}
+{% block coda %}{% endblock %}
+</body>
+</html>

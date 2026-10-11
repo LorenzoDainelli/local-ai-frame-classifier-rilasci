@@ -1,0 +1,16 @@
+<div class="passi maiuscoletto">
+    {% for numero, nome, dove in [
+        (1, "il computer", "/benvenuto"),
+        (2, "la chiave", "/benvenuto/chiave"),
+        (3, "i modelli", "/benvenuto/modelli"),
+        (4, "la cartella", "/benvenuto/cartella"),
+        (5, "l'elaborazione", "/benvenuto/lavoro"),
+        (6, "il tutorial", "/benvenuto/pronto")] %}
+    {% if numero == passo %}
+    <b class="qui">{{ numero }} &middot; {{ nome }}</b>
+    {% else %}
+    <a href="{{ dove }}"><b>{{ numero }} &middot; {{ nome }}</b></a>
+    {% endif %}
+    {% if not loop.last %}<i>&#8250;</i>{% endif %}
+    {% endfor %}
+</div>

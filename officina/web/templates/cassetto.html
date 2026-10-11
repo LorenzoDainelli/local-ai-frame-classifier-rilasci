@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona, fotina %}
+{% block titolo %}Forse doppioni — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-mazzo">
+    <a class="ps-torna" href="/persone">{{ icona('indietro', 14) }} Tutte le persone</a>
+{% if not coppia %}
+    <div class="carta mz-vuoto">
+        {{ fotina('grande') }}
+        <div>
+            <h1 class="titolo-pagina">Il cassetto è vuoto</h1>
+            <p class="prosa">Nessun sospetto di doppione da guardare.</p>
+            <div class="in-fila"><a class="tasto-comando" href="/persone">Torna alle persone</a></div>
+        </div>
+    </div>
+{% else %}
+    <div class="mz-testa">
+        <div>
+            <h1 class="titolo-pagina">È la stessa persona?</h1>
+            <p class="sottotitolo">Di ognuno vedi i volti più diversi fra loro. <b>«Non so» rimanda in fondo, non cancella</b>: fra sei mesi ci saranno più scatti, e la stessa domanda potrebbe avere una risposta.</p>
+        </div>
+        <div class="mz-quanti"><span class="minuscolo tenue numeri">{{ quante|numero }} {{ 'coppia' if quante == 1 else 'coppie' }} da guardare</span></div>
+    </div>
+    <div class="mz-coppia" data-coppia="{{ coppia.id }}">
+        {% for nome, volti in [(coppia.nome_una, coppia.volti_una), (coppia.nome_altra, coppia.volti_altra)] %}
+        <section class="carta mz-lato">
+            <div class="mz-lato-t"><h2>{{ nome or 'senza nome' }}</h2><span class="minuscolo tenue numeri">{{ volti|length|numero }} volti</span></div>
+            <div class="mz-lato-facce">
+                {% for volto in volti %}
+                <span class="pe-tondo"><img src="/volto/{{ volto.id }}?lato=200" alt="" loading="lazy"></span>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+    <div class="mz-giu">
+        <button class="tasto-comando principale" data-risposta="si" type="button">Sì, è la stessa persona</button>
+        <button class="tasto-comando" data-risposta="no" type="button">No, sono due</button>
+        <button class="tasto-comando nudo" data-risposta="non_so" type="button">Non so</button>
+    </div>
+{% endif %}
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+{% if coppia %}
+<script type="module">
+    import { mandaModulo } from "/statici/js/comune.js";
+    const coppia = document.querySelector("[data-coppia]").dataset.coppia;
+    document.querySelectorAll("[data-risposta]").forEach((tasto) => {
+        tasto.addEventListener("click", async () => {
+            await mandaModulo(`/api/persone/forse/${coppia}`,
+                              { risposta: tasto.dataset.risposta });
+            if (tasto.dataset.risposta === "si" && window.movimenti?.unisciPersone) {
+                const lati = document.querySelectorAll(".mz-coppia .mz-lato");
+                await window.movimenti.unisciPersone(lati[0], lati[1]);
+            }
+            window.location.reload();
+        });
+    });
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% from "_ambito.html" import ambito %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Etichetta — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo et-pagina" id="et-pagina">
+<main class="zona-principale et-zona">
+
+<div class="et-su">
+    <a class="et-indietro" href="/lavoro" title="Torna a Lavoro e rimetti i menu">{{ icona('indietro', 14) }} Lavoro</a>
+    <span class="et-titolo">Etichetta</span>
+    {{ ambito('etichetta', gruppi_ambito|default([]), gruppo_ambito|default(none), '/officina') }}
+    <div class="et-ripasso" id="ripasso" hidden></div>
+    <span class="et-guida">
+        <kbd>↑</kbd><kbd>↓</kbd> nodi · <kbd>Tab</kbd> apre · <kbd>Invio</kbd> etichetta ·
+        <kbd>←</kbd><kbd>→</kbd> scatto · <kbd>Spazio</kbd> video · <kbd>Ctrl F</kbd> cerca ·
+        <kbd>Ctrl C</kbd>/<kbd>V</kbd> · <kbd>Ctrl Z</kbd> · <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> parte ·
+        <kbd>N</kbd> nessuna persona · <kbd>?</kbd> non so dove · <kbd>F</kbd> live ·
+        <kbd>A</kbd> nodi · <kbd>P</kbd> persone · <kbd>L</kbd> luoghi
+    </span>
+    <span class="pillola minuscolo et-non-finiti" title="Scatti a cui manca la tipologia, le persone o il luogo">non finiti <span class="conto numeri" id="non-finiti">{{ non_finiti|numero }}</span></span>
+    {% if da_guardare %}
+    <a class="pillola minuscolo" href="/sistemare" title="Cose che il programma non ha saputo decidere da solo">da guardare <span class="conto numeri">{{ da_guardare|numero }}</span></a>
+    {% endif %}
+    <a class="pillola minuscolo" href="{{ ritorno }}" title="Torna alla griglia con i filtri di prima">galleria</a>
+    <span class="minuscolo tenue et-salvato" id="salvato">salvato</span>
+</div>
+
+<div class="et-corpo" id="et-corpo">
+    <section class="et-sinistra" aria-label="L'albero">
+        <div class="et-schede" role="tablist" id="schede">
+            <button type="button" role="tab" data-parte="0" aria-selected="true"><i class="et-punto" id="punto-0"></i>Tipologia <kbd>Q</kbd></button>
+            <button type="button" role="tab" data-parte="1" aria-selected="false"><i class="et-punto" id="punto-1"></i>Persone <kbd>W</kbd></button>
+            <button type="button" role="tab" data-parte="2" aria-selected="false"><i class="et-punto" id="punto-2"></i>Luogo <kbd>E</kbd></button>
+        </div>
+        <div class="et-cerca">
+            <input id="cerca" class="campo" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="Cerca un nodo…  (Ctrl+F o /)">
+            <div class="et-risultati" id="risultati" hidden></div>
+        </div>
+        <div class="et-recenti" id="recenti"></div>
+        <div class="et-gente" id="gente" hidden></div>
+        <div class="et-tela" id="tela">
+            <div class="et-mondo" id="mondo"></div>
+            <p class="tenue piccolo et-vuoto" id="albero-vuoto" hidden>L'albero è vuoto. Crea il primo nodo dalla pagina Albero.</p>
+            <div class="et-vuoto" id="luoghi-vuoti" hidden>
+                <p class="tenue piccolo">Nessun luogo, ancora. Crealo qui, oppure in Luoghi trasforma un albero che hai già.</p>
+                <button class="tasto-comando piccolo" type="button" id="luogo-in-cima">Nuovo luogo</button>
+            </div>
+            <div class="et-angolo">
+                <button type="button" id="colonne" class="et-colonne" aria-pressed="false" title="Quante colonne vedere: 3 o 5">3 colonne</button>
+            </div>
+            <div class="et-zoom">
+                <button type="button" id="z-meno" title="Rimpicciolisci (Ctrl + rotella)">−</button>
+                <button type="button" id="z-piu" title="Ingrandisci (Ctrl + rotella)">+</button>
+            </div>
+        </div>
+    </section>
+
+    <div class="et-bordo" id="bordo" title="Trascina. Doppio clic: torna 75/25"></div>
+
+    <section class="et-destra" aria-label="Lo scatto">
+        <div class="et-testa">
+            <b class="numeri" id="conta">—</b>
+            <span class="et-nome" id="nome-file"></span>
+            <span class="minuscolo tenue" id="quando"></span>
+        </div>
+        <div class="et-scena" id="scena">
+            <div class="et-scorre" id="scorre">
+                <p class="tenue piccolo">{% if quanti %}Carico lo scatto…{% else %}Con questo filtro non c'è niente da etichettare.{% endif %}</p>
+            </div>
+            <div class="et-bottoni">
+                <button type="button" id="b-cuore" aria-pressed="false" title="Fra i preferiti (C)">&#9825;</button>
+                <button type="button" id="b-stella" aria-pressed="false" title="Mettilo da parte: esce dalla coda (M)">&#9734;</button>
+                <button type="button" id="b-info" aria-pressed="false" title="Informazioni">{{ icona('info', 16) }}</button>
+                <button type="button" id="b-intero" aria-pressed="false" title="Tutto schermo (anche col clic della rotella)">&#10530;</button>
+            </div>
+            <span class="et-segno" id="segno" hidden></span>
+            <div class="et-info" id="info" hidden>
+                <dl class="et-dati" id="info-dati"></dl>
+                <div class="et-info-blocco">
+                    <p class="maiuscoletto riga-fra"><span>Chi c'è</span>
+                        <button class="tasto-comando nudo minuscolo" id="metti-persona" type="button"
+                                title="Dillo tu: c'è anche se non si vede la faccia">metti</button></p>
+                    <div class="in-fila" id="persone-qui"></div>
+                    <div class="et-cerca-persona" id="cerca-persona" hidden>
+                        <input class="campo" id="persona-nome" type="text" autocomplete="off" placeholder="Cerca la persona">
+                        <div class="et-risultati dentro" id="persone-trovate"></div>
+                    </div>
+                </div>
+                <div class="et-info-blocco">
+                    <p class="maiuscoletto">Nota</p>
+                    <textarea class="campo" id="nota" rows="2" placeholder="Una riga per te, se serve"></textarea>
+                </div>
+                <div class="et-info-blocco" id="perche" hidden>
+                    <p class="maiuscoletto" id="perche-titolo">Perché</p>
+                    <p class="piccolo attenuato" id="perche-testo"></p>
+                    <p class="minuscolo tenue" id="perche-luogo" hidden></p>
+                    <div class="in-fila" id="perche-simili"></div>
+                </div>
+            </div>
+            <div class="et-tutte" id="tutte" hidden>
+                <p class="riga-fra"><b>Tutte le etichette</b><span class="minuscolo tenue">Esc chiude</span></p>
+                <div class="et-pillole aperte" id="tutte-pillole"></div>
+            </div>
+        </div>
+        <div class="et-striscia" id="striscia" hidden></div>
+        <div class="et-tre" id="tre">
+            <div class="et-parte" data-parte="0">
+                <button type="button" class="et-parte-nome" data-parte="0"><i class="et-punto" id="punto-r0"></i>Tipologia</button>
+                <div class="et-pillole-box" id="pillole-box">
+                    <div class="et-pillole" id="pillole"></div>
+                </div>
+            </div>
+            <div class="et-parte" data-parte="1">
+                <button type="button" class="et-parte-nome" data-parte="1"><i class="et-punto" id="punto-r1"></i>Persone</button>
+                <div class="et-pillole aperte" id="pillole-persone"></div>
+            </div>
+            <div class="et-parte" data-parte="2">
+                <button type="button" class="et-parte-nome" data-parte="2"><i class="et-punto" id="punto-r2"></i>Luogo</button>
+                <div class="et-pillole aperte" id="pillole-luogo"></div>
+            </div>
+            <p class="minuscolo tenue et-manca" id="manca"></p>
+        </div>
+    </section>
+</div>
+
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+<script id="dati-officina" type="application/json">{{ dati|safe }}</script>
+<script type="module" src="/statici/js/officina.js"></script>
+{% endblock %}

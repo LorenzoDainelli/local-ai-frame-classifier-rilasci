@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona, fotina %}
+{% block titolo %}Senza data — Local AI Frame Classifier{% endblock %}
+
+{% macro miniatura(voce, via=True) -%}
+<span class="sd-mini" data-scatto="{{ voce.scatto.id }}">
+    <a class="sd-mini-foto" href="/scatto/{{ voce.scatto.id }}" title="Apri lo scatto">
+        {% if voce.file_id %}<img src="/miniatura/{{ voce.file_id }}" alt="" loading="lazy">{% endif %}
+    </a>
+    {% if via %}<button class="sd-via" type="button" data-togli aria-pressed="false" title="Toglilo da questo gruppo">{{ icona('x', 12) }}</button>{% endif %}
+    <span class="minuscolo tenue nome-di-file">{{ voce.nome }}</span>
+    <details class="sd-uno">
+        <summary>Solo questo {{ icona('giu', 12) }}</summary>
+        <div class="sd-uno-dentro">
+            <form method="post" action="/senza-data/{{ voce.scatto.id }}/imposta" class="sd-uno-data">
+                <input class="campo" type="date" name="giorno" required aria-label="La data di questo scatto">
+                <button class="tasto-comando piccolo" type="submit">Metti</button>
+            </form>
+            <form method="post" action="/senza-data/{{ voce.scatto.id }}/marca">
+                <button class="tasto-comando nudo piccolo" type="submit"
+                        title="Resta senza data e sparisce da questo elenco. Continua a essere cercabile per tutto il resto.">Lascialo senza data</button>
+            </form>
+        </div>
+    </details>
+</span>
+{%- endmacro %}
+
+{% macro quali(voci) -%}
+{% for voce in voci %}<input type="hidden" name="scatto" value="{{ voce.scatto.id }}" data-per="{{ voce.scatto.id }}">{% endfor %}
+{%- endmacro %}
+
+{% macro gruppo_per_giorno(gruppo, bollino, detto, principale) -%}
+{% set n = gruppo.voci|length %}
+<section class="carta sd-gruppo" data-gruppo>
+    <div class="sd-gruppo-t">
+        <span class="bollino {{ bollino }}" aria-hidden="true"></span>
+        <div><h2>{{ gruppo.data }} · <span class="numeri">{{ n|numero }}</span> {{ 'scatto' if n == 1 else 'scatti' }}</h2><span class="minuscolo tenue">{{ detto }}</span></div>
+        <form method="post" action="/senza-data/gruppo">
+            <input type="hidden" name="giorno" value="{{ gruppo.giorno }}">
+            {{ quali(gruppo.voci) }}
+            <button class="tasto-comando {{ 'principale' if principale }}" type="submit" data-conta>
+                {% if n == 1 %}Metti {{ gruppo.quando }}{% else %}Metti {{ gruppo.quando }} a tutti e <span data-quanti>{{ n }}</span>{% endif %}</button>
+        </form>
+    </div>
+    <div class="sd-miniature">{% for voce in gruppo.voci %}{{ miniatura(voce, n > 1) }}{% endfor %}</div>
+</section>
+{%- endmacro %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-senza-data">
+
+    <a class="torna-a" href="/sistemare#senza-data">{{ icona('indietro', 14) }} Da sistemare</a>
+    <div class="sd-testa">
+        <h1 class="titolo-pagina">Gli scatti senza data{% call spiega("Se non si svuota mai") %}
+            <p>La data si legge solo dai metadati scritti dentro il file, mai da
+            quella che il sistema mette sul file: una copia la cambia, e una foto
+            del 2009 finirebbe a ieri.</p>
+            <p>Questo elenco resta qui finché non si svuota, e può anche non
+            svuotarsi mai: &laquo;senza data&raquo; è una risposta legittima, non
+            un lavoro lasciato a metà.</p>
+        {% endcall %}</h1>
+        <p class="sottotitolo">La data si legge solo dai metadati, mai da quella del file. Questi non ce l'hanno.</p>
+        {% if scatti_senza %}<a class="tasto-comando nudo piccolo" href="/senza-data/perche">Perché non hanno la data?</a>{% endif %}
+    </div>
+
+    {% if not scatti_senza %}
+    <div class="carta sd-vuoto">
+        {{ fotina() }}
+        <p><b>Nessuno.</b> <span class="tenue">Tutti gli scatti hanno una data.</span></p>
+    </div>
+    {% else %}
+    <form method="post" action="/senza-data/blocco" class="carta sd-tutti">
+        <div><h2>Tutti insieme</h2><span class="minuscolo tenue">Se sono tutti dello stesso giorno, una data sola e si passa ad altro.</span></div>
+        <input class="campo" type="date" name="giorno" required aria-label="La data per tutti">
+        <button class="tasto-comando" type="submit">Metti a tutti e {{ scatti_senza|length|numero }}</button>
+    </form>
+
+    {% for gruppo in sicuri %}
+    {{ gruppo_per_giorno(gruppo, 'bene', "I vicini nella stessa cartella, prima e dopo, sono di quel giorno.", True) }}
+    {% endfor %}
+
+    {% for gruppo in un_vicino %}
+    {{ gruppo_per_giorno(gruppo, 'attenzione', "Solo un vicino nella cartella ha una data: è probabile, non sicuro.", False) }}
+    {% endfor %}
+
+    {% if discordi %}
+    <section class="carta sd-gruppo">
+        <div class="sd-gruppo-t">
+            <span class="bollino attenzione" aria-hidden="true"></span>
+            <div><h2>I vicini non concordano · <span class="numeri">{{ discordi|length|numero }}</span> {{ 'scatto' if discordi|length == 1 else 'scatti' }}</h2><span class="minuscolo tenue">Prima e dopo nella cartella ci sono due giorni diversi: guarda tu.</span></div>
+        </div>
+        {% for voce in discordi %}
+        <div class="sd-discorde">
+            {{ miniatura(voce, False) }}
+            <span class="minuscolo attenuato">{{ voce.proposta.perche }}</span>
+            <span class="sd-due">
+                {% for giorno, quando in voce.giorni %}
+                <form method="post" action="/senza-data/{{ voce.scatto.id }}/imposta">
+                    <input type="hidden" name="giorno" value="{{ giorno }}">
+                    <button class="tasto-comando piccolo" type="submit">Usa {{ quando }}</button>
+                </form>
+                {% endfor %}
+            </span>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if senza_proposta %}
+    {% set n = senza_proposta|length %}
+    <section class="carta sd-gruppo" data-gruppo>
+        <div class="sd-gruppo-t">
+            <span class="bollino" aria-hidden="true"></span>
+            <div><h2>Senza proposta · <span class="numeri">{{ n|numero }}</span> {{ 'scatto' if n == 1 else 'scatti' }}</h2><span class="minuscolo tenue">Non hanno vicini con una data nella stessa cartella: scegli tu, o lasciali senza.</span></div>
+            <form method="post" action="/senza-data/gruppo" class="sd-con-data">
+                {{ quali(senza_proposta) }}
+                <input class="campo" type="date" name="giorno" required aria-label="La data per questi scatti">
+                <button class="tasto-comando" type="submit" data-conta>{% if n == 1 %}Metti{% else %}Metti a tutti e <span data-quanti>{{ n }}</span>{% endif %}</button>
+            </form>
+            <form method="post" action="/senza-data/lascia">
+                {{ quali(senza_proposta) }}
+                <button class="tasto-comando nudo" type="submit" data-conta
+                        title="Restano senza data e spariscono da questo elenco. Continuano a essere cercabili per tutto il resto.">{% if n == 1 %}Lascialo senza data{% else %}Lasciali senza data{% endif %}</button>
+            </form>
+        </div>
+        <div class="sd-miniature">{% for voce in senza_proposta %}{{ miniatura(voce, n > 1) }}{% endfor %}</div>
+    </section>
+    {% endif %}
+    {% endif %}
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+<script type="module">
+    document.querySelectorAll("[data-gruppo]").forEach((gruppo) => {
+        const conta = () => {
+            const quanti = gruppo.querySelectorAll(".sd-mini:not(.tolto)").length;
+            gruppo.querySelectorAll("[data-quanti]").forEach((dove) => { dove.textContent = quanti; });
+            gruppo.querySelectorAll("[data-conta]").forEach((tasto) => { tasto.disabled = quanti === 0; });
+        };
+        gruppo.querySelectorAll("[data-togli]").forEach((tasto) => {
+            tasto.addEventListener("click", () => {
+                const mini = tasto.closest(".sd-mini");
+                const tolto = mini.classList.toggle("tolto");
+                tasto.setAttribute("aria-pressed", String(tolto));
+                tasto.title = tolto ? "Rimettilo nel gruppo" : "Toglilo da questo gruppo";
+                gruppo.querySelectorAll(`[data-per="${mini.dataset.scatto}"]`).forEach((campo) => {
+                    campo.disabled = tolto;
+                });
+                conta();
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="it" {{ attributi|safe }}>
+<head>
+<meta charset="utf-8">
+<title>{{ nome }}</title>
+<style>
+{{ fondamenta }}
+{{ componenti }}
+{{ carattere }}
+[hidden] { display: none !important; }
+body { overflow: hidden; user-select: none; }
+.finestrina {
+    display: flex; flex-direction: column; gap: var(--s5);
+    height: 100vh; padding: var(--s6) var(--s8) var(--s6);
+}
+.testa { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.marchio { display: inline-flex; align-items: center; gap: 9px; font: 500 15px/1.2 var(--serif); }
+.passo { display: flex; flex-direction: column; gap: var(--s4); flex: 1; min-height: 0; animation: entra var(--passo) var(--uscita); }
+.passo[hidden] { display: none; }
+.passo h1 { font: 400 25px/1.2 var(--serif); letter-spacing: -0.01em; text-wrap: balance; }
+.passo.al-centro { align-items: center; justify-content: center; text-align: center; gap: 16px; }
+.passo.al-centro p { color: var(--attenuato); font: 15.5px/1.5 var(--serif); }
+.passo.al-centro .campo { width: 100%; height: 42px; }
+.passo.al-centro .tasto-comando.largo { width: 100%; height: 40px; }
+.nota { font-size: var(--testo-minore); color: var(--tenue); }
+.fotina.dorme .occhi span { height: 2px; margin-top: 7px; animation: none; }
+.fotina.sveglia .occhi span { animation: si-sveglia 1.2s var(--uscita) both, fotina-batte 4s 1.4s infinite; }
+@keyframes si-sveglia { from { transform: scaleY(.15); } }
+.passi { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; min-width: 280px; text-align: left; }
+.passi li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--tenue); transition: color var(--passo) var(--uscita); }
+.passi li.fatto, .passi li.adesso { color: var(--ink); }
+.spunta { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 0.5px solid var(--linea-forte); color: transparent; flex: none; transition: background var(--passo) var(--uscita), color var(--passo) var(--uscita); }
+.passi li.fatto .spunta { background: var(--accento); border-color: var(--accento); color: var(--su-accento); }
+.passi li.adesso .spunta { border-color: var(--accento); box-shadow: 0 0 0 3px var(--alone); }
+.linea { width: 280px; height: 3px; border-radius: 999px; background: var(--pozzo); overflow: hidden; }
+.linea span { display: block; height: 100%; width: 6%; border-radius: inherit; background: var(--accento); transition: width 1s var(--uscita); }
+.passo p { margin: 0; max-width: 60ch; }
+.scelte { display: flex; flex-direction: column; gap: var(--s2); margin-top: auto; }
+.scelte .tasto-comando { width: 100%; justify-content: flex-start; height: auto; min-height: var(--altezza-comando); padding: var(--s3) var(--s4); white-space: normal; text-align: left; }
+.scelte .tasto-comando small { display: block; color: var(--attenuato); font-size: var(--testo-minore); margin-top: 2px; }
+.scelte .tasto-comando.accento small { color: inherit; opacity: 0.8; }
+.consigliata { background: var(--su-accento); color: var(--accento); }
+.tasto-comando:not(.accento) .consigliata { background: var(--accento); color: var(--su-accento); }
+.istruzioni { margin: 0; padding: 0; list-style: none; counter-reset: passo; display: grid; gap: 8px; font-size: var(--testo-comando); color: var(--attenuato); }
+.istruzioni li { counter-increment: passo; display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: baseline; }
+.istruzioni li::before { content: counter(passo); display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--pozzo); color: var(--attenuato); font-size: 11.5px; font-weight: 600; }
+.istruzioni a, .sito { color: var(--ink); text-decoration: underline; text-decoration-color: var(--linea-forte); text-underline-offset: 3px; cursor: pointer; }
+.istruzioni a:hover, .sito:hover { text-decoration-color: var(--accento); }
+.campo-chiave { width: 100%; height: 42px; font-family: var(--mono); }
+.sempre { border: 0.5px solid var(--linea); border-radius: 12px; background: var(--superficie); }
+.sempre > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 12px; font-size: var(--testo-comando); cursor: pointer; }
+.sempre > summary::-webkit-details-marker { display: none; }
+.sempre > summary b { font-weight: 500; }
+.sempre > summary .peso { margin-left: auto; white-space: nowrap; color: var(--attenuato); font-variant-numeric: tabular-nums; }
+.sempre ul { list-style: none; margin: 0; padding: 0 12px 10px 38px; display: grid; gap: 4px; font-size: var(--testo-minore); color: var(--attenuato); }
+.sempre ul li { display: flex; justify-content: space-between; gap: 10px; font-variant-numeric: tabular-nums; }
+.carte-mg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.carta-mg { display: grid; min-width: 0; width: 100%; gap: 4px; padding: 8px 10px 10px; border-radius: 12px; border: 0.5px solid var(--linea-forte); background: transparent; text-align: left; color: var(--ink); cursor: pointer; transition: border-color var(--gesto) var(--uscita), box-shadow var(--gesto) var(--uscita), background var(--gesto) var(--uscita); }
+.carta-mg:hover { background: var(--superficie); }
+.carta-mg[aria-pressed="true"] { border-color: var(--accento); background: var(--superficie); box-shadow: inset 0 0 0 0.5px var(--accento); }
+.carta-mg[disabled] { cursor: default; opacity: .7; }
+.carta-mg .vedi { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-bottom: 4px; }
+.carta-mg .vedi i { aspect-ratio: 5 / 2; border-radius: 6px; background: radial-gradient(circle at 72% 30%, hsl(var(--h) 70% 72%) 0 9%, transparent 10%), linear-gradient(160deg, hsl(var(--h) 35% 62%), hsl(calc(var(--h) + 40) 30% 38%)); }
+.carta-mg .vedi i:first-child { filter: blur(1.6px) saturate(.7); }
+.carta-mg .segno { position: absolute; top: 5px; left: 5px; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; background: var(--superficie); border: 1px solid var(--linea-forte); color: transparent; }
+.carta-mg[aria-pressed="true"] .segno { background: var(--accento); border-color: var(--accento); color: var(--su-accento); }
+.carta-mg .riga { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 500; }
+.carta-mg .riga span:last-child { font-weight: 400; color: var(--attenuato); font-size: var(--testo-minore); font-variant-numeric: tabular-nums; }
+.carta-mg small { font-size: 12px; color: var(--attenuato); line-height: 1.35; }
+.totale { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: var(--testo-comando); }
+.totale b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.grande { display: grid; gap: 8px; padding: 14px 16px; border-radius: 12px; background: var(--superficie); border: 0.5px solid var(--linea); }
+.grande .cifre { font-size: var(--testo-comando); }
+.fila-modelli { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: var(--testo-comando); overflow: auto; }
+.fila-modelli li { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: center; color: var(--tenue); }
+.fila-modelli li.fatto, .fila-modelli li.adesso { color: var(--ink); }
+.fila-modelli li .tondo { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--linea-forte); }
+.fila-modelli li.fatto .tondo { background: var(--bene); border-color: var(--bene); }
+.fila-modelli li.adesso .tondo { border-color: var(--accento); border-right-color: transparent; animation: gira 1.1s linear infinite; }
+.fila-modelli li span:last-child { font-variant-numeric: tabular-nums; color: var(--attenuato); font-size: var(--testo-minore); }
+@keyframes gira { to { transform: rotate(360deg); } }
+.consigliata { font-size: 11.5px; font-weight: 500; margin-left: auto; padding: 2px 7px; border-radius: 999px; background: var(--accento); color: var(--su-accento); align-self: center; }
+.dati { display: grid; grid-template-columns: auto 1fr; gap: var(--s1) var(--s4); font-size: var(--testo-comando); }
+.dati dt { color: var(--attenuato); }
+.dati dd { margin: 0; font-variant-numeric: tabular-nums; }
+.errore { color: var(--ink); border-color: var(--male); }
+.errore[hidden] { display: none; }
+.cifre { font-variant-numeric: tabular-nums; font-size: var(--testo-minore); color: var(--attenuato); display: flex; justify-content: space-between; gap: var(--s3); }
+.cifre span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.in-fila { display: flex; gap: var(--s2); }
+.in-fila .tasto-comando { flex: 1; }
+.attesa { width: 100%; height: 3px; background: var(--linea); overflow: hidden; border-radius: 2px; }
+.attesa::after { content: ""; display: block; width: 30%; height: 100%; background: var(--accento); animation: va-e-viene 1.4s var(--andirivieni) infinite alternate; }
+@keyframes va-e-viene { from { transform: translateX(-100%); } to { transform: translateX(333%); } }
+input.campo { user-select: text; }
+.fissi { display: grid; gap: var(--s2); }
+.fisso { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4); border-radius: 12px; border: 0.5px solid var(--linea-forte); cursor: pointer; }
+.fisso input { accent-color: var(--accento); }
+.radar { position: relative; display: grid; place-items: center; width: 180px; height: 120px; margin: 0 auto; }
+.radar i { position: absolute; left: 50%; top: 50%; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 1.5px solid var(--accento); opacity: 0; animation: radar-onda 1.5s cubic-bezier(0, .55, .45, 1) infinite; }
+.radar i:nth-child(2) { animation-delay: .5s; }
+.radar i:nth-child(3) { animation-delay: 1s; }
+.radar-qui { position: relative; z-index: 1; display: grid; place-items: center; width: 64px; height: 42px; border-radius: 10px; background: var(--superficie); border: .5px solid var(--linea-forte); box-shadow: var(--ombra); font-size: 10px; color: var(--attenuato); }
+@keyframes radar-onda { from { transform: scale(1); opacity: .8; } to { transform: scale(3); opacity: 0; } }
+.fisso.trovato { animation: fisso-trovato 520ms cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes fisso-trovato { from { opacity: 0; transform: scale(.6); box-shadow: 0 0 0 0 var(--bene); } 60% { box-shadow: 0 0 0 3px var(--bene); } to { opacity: 1; transform: none; box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .radar i, .fisso.trovato { animation: none; } .radar i { opacity: .4; } }
+.fisso .nota { margin-left: auto; }
+</style>
+</head>
+<body>
+<main class="finestrina">
+    <div class="testa">
+        <span class="marchio"><span class="fotina piccola" aria-hidden="true"><span class="cornice"><span class="monte"></span><span class="monte due"></span><span class="sole"></span><span class="occhi"><span></span><span></span></span></span></span>{{ nome }}</span>
+        <span class="minuscolo tenue numeri">{{ versione }}</span>
+    </div>
+
+    <section class="passo" data-passo="archivio" hidden>
+        <div data-se="trovato" hidden>
+            <h1>Ho trovato il tuo archivio</h1>
+            <p class="attenuato" style="margin-top:var(--s2)">
+                È quello che usavi con la versione di prima. Lo apro così com'è:
+                non copio niente e non sposto niente.
+            </p>
+            <dl class="dati" style="margin-top:var(--s4)">
+                <dt>Dove</dt><dd data-campo="dove"></dd>
+                <dt>Scatti</dt><dd data-campo="scatti"></dd>
+                <dt>Peso</dt><dd data-campo="peso"></dd>
+                <dt>Ultimo uso</dt><dd data-campo="toccato"></dd>
+            </dl>
+        </div>
+        <div data-se="nuovo" hidden>
+            <h1>Benvenuto</h1>
+            <p class="attenuato" style="margin-top:var(--s2)">
+                Le foto restano dove sono. Il programma tiene per sé solo un
+                archivio di numeri e miniature, su questo computer, e niente
+                esce da qui.
+            </p>
+        </div>
+        <div class="avviso errore" data-errore hidden></div>
+        <div class="scelte">
+            <button class="tasto-comando accento" data-fai="usa_la_versione_1" data-se="trovato" hidden>
+                <span>Usa questo archivio<small>si riparte esattamente da dove eri</small></span>
+                <span class="consigliata">consigliata</span>
+            </button>
+            <button class="tasto-comando accento" data-fai="comincia_da_zero" data-se="nuovo" hidden>
+                <span>Comincia da zero<small>un archivio nuovo, vuoto</small></span>
+                <span class="consigliata">consigliata</span>
+            </button>
+            <button class="tasto-comando" data-fai="sfoglia_archivio">
+                <span>Il mio archivio è da un'altra parte<small>scegli tu la cartella</small></span>
+            </button>
+            <button class="tasto-comando nudo" data-fai="comincia_da_zero" data-se="trovato" hidden>
+                <span>Comincia da zero, senza questo archivio</span>
+            </button>
+            <button class="tasto-comando" data-fai="scegli_lo_schermo">
+                <span>Usalo come schermo del fisso<small>il fisso tiene le foto e lavora; qui guardi e decidi, e non resta niente</small></span>
+            </button>
+        </div>
+    </section>
+
+    <section class="passo" data-passo="schermo-cerca" hidden>
+        <h1>Collegati al fisso</h1>
+        <p class="attenuato">Sul fisso apri Impostazioni, «Il portatile», e premi «Apri la porta»: comparirà un codice di sei cifre.</p>
+        <div class="fissi" data-fissi>
+            <div class="radar" aria-hidden="true"><i></i><i></i><i></i><span class="radar-qui">portatile</span></div>
+            <p class="nota">Cerco il fisso nella rete di casa…</p>
+        </div>
+        <input class="campo" type="text" data-indirizzo placeholder="L'indirizzo scritto sul fisso, per esempio 192.168.1.20" spellcheck="false" hidden>
+        <input class="campo" type="text" inputmode="numeric" maxlength="7" data-codice placeholder="Il codice di sei cifre che vedi sul fisso" autocomplete="off">
+        <input class="campo" type="password" data-password-fisso placeholder="La password del forziere del fisso" autocomplete="off" hidden>
+        <div class="avviso errore" data-errore hidden></div>
+        <div class="scelte">
+            <button class="tasto-comando accento" data-fai="abbina_il_fisso"><span>Collegati</span></button>
+            <div class="in-fila">
+                <button class="tasto-comando nudo" data-fai="cerca_il_fisso"><span>Cerca di nuovo</span></button>
+                <button class="tasto-comando nudo" data-fai="a_mano"><span>Non lo trovo</span></button>
+            </div>
+            <button class="tasto-comando nudo" data-fai="lascia_lo_schermo"><span>Usa questo computer con le foto</span></button>
+        </div>
+    </section>
+
+    <section class="passo al-centro" data-passo="schermo-entra" hidden>
+        <span class="fotina grande dorme" aria-hidden="true"><span class="cornice"><span class="monte"></span><span class="monte due"></span><span class="sole"></span><span class="occhi"><span></span><span></span></span></span></span>
+        <h1>Bentornato.</h1>
+        <p data-campo="fisso-stato">Cerco il fisso…</p>
+        <input class="campo" type="password" autocomplete="off" data-password-entra placeholder="La password del forziere del fisso" hidden>
+        <div class="avviso errore" data-errore hidden></div>
+        <button class="tasto-comando accento largo" data-fai="entra_nel_fisso"><span>Entra</span></button>
+        <div class="in-fila">
+            <button class="tasto-comando nudo" data-fai="riabbina"><span>Abbina di nuovo</span></button>
+            <button class="tasto-comando nudo" data-fai="lascia_lo_schermo"><span>Usalo con le foto</span></button>
+        </div>
+        <p class="nota">Il fisso deve essere acceso, con la porta aperta.</p>
+    </section>
+
+    <section class="passo" data-passo="scelto" hidden>
+        <h1>Questo è l'archivio che hai scelto</h1>
+        <dl class="dati">
+            <dt>Dove</dt><dd data-campo="dove"></dd>
+            <dt>Scatti</dt><dd data-campo="scatti"></dd>
+            <dt>Peso</dt><dd data-campo="peso"></dd>
+            <dt>Ultimo uso</dt><dd data-campo="toccato"></dd>
+        </dl>
+        <div class="scelte">
+            <button class="tasto-comando accento" data-fai="usa_lo_scelto">
+                <span>Usa questo archivio<small>lo apro com'è, senza copiarlo</small></span>
+                <span class="consigliata">consigliata</span>
+            </button>
+            <button class="tasto-comando" data-fai="torna_all_archivio"><span>Torna indietro</span></button>
+        </div>
+    </section>
+
+    <section class="passo" data-passo="sparito" hidden>
+        <h1>Non trovo l'archivio</h1>
+        <p class="attenuato">
+            L'ultima volta stava qui, e adesso questa cartella non c'è:
+        </p>
+        <p class="numeri piccolo" data-campo="dove"></p>
+        <p class="attenuato piccolo">
+            Se sta su un disco esterno, collegalo e premi «Riprova». Non ne
+            creo uno nuovo al suo posto: vedresti un archivio vuoto.
+        </p>
+        <div class="avviso errore" data-errore hidden></div>
+        <div class="scelte">
+            <button class="tasto-comando accento" data-fai="riprova_dopo_la_vecchia">
+                <span>Riprova<small>quando il disco è collegato</small></span>
+                <span class="consigliata">consigliata</span>
+            </button>
+            <button class="tasto-comando" data-fai="sfoglia_archivio">
+                <span>È da un'altra parte<small>scegli tu la cartella</small></span>
+            </button>
+        </div>
+    </section>
+
+    <section class="passo" data-passo="vecchia-aperta" hidden>
+        <h1>La versione di prima è ancora aperta</h1>
+        <p class="attenuato">
+            Due programmi sullo stesso archivio si pestano i piedi. Chiudi la
+            versione di prima, anche la finestra nera se c'è, e poi premi
+            «Riprova».
+        </p>
+        <div class="scelte">
+            <button class="tasto-comando accento" data-fai="riprova_dopo_la_vecchia"><span>Riprova</span></button>
+        </div>
+    </section>
+
+    <section class="passo" data-passo="motori" hidden>
+        <h1>La scheda video</h1>
+        <p data-campo="scheda"></p>
+        <p class="attenuato piccolo">
+            Per riconoscere le foto il programma usa dei modelli di
+            intelligenza artificiale, che girano qui e non su internet. Il
+            motore che li fa girare si scarica adesso, una volta sola:
+            <b data-campo="quanto"></b>.
+        </p>
+        <div data-se="lavora" hidden style="display:flex;flex-direction:column;gap:var(--s2)">
+            <p class="piccolo" data-campo="detto"></p>
+            <div class="avanzamento" data-barra><div class="fatto" style="width:0%"></div></div>
+            <div class="attesa" data-attesa hidden></div>
+            <div class="cifre"><span data-campo="file"></span><span data-campo="cifre"></span></div>
+        </div>
+        <div class="avviso errore" data-errore hidden></div>
+        <details data-dettagli hidden>
+            <summary class="minuscolo tenue">Cosa ha detto lo scaricamento</summary>
+            <pre class="minuscolo tenue" style="white-space:pre-wrap;user-select:text;max-height:120px;overflow:auto" data-campo="dettagli"></pre>
+        </details>
+        <div class="scelte">
+            <button class="tasto-comando accento" data-fai="prepara_i_motori" data-se="fermo">
+                <span>Scarica e prepara<small>ci vuole qualche minuto; il resto lo faccio io</small></span>
+                <span class="consigliata">consigliata</span>
+            </button>
+            <button class="tasto-comando" data-fai="ferma_i_motori" data-se="lavora" hidden><span>Ferma</span></button>
+        </div>
+    </section>
+
+    <section class="passo" data-passo="chiave" hidden>
+        <h1>La chiave di Hugging Face</h1>
+        <p class="attenuato">
+            Due dei modelli che guardano le foto, DINOv3 e SAM 3, si scaricano solo
+            con una chiave personale. È gratis e ci vogliono pochi minuti.
+        </p>
+        <ol class="istruzioni">
+            <li><span>Crea un account su <a class="sito" data-sito="https://huggingface.co/join">huggingface.co</a>, se non ce l'hai.</span></li>
+            <li><span>Apri la <a class="sito" data-sito="https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m">pagina di DINOv3</a> e accetta le condizioni.</span></li>
+            <li><span>Apri la <a class="sito" data-sito="https://huggingface.co/facebook/sam3">pagina di SAM 3</a>, compila il modulo e accetta le condizioni: la conferma arriva per mail.</span></li>
+            <li><span>In <a class="sito" data-sito="https://huggingface.co/settings/tokens">Settings › Access Tokens</a> crea una chiave di tipo «Read» e copiala.</span></li>
+        </ol>
+        <input class="campo campo-chiave" type="password" autocomplete="off" spellcheck="false"
+               placeholder="Incolla qui la chiave, comincia con hf_" aria-label="La chiave di Hugging Face" data-chiave>
+        <div class="avviso errore" data-errore hidden></div>
+        <div class="scelte">
+            <button class="tasto-comando accento" data-fai="salva_la_chiave"><span>Controlla e salva</span></button>
+            <p class="nota">La tengo nel Gestore credenziali di Windows, non in un file. Si cambia quando vuoi da Impostazioni.</p>
+        </div>
+    </section>
+
+    <section class="passo" data-passo="modelli" hidden>
+        <div data-se="scegli" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
+            <h1>I modelli</h1>
+            <p class="attenuato piccolo">Si scaricano una volta sola, poi tutto resta su questo computer.</p>
+            <details class="sempre">
+                <summary title="Tocca per vederli"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg><span><b data-campo="quanti-sempre"></b> <span class="nota">· impronte, volti, corpi, scritte, ricerca</span></span><span class="peso" data-campo="peso-sempre"></span></summary>
+                <ul data-obbligatori></ul>
+            </details>
+            <p class="attenuato piccolo">Per il Miglioramento, se vuoi. Tocca le carte:</p>
+            <div class="carte-mg" data-facoltativi></div>
+            <div class="scelte" style="gap:var(--s2)">
+                <div class="totale"><span>In tutto <b data-campo="totale"></b></span><span class="nota" data-campo="libero"></span></div>
+                <button class="tasto-comando accento" data-fai="scarica_i_modelli"><span data-campo="tasto-scarica">Scarica</span></button>
+            </div>
+        </div>
+        <div data-se="scarica" hidden style="display:flex;flex-direction:column;gap:var(--s4);flex:1;min-height:0">
+            <h1 data-campo="titolo-scarica">Scarico i modelli</h1>
+            <p class="attenuato" data-campo="detto-scarica"></p>
+            <div class="grande">
+                <div class="cifre"><span data-campo="adesso"></span><span data-campo="quanto"></span></div>
+                <div class="avanzamento" data-barra-modelli><div class="fatto" style="width:0%"></div></div>
+                <div class="attesa" data-attesa-modelli hidden></div>
+                <div class="cifre"><span data-campo="sotto-sx"></span><span></span></div>
+            </div>
+            <ul class="fila-modelli" data-fila></ul>
+            <div class="scelte">
+                <button class="tasto-comando" data-fai="ferma_i_modelli"><span>Ferma</span></button>
+                <p class="nota">Se chiudi la finestra, alla prossima apertura riprendo da dove ero.</p>
+            </div>
+        </div>
+        <div class="avviso errore" data-errore hidden></div>
+    </section>
+
+    <section class="passo al-centro" data-passo="password" hidden>
+        <span class="fotina grande dorme" aria-hidden="true"><span class="cornice"><span class="monte"></span><span class="monte due"></span><span class="sole"></span><span class="occhi"><span></span><span></span></span></span></span>
+        <h1>Bentornato.</h1>
+        <p>L'archivio è chiuso nel forziere. Scrivi la password e lo apro.</p>
+        <input class="campo" type="password" autocomplete="current-password" data-password>
+        <div class="avviso errore" data-errore hidden></div>
+        <button class="tasto-comando accento largo" data-fai="apri_il_forziere"><span>Apri l'archivio</span></button>
+        <p class="nota">Non esiste «password dimenticata»: le foto però restano dove sono.</p>
+    </section>
+
+    <section class="passo al-centro" data-passo="apertura" hidden>
+        <span class="fotina grande sveglia" aria-hidden="true"><span class="cornice"><span class="monte"></span><span class="monte due"></span><span class="sole"></span><span class="occhi"><span></span><span></span></span></span></span>
+        <h1 data-campo="titolo-apertura">Apro il tuo archivio</h1>
+        <ol class="passi" data-passi>
+            <li class="adesso"><span class="spunta"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Apro l'archivio</span></li>
+            <li><span class="spunta"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Preparo le proposte</span></li>
+            <li><span class="spunta"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Ci siamo</span></li>
+        </ol>
+        <div class="linea" data-linea><span></span></div>
+        <p class="nota" data-campo="detto-apertura"></p>
+    </section>
+
+    <section class="passo" data-passo="guasto" hidden>
+        <h1>Qualcosa non va</h1>
+        <p data-campo="guasto"></p>
+        <div class="scelte">
+            <button class="tasto-comando accento" data-fai="riprova"><span>Riprova</span></button>
+        </div>
+    </section>
+</main>
+<script>
+(function () {
+    "use strict";
+    var passi = document.querySelectorAll("[data-passo]");
+    var adesso = null;
+    var sorveglia = null;
+
+    function api() { return window.pywebview && window.pywebview.api; }
+
+    function mostra(nome) {
+        adesso = nome;
+        passi.forEach(function (p) { p.hidden = p.getAttribute("data-passo") !== nome; });
+        var campo = document.querySelector("[data-passo='" + nome + "'] input");
+        if (campo) { setTimeout(function () { campo.focus(); }, 30); }
+    }
+
+    function qui() { return document.querySelector("[data-passo='" + adesso + "']"); }
+
+    function errore(testo) {
+        var dove = qui() && qui().querySelector("[data-errore]");
+        if (!dove) { return; }
+        dove.textContent = testo || "";
+        dove.hidden = !testo;
+    }
+
+    function scrivi(sezione, campo, valore) {
+        sezione.querySelectorAll("[data-campo='" + campo + "']").forEach(function (e) {
+            e.textContent = valore == null ? "" : String(valore);
+        });
+    }
+
+    function metti_archivio(sezione, a) {
+        scrivi(sezione, "dove", a.dove);
+        scrivi(sezione, "scatti", a.scatti);
+        scrivi(sezione, "peso", a.peso);
+        scrivi(sezione, "toccato", a.toccato);
+    }
+
+    function secondo(stato) {
+        var sezione = document.querySelector("[data-passo='" + stato.passo + "']");
+        if (stato.passo === "archivio") {
+            var trovato = !!stato.versione_1;
+            sezione.querySelectorAll("[data-se]").forEach(function (e) {
+                e.hidden = (e.getAttribute("data-se") === "trovato") !== trovato;
+            });
+            if (trovato) { metti_archivio(sezione, stato.versione_1); }
+        }
+        if (stato.passo === "scelto" && stato.scelto) { metti_archivio(sezione, stato.scelto); }
+        if (stato.passo === "motori") {
+            scrivi(sezione, "scheda", stato.scheda || "");
+            scrivi(sezione, "quanto", stato.quanto || "");
+            motori(stato.motori || {});
+        }
+        if (stato.passo === "modelli") { modelli_scelta(stato.modelli || {}); }
+        if (stato.passo === "guasto") { scrivi(sezione, "guasto", stato.guasto || ""); }
+        if (stato.passo === "schermo-cerca") { cerca_il_fisso(); }
+        if (stato.passo === "schermo-entra") { guarda_il_fisso(); }
+        if (stato.passo === "sparito") { scrivi(sezione, "dove", stato.dove || ""); }
+        if (stato.passo === "apertura") {
+            scrivi(sezione, "titolo-apertura", stato.titolo || "Apro il tuo archivio");
+            scrivi(sezione, "detto-apertura", stato.detto || "");
+            guarda_l_apertura();
+        }
+        mostra(stato.passo);
+    }
+
+    function gb(n) { return (n / 1073741824).toFixed(2) + " GB"; }
+
+    function motori(m) {
+        var sezione = document.querySelector("[data-passo='motori']");
+        var lavora = m.fase && m.fase !== "fermo" && m.fase !== "guasto" && m.fase !== "finito";
+        sezione.querySelectorAll("[data-se]").forEach(function (e) {
+            var se = e.getAttribute("data-se");
+            e.hidden = se === "lavora" ? !lavora : lavora;
+        });
+        if (m.detto) { scrivi(sezione, "detto", m.detto); }
+        var barra = sezione.querySelector("[data-barra]");
+        var attesa = sezione.querySelector("[data-attesa]");
+        var con_numeri = m.totale > 0;
+        barra.hidden = !con_numeri;
+        attesa.hidden = con_numeri || !lavora;
+        barra.querySelector(".fatto").style.width = (m.percento || 0) + "%";
+        scrivi(sezione, "file", m.fase === "installo" ? "Installo, può metterci qualche minuto" :
+               m.fase === "provo" ? "Provo la scheda" : (m.file || ""));
+        scrivi(sezione, "cifre", con_numeri ? gb(m.fatti) + " di " + gb(m.totale) : "");
+        if (m.fase === "guasto") { errore(m.guasto); } else { errore(""); }
+        var dettagli = sezione.querySelector("[data-dettagli]");
+        var righe = m.dettagli || [];
+        dettagli.hidden = !righe.length;
+        scrivi(sezione, "dettagli", righe.join("\n"));
+    }
+
+    var scelti_mg = null;
+    var ESEMPI = { seedvr2: [28, "Porta foto e video piccoli alla misura FHD"],
+                   codeformer: [350, "Sistema i volti nelle foto migliorate"],
+                   faceme: [200, "Sistema i volti guardando le foto di chi ha un nome"],
+                   lucidflux: [140, "Sfida SeedVR2 sulle foto, e scegli tu"] };
+    function gbt(n) { return (n / 1e9).toLocaleString("it-IT", { maximumFractionDigits: 1, minimumFractionDigits: n < 1e10 ? 1 : 0 }) + " GB"; }
+    function totale_scelto(m) {
+        var t = 0;
+        (m.obbligatori || []).forEach(function (o) { if (!o.in_casa) { t += o.peso; } });
+        (m.facoltativi || []).forEach(function (f) { if (!f.in_casa && scelti_mg[f.quale]) { t += f.peso; } });
+        return t;
+    }
+    var ultimi_modelli = null;
+    function modelli_scelta(m) {
+        ultimi_modelli = m;
+        var sezione = document.querySelector("[data-passo='modelli']");
+        var lavoro = m.lavoro || {};
+        if (lavoro.sta_lavorando) { modelli_scarica(lavoro); guarda_i_modelli(); return; }
+        sezione.querySelector("[data-se='scegli']").hidden = false;
+        sezione.querySelector("[data-se='scarica']").hidden = true;
+        if (scelti_mg === null) {
+            scelti_mg = {};
+            (m.facoltativi || []).forEach(function (f) { scelti_mg[f.quale] = f.consigliato || f.in_casa; });
+        }
+        var sempre = m.obbligatori || [];
+        var peso_sempre = 0;
+        var ul = sezione.querySelector("[data-obbligatori]");
+        ul.replaceChildren();
+        sempre.forEach(function (o) {
+            peso_sempre += o.peso;
+            var li = document.createElement("li");
+            var a = document.createElement("span"); a.textContent = o.nome + (o.in_casa ? " · già in casa" : "");
+            var b = document.createElement("span"); b.textContent = gbt(o.peso);
+            li.appendChild(a); li.appendChild(b); ul.appendChild(li);
+        });
+        scrivi(sezione, "quanti-sempre", sempre.length + " modelli che servono sempre");
+        scrivi(sezione, "peso-sempre", gbt(peso_sempre));
+        var zona = sezione.querySelector("[data-facoltativi]");
+        zona.replaceChildren();
+        (m.facoltativi || []).forEach(function (f) {
+            var es = ESEMPI[f.quale] || [30, ""];
+            var carta = document.createElement("button");
+            carta.type = "button";
+            carta.className = "carta-mg";
+            carta.setAttribute("aria-pressed", String(!!scelti_mg[f.quale]));
+            carta.setAttribute("data-mg", f.quale);
+            if (f.in_casa) { carta.disabled = true; }
+            carta.style.setProperty("--h", es[0]);
+            carta.innerHTML = '<span class="vedi"><i></i><i></i><span class="segno">&#10003;</span></span><span class="riga"><span></span><span></span></span><small></small>';
+            carta.querySelector(".riga span").textContent = f.nome;
+            carta.querySelector(".riga span:last-child").textContent = f.in_casa ? "in casa" : gbt(f.peso);
+            carta.querySelector("small").textContent = es[1];
+            zona.appendChild(carta);
+        });
+        var t = totale_scelto(m);
+        scrivi(sezione, "totale", gbt(t));
+        scrivi(sezione, "libero", m.libero ? "sul disco " + m.disco + " restano " + gbt(m.libero) : "");
+        scrivi(sezione, "tasto-scarica", t ? "Scarica " + gbt(t) : "Avanti");
+        if (lavoro.guasto) { errore(lavoro.guasto); }
+    }
+    document.addEventListener("click", function (evento) {
+        var carta = evento.target.closest("[data-mg]");
+        if (!carta || carta.disabled || !ultimi_modelli) { return; }
+        var q = carta.getAttribute("data-mg");
+        scelti_mg[q] = !scelti_mg[q];
+        modelli_scelta(ultimi_modelli);
+    });
+    document.addEventListener("click", function (evento) {
+        var sito = evento.target.closest("[data-sito]");
+        if (!sito || !api()) { return; }
+        evento.preventDefault();
+        api().apri_il_sito(sito.getAttribute("data-sito"));
+    });
+    function modelli_scarica(l) {
+        var sezione = document.querySelector("[data-passo='modelli']");
+        sezione.querySelector("[data-se='scegli']").hidden = true;
+        sezione.querySelector("[data-se='scarica']").hidden = false;
+        var rete = !!l.aspetta_la_rete;
+        scrivi(sezione, "titolo-scarica", rete ? "La rete se n'è andata" : "Scarico i modelli");
+        scrivi(sezione, "detto-scarica", rete
+            ? "Non perdo niente di quello già scaricato. Appena la rete torna riprendo da solo, da dove ero."
+            : "Quando finisco il programma si apre da solo. Puoi lasciare il computer acceso e andare.");
+        scrivi(sezione, "adesso", rete ? "Aspetto la rete…" : (l.adesso_nome ? l.adesso_nome + (l.adesso_percento != null ? " · " + l.adesso_percento + "%" : "") : "Comincio…"));
+        scrivi(sezione, "quanto", l.byte_totali ? gbt(l.byte_fatti) + " di " + gbt(l.byte_totali) : "");
+        scrivi(sezione, "sotto-sx", rete ? "Riprovo ogni 10 secondi" : "");
+        sezione.querySelector("[data-barra-modelli]").hidden = rete;
+        sezione.querySelector("[data-attesa-modelli]").hidden = !rete;
+        sezione.querySelector("[data-barra-modelli] .fatto").style.width = (l.percento_tutto || 0) + "%";
+        var fila = sezione.querySelector("[data-fila]");
+        fila.replaceChildren();
+        var nomi = (ultimi_modelli && ultimi_modelli.obbligatori || []).concat(ultimi_modelli && ultimi_modelli.facoltativi || []);
+        (l.quali || []).forEach(function (q) {
+            var voce = nomi.filter(function (n) { return n.quale === q; })[0] || { nome: q, peso: 0 };
+            var li = document.createElement("li");
+            li.className = (l.fatti_modelli || []).indexOf(q) >= 0 ? "fatto" : (l.adesso === q ? "adesso" : "");
+            li.innerHTML = '<span class="tondo"></span><span></span><span></span>';
+            li.children[1].textContent = voce.nome;
+            li.children[2].textContent = voce.peso ? gbt(voce.peso) : "";
+            fila.appendChild(li);
+        });
+        errore("");
+    }
+    var sorveglia_modelli = null;
+    function guarda_i_modelli() {
+        if (sorveglia_modelli) { return; }
+        sorveglia_modelli = setInterval(function () {
+            api().come_vanno_i_modelli().then(function (l) {
+                if (l.sta_lavorando) { modelli_scarica(l); return; }
+                clearInterval(sorveglia_modelli);
+                sorveglia_modelli = null;
+                avanti();
+            });
+        }, 700);
+    }
+
+    function guarda_i_motori() {
+        clearInterval(sorveglia);
+        sorveglia = setInterval(function () {
+            api().come_vanno_i_motori().then(function (m) {
+                motori(m);
+                if (m.fase === "finito") { clearInterval(sorveglia); avanti(); }
+                if (m.fase === "guasto" || m.fase === "fermo") { clearInterval(sorveglia); }
+            });
+        }, 400);
+    }
+
+    var sorveglia_apertura = null;
+    function guarda_l_apertura() {
+        if (sorveglia_apertura) { return; }
+        var sezione = document.querySelector("[data-passo='apertura']");
+        var righe = sezione.querySelectorAll("[data-passi] li");
+        var linea = sezione.querySelector("[data-linea] span");
+        sorveglia_apertura = setInterval(function () {
+            if (!api() || !api().come_va_l_apertura) { return; }
+            api().come_va_l_apertura().then(function (quanti) {
+                righe.forEach(function (r, i) { r.className = i < quanti ? "fatto" : (i === quanti ? "adesso" : ""); });
+                linea.style.width = Math.max(6, Math.round(quanti * 100 / righe.length)) + "%";
+            });
+        }, 250);
+    }
+
+    function avanti() { api().stato().then(secondo); }
+
+    function esito(risposta) {
+        if (!risposta) { return; }
+        if (risposta.errore) { errore(risposta.errore); return; }
+        if (risposta.stato) { secondo(risposta.stato); }
+    }
+
+    var azioni = {
+        usa_la_versione_1: function () { return api().usa_la_versione_1(); },
+        comincia_da_zero: function () { return api().comincia_da_zero(); },
+        sfoglia_archivio: function () { return api().sfoglia_archivio(); },
+        usa_lo_scelto: function () { return api().usa_lo_scelto(); },
+        torna_all_archivio: function () { return api().torna_all_archivio(); },
+        riprova_dopo_la_vecchia: function () { return api().stato().then(function (s) { return { stato: s }; }); },
+        prepara_i_motori: function () {
+            return api().prepara_i_motori().then(function (r) { guarda_i_motori(); return r; });
+        },
+        ferma_i_motori: function () { return api().ferma_i_motori(); },
+        salva_la_chiave: function () {
+            var campo = document.querySelector("[data-chiave]");
+            var valore = campo.value;
+            campo.value = "";
+            return api().salva_la_chiave(valore);
+        },
+        salta_la_chiave: function () { return api().salta_la_chiave(); },
+        scarica_i_modelli: function () {
+            var voluti = Object.keys(scelti_mg || {}).filter(function (q) { return scelti_mg[q]; });
+            return api().scarica_i_modelli(voluti).then(function (r) {
+                if (r && r.stato && r.stato.passo === "modelli") { guarda_i_modelli(); }
+                return r;
+            });
+        },
+        ferma_i_modelli: function () { return api().ferma_i_modelli(); },
+        apri_il_forziere: function () {
+            var campo = document.querySelector("[data-password]");
+            var valore = campo.value;
+            campo.value = "";
+            mostra("apertura");
+            return api().apri_il_forziere(valore).then(function (r) {
+                if (r && r.errore) {
+                    mostra("password");
+                    if (campo.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+                        campo.animate([0, -9, 8, -6, 4, -2, 0].map(function (x) { return { transform: "translateX(" + x + "px)" }; }),
+                                      { duration: 480 });
+                    }
+                    campo.focus();
+                }
+                return r;
+            });
+        },
+        riprova: function () { return api().riprova(); },
+        scegli_lo_schermo: function () { return api().scegli_lo_schermo(); },
+        lascia_lo_schermo: function () { return api().lascia_lo_schermo(); },
+        riabbina: function () { return api().riabbina(); },
+        cerca_il_fisso: function () { cerca_il_fisso(); return null; },
+        a_mano: function () {
+            var campo = document.querySelector("[data-indirizzo]");
+            campo.hidden = false;
+            campo.focus();
+            chiedi_la_password();
+            return null;
+        },
+        abbina_il_fisso: function () {
+            var scelto = document.querySelector("[name=fisso]:checked");
+            var a_mano = document.querySelector("[data-indirizzo]").value.trim();
+            var codice = document.querySelector("[data-codice]");
+            var password = document.querySelector("[data-password-fisso]");
+            var indirizzo = a_mano || (scelto ? scelto.value : "");
+            var porta = a_mano ? "" : (scelto ? scelto.getAttribute("data-porta") : "");
+            if (!indirizzo) { errore("Scegli il fisso, oppure scrivi il suo indirizzo."); return null; }
+            var valore = password.value;
+            password.value = "";
+            return api().abbina_il_fisso(indirizzo, porta, codice.value, valore).then(function (r) {
+                if (!r || !r.errore) { codice.value = ""; }
+                return r;
+            });
+        },
+        entra_nel_fisso: function () {
+            var campo = document.querySelector("[data-password-entra]");
+            var valore = campo.value;
+            campo.value = "";
+            return api().entra_nel_fisso(valore);
+        }
+    };
+
+    function cerca_il_fisso() {
+        var zona = document.querySelector("[data-fissi]");
+        var cerco = document.createElement("p");
+        cerco.className = "nota";
+        cerco.textContent = "Cerco il fisso nella rete di casa…";
+        var radar = document.createElement("div");
+        radar.className = "radar";
+        radar.setAttribute("aria-hidden", "true");
+        radar.innerHTML = '<i></i><i></i><i></i><span class="radar-qui">portatile</span>';
+        zona.replaceChildren(radar, cerco);
+        api().cerca_il_fisso().then(function (r) {
+            var fissi = (r && r.fissi) || [];
+            var voci = [];
+            if (!fissi.length) {
+                var niente = document.createElement("p");
+                niente.className = "nota";
+                niente.textContent = "Non trovo nessun fisso con la porta aperta. Aprila sul fisso e premi «Cerca di nuovo», oppure «Non lo trovo» per scrivere il suo indirizzo.";
+                voci.push(niente);
+            }
+            fissi.forEach(function (f, i) {
+                var voce = document.createElement("label");
+                voce.className = "fisso trovato";
+                voce.style.animationDelay = (i * 90) + "ms";
+                var scelta = document.createElement("input");
+                scelta.type = "radio";
+                scelta.name = "fisso";
+                scelta.value = f.indirizzo;
+                scelta.setAttribute("data-porta", f.porta);
+                scelta.setAttribute("data-password", f.password ? "1" : "0");
+                scelta.checked = i === 0;
+                var nome = document.createElement("b");
+                nome.textContent = f.nome;
+                var nota = document.createElement("span");
+                nota.className = "nota";
+                nota.textContent = "cifrato · " + f.indirizzo;
+                voce.appendChild(scelta);
+                voce.appendChild(nome);
+                voce.appendChild(nota);
+                voci.push(voce);
+            });
+            zona.replaceChildren.apply(zona, voci);
+            chiedi_la_password();
+        });
+    }
+
+    function chiedi_la_password() {
+        var scelto = document.querySelector("[name=fisso]:checked");
+        var a_mano = !document.querySelector("[data-indirizzo]").hidden;
+        document.querySelector("[data-password-fisso]").hidden =
+            !a_mano && !(scelto && scelto.getAttribute("data-password") === "1");
+    }
+
+    document.addEventListener("change", function (evento) {
+        if (evento.target.name === "fisso") { chiedi_la_password(); }
+    });
+
+    function guarda_il_fisso() {
+        var sezione = document.querySelector("[data-passo='schermo-entra']");
+        scrivi(sezione, "fisso-stato", "Cerco il fisso…");
+        api().com_e_il_fisso().then(function (r) {
+            if (!r) { return; }
+            var dove = r.nome || "il fisso";
+            if (r.trovato) {
+                scrivi(sezione, "fisso-stato", dove + " è acceso e la porta è aperta." +
+                       (r.password ? " Scrivi la password del forziere del fisso." : ""));
+                sezione.querySelector("[data-password-entra]").hidden = !r.password;
+            } else {
+                scrivi(sezione, "fisso-stato", r.perche || ("Non trovo " + dove + "."));
+            }
+        });
+    }
+
+    document.addEventListener("click", function (evento) {
+        var tasto = evento.target.closest("[data-fai]");
+        if (!tasto || !api()) { return; }
+        var fai = azioni[tasto.getAttribute("data-fai")];
+        if (!fai) { return; }
+        tasto.disabled = true;
+        Promise.resolve(fai()).then(esito, function () {
+            errore("Qualcosa non ha risposto. Riprova.");
+        }).then(function () { tasto.disabled = false; });
+    });
+
+    document.addEventListener("keydown", function (evento) {
+        if (evento.key !== "Enter") { return; }
+        if (adesso === "password") { azioni.apri_il_forziere().then(esito); }
+        if (adesso === "chiave") { azioni.salva_la_chiave().then(esito); }
+        if (adesso === "schermo-cerca") { Promise.resolve(azioni.abbina_il_fisso()).then(esito); }
+        if (adesso === "schermo-entra") { azioni.entra_nel_fisso().then(esito); }
+    });
+
+    function parti() {
+        api().stato().then(function (stato) {
+            secondo(stato);
+            if (stato.passo === "motori" && stato.motori && stato.motori.fase &&
+                ["fermo", "guasto", "finito"].indexOf(stato.motori.fase) < 0) {
+                guarda_i_motori();
+            }
+        });
+    }
+
+    if (api()) { parti(); } else { window.addEventListener("pywebviewready", parti); }
+})();
+</script>
+</body>
+</html>

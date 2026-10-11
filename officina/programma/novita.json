@@ -1,0 +1,1067 @@
+[
+  {
+    "numero": 19,
+    "versione": null,
+    "data": "7 ottobre",
+    "titolo": "Etichetta nuova: l'albero sempre aperto accanto allo scatto",
+    "semplice": [
+      [
+        "etichetta",
+        "Etichetta ha tre schede: Tipologia (Q), Persone (W), Luogo (E). Sotto lo scatto vedi sempre le tre righe col pallino verde quando sono fatte"
+      ],
+      [
+        "etichetta",
+        "Uno scatto è finito solo con tipologia, persone e luogo: finché ne manca una non passi al prossimo. «Nessuna persona» (N) e «Non so dove» (?) contano come risposta"
+      ],
+      [
+        "persone",
+        "Le persone le metti anche se si vede solo un braccio, e più di una: l'IA propone dai volti, tu confermi"
+      ],
+      [
+        "luoghi",
+        "I luoghi sono un albero, come Italia › Casa › Cucina. Più stanze della stessa casa possono stare sullo stesso scatto"
+      ],
+      [
+        "luoghi",
+        "L'IA propone il luogo dal GPS, dagli scatti fatti poco prima o dopo e da come somiglia ad altri. In Luoghi trasformi in luoghi un albero che hai già"
+      ],
+      [
+        "foto",
+        "In «Da sistemare» c'è la lista «Data indovinata»: le foto con la data presa dal nome o da Windows, da controllare"
+      ],
+      [
+        "calendario",
+        "Se dentro il file non c'è la data, la leggo dal nome del file e, se non c'è nemmeno lì, dalla data di Windows del file. Le foto già in archivio si rileggono da sole"
+      ],
+      [
+        "calendario",
+        "Alcuni video .mov dove non trovavo l'intestazione ora hanno la data"
+      ],
+      [
+        "foto",
+        "In «Lo stesso file in più cartelle» e «Messi da parte» vedi la fotina di ogni file e le cartelle dove si trova"
+      ],
+      [
+        "occhio",
+        "Miglioramento, doppioni, impronte, volti e scritte lavorano in un processo a parte: le pagine restano veloci"
+      ],
+      [
+        "etichetta",
+        "Etichetta è nuova: l'albero sta sempre a sinistra e lo scatto a destra. Clicchi un nodo e diventa un'etichetta"
+      ],
+      [
+        "albero",
+        "Passando col mouse su un nodo si accende la strada fino in cima: si vede subito da quale genitore viene"
+      ],
+      [
+        "occhio",
+        "Etichetta usa tutto lo schermo: i menu si nascondono, e «Lavoro» in alto a sinistra li fa tornare"
+      ],
+      [
+        "foto",
+        "Il clic della rotella del mouse apre lo scatto a tutto schermo"
+      ],
+      [
+        "indietro",
+        "Riaprendo Etichetta torni allo scatto dove eri, non a quello dopo"
+      ],
+      [
+        "filtri",
+        "Su schermi stretti i menu dei filtri e di «Senza data» non escono più dal bordo, e le linguette di Stato si vedono tutte"
+      ],
+      [
+        "foto",
+        "Aprire una foto e passare allo scatto dopo in Etichetta non aspetta più l'IA"
+      ],
+      [
+        "info",
+        "Nel pannello «i» di Etichetta c'è anche la macchina o il telefono che ha fatto lo scatto, anche per le foto già in archivio"
+      ],
+      [
+        "albero",
+        "Premendo A in Etichetta l'albero si carica di nuovo per intero, non solo le linee"
+      ],
+      [
+        "albero",
+        "In Etichetta l'albero resta sempre tutto aperto: cliccare un genitore lo sceglie e basta, non lo apre e non lo chiude"
+      ],
+      [
+        "pannello",
+        "In alto a destra dell'albero c'è il pulsante «3 colonne»: cliccandolo vedi 5 livelli dell'albero insieme, e riparte sempre da 3"
+      ],
+      [
+        "codice",
+        "Dentro, il programma è più ordinato: la parte che risponde alle pagine ora è divisa in un pezzo per ogni zona. Per te non cambia niente"
+      ],
+      [
+        "tavolozza",
+        "Anche la grafica delle pagine è divisa in un pezzo per ogni zona, e sono spariti gli stili vecchi che non si usavano più. Le pagine si vedono identiche a prima"
+      ],
+      [
+        "foto",
+        "Sotto le foto della galleria le etichette stanno su una riga, intere: quelle che non entrano diventano «+2», «+3»"
+      ],
+      [
+        "etichetta",
+        "A tutto schermo vedi solo la foto: niente albero né etichette sopra. Frecce per cambiare foto, Esc per uscire"
+      ],
+      [
+        "luoghi",
+        "In Luoghi il pulsante Albero mostra lo stesso albero dei nodi: rami, zoom, trascini un luogo per spostarlo, e a destra vedi scatti e coordinate"
+      ],
+      [
+        "albero",
+        "Su un nodo con figli puoi scegliere «Si può usare anche da solo»: in Etichetta potrai mettere quel nodo senza scendere fino in fondo"
+      ],
+      [
+        "portatile",
+        "Se aggiorni il fisso dal portatile, il portatile mostra i passi e si ricollega da solo quando il fisso riparte. Dopo 2 minuti senza risposta ti avvisa, dopo 3 minuti e mezzo torni alla scelta del fisso"
+      ],
+      [
+        "luoghi",
+        "Da ogni pagina: A apre l'albero dei nodi, P le persone, L i luoghi. Ripremi lo stesso tasto per chiudere"
+      ],
+      [
+        "etichetta",
+        "In Etichetta la foto Live ora si accende con F, perché L apre i luoghi"
+      ],
+      [
+        "albero",
+        "I pallini dei nodi ora hanno il colore giusto: prima erano tutti verdi"
+      ],
+      [
+        "persone",
+        "L'IA trova le persone anche dal corpo: SAM 3 separa ogni persona, anche quando si coprono, e RTMW capisce di chi è ogni mano, gamba e volto. In Lavoro → AI il lavoro «I corpi» parte dopo i volti"
+      ],
+      [
+        "foto",
+        "Nella foto aperta il tasto «Corpi» mostra il contorno di ogni persona, i punti del corpo e il volto collegato, una persona per colore"
+      ],
+      [
+        "persone",
+        "In Etichetta l'IA propone le persone anche senza volto: guarda chi c'è negli scatti vicini nel tempo, nello stesso luogo e chi sta spesso insieme, e ti dice perché"
+      ],
+      [
+        "etichetta",
+        "Ctrl+C in Etichetta chiede cosa copiare fra tipologia, persone e luogo (tasti 1, 2, 3); Ctrl+V incolla tutto sullo scatto"
+      ],
+      [
+        "etichetta",
+        "Le proposte guardano anche i pezzi della foto, non solo la foto intera, e tengono il pezzo che somiglia di più"
+      ],
+      [
+        "persone",
+        "Il lavoro «I corpi» ora ricorda anche la corporatura e i vestiti di ogni persona: KPR la riconosce anche di spalle, SigLIP 2 guarda solo la persona e non lo sfondo. Serviranno a proporre le persone anche senza volto"
+      ],
+      [
+        "scarica",
+        "KPR arriva da Google Drive insieme agli altri modelli del corpo, senza chiave: circa 1,2 GB, controllato con l'impronta e aperto in un modo che legge solo numeri"
+      ],
+      [
+        "computer",
+        "Con una scheda video da almeno 12 GB i modelli del corpo restano tutti accesi; con meno si accendono uno alla volta su gruppi di foto, così la memoria non finisce"
+      ],
+      [
+        "pannello",
+        "In Intelligenza artificiale i quattro lavori stanno in un quadrato: impronte e volti sopra, corpi e scritte sotto"
+      ]
+    ],
+    "tecnico": [
+      [
+        "calendario",
+        "metadati: data di ripiego dal nome (AAAAMMGG[_HHMMSS]) e dalla data del file, origine «nome» e «file»; migrazione 42 rilegge i file senza data"
+      ],
+      [
+        "calendario",
+        "quicktime: se l'albero degli atomi si rompe, l'mvhd si cerca nei primi e negli ultimi 16 MB"
+      ],
+      [
+        "occhio",
+        "in_disparte.lancia: ogni lavoro pesante nel suo processo figlio"
+      ],
+      "<code>officina.js</code> disegna tutto l'albero (dati da <code>albero.forma_dell_albero</code>) con una finestra degli ultimi 3 livelli e le briciole per risalire.",
+      "<code>/api/officina/{id}/qui</code> ricorda lo scatto solo quando si vede davvero: lo scatto preparato in anticipo non conta più.",
+      "<code>stato_dello_scatto</code> manda anche nome del file, cartella, luogo e riquadri dei volti per il pannello «i».",
+      "<code>base.ricorda</code> scrive in sottofondo gli ultimi ricordi della vista (filtro, scatto) e salva sempre il valore più recente.",
+      "<code>navigazione.js</code> apre verso sinistra le tendine che uscirebbero dallo schermo (classe <code>a-destra</code>).",
+      "La prova <code>test_pagine_mentre_scrive</code> tiene occupato l'archivio e controlla che ogni pagina risponda entro 3 secondi.",
+      "Migrazione 41: <code>file_media</code> ha <code>marca</code> e <code>modello</code>; <code>rileggi_macchine</code> li legge in sottofondo nei file già importati.",
+      "<code>_albero.html</code> usa gli id <code>albero-tela</code> e <code>albero-mondo</code>: con gli stessi id di Etichetta i nodi finivano nella pagina sotto.",
+      "<code>finestra()</code> tiene aperti tutti i rami e mostra <code>st.colonne</code> livelli (3 o 5).",
+      "<code>server.py</code> (5.391 righe) è diviso in <code>officina/web/strade/</code>: un file per zona, ognuno col suo <code>APIRouter</code> <code>strada</code>; <code>comune.py</code> tiene le variabili condivise (lavori in sottofondo, passate, piani) e <code>base.py</code> quello che serve a tutte le pagine (<code>comune()</code>, la barra, <code>pagine</code>). <code>server.py</code> tiene solo l'app, il controllo degli accessi, gli errori e l'elenco delle zone (<code>ZONE</code>, con <code>tutte_le_strade()</code> per le prove): le 228 strade sono le stesse di prima.",
+      "<code>schermate.css</code> (4.059 righe) è diviso in <code>css/schermate/</code>: <code>comune.css</code> per gli stili di più zone e un file per zona. L'ordine sta in <code>base.FOGLI_DELLE_SCHERMATE</code> e le quattro pagine di partenza lo seguono con un ciclo; 338 ritocchi sono rimasti nel file che tiene il loro ordine, e le foto di 47 pagine in 3 aspetti e 2 temi sono uguali a prima. Tolti circa 210 stili che nessuna pagina usava; la prova <code>test_fogli_delle_schermate</code> boccia lo stesso selettore scritto in due file.",
+      "Durante la chiusura per aggiornamento la porta del portatile resta aperta fino a dopo la copia dell'archivio: <code>/schermo/chiusura</code> dà i passi e le altre richieste rispondono 503 con <code>x-schermo-aggiorna</code>. Il ponte del portatile mostra <code>/__schermo/aggiorna</code>, ritrova il fisso e rientra con la stessa password, poi torna all'ultima pagina.",
+      "<code>albero.js</code> si carica anche con <code>?genere=luoghi&amp;prefisso=…</code>: stesso motore, id col prefisso e API <code>/api/luoghi/…</code>. Le classi dei pallini sono <code>corsia-*</code>: <code>.salute.salute</code> prendeva tutti.",
+      [
+        "portatile",
+        "Dopo <code>aggiorna_adesso</code> il ponte del portatile chiede <code>/schermo/chiusura</code> ogni secondo (<code>Ponte.guarda_l_aggiornamento</code>): prima la pagina smetteva di chiedere e il portatile non vedeva mai la chiusura del fisso."
+      ],
+      "Migrazione 45: <code>corpi</code> (riquadro, maschera compressa a bit, 133 punti in float16, <code>volto_id</code> e <code>vicinanza</code>) e <code>corpi_guardati</code>. <code>officina/corpi</code>: SAM 3 da <code>transformers</code> col testo «person», RTMW-x 384×288 SimCC su <code>onnxruntime</code>, abbinamento volto-corpo coi punti del viso e, se mancano, col contorno. <code>volti.motore</code> richiama <code>corpi.ricollega</code> dopo aver riscritto i volti.",
+      "I modelli del corpo sono fra gli <code>OBBLIGATORI</code>: SAM 3 da <code>facebook/sam3</code> con la chiave, RTMW dallo zip ufficiale di OpenMMLab con la copia <code>SceneWorks/dwpose-onnx</code> di riserva. Il collaudo <code>--motori --corpi</code> li scarica, li prova su due foto pubbliche di COCO e scrive le impronte SHA-256.",
+      "<code>indizi_persone</code>: i vicini nel tempo si cercano camminando sull'indice di <code>istante_utc</code> (o di <code>giorno</code>) prima e dopo lo scatto, invece di leggere tutti gli scatti.",
+      "Migrazione 46: <code>aspetti</code> (<code>corpo_id</code>, <code>modello</code>, <code>parti</code>, <code>vettore</code> float32, <code>visibili</code>). <code>corpi.Rilevatore</code> fa SAM 3 e RTMW sulla copia a 1280 e poi ritaglia ogni persona dalla foto intera: KPR con SOLIDER nelle tre versioni (PoseTrack, Market, Duke; (K+1)×512 normalizzati, con le parti visibili) e SigLIP 2 sulla sagoma su grigio a 384. <code>VERSIONE</code> diventa 2, quindi gli scatti si riguardano. Con meno di 12 GB di scheda video (o 24 GB di RAM senza scheda) i modelli vanno a turno su gruppi di 32 scatti o 96 fotogrammi."
+    ]
+  },
+  {
+    "numero": 18,
+    "versione": "2.0.0-beta.111",
+    "data": "5 ottobre",
+    "titolo": "Aggiornamenti che arrivano da soli",
+    "semplice": [
+      [
+        "scarica",
+        "Il programma controlla ogni 5 minuti se c'è una beta nuova e la scarica in sottofondo"
+      ],
+      [
+        "avviso",
+        "Quando è pronta compare l'avviso «Riavvia ora» oppure «Dopo»: se scegli dopo, si installa da sola quando chiudi"
+      ],
+      [
+        "regalo",
+        "Da ora ogni beta ha il suo blocco di Novità con quello che è cambiato"
+      ],
+      [
+        "persone",
+        "«Vedi i suoi scatti» si apre subito anche mentre l'IA lavora: le pagine non aspettano più l'IA per leggere le impostazioni"
+      ],
+      [
+        "etichetta",
+        "Etichetta: «Su cosa lavora» è allineata col resto e non compare più l'errore in basso a destra"
+      ]
+    ],
+    "tecnico": [
+      "<code>avvio._guarda_gli_aggiornamenti</code> gira finché il programma è aperto e chiama <code>cerca</code> ogni <code>OGNI_QUANTO_CONTROLLO</code> (300 s); non riscarica la versione già pronta.",
+      "«Riavvia ora» usa il file già scaricato; alla chiusura una beta pronta si installa con <code>/RIAPRI=0</code>.",
+      "La striscia in <code>programma.js</code> chiede lo stato ogni 30 secondi.",
+      "<code>Archivio.stato</code>, <code>impostazione</code> e <code>tutte_le_impostazioni</code> leggono dal lettore del filo; il lettore usa un <code>RLock</code>, così una lettura dentro un'altra non si blocca. I colori delle miniature si scrivono in sottofondo."
+    ]
+  },
+  {
+    "numero": 16,
+    "versione": "2.0.0-beta.68",
+    "data": "29 settembre",
+    "titolo": "Il portatile fa da schermo al fisso",
+    "semplice": [
+      [
+        "video",
+        "Le live si muovono quando ci passi sopra con il mouse nella Galleria. Quelle dell'iPhone si vedono anche aprendo la foto, se Windows ha l'estensione HEVC."
+      ],
+      [
+        "foto",
+        "L'icona sul desktop è Fotina che sale dal bordo. In alto a sinistra, dentro il programma, sbatte gli occhi e ogni tanto si guarda intorno o si allunga; se ci passi sopra col mouse ti guarda."
+      ],
+      [
+        "scintilla",
+        "Quando finisce un lavoro lungo, nel riquadro «In corso» Fotina salta fuori, fa un lampo col sole e mette in fila le foto finite."
+      ],
+      [
+        "occhio",
+        "Nelle pagine vuote Fotina passa saltellando e lancia una foto nella cartella. All'apertura del programma si sveglia con il sole che sorge; alla chiusura il sole tramonta e lei va a dormire."
+      ],
+      [
+        "foto",
+        "La foto aperta dalla galleria cresce dalla sua miniatura. Quando cambi filtro le foto che restano scivolano nei posti nuovi."
+      ],
+      [
+        "migliora",
+        "Dare un'etichetta, i numeri che cambiano, il cambio di tema, i tasti che lavorano, prima e dopo nel Miglioramento, i volti nella foto aperta, i rami della mappa, gli avvisi e i doppioni hanno ognuno il suo movimento."
+      ],
+      [
+        "computer",
+        "In Impostazioni › Aspetto, «Come si muove», scegli la versione di ogni movimento. Cambia subito, senza prova. Con «Movimento ridotto» restano fermi."
+      ],
+      [
+        "migliora",
+        "In Miglioramento c'è il controllo qualità di tutto l'archivio: per ogni provenienza (Snapchat, WhatsApp, iPhone…) quante foto e video sono bassi, medi o alti. Clicchi un numero e li metti in coda. In Aspetto: tabella o barre."
+      ],
+      [
+        "scudo",
+        "Ogni foto migliorata passa un controllo di fedeltà: se un volto non sembra più la stessa persona o compaiono dettagli che non c'erano, in revisione vedi un avviso rosso. Le impronte e il riconoscimento dei volti restano quelli dell'originale."
+      ],
+      [
+        "fulmine",
+        "L'importazione legge in anticipo i file che vengono dopo, mentre registra quello di adesso: con tante foto finisce prima."
+      ],
+      [
+        "computer",
+        "Sul portatile scegli «Usalo come schermo del fisso»: il fisso tiene le foto e lavora, il portatile mostra tutto il programma e comanda."
+      ],
+      [
+        "chiave",
+        "La prima volta sul fisso apri la porta in Impostazioni, «Il portatile»: compare un codice di sei cifre a tutta finestra. Le volte dopo il portatile si ricollega da solo e chiede solo la password del forziere, se c'è."
+      ],
+      [
+        "scudo",
+        "Tutto quello che passa è cifrato, le foto arrivano a piena risoluzione e sul portatile non resta niente."
+      ],
+      [
+        "occhio",
+        "Mentre il portatile è collegato il fisso si copre: mostra solo cosa sta facendo e il tasto «Chiudi il collegamento»."
+      ],
+      [
+        "collega",
+        "Il portatile trova il fisso anche quando prima non ci riusciva, e il fisso mostra l'indirizzo da scrivere se proprio non lo trova."
+      ],
+      [
+        "foto",
+        "Aprendo una foto vedi solo la foto: informazioni e nota si aprono con i pulsanti sotto."
+      ],
+      [
+        "video",
+        "I video si guardano davvero, con play e barra; le foto live si muovono nello stesso riquadro quando ci passi sopra."
+      ],
+      [
+        "tavolozza",
+        "Le scelte dei movimenti stanno insieme alle altre in Aspetto, con la loro miniatura e la prova."
+      ],
+      [
+        "telefono",
+        "Dispositivi ha tre carte: portatile, telefono e altro computer. Tocchi una carta e sotto si apre quello che serve."
+      ],
+      [
+        "tavolozza",
+        "Aspetto è diviso in linguette: Colori, Le pagine, I movimenti e La prova."
+      ],
+      [
+        "foto",
+        "«Tutte le foto» adesso si chiama Galleria."
+      ],
+      [
+        "migliora",
+        "Nel controllo qualità il tasto per Snapchat con qualità bassa si chiama «Controlla gli scatti»."
+      ],
+      [
+        "migliora",
+        "Il controllo qualità conta le stesse foto e video della Galleria. Quelli di cui non sapeva la misura (per esempio i video .avi, .mkv e .webm) li misura mentre guardi la pagina; quelli messi fuori archivio non li conta più."
+      ],
+      [
+        "albero",
+        "Spostare un nodo nella mappa funziona di nuovo: la conferma e il nome che segue il mouse restavano nascosti sotto la mappa."
+      ],
+      [
+        "albero",
+        "Creare, rinominare e unire nodi, spegnere il forziere e la domanda prima di chiudere mentre lavora: adesso è tutto in una finestrina del programma invece che in quella grigia di Windows. Spegnere il forziere si conferma tenendo premuto."
+      ],
+      [
+        "migliora",
+        "Arrivano altri sessanta movimenti, quelli scelti nel secondo giro: barra a sinistra, galleria, foto aperta, Etichetta, Da controllare, Doppioni, Persone, Luoghi, albero, Miglioramento, Aggiungi foto, Stato, Impostazioni e portatile."
+      ],
+      [
+        "foto",
+        "Nella barra a sinistra lo sfondo della voce scivola sulla voce nuova, con la barretta arancio che si allunga e si accorcia, e la voce nuova fa un piccolo battito. La Galleria adesso si accende anche quando ci sei dentro."
+      ],
+      [
+        "foto",
+        "La foto aperta si ingrandisce con il doppio clic o la rotella proprio dove punti, e con Esc torna com'era."
+      ],
+      [
+        "albero",
+        "In Etichetta premi A, crei il nodo nell'albero, premi di nuovo A: l'albero si chiude, la foto resta quella e il nodo nuovo è in cima alle proposte, contornato di arancio."
+      ],
+      [
+        "scudo",
+        "Scegliendo la password del forziere vedi quanto è forte, in otto passi dal rosso al verde. Le cose che non si disfano (spegnere il forziere, rimettere l'albero com'era, dimenticare il portatile) si confermano tenendo premuto."
+      ],
+      [
+        "tavolozza",
+        "In Aspetto, «I movimenti», ci sono sei scelte in più: la pillola dei filtri, etichettare molte foto, sfogliare le foto, prendere un nodo, tenere o scartare in revisione e il codice per il portatile."
+      ],
+      [
+        "tavolozza",
+        "Nella sfida alla cieca, quando voti, dalla foto scelta parte un puntino arancio che vola sul conto. In Aspetto puoi scegliere invece la cornice arancio con la spunta e la coppia che scivola via."
+      ],
+      [
+        "tavolozza",
+        "Tornare indietro ti riporta dove eri, con gli stessi filtri e la foto da cui torni evidenziata. Fra una pagina e l'altra la barra resta ferma e il resto sfuma, e la Galleria scorre più leggera."
+      ],
+      [
+        "foto",
+        "Dopo la password si apre subito la finestra grande con Fotina che si sveglia. La copia di sicurezza si fa mentre lavori, quando il programma è fermo da un paio di minuti, così la chiusura è molto più veloce."
+      ],
+      [
+        "foto",
+        "Cercare è più semplice: scrivi nella casella in alto a sinistra, premi Invio e si apre la Galleria con le foto trovate. La X sulla pillola torna a tutte le foto. Dal portatile, Impostazioni › Il programma mostra quello del fisso."
+      ],
+      [
+        "fulmine",
+        "Passare da una schermata all'altra non si blocca più mentre l'IA lavora"
+      ],
+      [
+        "persone",
+        "In Persone, accanto a «Dai i nomi», c'è «Unisci i gruppi»: spunti i gruppi sulla pagina e clicchi la persona in cui vanno"
+      ],
+      [
+        "persone",
+        "«Vedi i suoi scatti» di una persona si apre subito anche mentre l'IA lavora"
+      ]
+    ],
+    "tecnico": [
+      "<code>statici/js/movimenti.js</code> raccoglie i movimenti; le molle sono curve <code>linear()</code> calcolate all'avvio. Le scelte sono undici voci <code>mv_*</code> in <code>aspetto.SCELTE</code>, scritte sulla radice come <code>data-mv-*</code> solo quando non sono quelle di partenza.",
+      "<code>statici/js/fotina_scene.js</code> disegna le tre scene in SVG con tracce a fotogrammi chiave; la schermata d'attesa la riceve dentro la pagina.",
+      "La foto che si apre usa le View Transition tra documenti (<code>@view-transition</code>, <code>pageswap</code>, <code>pagereveal</code>): le altre navigazioni saltano la transizione.",
+      "Lo scatto riceve i riquadri dei volti trovati (fotogramma 0 del file principale). L'icona <code>officina.ico</code> è rifatta da <code>strumenti/fai_icona.py</code>.",
+      "<code>miglioria/qualita.py</code>: il voto usa il lato corto (sotto 1080 bassa, fino a 2159 media, poi alta; per le approvate la misura dopo); la provenienza viene da nome e cartella. Strade <code>/api/miglioramento/qualita</code> e <code>/api/miglioramento/qualita/metti</code>, voce <code>qualita</code> (A, C) in <code>aspetto.VOCI</code>.",
+      "<code>miglioria/fedelta.py</code>: differenza a 96 px sfocata (media oltre 10 o più del 3% dei punti oltre 40) e volti confrontati per impronta (sotto 0,75 si sconsiglia). Esito nella colonna <code>migliorie.fedelta</code> (schema 31).",
+      "Importazione: quattro aiutanti calcolano impronta, metadati e impronta dell'occhio dei file successivi; la scrittura nell'archivio resta in fila.",
+      "Nuova strada <code>/live/{scatto}</code>. Lo scatto prova <code>canPlayType('video/mp4; codecs=\"hvc1.1.6.L93.B0\"')</code> prima di mostrare il messaggio. I .mov escono come <code>video/mp4</code>.",
+      "<code>officina/schermo</code>: sul fisso un secondo uvicorn in TLS 1.2+ sulla porta 47260, con un certificato ECDSA P-256 fatto al primo uso; il portatile lo trova con una domanda UDP sulla 47261.",
+      "Abbinamento con SPAKE2 (pacchetto <code>spake2</code>): il codice non passa mai in rete e non si può indovinare spiando. Le due prove HMAC legano la chiave all'impronta SHA-256 del certificato visto, così chi si mette in mezzo viene scoperto. Il gettone del portatile va nel Gestore credenziali di Windows; il fisso ne tiene solo l'impronta.",
+      "Il portatile apre un ponte su 127.0.0.1 che fissa il certificato del fisso e aggiunge la sessione a ogni richiesta; le risposte arrivano con <code>Cache-Control: no-store</code>. Le foto dal portatile escono intere, in JPEG 95.",
+      "Cinque codici sbagliati cambiano il codice; il codice dura cinque minuti e vale una volta sola. Dal portatile non si vede il codice, non si comanda la porta e non si apre la finestra delle cartelle del fisso.",
+      "Ricerca del fisso: domanda UDP anche all'indirizzo di broadcast di ogni rete /24 del computer; se non risponde nessuno, prova la porta 47260 su ogni indirizzo della rete. Aprendo la porta, una regola del firewall di Windows per il programma (una sola richiesta di permesso).",
+      "Foto live: l'abbinamento confronta ora UTC con ora UTC e ora locale con ora locale, e il filmato arrivato prima della foto si trova anche per nome. La migrazione 32 riattacca quelle rimaste staccate.",
+      "Copertine dei video: se il primo fotogramma è buio si prende il primo chiaro fra 0,7, 1,5 e 3 secondi; le vecchie si rifanno.",
+      "Anteprime: la galleria chiede sempre la miniatura (si fa al momento se manca) e scrive «anteprima non pronta» se non arriva.",
+      "Il portatile si collega da Dispositivi; in Impostazioni resta solo il rimando.",
+      "La linguetta di Aspetto scelta si ricorda su questo computer.",
+      "<code>statici/js/finestrina.js</code> (<code>chiediUnNome</code>, <code>chiediSeSi</code>) sostituisce <code>window.prompt</code> e <code>window.confirm</code>: un <code>&lt;dialog&gt;</code> modale nello strato in cima, sopra la mappa. <code>.conferma</code> e <code>.in-volo</code> salgono a z-index 86.",
+      "<code>qualita.tutte</code> esclude gli scatti fuori archivio; <code>misura_chi_manca</code> misura per due secondi a richiesta i file principali senza larghezza o altezza (Pillow, QuickTime, poi PyAV). Anche l'importazione dei video ripiega su PyAV.",
+      "<code>statici/js/movimenti_pagine.js</code> raccoglie i movimenti del secondo giro; le molle di <code>movimenti.js</code> diventano anche proprietà CSS (<code>--mv-viva</code>, <code>--mv-morbida</code>, <code>--mv-elastica</code>). Sei voci nuove in <code>aspetto.SCELTE</code>: <code>mv_pillola</code>, <code>mv_molte</code>, <code>mv_sfoglia</code>, <code>mv_prendi</code>, <code>mv_rivedi</code> (parte da C), <code>mv_codice</code>.",
+      "Schema 33: colonna <code>file_media.colore</code>, il colore medio della miniatura. Si calcola quando nasce la miniatura e, per quelle vecchie, per 150 ms a ogni pagina della galleria.",
+      "Sfogliare le foto usa le View Transition fra documenti (<code>foto-sfoglia</code>); chiudere l'albero dopo una modifica chiede alla pagina (<code>albero-cambiato-chiuso</code>) prima di ricaricarla, ed Etichetta si ridisegna da sola.",
+      "Chiudendo con dei lavori in corso, <code>avvio._chiede_la_pagina</code> chiama <code>window.chiediDiChiudere</code>; se la pagina risponde, la finestrina chiama <code>chiudi_comunque</code> sul ponte. Se la pagina non c'è, resta la domanda di Windows."
+    ]
+  },
+  {
+    "numero": 15,
+    "versione": "2.0.0-beta.44",
+    "data": "29 settembre",
+    "titolo": "Stato, Persone e il Periodo nella grafica nuova",
+    "semplice": [
+      [
+        "cubo",
+        "In «Modelli e macchina» la macchina sta in cima e ogni modello dice a cosa serve, senza numeri di regole."
+      ],
+      [
+        "disco",
+        "«L'archivio» mostra foto, video e impronte in grande, e una barra con lo spazio usato: si conta in sottofondo, la pagina non aspetta più."
+      ],
+      [
+        "orologio",
+        "«Misura adesso» lavora in sottofondo: puoi cambiare pagina. In Aspetto scegli se seguirla nella sua carta o tra i lavori in corso."
+      ],
+      [
+        "persone",
+        "In Persone c'è la casella per cercare un nome, e quando la pagina è vuota un tasto solo dice cosa fare."
+      ],
+      [
+        "calendario",
+        "Il Periodo di Tutte le foto si sceglie ad anni e mesi: un clic su un mese, un altro clic per arrivare a un secondo mese."
+      ],
+      [
+        "riprova",
+        "I video girati dal telefono si ripassano: le impronte e i volti, calcolati quando erano di lato, si rifanno con il video dritto."
+      ]
+    ],
+    "tecnico": [
+      "<code>/misura/esegui</code> fa partire <code>lavoro_misura</code> e torna subito; lo stato si legge da <code>/api/misura</code>. Nuova voce di Aspetto <code>misura</code> (A carta, B lavori).",
+      "<code>archivio/spazio.py</code>: il peso di miniature, copie dei video e database si conta in un filo e si ricorda per un'ora; <code>/api/spazio</code>, <code>/archivio/ricalcola-spazio</code>. Impostazioni e Stato non ripassano più la cartella a ogni apertura.",
+      "I mesi del Periodo arrivano da <code>/api/periodo</code> solo quando si apre la tendina. Un clic dentro la tendina non la chiude più anche se il tasto cliccato viene ridisegnato.",
+      "Il filtro <code>senza_regole</code> toglie «(regola N)» da descrizioni e licenze dei modelli; i motivi delle copie del database hanno parole al posto delle chiavi.",
+      "Migrazione 30: rimette il segno <code>video_da_raddrizzare</code>; <code>raddrizza.uno</code> ora cancella anche <code>impronte</code> e <code>volti</code> dello scatto, che si ricalcolano con «Calcola le impronte» e «Cerca nelle nuove»."
+    ]
+  },
+  {
+    "numero": 14,
+    "versione": "2.0.0-beta.42",
+    "data": "29 settembre",
+    "titolo": "I video si aprono, e quelli girati stanno dritti",
+    "semplice": [
+      [
+        "video",
+        "Aprire un video non blocca più il programma. Prima, con i video 4K dell'iPhone, la finestra poteva restare bianca e poi «non risponde»: il decodificatore si incastrava con il resto del programma, che si fermava tutto."
+      ],
+      [
+        "foto",
+        "I video girati in verticale col telefono adesso stanno in piedi: nella galleria, nella striscia dei fotogrammi, nei volti e nella copia che si vede. Quelli già nell'archivio si raddrizzano da soli, in sottofondo, alla prima apertura."
+      ],
+      [
+        "fulmine",
+        "Mentre prepara le miniature, i fotogrammi o il laboratorio di misura, il resto del programma non resta più in coda: le altre pagine rispondono subito."
+      ],
+      [
+        "video",
+        "La copia dei video che il browser non sa aprire non perde più gli ultimi fotogrammi."
+      ]
+    ],
+    "tecnico": [
+      "Causa del blocco: <code>fotogrammi._av()</code> chiamava <code>av.logging.set_level(FATAL)</code>, che installa il richiamo dei messaggi di PyAV. Ogni messaggio dei fili del decodificatore (FRAME threading, HEVC 4K) chiedeva il GIL, mentre il filo principale lo teneva aspettando proprio quei fili: stallo di tutto il processo, finestra compresa. Ora <code>set_level(None)</code>, e tutti i moduli video passano da <code>fotogrammi.decodificatore()</code>. Prova: <code>test_video_girati.py</code>, con x264 e x265.",
+      "Rotazione: <code>quicktime</code> legge la matrice del <code>tkhd</code> (<code>DatiVideo.rotazione</code>, gradi in senso antiorario come PyAV) e <code>metadati.da_video</code> scambia le misure; <code>fotogrammi</code> raddrizza con <code>VideoFrame.rotation</code> o con la matrice per i video JPEG; <code>compatibile</code> gira i fotogrammi prima di codificare e ha un nome di copia nuovo. Migrazione 29: segna fino a quale file i video vanno riletti; <code>raddrizza.tutti_i_video</code> corregge misure di file e scatto e butta miniatura e copia vecchie.",
+      "Lucchetto dell'archivio: <code>miniature.per_file</code> non lo tiene più mentre fa la miniatura (prima lo teneva anche durante la decodifica di un video, e con lui ogni pagina aspettava); lo stesso per il banco della misura, che lo prende solo per leggere le tabelle, e per <code>quicktime.codec_video</code> nella pagina dello scatto.",
+      "<code>/miniatura</code>, <code>/immagine</code>, <code>/fotogramma</code> e <code>/volto</code> sono asincrone: le letture brevi passano da <code>asyncio.to_thread</code>, il lavoro pesante da due cantieri (<code>consegna.cantiere</code>, 3 fili; <code>cantiere_dei_filmati</code>, 2 fili), e una richiesta abbandonata dal browser non viene più fatta. Fotogrammi e ritagli dei volti restano in memoria (96 MB al massimo), mai su disco (regola 327).",
+      "<code>compatibile._ricodifica</code> svuota il decodificatore alla fine (prima saltava il pacchetto vuoto e perdeva i fotogrammi in coda). Il messaggio sul decodificatore mancante non dice più «pip install» dentro il programma."
+    ]
+  },
+  {
+    "numero": 13,
+    "versione": "2.0.0-beta.39",
+    "data": "29 settembre",
+    "titolo": "La cartella e le impronte nella grafica nuova",
+    "semplice": [
+      [
+        "cartella",
+        "Aggiungere una cartella è più semplice: un tasto grande apre la finestra di Windows, e sotto resta la casella per scrivere il percorso. Se il percorso è sbagliato te lo dice lì, senza cambiare pagina."
+      ],
+      [
+        "impronta",
+        "Il calcolo delle impronte ha un aspetto nuovo, in due versioni da scegliere in Impostazioni › Aspetto: una riga per ogni modello, oppure la fotina che racconta cosa sta facendo. Un tasto solo, in alto a destra, fa Calcola, Ferma e Riprova."
+      ],
+      [
+        "impostazioni",
+        "Con quali modelli calcolare le impronte ora si sceglie in Impostazioni › Elaborazione, e vale anche nella guida."
+      ],
+      [
+        "lettere",
+        "I messaggi del programma hanno gli accenti veri: «è», «più», «già» al posto di «e'», «piu'», «gia'»."
+      ]
+    ],
+    "tecnico": [
+      "<code>_cartella_nuova.html</code>: l'elenco delle cartelle sta dentro il riquadro; l'invio passa da <code>fetch</code> con <code>Accept: application/json</code>, così l'errore di <code>CartellaNonTrovata</code> si mostra nel riquadro. Il percorso sbagliato si ripete com'era scritto, non risolto, e un file scelto al posto di una cartella ha il suo messaggio.",
+      "<code>_impronte.html</code> sostituisce il primo riquadro della misura e quello della guida; <code>impronte.js</code> segue <code>/api/impronte</code>, che ora dà anche <code>nomi</code>, <code>finiti</code>, <code>adesso_resta</code>, <code>adesso_impronte</code> e <code>adesso_quanto_manca</code> del modello che lavora. Voce nuova <code>impronte</code> (A, C) in <code>aspetto.VOCI</code>.",
+      "Impostazione nuova <code>impronte_con_quali</code> («tutti» o un modello). Se il modello scelto non è scaricato, <code>/misura/impronte</code> lo dice invece di non fare niente in silenzio.",
+      "Accenti: circa 870 righe di Python e JavaScript corrette solo dentro le frasi, lasciando stare le stringhe di byte, i pezzi di SQL e «un po'»."
+    ]
+  },
+  {
+    "numero": 12,
+    "versione": "2.0.0-beta.38",
+    "data": "29 settembre",
+    "titolo": "Gli aggiornamenti riprendono da dove erano",
+    "semplice": [
+      [
+        "freccia",
+        "Se chiudi il programma mentre scarica un aggiornamento, alla riapertura riparte dal punto in cui era arrivato invece che da capo."
+      ]
+    ],
+    "tecnico": [
+      "<code>aggiornamenti.scarica</code>: il file <code>.parziale</code> non si cancella più se lo scaricamento si interrompe; al giro dopo si rilegge per l'impronta e si chiede il resto con <code>Range: bytes=N-</code>. Se il server risponde 200 invece di 206 si ricomincia da zero; se l'impronta finale non torna si butta e si riscarica una volta intero.",
+      "<code>pulisci_gli_scaricati</code> tiene il <code>.parziale</code>; quelli di versioni vecchie si tolgono quando ne parte uno nuovo."
+    ]
+  },
+  {
+    "numero": 11,
+    "versione": "2.0.0-beta.37",
+    "data": "29 settembre",
+    "titolo": "Rivedere, sfidare e misurare, nell'aspetto nuovo",
+    "semplice": [
+      [
+        "migliora",
+        "<b>Rivedere</b> un miglioramento ha il titolo in alto, «Da rivedere, 2 di 5», e i tasti Approva e Rifiuta con il loro segno. Quando non c'è niente, lo dice la fotina; se ci sono foto da votare nella sfida, c'è il tasto per andarci."
+      ],
+      [
+        "sfida",
+        "La <b>sfida alla cieca</b> ha lo stesso aspetto, e il «?» accanto al titolo spiega come si vota. I risultati stanno in due carte: i conti, poi la scelta."
+      ],
+      [
+        "mucchi",
+        "Il <b>banco della misura</b> tiene tutto in una carta accanto alla foto: dove sei, i mucchi, i tasti. Il perché degli scatti sparsi sta nel «?»."
+      ],
+      [
+        "volto",
+        "Le <b>facce raddrizzate</b> si guardano a coppie, prima e dopo, in carte affiancate."
+      ],
+      [
+        "telefono",
+        "Le vecchie pagine <b>Telefono</b> e <b>Due computer</b> portano a <b>Dispositivi</b>, dove c'era già tutto."
+      ]
+    ],
+    "tecnico": [
+      "<code>GET /telefono</code> e <code>/sincronia</code> rimandano a <code>/fuori</code> e <code>/fuori?dove=computer</code>; i <code>POST</code> senza provenienza tornano lì. Nella B, «Cambia cosa ci va» apre <code>dialog#scelte</code>. Regola 494.",
+      "Nella prova dal vivo <code>/senza-data/gruppo</code> e <code>/senza-data/lascia</code> sono ammessi: scrivono solo nel database della copia.",
+      "<code>miglioramento-rivedi.html</code>, <code>miglioramento-sfida.html</code>, <code>miglioramento-sfida-fine.html</code>, <code>banco.html</code> e <code>raddrizzamento.html</code> rifatte coi pezzi nuovi (<code>rv-</code>, <code>sf-</code>, <code>bn-</code>, <code>rd-</code>); gli identificativi che leggono <code>rivedi.js</code>, <code>sfida.js</code> e lo script del banco restano gli stessi.",
+      "La barra delle copie da guardare è una <code>.barretta</code> con <code>[hidden]</code> rispettato; accenti veri al posto degli apostrofi in tutte e cinque.",
+      "Accenti veri al posto degli apostrofi in tutte le pagine rimaste (<code>impostazioni.html</code>, <code>_stato_misura.html</code>, <code>_telefono_scelte.html</code>, <code>base.html</code>, <code>galleria.html</code> e altre)."
+    ]
+  },
+  {
+    "numero": 10,
+    "versione": "2.0.0-beta.35",
+    "data": "28 settembre",
+    "titolo": "Le ultime pagine nell'aspetto nuovo",
+    "semplice": [
+      [
+        "persona",
+        "La pagina di una <b>persona</b> mette prima chi è, con le sue facce grandi. Per insegnargli la faccia da una cartella c'è una riga sola, che apre una finestrella."
+      ],
+      [
+        "persone",
+        "<b>Chi è?</b> mostra un gruppo alla volta e quanti ne restano. Se il nome c'è già, te lo chiede la fotina."
+      ],
+      [
+        "calendario",
+        "Gli <b>scatti senza data</b> si raccolgono per giorno proposto: quando i vicini sono d'accordo, un tasto mette la data a tutto il gruppo."
+      ],
+      [
+        "guida",
+        "La <b>guida del primo avvio</b> non ha più il menu intorno: sei passi in alto, la fotina che spiega, «Avanti» in fondo."
+      ]
+    ],
+    "tecnico": [
+      "<code>persona.html</code>: copertina, conto degli scatti (<code>count(DISTINCT scatto_id)</code> dei volti) e un <code>dialog.finestra#insegna</code>; <code>/persone/{id}/insegna</code> e <code>/togli</code> tornano a <code>#insegna</code>.",
+      "<code>mazzo.html</code> e <code>cassetto.html</code> rifatte; <code>mazzo.js</code> conta i volti spuntati e mette la domanda sull'omonimo in una nuvola della fotina, coi nomi passati da <code>pulito</code>.",
+      "<code>/senza-data</code>: <code>_senza_data_a_gruppi</code> divide in sicuri, un vicino, discordi e senza proposta; nuovi <code>POST /senza-data/gruppo</code> (giorno + scatti) e <code>/senza-data/lascia</code>.",
+      "Guida: <code>_guida.html</code> con <code>testa</code>, <code>dice</code> e <code>piede</code>; le pagine mettono <code>{% set guida = true %}</code> e <code>base.html</code> non disegna la navigazione. Regola 493."
+    ]
+  },
+  {
+    "numero": 9,
+    "versione": "2.0.0-beta.34",
+    "data": "28 settembre",
+    "titolo": "«Da controllare» si legge a colpo d'occhio",
+    "semplice": [
+      [
+        "controlla",
+        "<b>Da controllare</b> è diventata un elenco: una riga per ogni cosa, col numero, una frase e un tasto solo. Quelle già a posto scendono in fondo, in grigio."
+      ],
+      [
+        "cartella",
+        "I file di ogni riga si aprono sotto con «Mostra i file», e lì c'è ancora Riprova o Guardalo per uno solo."
+      ],
+      [
+        "freccia",
+        "Dalla casa del <b>Lavoro</b> ogni riga ti porta dritto alla sua, già aperta."
+      ],
+      [
+        "scudo",
+        "Quando il programma si chiude da solo perché non lo usavi, la fotina dorme sulla password come all'avvio, col tema che hai scelto."
+      ]
+    ],
+    "tecnico": [
+      "<code>elenchi.html</code> riscritta: sette <code>section.dc-riga</code> con un <code>id</code> ciascuna; le righe a zero hanno <code>order: 1</code> e scendono sotto «Già a posto».",
+      "<code>controllare.js</code>: i tasti con <code>data-apre</code> aprono il loro <code>details</code>; arrivando con <code>#riga</code> si apre quello della riga.",
+      "<code>_da_controllare</code> manda a <code>/elenchi#non-importati</code>, <code>#messi-da-parte</code>, <code>#stesso-file</code>, <code>#coppie</code>, <code>#non-trovati</code>. Regola 492.",
+      "<code>blocco.html</code> riceve <code>attributi_aspetto</code> (prima restava sempre nel tema del sistema) e usa la fotina <code>grande dorme</code> della finestrina d'avvio; <code>errore.html</code> è una carta con la fotina."
+    ]
+  },
+  {
+    "numero": 8,
+    "versione": "2.0.0-beta.33",
+    "data": "28 settembre",
+    "titolo": "Foto e video si aprono di nuovo, e subito",
+    "semplice": [
+      [
+        "video",
+        "Aprire una foto o un video poteva bloccare il programma fino a farlo chiudere, se da qualche parte c'era un video senza miniatura. Adesso la miniatura di un video si fa dal primo fotogramma, in un attimo e con poca memoria."
+      ],
+      [
+        "foto",
+        "La <b>foto aperta</b> arriva più in fretta: grande quanto lo schermo, non di più, e preparata più alla svelta."
+      ],
+      [
+        "fulmine",
+        "Nell'<b>etichettatura</b> la striscia dei fotogrammi di un video si riempie subito: ogni fotogramma si va a prendere al suo istante, invece di rileggere il video dall'inizio."
+      ]
+    ],
+    "tecnico": [
+      "<code>fotogrammi.copertina</code> legge solo il primo fotogramma (prima passava da <code>prendi</code>, che raccoglieva fino a 900 candidati a grandezza piena: oltre 7 GB per 15 secondi di 4K).",
+      "<code>prendi</code> tiene i candidati a 256 pixel per <code>scegli</code>, poi rilegge i fotogrammi scelti saltando al loro <code>pts</code>; se il salto non trova il fotogramma esatto, li rilegge in fila. Le impronte dei video lavorano a <code>lato × 4</code>, come le foto; i volti a 1280.",
+      "<code>fotogrammi.uno</code> con l'istante salta e poi scorre fino al fotogramma esatto, e riduce già nel decodificatore (<code>to_image</code> con <code>AREA</code>). <code>/volto</code> e il motore dei volti passano l'istante letto dalle impronte.",
+      "<code>/immagine</code> e <code>/fotogramma</code>: al massimo 2560 pixel, AVIF con <code>speed=8</code> (circa sei volte più veloce, stessa qualità). <code>consegna.a_turno</code> lascia lavorare tre richieste pesanti alla volta, miniature e volti compresi.",
+      "<code>/originale</code> risponde con <code>FileResponse</code>: niente più <code>read_bytes</code> di tutto il video, e le richieste a pezzi (<code>Range</code>) ricevono 206."
+    ]
+  },
+  {
+    "numero": 7,
+    "versione": "2.0.0-beta.32",
+    "data": "28 settembre",
+    "titolo": "Le altre pagine, ognuna nei suoi modi",
+    "semplice": [
+      [
+        "foto",
+        "La <b>foto aperta</b> ha la scheda accanto, con la nota che si salva da sola, oppure la foto in alto e sotto tre carte. Si sceglie in Impostazioni › Aspetto."
+      ],
+      [
+        "persone",
+        "Le <b>persone</b> ti invitano a dare i nomi ai gruppi che non ce l'hanno, oppure tengono il mazzo sempre aperto a sinistra. I <b>luoghi</b> sono carte con tre foto, oppure punti messi come stanno fra loro, senza nessuna mappa."
+      ],
+      [
+        "telefono",
+        "Telefono e altro computer sono una pagina sola, <b>Dispositivi</b>, in tre modi: scegli e guarda il peso, due carte affiancate, o una lista di passi."
+      ],
+      [
+        "doppioni",
+        "I <b>doppioni</b> sono un elenco compatto: «Va bene», «Apri», «Sono diverse». Il gruppo aperto mostra tutte le copie, oppure due alla volta da decidere con la tastiera."
+      ],
+      [
+        "migliora",
+        "Il <b>miglioramento</b> mette in cima le foto da rivedere, oppure mostra il viaggio di ogni foto in quattro colonne. <b>Aggiungi foto</b> è fatta di tre passi in fila."
+      ]
+    ],
+    "tecnico": [
+      "Aspetto ha sei voci nuove: <code>foto</code> (A, C), <code>persone</code> (A, C), <code>luoghi</code> (A, C), <code>collegamenti</code> (A, B, C), <code>doppioni</code> (A, B), <code>miglioramento</code> (A, B). Ognuna si prova dal vivo come le altre; la foto aperta si prova da <code>/una-foto</code>, che apre l'ultima guardata.",
+      "Telefono e altro computer stanno in <code>/fuori</code>. Le scelte del telefono sono in <code>_telefono_scelte.html</code> e <code>telefono_scelte.js</code>, usati anche dalla vecchia <code>/telefono</code>; i tasti premuti da <code>/fuori</code> tornano lì guardando da dove arriva la richiesta.",
+      "Doppioni: <code>decisioni.gia_decisi</code> legge gli ultimi gruppi decisi per la linguetta «Decisi». La nota della foto risponde in JSON quando la chiede la pagina, e si salva 800 ms dopo l'ultima lettera.",
+      "Luoghi C: i punti si mettono sul piano con le coordinate in proiezione equirettangolare (longitudine per il coseno della latitudine media), nello stesso rapporto 16:10 del riquadro; la grandezza va con la radice del numero di scatti.",
+      "Le finestrelle (<code>dialog.finestra</code>) si aprono e chiudono da <code>finestre.js</code>, caricato in ogni pagina."
+    ]
+  },
+  {
+    "numero": 6,
+    "versione": "2.0.0-beta.31",
+    "data": "28 settembre",
+    "titolo": "La mappa dell'albero, e i filtri a pillole",
+    "semplice": [
+      [
+        "albero",
+        "La <b>mappa dell'albero</b> è più calma: ogni nodo ha il suo bollino di salute, il ramo che stai guardando si accende in arancio, e a destra c'è la scheda del nodo con il tasto per etichettarlo."
+      ],
+      [
+        "filtri",
+        "Nella galleria i filtri non sono più una colonna: sono una fila di pillole sopra le foto, e ognuna apre una tendina con la sua ricerca."
+      ],
+      [
+        "scintilla",
+        "Le foto arrivano una dopo l'altra, come un'onda, e l'etichetta confermata fa un piccolo «tac»."
+      ]
+    ],
+    "tecnico": [
+      "Mappa: nodi tutti della stessa altezza, colonne più strette e righe più larghe; il cammino dalla radice al nodo scelto è disegnato con la classe <code>cammino</code>. La salute arriva da <code>_forma_dell_albero</code>, nel campo <code>corsia</code> preso dalla pagella.",
+      "La mappa copre tutta la finestra: prima si apriva sotto l'altezza della vecchia barra in alto, e la parte «Persone», che doveva restare nascosta, si prendeva metà dello spazio.",
+      "Filtri: <code>_galleria_testa.html</code> al posto della colonna; <code>filtri.js</code> cerca dentro la tendina aperta e chiude le altre. L'impostazione «Dove stanno i filtri» non serve più ed è tolta dalla pagina.",
+      "Onda: le prime 24 schede entrano a 16 ms l'una dall'altra; col movimento ridotto non si muove niente."
+    ]
+  },
+  {
+    "numero": 5,
+    "versione": "2.0.0-beta.30",
+    "data": "28 settembre",
+    "titolo": "Stato, Lavoro e Impostazioni, ognuna in tre modi",
+    "semplice": [
+      [
+        "stato",
+        "La pagina <b>Stato</b> è nuova: in cima tre carte (l'albero, i modelli, l'archivio), sotto le linguette con tutto il resto. Quello che chiede te sta in «Da sistemare»."
+      ],
+      [
+        "etichetta",
+        "Il <b>Lavoro</b> ha una casa con le sue quattro stanze, e ognuna dice col numero arancio se c'è qualcosa per te. Etichetta ha la foto grande e a destra le parti sempre nello stesso ordine."
+      ],
+      [
+        "impostazioni",
+        "Le <b>Impostazioni</b> mostrano un gruppo alla volta, scelto a sinistra."
+      ],
+      [
+        "tavolozza",
+        "Per tutte e tre ci sono altre due versioni da provare in <b>Impostazioni › Aspetto</b>: adesso ogni miniatura si può provare."
+      ],
+      [
+        "spunta",
+        "Le spiegazioni col <b>?</b> in alcune pagine si aprivano da sole: adesso restano chiuse finché non le tocchi."
+      ],
+      [
+        "foto",
+        "L'archivio finto per le prove ha anche le impronte: lì funzionano proposte e pagella, come sul tuo."
+      ]
+    ],
+    "tecnico": [
+      "Lavoro: la casa (<code>/lavoro</code>) c'è solo con la A; con la B e la C si va dritti alla coda, e con la C le quattro stanze diventano linguette in cima. Etichetta tiene gli stessi pezzi con gli stessi nomi nelle tre versioni, così <code>officina.js</code> non cambia: la B apre persone, perché, nota e albero da quattro icone, la C tiene l'albero sempre aperto a sinistra.",
+      "Impostazioni: la A mostra un gruppo alla volta, la B filtra le righe mentre scrivi e apre le spiegazioni con la «i», la C mette in cima tema, accento, grandezza delle foto, scheda video, password e copia, e chiude gli altri gruppi con una riga che dice cosa c'è dentro.",
+      "Stato si divide in pezzi riusabili (<code>_st_compiti</code>, <code>_st_corsie</code>, <code>_st_nodi</code>, <code>_st_modelli</code>, <code>_st_copie</code>…) che le tre versioni dispongono in modo diverso: linguette per la A, tendine per la B, riquadri con <code>&lt;dialog&gt;</code> per la C. I dati sono gli stessi.",
+      "«Da sistemare» nasce da <code>stato_a_parole.da_sistemare</code>: modelli non in casa, scaricamento fermo, file non trovati, nessuna copia, la macchina che non legge gli HEIC o non scrive gli AVIF, la lettura delle scritte ferma.",
+      "La versione B scrive le frasi con <code>stato_a_parole</code>: archivio vuoto, tutto bene, una o più cose da sistemare, con i numeri in lettere fino a dodici.",
+      "Le spiegazioni col «?» stavano dentro un paragrafo e contenevano altri paragrafi: il browser li tirava fuori e restavano sempre aperti. Ora il pannello usa righe <code>span</code>, e vale per tutto il programma.",
+      "Corretti anche il tasto «Ferma» delle scritte, che non aveva stile, e il titolo «Come sta l'albero», aperto come h2 e chiuso come h3.",
+      "L'archivio finto della prova calcola le impronte col descrittore <code>disegnato</code>, che non ha bisogno di modelli: la prima costruzione passa da mezzo minuto a circa un minuto."
+    ]
+  },
+  {
+    "numero": 4,
+    "versione": "2.0.0-beta.29",
+    "data": "28 settembre",
+    "titolo": "Scegli tu com'è fatto il programma",
+    "semplice": [
+      [
+        "tavolozza",
+        "In <b>Impostazioni › Aspetto</b> trovi le versioni che hai visto nelle bozze, una miniatura per ciascuna. Toccane una e il programma intero diventa quella versione."
+      ],
+      [
+        "occhio",
+        "Mentre provi lavori davvero: ti muovi, apri le pagine, etichetti. Ma su una copia del tuo archivio, o su un archivio finto se preferisci: quando esci, niente di quello che hai fatto resta."
+      ],
+      [
+        "spunta",
+        "Ti piace? <b>Tieni questa</b>. No? <b>Torna com'era</b>. Tema e accento cambiano subito, senza ricaricare."
+      ],
+      [
+        "casa",
+        "Con la navigazione B c'è una pagina nuova, la <b>Casa</b>: la ricerca grande e le tre cose da sapere ogni giorno."
+      ],
+      [
+        "scintilla",
+        "E poi ci sono io: a ogni aggiornamento ti racconto cosa è cambiato. Se chiudi, mi ritrovi in <b>Impostazioni › Novità</b>."
+      ]
+    ],
+    "tecnico": [
+      "La prova passa da un solo punto, <code>accesso.aperto()</code>. Per le richieste della finestra che hanno il biscotto della prova, una <code>ContextVar</code> mette al posto dell'archivio vero una copia in memoria, fatta con il <code>backup</code> di sqlite3 verso <code>:memory:</code>. Il telefono e l'altro computer non hanno il biscotto e vedono l'archivio vero.",
+      "Nella prova si scrive solo nel database: etichette, nodi, persone, luoghi, impostazioni. Aggiungere foto, telefono, due computer, copie, miniature e i lavori lunghi rispondono «nella prova non si fa». Anche <code>Lavoro.parti</code> e <code>motore_attuale</code> rifiutano da soli, così un lavoro vero in corso non viene fermato.",
+      "L'archivio finto della prova si costruisce una volta sola in <code>finto-per-la-prova</code>, separato da quello del giro guidato: 60 foto disegnate, importate, con le etichette <code>nodo_N</code> su una parte. Ogni prova ne usa una copia in memoria.",
+      "Le scelte dell'aspetto stanno in <code>programma.json</code>, sotto <code>aspetto</code>: valgono per questo computer.",
+      "Novità: una voce per versione in <code>officina/programma/novita.json</code>; il numero dell'ultima letta sta in <code>programma.json</code>. Alla prima installazione non compare niente.",
+      "La vecchia schermata d'attesa a mattoncini non parte più a ogni clic: resta la linea arancio, la forma grigia della pagina dopo un terzo di secondo e la fotina «Un attimo…» dopo un secondo, che dopo cinque dice che ci sta mettendo più del solito.",
+      "Corretti: nella navigazione C l'anello «In corso» si vedeva anche a lavori fermi, e «Collegamenti» usciva tagliato."
+    ]
+  },
+  {
+    "numero": 3,
+    "versione": "2.0.0-beta.28",
+    "data": "27 settembre",
+    "titolo": "Il programma ha una faccia nuova",
+    "semplice": [
+      [
+        "tavolozza",
+        "Tutto ridisegnato da capo: colori caldi, scritte più leggibili, meno cose sullo schermo."
+      ],
+      [
+        "foto",
+        "Le parti sono in ordine: a sinistra trovi <b>Foto, Lavoro, Archivio, Collegamenti</b> e <b>Impostazioni</b>. Il numero arancio vuol dire che qualcosa aspetta te."
+      ],
+      [
+        "cerca",
+        "La ricerca a parole e l'albero si aprono da qualunque pagina."
+      ],
+      [
+        "orologio",
+        "Quando apri il programma mi sveglio mentre preparo l'archivio; quando lo chiudi richiudo gli occhi, e ti dico se sto facendo la copia."
+      ]
+    ],
+    "tecnico": [
+      "Fogli di stile riscritti su un solo gruppo di variabili (<code>--fondo</code>, <code>--carta</code>, <code>--ink</code>, <code>--accento</code>…), con tema chiaro e scuro. Finché non scegli segue <code>prefers-color-scheme</code> di Windows. Sostituisce la tavolozza «Camera oscura».",
+      "Accento <code>#D97757</code> sul tema scuro, <code>#C2603F</code> sul chiaro. «Bianco» vuol dire <code>--accento: var(--ink)</code>: bianco sullo scuro, nero sul chiaro.",
+      "Source Serif 4 incorporato come woff2 (nessuna richiesta in rete) per titoli e testi lunghi; <code>system-ui</code> per comandi e dati. Bordi da 0,5 px.",
+      "Navigazione: una barra laterale al posto della barra in alto con le tendine. Archivio raccoglie Aggiungi foto, Albero dei nodi e Stato; Collegamenti raccoglie Telefono e Due computer; la guida passa in Impostazioni.",
+      "Il riquadro «In corso» legge <code>/api/in-corso</code> ogni tre secondi e raccoglie importazione, volti, doppioni, scritte e miglioramento."
+    ]
+  },
+  {
+    "numero": 2,
+    "versione": "2.0.0-beta.26",
+    "data": "27 settembre",
+    "titolo": "Il miglioramento si installa di nuovo",
+    "semplice": [
+      [
+        "migliora",
+        "Le librerie per migliorare foto e video si fermavano a metà. Adesso arrivano fino in fondo."
+      ],
+      [
+        "riprova",
+        "Se ti era comparso l'errore, riprova pure: stavolta va. Le tue foto non erano state toccate."
+      ]
+    ],
+    "tecnico": [
+      "<code>antlr4-python3-runtime</code> 4.9.3 su PyPI esiste solo come sorgente (<code>.tar.gz</code>). Il Python incorporato (3.13 embeddable) non ha gli strumenti per costruirlo, quindi <code>pip</code> si fermava e con lui tutta la parte «miglioria».",
+      "Ora il programma scarica il <code>.tar.gz</code> da <code>files.pythonhosted.org</code>, ne controlla lo SHA-256 e copia fra le librerie solo <code>src/antlr4/</code>. Niente da costruire.",
+      "<code>omegaconf</code> si installa con <code>--no-deps</code>, come <code>rotary-embedding-torch</code> e <code>accelerate</code>, così <code>pip</code> non torna a cercare antlr4; <code>PyYAML</code> è scritta a parte in <code>requirements-miglioria.txt</code>."
+    ]
+  },
+  {
+    "numero": 1,
+    "versione": "2.0.0-beta.25",
+    "data": "27 settembre",
+    "titolo": "Si apre e si chiude più in fretta",
+    "semplice": [
+      [
+        "fulmine",
+        "Se non hai cambiato niente, alla chiusura non rifà la copia dell'archivio: esce subito."
+      ],
+      [
+        "orologio",
+        "All'apertura prepara due cose insieme invece che una dopo l'altra."
+      ]
+    ],
+    "tecnico": [
+      "Chiusura: la copia del database (<code>backup</code> di sqlite3 dopo <code>wal_checkpoint(TRUNCATE)</code>) si fa solo se <code>total_changes</code> è cresciuto dall'apertura al netto dei ricordi della vista (<code>ultimo_filtro</code>, <code>ultimo_scatto</code>), se all'apertura c'è stata una migrazione, o se non esiste ancora nessuna copia.",
+      "Chiusura: <code>PRAGMA optimize</code> al posto di <code>ANALYZE</code> su tutte le tabelle; ricalcola solo le statistiche che servono.",
+      "Apertura: <code>officina.web.server</code> si importa in un thread mentre si apre l'archivio. Il registro scrive <code>archivio_ms</code> e <code>tutto_ms</code>, per misurare.",
+      "Uvicorn chiude con <code>timeout_graceful_shutdown=1</code>: al massimo un secondo di attesa per le richieste ancora aperte."
+    ]
+  },
+  {
+    "numero": 17,
+    "versione": "2.0.0-beta.77",
+    "data": "3 ottobre",
+    "titolo": "Il menu Lavoro nuovo e i guasti spiegati",
+    "semplice": [
+      [
+        "cartella",
+        "In Aggiungi foto c'è «Annulla importazione» su ogni cartella: toglie dall'app la cartella e i suoi scatti. Gli originali in altre cartelle restano, i file sul disco non si toccano."
+      ],
+      [
+        "spunta",
+        "Il gruppo che scegli (per esempio Snapchat) resta lo stesso in tutte le pagine e non torna più su Archivio generale quando avvii un lavoro."
+      ],
+      [
+        "persone",
+        "In Persone c'è «Unisci gruppi»: spunti tutti i gruppi che sono la stessa persona, scegli a chi vanno e premi Unisci. Nessun volto si cancella."
+      ],
+      [
+        "video",
+        "Scritte e descrizioni leggono anche i video, fotogramma per fotogramma, quanti ne scegli in «Quanti fotogrammi prendere dai video». I video finiti per sbaglio in «Da sistemare» tornano al loro posto."
+      ],
+      [
+        "cartella",
+        "In Aggiungi scatti scegli dove vanno le foto: Archivio generale o un gruppo, per esempio «Snapchat». Restano tutte nello stesso archivio; in Galleria il filtro «Gruppi» le mostra da sole."
+      ],
+      [
+        "cartella",
+        "In Intelligenza, Miglioramento ed Etichetta scegli «Su cosa lavora»: tutto l'archivio o un solo gruppo, per esempio «Snapchat». La scelta resta ricordata per la volta dopo."
+      ],
+      [
+        "cartella",
+        "Con un gruppo scelto, in Intelligenza «X di Y» conta solo le foto del gruppo: prima il totale era di tutto l'archivio e le foto fuori dal gruppo sembravano già fatte."
+      ],
+      [
+        "occhio",
+        "I volti si trovano in tutte le foto: prima le foto larghe o allungate venivano scartate senza dirlo. Le foto senza nessuna faccia ora contano come guardate, e il numero arriva in fondo."
+      ],
+      [
+        "scintilla",
+        "Scritte e ricerca ora le fa Qwen3.5 9B al posto di Florence-2 e Qwen3 0.6B. Legge meglio le scritte e scrive una frase breve su ogni foto, così la trovi cercando cosa si vede. Tutto resta su questo computer."
+      ],
+      [
+        "riprova",
+        "All'apertura scarica Qwen3.5 una volta (circa 19 GB) e lo comprime a 4 bit: alla fine occupa circa 8 GB. In Intelligenza artificiale un avviso dice che le scritte verranno rifatte da capo."
+      ],
+      [
+        "occhio",
+        "Se le scritte non riescono a leggere nemmeno le prime foto, il lavoro si ferma e mostra il guasto vero, invece di segnare tutte le foto come lette senza niente dentro."
+      ],
+      [
+        "migliora",
+        "Nel menu Lavoro ci sono Aggiungi scatti, Intelligenza artificiale, Da sistemare, Etichetta e Miglioramento."
+      ],
+      [
+        "scintilla",
+        "In Intelligenza artificiale accendi impronte, volti e scritte: partono uno dopo l'altro e riprendono da dove erano."
+      ],
+      [
+        "occhio",
+        "Se un lavoro si rompe, sotto il messaggio c'è «Visualizza dettagli»: si apre una finestra con il guasto e il tasto «Copia». Dentro non ci sono nomi di cartelle, foto o nodi."
+      ],
+      [
+        "albero",
+        "Nell'Albero c'è «Metti nel cestino», con la conferma. In Impostazioni, «Nel cestino», rimetti a posto i nodi."
+      ],
+      [
+        "occhio",
+        "I volti si cercano con un motore solo, più preciso."
+      ],
+      [
+        "foto",
+        "Doppioni a tutto schermo; Etichetta con un solo pannello e la casella in alto; Da controllare con l'elenco a sinistra."
+      ],
+      [
+        "video",
+        "I video senza durata non diventano più foto, e la foto con lo stesso nome del video nella stessa cartella basta per riconoscere una live."
+      ],
+      [
+        "computer",
+        "Al primo avvio sul fisso la chiave e i modelli sono obbligatori; il Miglioramento è a scelta."
+      ],
+      [
+        "tavolozza",
+        "Spariti gli ultimi pezzi della grafica bianca e nera."
+      ],
+      [
+        "scudo",
+        "I file che si rompono in modo imprevisto mentre si calcolano le impronte non vengono più riprovati per sempre: finiscono in Da sistemare, «Messi da parte», con il motivo accanto."
+      ],
+      [
+        "albero",
+        "Nei «Messi da parte» c'è «Togli dall'archivio»: lo scatto esce dal conto e dalla coda, ma il file sul disco resta dov'è."
+      ],
+      [
+        "fulmine",
+        "«Ferma» interrompe anche un video lungo a metà, senza aspettare che finisca di leggerlo."
+      ],
+      [
+        "riprova",
+        "Le impronte non tornano più a 0 quando hanno finito e chiudono il modello; i volti mostrano il totale fin dall'inizio."
+      ],
+      [
+        "cartella",
+        "Aggiornare non lascia più il programma senza file: i file vecchi vengono messi da parte e tolti solo a installazione finita. Se il programma non si chiude, l'installazione si ferma e non tocca niente."
+      ],
+      [
+        "cartella",
+        "Il programma si chiude sempre: se un lavoro resta bloccato, dopo un minuto si spegne lo stesso e non resta acceso di nascosto."
+      ],
+      [
+        "spunta",
+        "Gli aggiornamenti non si bloccano più a metà: l'installatore si fermava e dopo un minuto si chiudeva, lasciando la versione vecchia."
+      ],
+      [
+        "albero",
+        "Nell'Albero ogni ramo, anche quelli dentro altri rami, ha «Fai sceglierne uno solo»: un «sì» su Aperto diventa da solo un «no» per Chiuso."
+      ],
+      [
+        "albero",
+        "In Albero c'è «Copia in…»: copi un ramo con tutti i suoi figli dentro più nodi insieme, per esempio «Stato» sotto ogni oggetto. Si copiano i nomi e «scegline uno», non gli esempi."
+      ],
+      [
+        "calendario",
+        "Le date si trovano anche quando sono in un altro punto del file: nelle foto ritoccate o esportate e nei video esportati, passati da altre app o fatti con Android. Lì si legge anche il luogo."
+      ],
+      [
+        "calendario",
+        "Dopo l'aggiornamento il programma rilegge da solo, in sottofondo, le foto e i video già importati senza data, e mette la data a quelli dove ora la trova. Le date messe a mano non si toccano."
+      ],
+      [
+        "calendario",
+        "Trovo più date: quelle scritte in modi diversi, quelle dei video nelle tracce e quelle di un altro file dello stesso scatto. In Senza data c'è il tasto «Perché non hanno la data?»"
+      ],
+      [
+        "cartella",
+        "Le cartelle in Aggiungi scatti si leggono di nuovo per intero, non più una lettera per riga"
+      ],
+      [
+        "foto",
+        "Il riquadro «In corso» si apre cliccando ovunque"
+      ],
+      [
+        "migliora",
+        "Miglioramento: se dopo un aggiornamento cambiano le librerie, il tasto le prepara invece di dire «Scarica 0,0 GB», e la finestra appare dal centro"
+      ],
+      [
+        "filtri",
+        "Il menu «Su cosa lavora» e gli altri menu a tendina hanno lo stesso stile del resto del programma"
+      ],
+      [
+        "fulmine",
+        "L'Etichetta è molto più veloce: le etichette appaiono subito e la foto dopo è già pronta"
+      ],
+      [
+        "copia",
+        "Copia e incolla le etichette fra le foto dello stesso momento (Ctrl+C, Ctrl+V)"
+      ],
+      [
+        "albero",
+        "I nodi nuovi si creano solo nell'albero"
+      ],
+      [
+        "impronta",
+        "In Intelligenza, sotto le impronte, una barra per ogni modello e il conto sugli scatti"
+      ],
+      [
+        "calendario",
+        "Volti e Scritte mostrano quanto manca alla fine"
+      ]
+    ],
+    "tecnico": [
+      "<code>importazione/annulla.py</code> toglie percorsi, file e scatti rimasti solo nella cartella e rimette dentro gli originali dei doppioni; un solo <code>gruppo_ultimo</code> per tutte le zone.",
+      "SCRFD riceve un quadrato 640×640 con le bande nere, come vuole il modello: con lati non multipli di 32 le griglie non tornavano e le proposte venivano buttate.",
+      "Nuova tabella <code>volti_guardati</code> (schema 35), riempita con gli scatti che avevano già volti; la fila dei volti la usa al posto di <code>volti</code>.",
+      "Scritte: <code>Qwen/Qwen3.5-9B</code> con <code>AutoModelForImageTextToText</code>, compresso nf4 con bitsandbytes (la parte visiva resta bf16). Scarica in <code>parole.grezzo</code>, comprime in <code>parole.nuova</code>, poi prende il posto della cartella vecchia.",
+      "Librerie dei modelli: transformers 5.18.0, huggingface-hub 1.33.0, safetensors 0.8.0, più accelerate, bitsandbytes e psutil. DINOv3, SigLIP 2, FaceMe e LucidFlux provati con pesi finti: stessi numeri della 4.57.6.",
+      "SigLIP 2: con la 5 <code>get_image_features</code> restituisce un oggetto; si prende <code>pooler_output</code>. Una domanda per foto dà descrizione e scritte; nuova tabella <code>descrizioni</code> (schema 36), cercata nella ricerca.",
+      "Scheda delle scritte alla versione 2: tutte le foto si rileggono e le scritte vecchie dello scatto si cancellano prima. Il riscrittore delle domande usa lo stesso modello; la cartella <code>lingua</code> sparisce.",
+      "<code>registro.passi_del_guasto</code> scrive tipo, file e riga di ogni passo, compresi i guasti a catena; i nomi passano dal filtro del registro, quindi niente percorsi né testi dell'errore.",
+      "<code>Lavoro.dettaglio</code> accanto a <code>guasto</code>; la fila dell'intelligenza artificiale lo porta su <code>/api/intelligenza</code>. Il guasto delle scritte non sta più fra quelli di Stato.",
+      "Volti: SCRFD e AdaFace al posto di YuNet e SFace.",
+      "<code>fotogrammi.prendi(basta=…)</code> controlla la fermata a ogni fotogramma e solleva <code>Fermato</code>; la passata delle impronte la prende come fermata, non come file rotto.",
+      "Il motivo <code>errore_imprevisto</code> diventa una segnalazione <code>non_si_apre</code> col file principale, come gli altri file illeggibili.",
+      "Nuova strada <code>/elenchi/togli-messo-da-parte/{scatto}</code>: mette lo scatto fuori archivio e chiude la segnalazione.",
+      "Tolte tre variabili globali senza bisogno: <code>sfoglia.si_puo()</code> e <code>fotogrammi._av()</code> usano <code>functools.cache</code>, le novità aperte una volta sono un <code>threading.Event</code>. Restano solo quelle che tengono un pezzo unico: l'archivio aperto, il registro, la prova in Aspetto, il miglioratore.",
+      "<code>officina/avvio.py</code> diventa <code>officina/riga_di_comando.py</code>, così non si confonde con <code>officina/programma/avvio.py</code> che apre la finestra. Le pagine non lo importano più: <code>tutte_le_carte()</code> sta in <code>modelli_in_casa</code>, <code>perche_nessun_volto()</code> in <code>volti/spiegazione.py</code>.",
+      "Nuova prova <code>test_id_unici.py</code>: apre 36 pagine nei tre giri di Aspetto e controlla che nessun id compaia due volte nella stessa pagina."
+    ]
+  }
+]

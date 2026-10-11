@@ -1,0 +1,55 @@
+.dp-testa h1 { margin: 0; }
+.dp-spazio { flex: 1; min-width: 0; }
+
+.dp-riga[hidden] { display: none; }
+.dp-riga form, .dp-barra form { display: contents; }
+.dp-riga .barretta { min-width: 160px; }
+.dp-righe { flex-basis: 100%; margin: 0; }
+.dp-riga .dp-righe:empty { display: none; }
+
+.dp-mai p { margin: 0; }
+.dp-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.dp-viste { display: inline-flex; gap: 6px; }
+.dp-quando { margin: -6px 0 0; }
+.dp-elenco { display: grid; gap: 2px; }
+.dp-vuoto { margin: 10px 0 0; }
+.dp-elenco > #vedine-altri { justify-self: start; margin-top: 14px; }
+.dp-c-r { display: grid; grid-template-columns: 132px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 10px; border-radius: 12px; transition: background var(--gesto) var(--uscita), opacity var(--gesto) var(--uscita); }
+.dp-c-r:hover, .dp-c-r.aperta { background: var(--carta-sopra); }
+.dp-c-r.decisa { opacity: .5; }
+.dp-c-r.decisa:hover, .dp-c-r.decisa:focus-within { opacity: 1; }
+.dp-c-testo { display: grid; gap: 2px; min-width: 0; }
+.dp-c-testo b { font: 400 16px/1.3 var(--serif); }
+.dp-mazzetto { position: relative; height: 66px; }
+.dp-mazzetto img { position: absolute; top: calc(var(--posto) * 5px); left: calc(var(--posto) * 20px); width: 84px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 7px; border: 0.5px solid var(--linea); background: var(--pozzo); box-shadow: var(--ombra); }
+.dp-az { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dp-aperto { display: grid; gap: 14px; padding: 12px 10px 20px; margin-bottom: 8px; border-bottom: 0.5px solid var(--linea); animation: scende var(--scena) var(--uscita); }
+.dp-copie { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.dp-copia { display: grid; gap: 8px; align-content: start; padding: 8px; border-radius: 12px; border: 0.5px solid var(--linea); background: var(--carta); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--gesto) var(--uscita), box-shadow var(--gesto) var(--uscita); }
+.dp-copia:hover { border-color: var(--linea-forte); }
+.dp-copia.tieni { border-color: var(--accento); box-shadow: 0 0 0 3px var(--alone); }
+.dp-copia img, .dp-b-lato img { width: 100%; max-height: 340px; object-fit: contain; border-radius: 8px; background: var(--pozzo); display: block; }
+.dp-copia-t { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dp-tieni { font-size: 11px; font-weight: 600; color: var(--su-accento); background: var(--accento); padding: 1px 8px; border-radius: var(--raggio-pillola); }
+
+.dp-pieno { position: fixed; inset: 0; z-index: 95; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; padding: 16px 20px 18px; background: var(--fondo); color: var(--ink); }
+.dp-pieno-su, .dp-pieno-giu { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.dp-pieno-su b { font: 400 18px/1.3 var(--serif); }
+.dp-pieno-copie { display: grid; grid-template-columns: repeat(var(--colonne), minmax(0, 1fr)); grid-template-rows: repeat(var(--righe), minmax(0, 1fr)); gap: 12px; min-height: 0; }
+.dp-pieno .dp-copia { grid-template-rows: minmax(0, 1fr) auto; min-height: 0; height: 100%; transform-origin: top left; }
+.dp-pieno .dp-copia img { width: 100%; height: 100%; max-height: none; object-fit: contain; }
+@media (max-width: 720px) {
+    .dp-pieno { padding: 12px 16px; }
+    .dp-pieno-copie { grid-template-columns: repeat(min(var(--colonne), 2), minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: minmax(160px, 1fr); overflow-y: auto; }
+}
+.dp-b-su { display: flex; align-items: center; gap: 12px; }
+.dp-b-conf { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.dp-b-lato { display: grid; gap: 8px; align-content: start; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.dp-b-lato:hover img { box-shadow: 0 0 0 2px var(--linea-forte); }
+.dp-b-lato img { max-height: 460px; }
+.dp-b-giu { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+@media (max-width: 720px) {
+    .dp-c-r { grid-template-columns: 110px minmax(0, 1fr); }
+    .dp-c-r .dp-az { grid-column: 1 / -1; }
+    .dp-b-conf { grid-template-columns: 1fr; }
+}

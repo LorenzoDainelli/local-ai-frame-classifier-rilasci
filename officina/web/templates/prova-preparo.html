@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "_icone.html" import fotina %}
+{% block titolo %}Preparo la prova — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<main class="prova-pagina" id="prova-preparo">
+    {{ fotina('grande') }}
+    <h1>Preparo l'archivio finto.</h1>
+    <p data-detto>La prima volta disegna sessanta foto e le mette in un archivio tutto suo: ci vuole
+        un minuto. Poi resta pronto, e le prove dopo partono subito.</p>
+    <span class="barretta"><span data-quanto style="width:4%"></span></span>
+    <p class="piccolo tenue" data-riga></p>
+    <div class="in-fila" data-guasto hidden>
+        <form method="post" action="/prova/comincia">
+            <input type="hidden" name="chiave" value="{{ chiave }}">
+            <input type="hidden" name="valore" value="{{ valore }}">
+            <input type="hidden" name="con" value="copia">
+            <button class="tasto-comando">Prova sulla copia del tuo archivio</button>
+        </form>
+        <a class="tasto-comando nudo" href="/impostazioni#aspetto">Torna alle impostazioni</a>
+    </div>
+    <form method="post" action="/prova/comincia" data-parti hidden>
+        <input type="hidden" name="chiave" value="{{ chiave }}">
+        <input type="hidden" name="valore" value="{{ valore }}">
+        <input type="hidden" name="con" value="finto">
+    </form>
+</main>
+{% endblock %}
+
+{% block coda %}
+<script type="module">
+    const pagina = document.getElementById("prova-preparo");
+    const quanto = pagina.querySelector("[data-quanto]");
+    const riga = pagina.querySelector("[data-riga]");
+    async function guarda() {
+        try {
+            const risposta = await fetch("/api/prova/finto", { headers: { accept: "application/json" } });
+            const come = await risposta.json();
+            if (come.pronto) {
+                quanto.style.width = "100%";
+                pagina.querySelector("[data-parti]").submit();
+                return;
+            }
+            if (come.guasto) {
+                pagina.querySelector("[data-detto]").textContent = come.guasto;
+                pagina.querySelector("[data-guasto]").hidden = false;
+                riga.textContent = "";
+                return;
+            }
+            quanto.style.width = Math.max(4, come.percento || 0) + "%";
+            riga.textContent = come.detto || "";
+        } catch { }
+        setTimeout(guarda, 700);
+    }
+    guarda();
+</script>
+{% endblock %}

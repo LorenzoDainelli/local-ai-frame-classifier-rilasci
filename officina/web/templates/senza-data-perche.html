@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Perché senza data — Local AI Frame Classifier{% endblock %}
+{% block corpo %}
+<div class="pagina pagina-senza-data">
+    <a class="torna-a" href="/senza-data">{{ icona('indietro', 14) }} Senza data</a>
+    <div class="sd-testa">
+        <h1 class="titolo-pagina">Perché non hanno la data</h1>
+        <p class="sottotitolo">Ogni riquadro raccoglie i file dello stesso tipo e con gli stessi motivi. Lo vedi solo tu: niente esce dal computer.</p>
+    </div>
+    {% for gruppo in gruppi %}
+    <section class="carta sd-gruppo">
+        <h2>{{ gruppo.tipo }} · <span class="numeri">{{ gruppo.quanti|numero }}</span> {{ 'file' }}</h2>
+        <ul class="minuscolo">
+            {% for campo, esito in gruppo.motivi %}<li><b>{{ campo }}</b>: {{ esito }}</li>{% endfor %}
+        </ul>
+    </section>
+    {% else %}
+    <div class="carta sd-vuoto"><p><b>Nessuno.</b> <span class="tenue">Tutti gli scatti hanno una data.</span></p></div>
+    {% endfor %}
+</div>
+{% endblock %}

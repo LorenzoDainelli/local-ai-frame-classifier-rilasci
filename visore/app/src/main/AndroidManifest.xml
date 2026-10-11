@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Quello che l'app chiede al telefono: **niente**.
+
+    Non c'e' un solo permesso qui dentro, e non e' una dimenticanza. Il Visore
+    non va in rete, non legge la rubrica, non guarda la posizione, non tocca la
+    galleria del telefono: apre un pacchetto e lo mostra. Se un giorno qui
+    comparisse una riga «uses-permission», vorrebbe dire che qualcosa e'
+    cambiato nel progetto, non nel file (regole 1, 7).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="Visore"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Visore">
+        <activity
+            android:name=".Principale"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

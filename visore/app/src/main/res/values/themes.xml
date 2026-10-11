@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Il tema di sistema, che qui serve a una cosa sola: far partire l'app col
+    nero giusto invece che col bianco di Android, cosi' non c'e' un lampo
+    bianco prima che Compose disegni. I colori veri stanno in Colori.kt.
+-->
+<resources>
+    <style name="Theme.Visore" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B0B0C</item>
+        <item name="android:statusBarColor">#0B0B0C</item>
+        <item name="android:navigationBarColor">#0B0B0C</item>
+    </style>
+</resources>

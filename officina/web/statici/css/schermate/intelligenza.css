@@ -1,0 +1,40 @@
+.ia-carta.spenta { opacity: .62; }
+.ia-carta.attiva { border-color: var(--linea-forte); box-shadow: 0 0 0 3px var(--alone-lontano); }
+
+.ia-carta.attiva .ia-icona { background: var(--alone); color: var(--ink); }
+
+.ia-dice h2 { font: 400 19px/1.25 var(--serif); }
+.ia-dice p { margin: 0; color: var(--attenuato); font-size: var(--testo-comando); line-height: 1.45; }
+.ia-num { align-self: end; font: 400 28px/1 var(--serif); letter-spacing: var(--tracciato-numero); }
+.ia-num small { font: var(--testo-comando) var(--sans); color: var(--tenue); letter-spacing: 0; }
+
+.ia-con { margin: 0; }
+.ia-guasto { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--raggio-controllo); border: 0.5px solid color-mix(in srgb, var(--male) 55%, var(--linea)); background: color-mix(in srgb, var(--male) 6%, var(--carta)); color: var(--attenuato); font-size: var(--testo-minore); }
+.ia-guasto p { margin: 0; white-space: pre-line; }
+.ia-guasto > div { display: grid; gap: 8px; justify-items: start; }
+.ia-dettaglio { margin: 0; padding: 12px; max-height: 50dvh; overflow: auto; border-radius: var(--raggio-controllo); border: 0.5px solid var(--linea); background: var(--carta); color: var(--ink); font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre; }
+.ia-guasto svg { flex: none; color: var(--male); margin-top: 1px; }
+.ia-fila { display: flex; align-items: center; gap: 14px; padding: 12px 14px 12px 18px; }
+.ia-passi { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; font-size: var(--testo-comando); color: var(--attenuato); }
+.ia-passi .p { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; transition: color var(--gesto) var(--uscita); }
+.ia-passi .p.via { color: var(--tenue); text-decoration: line-through; text-decoration-color: var(--linea-forte); }
+
+.ia-passi .p.qui { color: var(--ink); font-weight: 500; }
+.ia-passi .p.qui .ia-tondo { background: var(--accento); color: var(--su-accento); }
+.ia-passi .p.fatto .ia-tondo { color: var(--bene); }
+.ia-passi .tra { flex: 1; height: 1px; min-width: 18px; background: var(--linea-forte); }
+.ia-fermando { display: inline-flex; align-items: center; gap: 8px; }
+.ia-fermando[hidden] { display: none; }
+.ia-piede { margin: 0; max-width: 72ch; }
+@media (max-width: 900px) {
+    .ia-carte { grid-template-columns: 1fr; }
+    .ia-fila { flex-wrap: wrap; }
+}
+#ia-modulo { display: grid; gap: 14px; }
+
+.ia-modelli { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.ia-modelli li { display: grid; grid-template-columns: minmax(90px, 1fr) 2fr 3.5em; align-items: center; gap: var(--s2); color: var(--tenue); }
+.ia-modelli li.ora, .ia-modelli li.fatto { color: var(--ink); }
+.ia-modelli li .numeri { text-align: right; }
+.ia-modelli li.ora .barretta > span { box-shadow: 0 0 8px var(--accento); }
+.ia-modelli li.fatto .barretta > span { background: var(--bene, var(--accento)); }

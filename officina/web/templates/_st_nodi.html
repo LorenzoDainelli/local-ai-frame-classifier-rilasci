@@ -1,0 +1,38 @@
+{% from "_spiega.html" import spiega %}
+<div class="st-tabella">
+    <table class="tabella">
+        <thead><tr>
+            <th>Nodo</th>
+            <th class="a-destra">Esempi</th>
+            <th class="a-destra">Ci azzecca</th>
+            <th></th>
+            <th>Lo confonde con</th>
+            <th class="a-destra">Ultimo tocco</th>
+        </tr></thead>
+        <tbody>
+        {% for riga in pagella.righe %}
+        <tr>
+            <td>{% if riga.percorso %}<span class="cammino">{{ riga.percorso }} › </span>{% endif %}{{ riga.nome }}</td>
+            <td class="numeri a-destra">{{ riga.esempi_si|numero }}</td>
+            <td class="numeri a-destra">{% if riga.giudicabile %}{{ (riga.azzecca * 100)|round|int }}%{% else %}—{% endif %}</td>
+            <td class="st-barra-cella">{% if riga.giudicabile %}<span class="barretta {{ '' if riga.azzecca >= 0.7 else 'debole' }} {{ 'ink' if riga.azzecca >= 0.9 }}"><span style="width: {{ (riga.azzecca * 100)|round|int }}%"></span></span>{% endif %}</td>
+            <td class="piccolo attenuato">
+                {% if riga.confusi %}{% for confuso in riga.confusi %}«{{ confuso.nome }}»{% if not loop.last %}, {% endif %}{% endfor %}
+                {% elif not riga.giudicabile %}<span class="tenue">{{ riga.voto_a_parole }}</span>
+                {% else %}<span class="tenue">nessuno</span>{% endif %}
+            </td>
+            <td class="numeri tenue piccolo a-destra">
+                {% if riga.giorni is none %}mai{% elif riga.giorni == 0 %}oggi{% else %}{{ riga.giorni }} g{% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="tenue">Nessun nodo da misurare, ancora.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="minuscolo tenue">Accanto a ogni percentuale c'è il numero grezzo da cui
+    nasce.{% call spiega("«Troppo pochi esempi per dirlo»") %}
+        <p>Un nodo con troppo pochi esempi non riceve un voto: riceve quella scritta.</p>
+        <p>Una percentuale su quattro scatti non è una misura, è un caso.</p>
+    {% endcall %}</p>

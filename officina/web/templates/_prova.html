@@ -1,0 +1,26 @@
+{% from "_icone.html" import icona, fotina %}
+{% set prova = sto_provando %}
+{% set come, costa = prova.come_e() %}
+<div class="fascia-prova" role="region" aria-label="Stai provando una versione">
+    {{ fotina('piccola') }}
+    <p class="fascia-testo">
+        <b>Stai provando «{{ prova.nome }}»</b>
+        <span>{% if prova.con == 'copia' %}sul tuo archivio, ma su una copia: quello che fai qui non resta.{% else %}su un archivio finto: niente di quello che vedi è vero, e niente resta.{% endif %}</span>
+    </p>
+    <details class="fascia-come">
+        <summary class="tasto-comando nudo piccolo">{{ icona('info', 14) }} Com'è</summary>
+        <div class="fascia-nota">
+            <p class="etichetta">{{ prova.voce.titolo }} · {{ prova.valore }}</p>
+            <p>{{ come }}</p>
+            <p class="costa"><b>Cosa costa.</b> {{ costa }}</p>
+        </div>
+    </details>
+    <form class="fascia-versioni" method="post" action="/prova/cambia" aria-label="Passa a un'altra versione">
+        {% for lettera, versione in prova.voce.versioni.items() %}
+        <button class="pillola {{ 'accesa' if lettera == prova.valore }}" name="valore" value="{{ lettera }}"
+                title="{{ versione[0] }}" {% if lettera == prova.valore %}aria-pressed="true"{% endif %}>{{ lettera }}</button>
+        {% endfor %}
+    </form>
+    <form method="post" action="/prova/esci"><button class="tasto-comando nudo piccolo">Torna com'era</button></form>
+    <form method="post" action="/prova/tieni"><button class="tasto-comando accento piccolo">Tieni questa</button></form>
+</div>

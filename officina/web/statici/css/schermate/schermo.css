@@ -1,0 +1,24 @@
+.schermo-coperto {
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--s6);
+    background: var(--fondo);
+}
+
+.sp-dentro { display: grid; justify-items: center; text-align: center; gap: 16px; max-width: 560px; padding: 24px 16px; }
+.sp-dentro h1 { margin: 0; font: 400 28px/1.2 var(--serif); letter-spacing: -0.01em; text-wrap: balance; }
+.sp-dentro p { margin: 0; }
+.sp-cifre { display: flex; gap: 10px; }
+.sp-cifre span { width: 64px; height: 84px; display: grid; place-items: center; border-radius: 14px; background: var(--carta); border: 0.5px solid var(--linea-forte); font: 400 46px/1 var(--serif); }
+.sp-come { display: grid; gap: 8px; padding: 14px 18px; text-align: left; }
+.sp-abbinati { display: grid; gap: 4px; }
+.sp-tasti { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.sp-lavori { width: min(420px, 100%); display: grid; gap: 8px; padding: 14px 18px; text-align: left; }
+.sp-lavoro { display: flex; justify-content: space-between; gap: 12px; }
+@media (max-width: 520px) { .sp-cifre span { width: 44px; height: 60px; font-size: 32px; } }
+
+.sp-cifre > span { overflow: hidden; }
+.sp-cifre .sp-rullo { align-self: start; justify-self: stretch; display: flex; flex-direction: column; width: auto; height: auto; border: 0; border-radius: 0; background: none; }
+.sp-cifre .sp-rullo > span { width: auto; border: 0; border-radius: 0; background: none; }

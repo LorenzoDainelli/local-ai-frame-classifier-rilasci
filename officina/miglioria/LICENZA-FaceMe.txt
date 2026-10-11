@@ -1,0 +1,50 @@
+Il file faceme_rete.py contiene codice copiato e riscritto da FaceMe
+(https://github.com/modyu-liu/FaceMe), commit
+8973f65dc4c869f6b2d11a46e5b03d63fbd9241e, dai file arch/idencoder.py e
+utils/wavelet_color_fix.py; il secondo viene a sua volta da
+https://github.com/pkuliyi2015/sd-webui-stablesr (Li Yi). Il file faceme.py
+rifa i passi di infer.py dello stesso deposito.
+
+I pesi non viaggiano con il programma: si scaricano dalla loro fonte al primo
+uso. Il lettore dei volti di PhotoMaker (TencentARC/PhotoMaker) e' Apache-2.0;
+i modelli antelopev2 di InsightFace sono solo per ricerca non commerciale.
+
+Si usa solo per uso non commerciale, come chiede la licenza qui sotto.
+
+----------------------------------------------------------------------
+
+Pi-Lab License 1.0
+
+Copyright 2024 Pi-Lab
+
+Redistribution and use for non-commercial purpose in source and
+binary forms, with or without modification, are permitted provided
+that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in
+   the documentation and/or other materials provided with the
+   distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived
+   from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+In the event that redistribution and/or use for commercial purpose in
+source or binary forms, with or without modification is required,
+please contact the contributor(s) of the work.

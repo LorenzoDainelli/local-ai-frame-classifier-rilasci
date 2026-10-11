@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona, fotina %}
+{% block titolo %}Novità — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<main class="pagina pagina-novita">
+    <div class="nv-dentro">
+        <div class="nv-apre">
+            {{ fotina('grande') }}
+            <div class="nv-apre-testo">
+                <h1 class="nv-titolo">Le novità, versione per versione</h1>
+                <p class="nv-sotto">Dalla più nuova. Sotto ognuna, i dettagli per chi vuole sapere come e perché.</p>
+            </div>
+        </div>
+        {% for voce in tutte_le_novita %}
+        <article class="nv-versione {{ 'nv-nuova' if loop.first }}">
+            <div class="nv-v-testa"><span class="pillola {{ 'accesa' if loop.first }}">{{ voce.nome }}</span><span class="piccolo tenue">{{ voce.data }}</span></div>
+            <h2 class="nv-v-titolo">{{ voce.titolo }}</h2>
+            <ul class="nv-righe">
+                {% for quale, testo in voce.semplice %}<li>{{ icona(quale, 17) }}<p>{{ testo|safe }}</p></li>{% endfor %}
+            </ul>
+            <details class="nv-dettagli">
+                <summary class="tasto-comando nudo piccolo">{{ icona('codice', 14) }} Maggiori dettagli</summary>
+                <ul class="nv-tec-righe">{% for riga in voce.tecnico %}<li>{{ riga|safe }}</li>{% endfor %}</ul>
+            </details>
+        </article>
+        {% endfor %}
+    </div>
+</main>
+{% endblock %}

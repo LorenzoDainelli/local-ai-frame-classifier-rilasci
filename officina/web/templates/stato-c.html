@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Stato — Local AI Frame Classifier{% endblock %}
+
+{% macro apri(quale) -%}
+<button class="tasto-comando nudo piccolo st-c-apri" type="button" data-apri-riquadro="{{ quale }}" title="Apri per intero">{{ icona('freccia', 14) }}</button>
+{%- endmacro %}
+{% macro per_intero(quale, titolo) -%}
+<dialog class="st-c-intero" id="{{ quale }}" aria-label="{{ titolo }}">
+    <header><h2>{{ titolo }}</h2><button class="tasto-comando nudo piccolo" type="button" data-chiudi-riquadro aria-label="Chiudi">{{ icona('x', 18) }}</button></header>
+    <div class="st-c-intero-dentro">{{ caller() }}</div>
+</dialog>
+{%- endmacro %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina stato stato-c" id="pagina-stato">
+    <div class="st-c-testa">
+        <div>
+            <h1>Stato</h1>
+            <p class="sottotitolo">Tutto in una schermata: ogni riquadro si apre per intero.</p>
+        </div>
+        {% if sistemare %}<span class="bollino attenzione">{{ sistemare|length }} {{ 'cosa' if sistemare|length == 1 else 'cose' }} da sistemare</span>
+        {% else %}<span class="bollino bene">niente da sistemare</span>{% endif %}
+    </div>
+
+    {% set n = pagella.corsie.nutrire|length %}{% set c = pagella.corsie.crescita|length %}{% set s = pagella.corsie.salute|length %}
+    <div class="st-c-griglia">
+        <section class="carta st-c-riquadro st-c-largo" id="pagella">
+            <header><h2>Da fare adesso</h2><span class="minuscolo tenue numeri">{{ pagella.coda|length }}</span></header>
+            {% include "_st_compiti.html" %}
+        </section>
+
+        <section class="carta st-c-riquadro">
+            <header><h2>L'albero</h2>{{ apri('st-c-albero') }}</header>
+            <p class="st-grande"><b class="numeri">{{ s|numero }}</b> di {{ pagella.righe|length|numero }} in salute</p>
+            {% include "_st_tre.html" %}
+            <div class="st-c-tre">
+                <span><span class="bollino attenzione">da nutrire</span><b class="numeri">{{ n }}</b></span>
+                <span><span class="bollino">in crescita</span><b class="numeri">{{ c }}</b></span>
+                <span><span class="bollino bene">in salute</span><b class="numeri">{{ s }}</b></span>
+            </div>
+        </section>
+
+        <section class="carta st-c-riquadro">
+            <header><h2>In corso</h2></header>
+            {% include "_st_in_corso.html" %}
+            {% if sistemare %}<div class="st-c-guai">{% include "_st_sistemare.html" %}</div>{% endif %}
+        </section>
+
+        <section class="carta st-c-riquadro">
+            <header><h2>Modelli</h2>{{ apri('salute') }}</header>
+            <ul class="st-c-elenco">
+                {% for modello in modelli %}
+                <li><span>{{ modello.titolo }}</span>
+                    {% if modello.in_casa %}<span class="bollino bene">in casa</span>
+                    {% else %}<span class="bollino attenzione">non in casa</span>{% endif %}</li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <section class="carta st-c-riquadro">
+            <header><h2>La macchina</h2></header>
+            <ul class="st-c-elenco">
+                {% if scheda_video %}<li><span>Scheda video</span><span class="bollino bene">{{ scheda_video }}</span></li>{% endif %}
+                {% for voce, valore, nota in capacita %}
+                <li><span>{{ voce }}</span><span class="bollino {{ 'bene' if valore else 'attenzione' }}">{{ 'sì' if valore else 'no' }}</span></li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <section class="carta st-c-riquadro st-c-medio">
+            <header><h2>L'archivio</h2>{{ apri('st-c-archivio') }}</header>
+            <dl class="st-c-numeri">
+                {% for voce, valore in numeri %}<div><dt>{{ voce }}</dt><dd class="numeri">{{ valore|numero }}</dd></div>{% endfor %}
+            </dl>
+        </section>
+
+        <section class="carta st-c-riquadro st-c-medio">
+            <header><h2>Copie</h2>
+                <form method="post" action="/impostazioni/copia"><button class="tasto-comando piccolo" type="submit">Falla adesso</button></form></header>
+            <table class="tabella st-c-copie">
+                <tr><th>Quando</th><th>Perché</th><th class="a-destra">Peso</th></tr>
+                {% for copia in copie[:5] %}
+                <tr><td>{{ copia.quando }}</td><td class="attenuato">{{ copia.motivo }}</td><td class="numeri a-destra">{{ copia.peso }}</td></tr>
+                {% else %}<tr><td colspan="3" class="tenue">Nessuna copia, ancora.</td></tr>{% endfor %}
+            </table>
+        </section>
+
+        <section class="carta st-c-riquadro st-c-medio">
+            <header><h2>Laboratorio di misura</h2>{{ apri('misura') }}</header>
+            <p class="piccolo tenue">Serve a una cosa sola: capire quale modello guarda meglio le tue foto. Le impronte, le tue decisioni e il confronto stanno qui dentro.</p>
+            <button class="tasto-comando piccolo" type="button" data-apri-riquadro="misura">Apri il laboratorio</button>
+        </section>
+
+        <section class="carta st-c-riquadro st-c-medio">
+            <header><h2>Scritte e facce</h2></header>
+            <p class="piccolo">Scritte lette: <span class="numeri">{{ scritte.quante|numero }}</span>{% if scritte.restano %} · <span class="numeri">{{ scritte.restano|numero }}</span> foto ancora da guardare{% endif %}</p>
+            <a class="minuscolo" href="/volti/raddrizzamento">Guarda come vengono raddrizzate le facce {{ icona('avanti', 12) }}</a>
+        </section>
+    </div>
+
+    <section class="carta st-c-riquadro st-c-pieno">
+        <header><h2>Tutti i nodi</h2><span class="minuscolo tenue numeri">{{ pagella.righe|length|numero }} · dal più affamato</span></header>
+        {% include "_st_nodi.html" %}
+    </section>
+
+    {% call per_intero('st-c-albero', "L'albero") %}{% set quanti_per_corsia = 6 %}{% include "_st_corsie.html" %}{% endcall %}
+    {% call per_intero('salute', 'I modelli') %}{% include "_st_macchina.html" %}{% include "_st_modelli.html" %}{% include "_st_impronte.html" %}{% endcall %}
+    {% call per_intero('st-c-archivio', "L'archivio") %}{% include "_st_numeri.html" %}{% include "_st_copie.html" %}{% endcall %}
+    {% call per_intero('misura', 'Laboratorio di misura') %}{% include "_stato_misura.html" %}{% endcall %}
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+{% include "_stato_misura_coda.html" %}
+{% include "_stato_salute_coda.html" %}
+<script type="module" src="/statici/js/stato.js"></script>
+{% endblock %}

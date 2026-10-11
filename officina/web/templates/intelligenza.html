@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% from "_ambito.html" import ambito %}
+{% from "_icone.html" import icona, fotina %}
+{% from "_spiega.html" import spiega %}
+{% block titolo %}Intelligenza artificiale — Local AI Frame Classifier{% endblock %}
+
+{% set LAVORI = [
+    {"chiave": "impronte", "nome": "Le impronte", "corto": "Impronte", "icona": "impronta",
+     "dice": "Ogni scatto diventa un'impronta numerica. Servono alle proposte in Etichetta, alla ricerca a parole e a trovare le foto simili.",
+     "con": "con " ~ (mancano.modelli_impronte|join(", ") if mancano.modelli_impronte else "tutti i modelli"),
+     "fatti": "fatte", "serve": "Servono i modelli delle impronte"},
+    {"chiave": "volti", "nome": "I volti", "corto": "Volti", "icona": "volto",
+     "dice": "Trova le facce e mette insieme quelle della stessa persona. I nomi li dai tu, in Persone.",
+     "con": "con SCRFD e AdaFace", "fatti": "cercati", "serve": "Serve il modello dei volti"},
+    {"chiave": "corpi", "nome": "I corpi", "corto": "Corpi", "icona": "persona",
+     "dice": "Separa ogni persona, anche quando si coprono, capisce di chi è ogni mano, gamba e volto e ricorda corporatura e vestiti. Così trova le persone anche senza la faccia.",
+     "con": "con SAM 3, RTMW, KPR e SigLIP 2", "fatti": "guardati", "serve": "Servono i modelli del corpo"},
+    {"chiave": "scritte", "nome": "Scritte e descrizioni", "corto": "Scritte", "icona": "lettere",
+     "dice": "Legge insegne, cartelli e targhe dentro le foto e scrive una frase breve su cosa si vede, così le ritrovi cercando una parola.",
+     "con": "con Qwen3.5 9B", "fatti": "lette", "serve": "Serve il lettore delle scritte"},
+] %}
+{% set ORDINE = LAVORI|map(attribute="chiave")|list %}
+{% set corre = fila.sta_lavorando %}
+{% set totale = mancano.totale %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina ia" data-ia data-corre="{{ 1 if corre else 0 }}" data-adesso="{{ fila.adesso }}">
+    <header class="ia-testa">
+        <h1 class="titolo-pagina">Intelligenza artificiale</h1>
+        <p class="sottotitolo">Qui il programma guarda le tue foto, tutto su questo computer. Accendi i lavori che vuoi: partono uno dopo l'altro.</p>
+    </header>
+
+    {{ ambito('intelligenza', gruppi_ambito|default([]), gruppo_ambito|default(none), '/intelligenza') }}
+
+    <form method="post" action="/intelligenza/avvia" id="ia-modulo">
+    <div class="ia-carte">
+        {% for L in LAVORI %}
+        {% set k = L.chiave %}
+        {% set manca = mancano[k] %}
+        {% set fatti = totale - manca %}
+        {% set vivo = fila.lavori[k] %}
+        {% set adesso = corre and fila.adesso == k %}
+        {% set in_fila = corre and k in fila.scelti and not adesso and loop.index0 > (ORDINE.index(fila.adesso) if fila.adesso else -1) %}
+        {% set gia = corre and not adesso and not in_fila %}
+        {% set guasto_qui = not corre and fila.dove_guasto == k and fila.guasto %}
+        {% set acceso = (k in fila.scelti) if corre else (in_casa[k] and manca > 0) %}
+        {% set si_tocca = in_casa[k] and manca > 0 and (not corre or loop.index0 > (ORDINE.index(fila.adesso) if fila.adesso else -1)) %}
+        <section class="carta ia-carta {{ 'attiva' if adesso }} {{ 'spenta' if not acceso and not adesso and manca > 0 }}" data-lavoro="{{ k }}">
+            <div class="ia-carta-t">
+                <span class="ia-icona">{{ icona(L.icona, 20) }}</span>
+                <label class="interruttore" title="{{ 'Acceso: parte' if acceso else 'Spento: non parte' }}">
+                    <input type="checkbox" name="scelti" value="{{ k }}" {{ 'checked' if acceso }} {{ 'disabled' if not si_tocca or adesso }} data-scelta="{{ k }}">
+                    <span class="binario"></span>
+                    <span class="solo-per-chi-ascolta">{{ L.nome }}</span>
+                </label>
+            </div>
+            <div class="ia-dice">
+                <h2>{{ L.nome }}</h2>
+                <p>{{ L.dice }}</p>
+            </div>
+            {% if adesso %}
+            <div class="ia-num numeri"><span data-fatti>{{ (vivo.fatti or 0)|numero }}</span> <small>di <span data-totale>{{ (vivo.totale or manca)|numero }}</span></small></div>
+            <div class="ia-stato">
+                <span class="barretta"><span data-barra style="width:{{ vivo.percento or 0 }}%"></span></span>
+                <span class="piccolo numeri"><span data-pct>{{ vivo.percento or 0 }}</span>%<span data-manca>{{ (' · ' ~ vivo.quanto_manca) if vivo.quanto_manca }}</span></span>
+            </div>
+            {% if vivo.modelli and vivo.modelli|length > 1 %}
+            <ul class="ia-modelli" data-modelli>
+                {% for m in vivo.modelli %}
+                <li class="{{ 'ora' if m.adesso }}{{ ' fatto' if m.percento >= 100 }}" data-modello="{{ m.nome }}">
+                    <span class="piccolo">{{ m.titolo }}</span>
+                    <span class="barretta luce"><span data-barra-modello style="width:{{ m.percento }}%"></span></span>
+                    <span class="piccolo numeri"><span data-pct-modello>{{ m.percento }}</span>%</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% else %}
+            <div class="ia-num numeri">{{ fatti|numero }} <small>di {{ totale|numero }}</small></div>
+            <div class="ia-stato">
+                {% if guasto_qui %}
+                <span class="bollino male">Fermo per un guasto</span>
+                {% elif not in_casa[k] %}
+                <span class="bollino attenzione">{{ L.serve }}</span>
+                {% elif not totale %}
+                <span class="bollino">Ancora nessuno scatto</span>
+                {% elif manca == 0 %}
+                <span class="bollino bene">Tutti {{ L.fatti }}</span>
+                {% elif in_fila %}
+                <span class="bollino" data-fila-scritta>In fila</span>
+                {% elif corre and not acceso %}
+                <span class="bollino">Saltato</span>
+                {% elif fatti == 0 %}
+                <span class="bollino">Mai {{ L.fatti }}</span>
+                {% else %}
+                <span class="bollino attenzione">Mancano {{ manca|numero }} {{ 'scatto' if manca == 1 else 'scatti' }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if guasto_qui %}
+            <div class="ia-guasto" role="alert">{{ icona('info', 16) }}<div><p>{{ fila.guasto }}</p>
+                {% if fila.dettaglio %}<button class="tasto-comando piccolo" type="button" data-apri-finestra="dettaglio-guasto">Visualizza dettagli</button>{% endif %}</div></div>
+            {% if fila.dettaglio %}
+            <dialog class="finestra" id="dettaglio-guasto" aria-label="Dettagli del guasto">
+                <header>
+                    <h2>Dettagli del guasto</h2>
+                    <button class="tasto-comando nudo piccolo" type="button" data-chiudi-finestra aria-label="Chiudi">{{ icona('x', 18) }}</button>
+                </header>
+                <div class="finestra-dentro">
+                    <p>{{ fila.guasto }}</p>
+                    <pre class="ia-dettaglio" id="testo-guasto">{{ L.nome }}
+{{ fila.guasto }}
+{{ fila.dettaglio }}</pre>
+                    <p class="piccolo tenue">Non ci sono nomi di cartelle, di foto o di nodi: solo i pezzi del programma dove si è rotto.</p>
+                    <div><button class="tasto-comando principale" type="button" id="copia-guasto">Copia</button></div>
+                </div>
+            </dialog>
+            <script type="module">
+            (function () {
+                const tasto = document.getElementById("copia-guasto");
+                const testo = document.getElementById("testo-guasto");
+                if (!tasto || !testo) return;
+                tasto.addEventListener("click", async function () {
+                    try {
+                        await navigator.clipboard.writeText(testo.textContent);
+                        tasto.textContent = "Copiato";
+                    } catch (errore) {
+                        const scelta = window.getSelection();
+                        const pezzo = document.createRange();
+                        pezzo.selectNodeContents(testo);
+                        scelta.removeAllRanges();
+                        scelta.addRange(pezzo);
+                        tasto.textContent = "Selezionato: Ctrl+C";
+                    }
+                    setTimeout(function () { tasto.textContent = "Copia"; }, 2500);
+                });
+            })();
+            </script>
+            {% endif %}
+            {% endif %}
+            <p class="piccolo tenue ia-con">{{ L.con }}</p>
+        </section>
+        {% endfor %}
+    </div>
+
+    <div class="carta ia-fila">
+        <span class="etichetta">La fila</span>
+        <div class="ia-passi">
+            {% for L in LAVORI %}
+            {% set k = L.chiave %}
+            {% set fatto = mancano[k] == 0 or (corre and k in fila.scelti and loop.index0 < (ORDINE.index(fila.adesso) if fila.adesso else 0)) %}
+            {% if not loop.first %}<span class="tra" aria-hidden="true"></span>{% endif %}
+            <span class="p {{ 'qui' if corre and fila.adesso == k }} {{ 'fatto' if fatto and not (corre and fila.adesso == k) }}" data-passo="{{ k }}">
+                <span class="ia-tondo">{% if fatto and not (corre and fila.adesso == k) %}{{ icona('spunta', 13) }}{% else %}{{ loop.index }}{% endif %}</span>{{ L.corto }}
+            </span>
+            {% endfor %}
+        </div>
+        {% if corre %}
+        <span class="ia-fermando piccolo tenue" {% if not fila.sta_fermando %}hidden{% endif %} data-fermando><span class="gira-poco"></span> Mi sto fermando…</span>
+        <button class="tasto-comando" type="submit" formaction="/intelligenza/ferma" {% if fila.sta_fermando %}hidden{% endif %} data-ferma>{{ icona('ferma', 14) }} Ferma</button>
+        {% else %}
+        <button class="tasto-comando accento" type="submit" data-avvia>Avvia</button>
+        {% endif %}
+    </div>
+    </form>
+
+    <p class="piccolo tenue ia-piede">
+        Partono sempre in quest'ordine: impronte, volti, corpi, scritte.{% call spiega("Se chiudo il programma?") %}Puoi chiudere il programma quando vuoi: la volta dopo riprende da dove era. Mentre lavora, i lavori ancora in fila si possono spegnere.{% endcall %}
+    </p>
+</div>
+</main>
+</div>
+{% if avviso_scritte %}
+<dialog class="finestra" id="avviso-scritte" data-apri-subito aria-labelledby="avviso-scritte-titolo">
+    <header>
+        <h2 id="avviso-scritte-titolo">Il lettore delle scritte è cambiato</h2>
+        <button class="tasto-comando nudo piccolo" type="button" data-avviso-visto aria-label="Chiudi">{{ icona('x', 18) }}</button>
+    </header>
+    <div class="finestra-dentro">
+        <p>Al posto di Florence-2 adesso lavora Qwen3.5 9B, molto più bravo.{% call spiega("Cosa cambia?") %}Legge meglio le scritte, anche storte o fatte a mano. In più scrive una frase breve su ogni foto, così la ritrovi cercando quello che si vede.{% endcall %}</p>
+        <p>Le scritte di tutte le foto verranno rifatte da capo.{% call spiega("Quando?") %}La prossima volta che parte il lavoro delle scritte. Finché non tocca a loro, le scritte vecchie restano cercabili.{% endcall %}</p>
+        <p class="piccolo tenue">Tutto succede su questo computer: le foto non escono mai.</p>
+        <div><button class="tasto-comando principale" type="button" data-avviso-visto>Ho capito</button></div>
+    </div>
+</dialog>
+{% endif %}
+<script type="module" src="/statici/js/intelligenza.js"></script>
+{% endblock %}

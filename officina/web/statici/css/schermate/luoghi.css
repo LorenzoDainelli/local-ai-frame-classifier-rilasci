@@ -1,0 +1,32 @@
+.lu-testa > div { display: grid; gap: 4px; }
+.lu-testa h1, .lu-testa p { margin: 0; }
+.lu-dove, .lu-albero, .lu-da-ramo { display: grid; gap: 10px; padding: 14px 16px; }
+.lu-dove h2, .lu-albero h2 { margin: 0; font-size: 16px; }
+.lu-dove p, .lu-da-ramo p { margin: 0; }
+.lu-dove-riga { display: grid; gap: 8px; padding-block: 10px; border-top: 1px solid var(--linea); }
+.lu-dove-nome { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.lu-dove-foto { display: flex; gap: 6px; flex-wrap: wrap; }
+.lu-dove-foto button { padding: 0; border: 2px solid transparent; border-radius: 8px; background: none; cursor: pointer; }
+.lu-dove-foto button:hover { border-color: var(--accento); }
+.lu-dove-foto img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; display: block; }
+.lu-albero-testa { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.lu-ramo { list-style: none; margin: 0; padding-left: 18px; display: grid; gap: 2px; border-left: 1px solid var(--linea); }
+.lu-vista > .lu-ramo { padding-left: 0; border-left: 0; }
+.lu-voce summary { display: flex; gap: 10px; align-items: baseline; padding: 5px 8px; border-radius: 7px; cursor: pointer; list-style: none; flex-wrap: wrap; }
+.lu-voce summary::-webkit-details-marker { display: none; }
+.lu-voce summary:hover { background: var(--superficie-alta); }
+.lu-voce-nome { font-weight: 600; }
+.lu-voce-dentro { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 6px 8px 10px; }
+.lu-voce:not([open]) .lu-voce-dentro { display: none; }
+.lu-da-ramo summary { cursor: pointer; font-weight: 600; }
+.lu-da-ramo form { flex-wrap: wrap; }
+.in-fila select.campo { max-width: 260px; }
+.lu-dove-riga form .campo, .lu-voce-dentro form .campo { width: auto; max-width: 240px; }
+.lu-dove-riga form, .lu-voce-dentro form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.lu-albero-testa form .campo { width: auto; max-width: 220px; }
+.lu-albero-testa form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.lu-voce summary::before { content: "⋯"; color: var(--tenue); order: 9; margin-left: auto; }
+
+.lu-mappa { height: min(72vh, 760px); min-height: 420px; border: 0.5px solid var(--linea); border-radius: var(--raggio-controllo); overflow: hidden; }
+.lu-mappa .mappa-testa .campo-cerca { width: 240px; max-width: 100%; }
+.lu-mappa[hidden] { display: none; }

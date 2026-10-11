@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona, fotina %}
+{% block titolo %}I nomi — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-mazzo">
+    <a class="ps-torna" href="/persone">{{ icona('indietro', 14) }} Tutte le persone</a>
+{% if not gruppo %}
+    <div class="carta mz-vuoto">
+        {{ fotina('grande') }}
+        <div>
+            <h1 class="titolo-pagina">Nessun nome da dare</h1>
+            <p class="prosa">Tutti i gruppi hanno un nome, oppure le facce non sono ancora state cercate.</p>
+            <div class="in-fila">
+                {% if resta.forse %}
+                <a class="tasto-comando principale" href="/persone/cassetto">Guarda i forse doppioni <span class="numeri">· {{ resta.forse|numero }}</span></a>
+                {% endif %}
+                <a class="tasto-comando" href="/persone">Torna alle persone</a>
+            </div>
+        </div>
+    </div>
+{% else %}
+    {% set totale = quanti_nel_mazzo + con_nome %}
+    <div class="mz-testa">
+        <div>
+            <h1 class="titolo-pagina">Chi è?</h1>
+            <p class="sottotitolo">Compare in <b class="numeri">{{ gruppo.scatti|numero }}</b> scatti. Qui i suoi volti più diversi fra loro, non i più belli.{% call spiega("Perché i più diversi") %}
+                <p>Se i volti che vedi qui sotto sono la stessa persona, lo è quasi
+                certamente anche tutto il resto del gruppo: i casi facili non
+                aggiungono niente a una decisione, i casi al limite sì.</p>
+            {% endcall %}</p>
+        </div>
+        <div class="mz-quanti">
+            <span class="minuscolo tenue numeri">{{ quanti_nel_mazzo|numero }} {{ 'gruppo' if quanti_nel_mazzo == 1 else 'gruppi' }} da nominare · {{ con_nome|numero }} con un nome</span>
+            <span class="barretta" aria-hidden="true"><span style="width:{{ (100 * con_nome / totale)|round|int if totale else 0 }}%"></span></span>
+        </div>
+    </div>
+
+    <div class="carta mz-carta" data-persona="{{ gruppo.id }}">
+        <div class="mz-facce">
+            {% for volto in gruppo.volti %}
+            <label class="mz-f">
+                <input type="checkbox" value="{{ volto.id }}" data-volto aria-label="Non è lui">
+                <span class="pe-tondo"><img src="/volto/{{ volto.id }}?lato=200" alt="" loading="lazy"></span>
+                <i aria-hidden="true">{{ icona('spunta', 12) }}</i>
+            </label>
+            {% endfor %}
+        </div>
+        <p class="mz-sotto">
+            {{ icona('info', 15) }}<span>Uno non è lui? Spuntalo e premi</span>
+            <button class="tasto-comando piccolo" id="non-e-lui" type="button" disabled>Non è lui<span data-quanti></span></button>
+            <span class="minuscolo tenue">diventa un gruppo nuovo senza nome, nessun volto si cancella</span>
+        </p>
+        <div class="mz-nome">
+            <input class="campo" id="nome" type="text" autocomplete="off" placeholder="Come si chiama?">
+            <button class="tasto-comando principale" id="dai-il-nome" type="button">Dai il nome</button>
+            <button class="tasto-comando" id="salta" type="button"
+                    title="Torna in fondo al mazzo: «dopo» non vuol dire «non m'interessa»">Dopo</button>
+            <button class="tasto-comando nudo" id="ignora" type="button"
+                    title="Passanti, riflessi, facce sui manifesti">Non m'interessa</button>
+        </div>
+        <div id="domanda-omonimo" hidden></div>
+    </div>
+
+    <p class="minuscolo tenue">
+        <b>«Dopo» vuol dire «non adesso», mai «non m'interessa».</b> Il gruppo torna in fondo al mazzo.{% call spiega("Cosa succede se rimandi") %}
+            <p>Il gruppo torna in fondo al mazzo e resta utilizzabile come
+            filtro.</p>
+            <p>È la stessa cosa che &laquo;salta&raquo; significa su uno
+            scatto: non può voler dire due cose opposte in due schermate
+            diverse.</p>
+        {% endcall %}
+        {% if resta.forse %} · <a href="/persone/cassetto">{{ resta.forse|numero }} {{ 'coppia' if resta.forse == 1 else 'coppie' }} di forse doppioni da guardare</a>{% endif %}
+    </p>
+{% endif %}
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+{% if gruppo %}
+<script type="module" src="/statici/js/mazzo.js"></script>
+{% endif %}
+{% endblock %}

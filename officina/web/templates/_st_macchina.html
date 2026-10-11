@@ -1,0 +1,24 @@
+    <div class="carta st-stanza mm-macchina">
+        <div class="riga-fra">
+            <h3>La macchina</h3>
+            {% if capacita|selectattr(1, "false")|list %}
+            <span class="bollino attenzione">Qualcosa si vedrà peggio</span>
+            {% else %}
+            <span class="bollino bene">Pronta</span>
+            {% endif %}
+        </div>
+        <div class="mm-tre">
+            <div class="mm-voce">
+                <span class="etichetta">Scheda video</span>
+                <span class="mm-numero">{{ scheda_video or "Nessuna" }}</span>
+                <span class="minuscolo tenue">{{ "i modelli lavorano qui" if scheda_video else "i modelli lavorano sul processore, più piano" }}</span>
+            </div>
+            {% for voce, valore, nota in capacita %}
+            <div class="mm-voce">
+                <span class="etichetta">{{ voce }}</span>
+                <span class="mm-numero">{{ "Sì" if valore else "No" }}</span>
+                <span class="minuscolo tenue">{{ nota|senza_regole }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>

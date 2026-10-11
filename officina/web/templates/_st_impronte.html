@@ -1,0 +1,34 @@
+{% from "_spiega.html" import spiega %}
+    <div class="carta st-stanza">
+        <h3>Le impronte, e con quali modelli{% call spiega("Cambiare modello") %}
+            <p>Il database sa con quale modello e con quale versione è stata
+            calcolata ogni impronta.</p>
+            <p>Cambiare modello è <b>una notte di ricalcolo, non una
+            riscrittura</b>: le etichette non si toccano, perché sono attaccate
+            agli scatti e non alle impronte.</p>
+        {% endcall %}</h3>
+        <p class="piccolo attenuato">
+            Ogni impronta sa da quale modello e da quale versione viene.
+        </p>
+        {% if modelli_usati %}
+        <table class="tabella" style="margin-top:var(--s4)">
+            <tr><th>Modello</th><th>Versione</th><th>Impronte</th><th>Scatti</th>
+                <th>Mancano</th><th>Numeri per impronta</th></tr>
+            {% for riga in modelli_usati %}
+            <tr>
+                <td>{{ riga.descrittore }}</td>
+                <td class="numeri">{{ riga.versione }}</td>
+                <td class="numeri">{{ riga.impronte|numero }}</td>
+                <td class="numeri">{{ riga.scatti|numero }}</td>
+                <td class="numeri {{ 'tenue' if not riga.mancano }}">{{ riga.mancano|numero if riga.mancano else '—' }}</td>
+                <td class="numeri">{{ riga.dimensione }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+        <p class="piccolo tenue" style="margin-top:var(--s3)">
+            Nessuna impronta, ancora. Si calcolano da
+            <a href="/intelligenza">Intelligenza artificiale</a>.
+        </p>
+        {% endif %}
+    </div>

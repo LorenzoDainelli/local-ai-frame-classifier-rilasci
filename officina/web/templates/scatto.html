@@ -1,0 +1,554 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Scatto — Local AI Frame Classifier{% endblock %}
+
+{% macro il_visore() %}
+{% set filmato = movimento or (principale if scatto.genere == 'video' else none) %}
+{% set si_vede = si_riproduce or copia_pronta %}
+<div class="visore">
+    <div class="lastra {{ 'con-live' if movimento }}" {% if movimento %}data-live="/live/{{ scatto.id }}"{% endif %}>
+        {% if non_si_apre %}
+        <div class="dentro-la-lastra ft-non-si-apre">
+            <p class="attenuato piccolo">
+                <b>Questo file non si apre</b>: {{ non_si_apre }}. I modelli hanno
+                smesso di provarci, ma <b>niente è stato cancellato</b>: etichette,
+                data e nota sono dove le hai lasciate.
+            </p>
+            <form method="post" action="/scatto/{{ scatto.id }}/rimetti-in-coda">
+                <button class="tasto-comando" type="submit">Rimettilo in coda</button>
+            </form>
+            <p class="tenue minuscolo">
+                Se lo ricopi dall'originale torna in coda da solo:
+                <a href="/sistemare">Da sistemare</a> &rarr; Controlla adesso.
+            </p>
+        </div>
+        {% else %}
+        {% if scatto.genere == 'video' and principale %}
+        <video id="lastra-video" {% if si_vede %}src="/originale/{{ principale.id }}"{% else %}data-sorgente="/originale/{{ principale.id }}" hidden{% endif %}
+               poster="/immagine/{{ principale.id }}" controls playsinline preload="metadata"></video>
+        <img id="lastra-principale" src="/immagine/{{ principale.id }}" alt="" {% if si_vede %}hidden{% endif %}>
+        {% else %}
+        <img id="lastra-principale" src="/immagine/{{ principale.id }}" alt="">
+        {% endif %}
+        <div class="dentro-la-lastra ft-non-si-vede" id="foto-non-si-vede" hidden>
+            <p class="attenuato piccolo"><b>Questa foto non si riesce a mostrare.</b> Il file è ancora al suo posto: magari il disco non è collegato, oppure il formato ha bisogno di un pezzo che manca.</p>
+            <button class="tasto-comando" type="button" id="riprova-la-foto">Riprova</button>
+        </div>
+        {% if movimento %}
+        <button class="ft-live" type="button" id="accendi-la-live" aria-pressed="false" title="Guarda il movimento. Basta anche passarci sopra col mouse.">◎ LIVE</button>
+        {% endif %}
+        {% if volti_visti %}<script type="application/json" id="volti-dello-scatto">{{ volti_visti|tojson }}</script>{% endif %}
+        {% if corpi_visti %}<script type="application/json" id="corpi-dello-scatto">{{ corpi_visti|tojson }}</script>{% endif %}
+        {% endif %}
+    </div>
+    {% if filmato and not si_vede and not non_si_apre %}
+    <div class="carta ft-non-si-apre ft-sotto-la-lastra" id="live-non-si-legge" {% if movimento %}hidden{% endif %}>
+        <p class="attenuato piccolo">
+            {{ "Il movimento di questa foto live" if movimento else "Questo video" }} è codificato in
+            <b>{{ codec or "un formato" }}</b>, che la finestra del programma non sa aprire da sola.
+        </p>
+        {% if copia_si_puo_fare %}
+        <form method="post" action="/scatto/copia-video/{{ filmato.id }}">
+            <button class="tasto-comando" type="submit">Preparane una copia che si vede</button>
+        </form>
+        <p class="tenue minuscolo" id="copia-video-a-che-punto"></p>
+        <p class="tenue minuscolo">
+            Sta nella cache: si butta quando vuoi e si rifà da sola.{% call spiega("La copia che si vede") %}
+                <p>È peggiore dell'originale, perché ricodificare butta via
+                qualcosa. Serve a guardare, e basta.</p>
+                <p>Tutto il resto del programma continua a leggere
+                l'originale, che non viene toccato.</p>
+            {% endcall %}
+        </p>
+        {% else %}
+        <p class="tenue minuscolo">
+            La copia che si vede non si può fare su questa macchina: manca il
+            decodificatore. Si installa {{ istruzioni_motori() }}.
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro la_striscia() %}
+{% if scatto.genere == 'video' %}
+<div class="ft-striscia">
+    {% if striscia %}
+    <div class="etichetta">I momenti in cui la scena cambia <span class="tenue numeri">{{ striscia|length|numero }}</span></div>
+    <div class="striscia-fotogrammi">
+        {% for momento in striscia %}
+        <button class="fotogramma {{ 'scelto' if loop.first }}"
+                data-numero="{{ momento.numero }}"
+                data-istante="{{ momento.istante }}"
+                data-file="{{ principale.id }}">
+            <img src="/fotogramma/{{ principale.id }}?numero={{ momento.numero }}&istante={{ momento.istante }}&lato=200"
+                 alt="" loading="lazy">
+            <span class="quando numeri">{{ momento.quando }}</span>
+        </button>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="piccolo tenue">
+        La striscia dei fotogrammi compare quando sono state calcolate le
+        impronte: i momenti sono quelli, non se ne inventano altri. Si calcolano
+        dalla pagina <a href="/stato#misura">Misura</a>.
+    </p>
+    {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro lo_stato_del_miglioramento() %}
+{% if miglioria %}
+{% if miglioria.stato == 'approvata' %}
+<span class="pillola">migliorata</span>
+{% elif miglioria.stato == 'da_rivedere' %}
+<a class="tasto-comando piccolo" href="/miglioramento/rivedi">Da rivedere</a>
+{% else %}
+<a class="pillola" href="/miglioramento">in coda per il miglioramento</a>
+{% endif %}
+{% elif si_puo_migliorare %}
+<button class="tasto-comando piccolo" type="button" id="migliora-scatto"
+        data-scatto="{{ scatto.id }}"
+        title="Porta a FHD questa foto o questo video, qui sul computer">Migliora</button>
+{% endif %}
+{% endmacro %}
+
+{% macro fuori_archivio() %}
+<form method="post" action="/scatto/{{ scatto.id }}/fuori-archivio">
+    <input type="hidden" name="fuori" value="{{ 0 if scatto.fuori_archivio else 1 }}">
+    <button class="tasto-comando piccolo" type="submit">
+        {{ "Rimetti in archivio" if scatto.fuori_archivio else "Metti fuori archivio" }}
+    </button>
+</form>
+{% endmacro %}
+
+{% macro i_dati() %}
+<dl class="ft-dati">
+    <dt>Tipo</dt><dd>{{ tipo_a_parole }}</dd>
+    <dt>Misure</dt><dd class="numeri">{{ scatto.larghezza }} × {{ scatto.altezza }}</dd>
+    {% if scatto.durata_ms %}
+    <dt>Durata</dt><dd class="numeri">{{ durata }}</dd>
+    {% endif %}
+    <dt>Data</dt>
+    <dd>
+        {{ quando }}
+        {% if scatto.fuso_minuti is not none %}<span class="tenue piccolo">· fuso {{ fuso }}</span>{% endif %}
+        <span class="tenue piccolo">· letta da: {{ {'nome': 'il nome del file', 'file': 'la data di Windows del file', 'nome_vista': 'il nome del file, controllata da te', 'file_vista': 'la data di Windows del file, controllata da te'}.get(scatto.origine_data, scatto.origine_data) }}</span>
+    </dd>
+    {% if scatto.latitudine %}
+    <dt>Luogo</dt>
+    <dd class="numeri">{{ "%.4f"|format(scatto.latitudine) }}, {{ "%.4f"|format(scatto.longitudine) }}
+        <span class="tenue piccolo">· il nome del posto arriva senza rete</span></dd>
+    {% endif %}
+    <dt>File</dt>
+    <dd>
+        {% for file in file_dello_scatto %}
+        <div class="ft-file">
+            <span class="piccolo nome-di-file">{{ file.nome }}</span>
+            <span class="tenue minuscolo">· {{ file.formato or '?' }} · {{ file.peso }}</span>
+            {% if not file.presente %}<span class="pillola proposta minuscolo">non trovato sul disco</span>{% endif %}
+        </div>
+        {% endfor %}
+    </dd>
+    {% if percorsi_in_piu %}
+    <dt>Doppioni</dt>
+    <dd class="piccolo attenuato">
+        Lo stesso file si trova in {{ percorsi_in_piu + 1 }} posti: è un solo scatto
+        con più percorsi.
+    </dd>
+    {% endif %}
+</dl>
+{% endmacro %}
+
+{% macro la_nota(da_sola) %}
+<form method="post" action="/scatto/{{ scatto.id }}/nota" class="ft-nota" {% if da_sola %}data-nota-da-sola{% endif %}>
+    <label class="etichetta" for="nota">La tua nota</label>
+    <textarea class="campo" id="nota" name="nota" rows="3"
+              placeholder="«qui la luce era strana», «controllare se è lo stesso posto»">{{ scatto.nota or '' }}</textarea>
+    <div class="ft-nota-sotto">
+        {% if da_sola %}
+        <span class="minuscolo tenue" data-come-sta-la-nota>Si salva da sola.</span>
+        <noscript><button class="tasto-comando piccolo" type="submit">Salva la nota</button></noscript>
+        {% else %}
+        <button class="tasto-comando piccolo" type="submit">Salva la nota</button>
+        {% endif %}
+    </div>
+</form>
+{% endmacro %}
+
+{% block corpo %}
+{% set versione = aspetto.foto %}
+<div class="corpo">
+<main class="zona-principale">
+
+    <div class="striscia-contesto">
+        <a href="{{ ritorno }}" data-torna class="tasto-comando nudo piccolo">{{ icona('indietro', 14) }} Torna alla griglia</a>
+        {% if vicini.posizione %}
+        <span class="piccolo attenuato numeri">{{ vicini.posizione|numero }} di {{ vicini.totale }}</span>
+        {% endif %}
+        <span class="in-fila ft-vicini">
+            <a class="tasto-comando nudo piccolo" href="/?simili={{ scatto.id }}"
+               title="La galleria, filtrata su chi somiglia a questo scatto">Chi gli somiglia</a>
+            {% if vicini.prima %}<a class="tasto-comando nudo piccolo" href="/scatto/{{ vicini.prima }}" title="Freccia a sinistra" data-sfoglia="-1">‹ Precedente</a>{% endif %}
+            {% if vicini.dopo %}<a class="tasto-comando nudo piccolo" href="/scatto/{{ vicini.dopo }}" title="Freccia a destra" data-sfoglia="1">Successivo ›</a>{% endif %}
+        </span>
+    </div>
+
+    <div class="pagina pagina-foto foto-{{ versione|lower }}" data-foto-aperta>
+        <div class="ft-palco">
+            <div class="ft-sinistra">
+                {{ il_visore() }}
+                {{ la_striscia() }}
+                <div class="ft-tasti" role="toolbar" aria-label="Cosa fare con questa foto">
+                    <button class="tasto-comando piccolo" type="button" data-apri-info aria-expanded="false" aria-controls="ft-info">{{ icona('info', 14) }} Informazioni</button>
+                    <button class="tasto-comando nudo piccolo" type="button" data-apri-nota aria-controls="ft-info">{{ icona('nota', 14) }} Nota{% if scatto.nota %} ·{% endif %}</button>
+                    {% if corpi_visti %}<button class="tasto-comando nudo piccolo" type="button" data-mostra-corpi aria-pressed="false" title="Mostra il contorno e i punti del corpo di ogni persona">{{ icona('persona', 14) }} Corpi · {{ corpi_visti|length }}</button>{% endif %}
+                    <span class="ft-tasti-destra in-fila">
+                        {{ lo_stato_del_miglioramento() }}
+                        {{ fuori_archivio() }}
+                    </span>
+                </div>
+                <p class="piccolo attenuato" id="esito-migliora" hidden></p>
+            </div>
+            <aside class="carta ft-scheda" id="ft-info" hidden>
+                <div class="ft-scheda-testa">
+                    <h2 class="ft-quando">{{ quando }}</h2>
+                    <button class="tasto-comando nudo piccolo" type="button" data-chiudi-info aria-label="Chiudi le informazioni">{{ icona('x', 14) }}</button>
+                </div>
+                {{ i_dati() }}
+                {{ la_nota(True) }}
+            </aside>
+        </div>
+    </div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+<script type="module">
+    import { preparaCorpi } from "/statici/js/corpi.js";
+    import { mettiInCoda, scriviEsito } from "/statici/js/migliora.js";
+
+    preparaCorpi();
+    import { mandaModulo, quandoSiFerma } from "/statici/js/comune.js";
+
+    const migliora = document.getElementById("migliora-scatto");
+    if (migliora) {
+        migliora.addEventListener("click", async () => {
+            const dove = document.getElementById("esito-migliora");
+            migliora.disabled = true;
+            try {
+                const esito = await mettiInCoda({ scatti: [Number(migliora.dataset.scatto)] });
+                scriviEsito(dove, esito);
+                if (esito.messi) {
+                    window.movimenti?.inCoda?.([document.getElementById("lastra-principale")].filter(Boolean));
+                    migliora.hidden = true;
+                }
+                else migliora.disabled = false;
+            } catch (errore) {
+                dove.textContent = errore.message;
+                dove.hidden = false;
+                migliora.disabled = false;
+            }
+        });
+    }
+
+    const modulo = document.querySelector("[data-nota-da-sola]");
+    if (modulo) {
+        const campo = modulo.querySelector("textarea");
+        const detto = modulo.querySelector("[data-come-sta-la-nota]");
+        let salvata = campo.value;
+        const salva = async () => {
+            if (campo.value === salvata) return;
+            const adesso = campo.value;
+            detto.textContent = "Salvo…";
+            try {
+                await mandaModulo(modulo.action, { nota: adesso });
+                salvata = adesso;
+                if (window.movimenti?.salvato) window.movimenti.salvato(detto, "salvata", "Si salva da sola.");
+                else detto.textContent = "Salvata.";
+            } catch (errore) {
+                detto.textContent = errore.message;
+            }
+        };
+        const piuTardi = quandoSiFerma(salva, 800);
+        campo.addEventListener("input", () => { detto.textContent = "…"; piuTardi(); });
+        campo.addEventListener("blur", salva);
+        modulo.addEventListener("submit", (evento) => { evento.preventDefault(); salva(); });
+        window.addEventListener("beforeunload", salva);
+    }
+</script>
+<script>
+(function () {
+    const pagina = document.querySelector("[data-foto-aperta]");
+    const info = document.getElementById("ft-info");
+    const apri = document.querySelector("[data-apri-info]");
+    if (!pagina || !info || !apri) return;
+    const segna = (aperta) => {
+        info.hidden = !aperta;
+        pagina.classList.toggle("con-info", aperta);
+        apri.setAttribute("aria-expanded", aperta ? "true" : "false");
+        try { localStorage.setItem("ft.info", aperta ? "1" : "0"); } catch (errore) { }
+    };
+    let aperta = false;
+    try { aperta = localStorage.getItem("ft.info") === "1"; } catch (errore) { }
+    segna(aperta);
+    apri.addEventListener("click", () => segna(info.hidden));
+    document.querySelector("[data-chiudi-info]").addEventListener("click", () => { segna(false); apri.focus(); });
+    document.querySelector("[data-apri-nota]").addEventListener("click", () => {
+        segna(true);
+        const campo = info.querySelector("textarea");
+        if (campo) { campo.scrollIntoView({ block: "nearest" }); campo.focus(); }
+    });
+})();
+
+(function () {
+    const lastra = document.getElementById("lastra-principale");
+    const sostituto = document.getElementById("foto-non-si-vede");
+    if (!lastra || !sostituto) return;
+    const video = document.getElementById("lastra-video");
+    lastra.addEventListener("error", () => {
+        if (video && !video.hidden) return;
+        lastra.hidden = true;
+        sostituto.hidden = false;
+    });
+    document.getElementById("riprova-la-foto").addEventListener("click", () => {
+        sostituto.hidden = true;
+        lastra.hidden = false;
+        lastra.src = lastra.src.split("?")[0] + "?di-nuovo=" + Date.now();
+    });
+})();
+
+(function () {
+    const video = document.getElementById("lastra-video");
+    if (!video || !video.hidden || !video.dataset.sorgente) return;
+    if (!video.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"')) return;
+    video.addEventListener("loadeddata", () => {
+        video.hidden = false;
+        const ferma = document.getElementById("lastra-principale");
+        if (ferma) ferma.hidden = true;
+        const avviso = document.getElementById("live-non-si-legge");
+        if (avviso) avviso.hidden = true;
+    }, { once: true });
+    video.src = video.dataset.sorgente;
+})();
+
+(function () {
+    const lastra = document.querySelector(".lastra[data-live]");
+    if (!lastra) return;
+    const tasto = document.getElementById("accendi-la-live");
+    let fissa = false;
+    let filmato = null;
+    const togli = () => {
+        if (!filmato) return;
+        filmato.removeAttribute("src");
+        filmato.load();
+        filmato.remove();
+        filmato = null;
+    };
+    const accendi = () => {
+        if (filmato) return;
+        filmato = document.createElement("video");
+        filmato.className = "live-al-passaggio";
+        filmato.muted = filmato.loop = filmato.playsInline = true;
+        filmato.addEventListener("loadeddata", () => {
+            filmato.classList.add("pronta");
+            filmato.play().catch(() => {});
+        }, { once: true });
+        filmato.addEventListener("error", () => {
+            togli();
+            fissa = false;
+            tasto.setAttribute("aria-pressed", "false");
+            tasto.classList.add("non-si-vede");
+            const avviso = document.getElementById("live-non-si-legge");
+            if (avviso) avviso.hidden = false;
+        }, { once: true });
+        filmato.src = lastra.dataset.live;
+        lastra.append(filmato);
+    };
+    lastra.addEventListener("mouseenter", accendi);
+    lastra.addEventListener("mouseleave", () => { if (!fissa) togli(); });
+    tasto.addEventListener("click", async () => {
+        fissa = !fissa;
+        tasto.setAttribute("aria-pressed", fissa ? "true" : "false");
+        if (!fissa) { togli(); return; }
+        if (window.movimenti && window.movimenti.anelloLive) await window.movimenti.anelloLive(tasto);
+        if (fissa) accendi();
+    });
+})();
+
+(function () {
+    const lastra = document.querySelector(".pagina-foto .lastra");
+    if (!lastra) return;
+    const MASSIMO = 5;
+    const vista = { z: 1, x: 0, y: 0 };
+    let trascino = null;
+    const media = () => [...lastra.querySelectorAll(":scope > img:not([hidden]), :scope > video:not([hidden]), video.live-al-passaggio, :scope > .ft-corpi:not([hidden])")];
+    const come = (el) => vista.z === 1 ? "none"
+        : "translate(" + (vista.x + (vista.z - 1) * el.offsetLeft) + "px," + (vista.y + (vista.z - 1) * el.offsetTop) + "px) scale(" + vista.z + ")";
+    const tieni = () => {
+        const r = lastra.getBoundingClientRect();
+        const libero = (r.width * (vista.z - 1));
+        const liberoAlto = (r.height * (vista.z - 1));
+        vista.x = Math.min(0, Math.max(-libero, vista.x));
+        vista.y = Math.min(0, Math.max(-liberoAlto, vista.y));
+    };
+    const metti = (morbido) => {
+        tieni();
+        lastra.classList.toggle("ingrandita", vista.z > 1);
+        media().forEach(function (el) {
+            const prima = getComputedStyle(el).transform;
+            el.style.transformOrigin = "0 0";
+            el.style.transform = come(el);
+            if (morbido && window.movimenti && window.movimenti.acceso()) {
+                window.movimenti.anima(el, [{ transform: prima === "none" ? "none" : prima }, { transform: come(el) }], { e: "morbida", f: "none" });
+            }
+        });
+    };
+    const verso = (z, px, py, morbido) => {
+        const r = lastra.getBoundingClientRect();
+        const fx = px - r.left, fy = py - r.top;
+        const nuova = Math.min(MASSIMO, Math.max(1, z));
+        vista.x = fx - (fx - vista.x) * (nuova / vista.z);
+        vista.y = fy - (fy - vista.y) * (nuova / vista.z);
+        vista.z = nuova;
+        if (nuova === 1) { vista.x = 0; vista.y = 0; }
+        metti(morbido);
+    };
+    lastra.addEventListener("dblclick", function (evento) {
+        if (evento.target.closest("button, video[controls]")) return;
+        evento.preventDefault();
+        verso(vista.z > 1 ? 1 : 2.4, evento.clientX, evento.clientY, true);
+    });
+    lastra.addEventListener("wheel", function (evento) {
+        if (evento.ctrlKey) return;
+        if (vista.z === 1 && evento.deltaY > 0) return;
+        evento.preventDefault();
+        verso(vista.z * (evento.deltaY < 0 ? 1.2 : 1 / 1.2), evento.clientX, evento.clientY, false);
+    }, { passive: false });
+    lastra.addEventListener("pointerdown", function (evento) {
+        if (vista.z === 1 || evento.button !== 0 || evento.target.closest("button")) return;
+        trascino = { x: evento.clientX - vista.x, y: evento.clientY - vista.y };
+        lastra.setPointerCapture(evento.pointerId);
+        lastra.classList.add("trascina");
+    });
+    lastra.addEventListener("pointermove", function (evento) {
+        if (!trascino) return;
+        vista.x = evento.clientX - trascino.x;
+        vista.y = evento.clientY - trascino.y;
+        metti(false);
+    });
+    const lascia = function () { trascino = null; lastra.classList.remove("trascina"); };
+    lastra.addEventListener("pointerup", lascia);
+    lastra.addEventListener("pointercancel", lascia);
+    document.addEventListener("keydown", function (evento) {
+        if (evento.key === "Escape" && vista.z > 1) {
+            evento.preventDefault();
+            evento.stopImmediatePropagation();
+            const r = lastra.getBoundingClientRect();
+            verso(1, r.left + r.width / 2, r.top + r.height / 2, true);
+        }
+    }, true);
+})();
+
+(function () {
+    const modulo = document.querySelector('form[action$="/fuori-archivio"]');
+    if (!modulo || modulo.querySelector('input[name="fuori"]').value !== "1") return;
+    let via = false;
+    modulo.addEventListener("submit", async function (evento) {
+        if (via || !window.movimenti || !window.movimenti.fuoriArchivio) return;
+        evento.preventDefault();
+        via = true;
+        await window.movimenti.fuoriArchivio(document.getElementById("lastra-principale"));
+        modulo.submit();
+    });
+})();
+
+(function () {
+    const prima = {{ (vicini.prima and "/scatto/%s" % vicini.prima) | tojson }};
+    const dopo = {{ (vicini.dopo and "/scatto/%s" % vicini.dopo) | tojson }};
+    const indietro = {{ ritorno | tojson }};
+    const parametri = window.location.search;
+
+    document.addEventListener("keydown", function (evento) {
+        if (evento.target.tagName === "INPUT" || evento.target.tagName === "TEXTAREA") return;
+        if (evento.key === "ArrowRight" && dopo) {
+            evento.preventDefault();
+            try { sessionStorage.setItem("mv.sfoglia", JSON.stringify({ verso: 1, quando: Date.now() })); } catch (errore) { }
+            location.href = dopo + parametri;
+        } else if (evento.key === "ArrowLeft" && prima) {
+            evento.preventDefault();
+            try { sessionStorage.setItem("mv.sfoglia", JSON.stringify({ verso: -1, quando: Date.now() })); } catch (errore) { }
+            location.href = prima + parametri;
+        } else if (evento.key === "Escape") {
+            evento.preventDefault();
+            if (window.torna) window.torna(indietro); else location.href = indietro;
+        }
+    });
+})();
+
+(function () {
+    const lastra = document.getElementById("lastra-principale");
+    const video = document.getElementById("lastra-video");
+    const striscia = document.querySelectorAll(".fotogramma");
+    if (!lastra || !striscia.length) return;
+    striscia.forEach(function (tasto) {
+        tasto.addEventListener("click", function () {
+            striscia.forEach(function (altro) { altro.classList.remove("scelto"); });
+            tasto.classList.add("scelto");
+            if (video && !video.hidden) {
+                video.currentTime = Number(tasto.dataset.istante || 0) / 1000;
+                video.play().catch(function () {});
+                return;
+            }
+            lastra.src = "/fotogramma/" + tasto.dataset.file
+                       + "?numero=" + tasto.dataset.numero
+                       + "&istante=" + tasto.dataset.istante;
+        });
+    });
+})();
+
+(function () {
+    const dove = document.getElementById("copia-video-a-che-punto");
+    if (!dove) return;
+
+    let staAndando = false;
+
+    function aSecondi(millisecondi) {
+        const tutti = Math.round(millisecondi / 1000);
+        const minuti = Math.floor(tutti / 60);
+        return minuti + ":" + String(tutti % 60).padStart(2, "0");
+    }
+
+    async function guarda() {
+        if (document.hidden) return;
+        let dati;
+        try {
+            dati = await (await fetch("/api/copia-video")).json();
+        } catch (errore) { return; }
+
+        if (dati.guasto) {
+            dove.textContent = dati.guasto;
+            staAndando = false;
+            return;
+        }
+        if (dati.sta_lavorando) {
+            staAndando = true;
+            dove.textContent = dati.totale
+                ? "Sto ricodificando: " + aSecondi(dati.fatti || 0)
+                  + " di " + aSecondi(dati.totale)
+                : "Sto ricodificando.";
+        } else if (staAndando) {
+            staAndando = false;
+            window.location.reload();
+        }
+    }
+
+    guarda();
+    setInterval(guarda, 2000);
+})();
+</script>
+{% endblock %}

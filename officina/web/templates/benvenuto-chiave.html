@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% import "_guida.html" as guida_pezzi %}
+{% set guida = true %}
+{% block titolo %}La chiave — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale guida">
+    {{ guida_pezzi.testa(2) }}
+<div class="pagina guida-corpo">
+
+    {% call guida_pezzi.dice("La chiave") %}
+        La chiave di Hugging Face è la parola che dice al sito dei modelli che sei tu. Senza, non arrivano DINOv3, SAM 3 e LucidFlux.{% call spiega("Serve per forza?") %}
+            <p>Sì: DINOv3 e SAM 3 servono per guardare le foto e chi li ha
+            fatti li dà solo a chi ha una chiave e accetta le condizioni.
+            Con la chiave anche gli altri arrivano più in fretta.</p>
+            <p>Comincia sempre con <span class="numeri">hf_</span>.</p>
+        {% endcall %}
+    {% endcall %}
+
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('chiave', 18) }}<h1>Come si fa</h1></div>
+        <ol class="piccolo elenco-passi">
+            <li>Apri il browser, vai su <span class="indirizzo numeri">huggingface.co</span>
+                e crea un account, oppure entra col tuo.</li>
+            <li>Vai su <span class="indirizzo numeri">huggingface.co/settings/tokens</span>
+                e premi <b>Create new token</b>.</li>
+            <li>Scegli il tipo <b>Read</b>, dagli un nome qualsiasi e premi
+                <b>Create token</b>.{% call spiega("E se scelgo «Fine-grained»?") %}
+                    <p>Va bene lo stesso, ma fra i permessi devi spuntare
+                    <b>Read access to contents of all public gated repos you can
+                    access</b>. Senza quella spunta i modelli con le condizioni
+                    non si scaricano.</p>
+                {% endcall %}</li>
+            <li>Copia la chiave e incollala qui sotto.</li>
+        </ol>
+        <div data-solo-nel-programma hidden class="guida-chiave">
+            <p class="piccolo" data-programma="chiave"></p>
+            <div class="in-fila" data-programma="campo-chiave" hidden>
+                <input class="campo" type="password" autocomplete="off"
+                       spellcheck="false" placeholder="hf_..."
+                       data-programma="nuova-chiave">
+                <button class="tasto-comando principale" type="button"
+                        data-programma-fai="salva-chiave">Salva</button>
+            </div>
+            <button class="tasto-comando nudo" type="button"
+                    data-programma-fai="togli-chiave" hidden>Togli la chiave</button>
+        </div>
+        <p class="minuscolo tenue">Resta nel Gestore credenziali di Windows, non in un file, e non parte mai verso nessun altro sito.</p>
+    </section>
+
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('chiave', 18) }}<h2>DINOv3 e SAM 3</h2></div>
+        <ol class="piccolo elenco-passi">
+            <li>Una volta sola: entra su Hugging Face, apri
+                <span class="indirizzo numeri">{{ pagina_dinov3 | replace("https://", "") }}</span>
+                e accetta le condizioni.</li>
+            <li>Poi apri <span class="indirizzo numeri">{{ pagina_sam3 | replace("https://", "") }}</span>,
+                compila il modulo e accetta le condizioni.{% call spiega("Quanto ci vuole?") %}
+                    <p>Per SAM 3 la conferma arriva per mail, di solito in pochi
+                    minuti, a volte in qualche ora. Finché non arriva, i corpi
+                    nelle foto non si possono separare.</p>
+                {% endcall %}</li>
+        </ol>
+    </section>
+
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('migliora', 18) }}<h2>Solo per LucidFlux</h2></div>
+        <p class="piccolo attenuato">
+            Una volta sola: entra su Hugging Face, apri
+            <span class="indirizzo numeri">{{ pagina_del_cancello | replace("https://", "") }}</span>
+            e premi <b>Agree and access repository</b>.{% call spiega("Perché") %}
+                <p>LucidFlux usa FLUX.1-dev, che chi l'ha fatto dà solo a chi
+                accetta le sue condizioni.</p>
+            {% endcall %}
+        </p>
+        <p class="minuscolo tenue">Se non ti interessa LucidFlux, salta questo riquadro.</p>
+    </section>
+</div>
+    {% call guida_pezzi.piede(2, "la chiave si mette anche dopo, dalle Impostazioni") %}
+        <a class="tasto-comando nudo" href="/benvenuto/modelli">Non ce l'ho, vado avanti</a>
+        <a class="tasto-comando principale" href="/benvenuto/modelli">Avanti {{ icona('avanti', 14) }}</a>
+    {% endcall %}
+</main>
+</div>
+{% endblock %}

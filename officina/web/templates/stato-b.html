@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona, fotina %}
+{% block titolo %}Stato — Local AI Frame Classifier{% endblock %}
+
+{% macro stanza(id, icona_nome, nome, riassunto) -%}
+<details class="carta st-b-stanza" id="{{ id }}">
+    <summary>{{ icona(icona_nome, 17) }}<span class="st-b-stanza-nome">{{ nome }}</span><span class="minuscolo tenue">{{ riassunto }}</span>{{ icona('giu', 14, 'st-b-freccia') }}</summary>
+    <div class="st-b-stanza-dentro">{{ caller() }}</div>
+</details>
+{%- endmacro %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina stato stato-b" id="pagina-stato">
+    <header class="st-b-testa">
+        {{ fotina('grande') }}
+        <div>
+            <p class="minuscolo tenue">Stato · aggiornato adesso</p>
+            <h1>{{ lettera.titolo }}<br>{{ lettera.sotto }}</h1>
+        </div>
+    </header>
+
+    <div class="st-b-lettera" id="pagella">
+        <p class="st-b-prosa">{{ lettera.albero }}</p>
+        {% if pagella.righe %}{% include "_st_tre.html" %}{% endif %}
+        {% if pagella.coda %}{% include "_st_compiti.html" %}{% endif %}
+
+        {% if sistemare %}
+        <div class="st-b-guai">{% include "_st_sistemare.html" %}</div>
+        {% endif %}
+
+        <p class="st-b-prosa" data-lavori-frase>{% if lavori_adesso %}Nel frattempo sto lavorando a {{ lettera.quanti_lavori }}:{% else %}Nel frattempo non sto facendo niente di lungo.{% endif %}</p>
+        {% include "_st_in_corso.html" %}
+
+        <p class="st-b-prosa">{{ lettera.resto }}</p>
+    </div>
+
+    <p class="etichetta st-b-numeri">Per chi vuole i numeri</p>
+    <div class="st-b-stanze">
+        {% call stanza("st-albero", "albero", "L'albero, nodo per nodo", pagella.righe|length|numero ~ " nodi") %}
+            {% set quanti_per_corsia = 2 %}
+            {% include "_st_corsie.html" %}
+            {% include "_st_nodi.html" %}
+        {% endcall %}
+        {% call stanza("salute", "cubo", "I modelli", (modelli|selectattr('in_casa')|list|length) ~ " in casa su " ~ modelli|length) %}
+            {% include "_st_modelli.html" %}
+        {% endcall %}
+        {% call stanza("st-macchina", "chip", "Questa macchina", macchina_in_breve) %}
+            {% include "_st_macchina.html" %}
+        {% endcall %}
+        {% call stanza("st-archivio", "foto", "L'archivio in numeri", stato_numeri['Scatti']|numero ~ " scatti") %}
+            {% include "_st_numeri.html" %}
+        {% endcall %}
+        {% call stanza("st-copie", "copia", "Le copie dell'archivio", (copie|length ~ " · l'ultima del " ~ copie[0].quando) if copie else "nessuna, ancora") %}
+            {% include "_st_copie.html" %}
+        {% endcall %}
+        {% call stanza("st-impronte", "impronta", "Le impronte", "con quali modelli sono calcolate") %}
+            {% include "_st_impronte.html" %}
+        {% endcall %}
+        {% call stanza("misura", "bersaglio", "Il laboratorio di misura", "impronte · banco · confronto") %}
+            {% include "_stato_misura.html" %}
+        {% endcall %}
+    </div>
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+{% include "_stato_misura_coda.html" %}
+{% include "_stato_salute_coda.html" %}
+<script type="module" src="/statici/js/stato.js"></script>
+{% endblock %}

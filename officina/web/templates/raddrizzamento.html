@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Le facce raddrizzate — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-raddrizzamento">
+
+    <a class="ps-torna" href="/stato">{{ icona('indietro', 14) }} Stato</a>
+
+    <div class="rd-testa">
+        <h1 class="titolo-pagina">Le facce raddrizzate{% call spiega("Perché si raddrizzano") %}
+            <p>Gli occhi a un'altezza fissa, il naso al centro, la bocca in fondo,
+            dentro un quadrato di <span class="numeri">{{ lato }}</span> pixel.</p>
+            <p>Senza questo passaggio la stessa persona con la testa inclinata di
+            venti gradi diventa <b>un'altra persona</b>. E non c'è modo di
+            accorgersene guardando i risultati, perché i risultati ci sono lo
+            stesso e sembrano sensati: è un guasto che non si vede.</p>
+        {% endcall %}</h1>
+        <p class="sottotitolo">Prima di riconoscere una faccia, il programma la gira dritta.
+            Qui sotto facce <b>inventate</b>, mai una tua foto, girate apposta di traverso.{% call spiega("Come si legge questa pagina") %}
+                <p>Due ovali e cinque pallini, storti apposta. A sinistra come
+                arrivano, a destra come escono.</p>
+                <p>Se il conto è giusto, i quadrati a destra si somigliano tutti
+                fra loro anche se quelli a sinistra sono tutti diversi.</p>
+            {% endcall %}</p>
+    </div>
+
+    <div class="rd-facce">
+    {% for faccia in facce %}
+        <figure class="carta rd-faccia">
+            <div class="rd-due">
+                <img src="/volti/raddrizzamento/{{ faccia.indice }}/prima.png"
+                     width="160" height="160" alt="La faccia finta com'era">
+                <span class="rd-verso">{{ icona('freccia', 18) }}</span>
+                <img src="/volti/raddrizzamento/{{ faccia.indice }}/dopo.png"
+                     width="160" height="160" alt="La stessa faccia raddrizzata">
+            </div>
+            <figcaption class="minuscolo tenue numeri">girata di {{ ('%.1f' % faccia.gradi)|replace('.', ',') }} gradi</figcaption>
+        </figure>
+    {% endfor %}
+    </div>
+
+    <p class="minuscolo tenue">
+        Queste immagini non stanno da nessuna parte: si disegnano nel momento in
+        cui apri la pagina e spariscono quando la chiudi. Nel programma non c'è
+        nessun file di immagine, nemmeno inventato.
+    </p>
+
+</div>
+</main>
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+name: Corpo in 3D
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/collaudo_corpo3d.py"
+      - ".github/workflows/corpo3d.yml"
+      - "officina/corpi/corpo3d.py"
+      - "officina/corpi/corpo3d_rete.py"
+      - "officina/corpi/dinov3_rete.py"
+      - "officina/corpi/mhr.py"
+      - "officina/corpi/rotazioni.py"
+      - "officina/corpi/solo_numeri.py"
+  workflow_dispatch:
+    inputs:
+      quante:
+        description: "foto pubbliche da provare"
+        default: "5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: corpo3d-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  confronta:
+    name: SAM 3D Body, l'originale contro il mio
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Le librerie e il codice originale
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install huggingface_hub numpy requests omegaconf yacs roma opencv-python-headless \
+            einops pytorch-lightning pyyaml braceexpand timm
+          git clone -q https://github.com/facebookresearch/sam-3d-body sam-3d-body
+          git -C sam-3d-body checkout -q b5c765a0d89d789985e186d396315e7590887b94
+          git clone -q https://github.com/facebookresearch/dinov3 dinov3-originale
+          git -C dinov3-originale checkout -q 6876159a11b4df116f30f667f8c9888617df0751
+      - name: Il confronto
+        run: |
+          python strumenti/collaudo_corpo3d.py confronta --originale sam-3d-body --dinov3 dinov3-originale \
+            --cartella "$RUNNER_TEMP/corpo3d" --quante "${{ github.event.inputs.quante || '5' }}" \
+            --uscita corpo3d-confronto.json

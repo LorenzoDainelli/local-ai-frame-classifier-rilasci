@@ -1,0 +1,93 @@
+.visore .lastra img, .visore .lastra video {
+    max-width: 100%;
+    max-height: calc(100vh - var(--barra-vera) - 160px);
+    object-fit: contain;
+}
+
+.striscia-contesto .ft-vicini { margin-left: auto; }
+
+.foto-c .visore .lastra { min-height: 0; }
+.pagina-foto .visore .lastra { min-height: 280px; }
+.pagina-foto .ft-non-si-apre { text-align: center; max-width: 360px; display: grid; gap: 10px; justify-items: center; }
+.pagina-foto .ft-non-si-apre p { margin: 0; }
+
+.ft-striscia { display: grid; gap: 4px; }
+
+.ft-sinistra { display: grid; gap: 12px; min-width: 0; }
+
+.ft-scheda form { margin: 0; }
+.ft-scheda .in-fila form { display: contents; }
+.ft-scheda #esito-migliora { margin: 0; }
+
+.foto-a.con-info .ft-palco { grid-template-columns: minmax(0, 1fr) 330px; }
+.pagina-foto .visore .lastra { position: relative; }
+.pagina-foto .visore .lastra img, .pagina-foto .visore .lastra video { max-height: calc(100vh - var(--barra-vera) - 150px); }
+.pagina-foto .lastra video.live-al-passaggio { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; object-fit: contain; opacity: 0; pointer-events: none; transition: opacity var(--gesto) var(--uscita); background: var(--fondo); }
+.pagina-foto .lastra video.live-al-passaggio.pronta { opacity: 1; }
+.ft-live { position: absolute; left: 10px; top: 10px; z-index: 1; height: 24px; padding: 0 10px; border: 0; border-radius: var(--raggio-pillola); background: color-mix(in srgb, var(--fondo) 78%, transparent); color: var(--ink); font-size: 11px; letter-spacing: 0.04em; cursor: pointer; }
+.ft-live[aria-pressed="true"] { background: var(--accento); color: var(--su-accento); }
+.ft-live.non-si-vede { opacity: 0.6; }
+.pagina-foto .lastra img, .pagina-foto .lastra video { will-change: transform; }
+.pagina-foto .lastra.ingrandita { cursor: grab; }
+.pagina-foto .lastra.ingrandita.trascina { cursor: grabbing; }
+.ft-live:focus-visible { outline: 2px solid var(--fill); outline-offset: 2px; }
+.ft-sotto-la-lastra { justify-self: center; padding: 14px 16px; margin-top: 10px; }
+
+.ft-tasti form { display: contents; }
+.ft-tasti-destra { margin-left: auto; }
+
+.foto-c .ft-scheda .ft-scheda-testa { grid-column: 1 / -1; }
+
+.ft-dati dt { color: var(--tenue); }
+.ft-dati dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ft-file + .ft-file { margin-top: 2px; }
+.ft-nota { display: grid; gap: 6px; }
+
+.striscia-fotogrammi {
+    display: flex;
+    gap: var(--s2);
+    overflow-x: auto;
+    padding: var(--s3) 0;
+}
+.striscia-fotogrammi .fotogramma {
+    position: relative;
+    flex: none;
+    width: 132px;
+    padding: 0;
+    background: var(--superficie);
+    border: 1px solid var(--linea);
+    border-radius: var(--raggio-controllo);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color var(--gesto) var(--uscita);
+}
+.striscia-fotogrammi .fotogramma:hover { border-color: var(--attenuato); }
+.striscia-fotogrammi .fotogramma.scelto { border-color: var(--fill); }
+.striscia-fotogrammi .fotogramma img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+}
+.striscia-fotogrammi .quando {
+    position: absolute;
+    right: var(--s1); bottom: var(--s1);
+    display: inline-flex;
+    align-items: center;
+    height: var(--altezza-bollo);
+    padding: 0 var(--s2);
+    line-height: 1;
+
+    border-radius: var(--raggio-pillola);
+    background: color-mix(in srgb, var(--fondo) 78%, transparent);
+    color: var(--attenuato);
+    font-size: var(--testo-minimo);
+}
+
+.pagina-foto .ft-scheda[hidden], .pagina-foto [hidden] { display: none !important; }
+
+.ft-corpi { position: absolute; z-index: 1; pointer-events: none; }
+.pagina-foto .lastra .ft-corpi img { position: absolute; max-width: none; max-height: none; object-fit: fill; will-change: auto; }
+.ft-corpi svg { position: absolute; inset: 0; overflow: visible; }
+.ft-corpi-chi { position: absolute; transform: translateY(calc(-100% - 2px)); padding: 1px 6px; border-radius: var(--raggio-pillola); color: #fff; font-size: 11px; line-height: 16px; white-space: nowrap; }
+[data-mostra-corpi][aria-pressed="true"] { background: var(--accento); color: var(--su-accento); }

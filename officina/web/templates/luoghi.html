@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% import "_mappa_luoghi.html" as mappa_luoghi %}
+{% block titolo %}Luoghi — Local AI Frame Classifier{% endblock %}
+
+{% macro scegli_padre(nome_campo, togli=None, vuoto="In cima") %}
+<select class="campo" name="{{ nome_campo }}" aria-label="Dentro quale luogo">
+    <option value="">{{ vuoto }}</option>
+    {% for altro in tutti_i_posti if altro.posto_id != togli %}
+    <option value="{{ altro.posto_id }}">{{ altro.nome }}</option>
+    {% endfor %}
+</select>
+{% endmacro %}
+
+{% macro ramo(voci) %}
+<ul class="lu-ramo">
+    {% for voce in voci %}
+    <li>
+        <details class="lu-voce">
+            <summary>
+                <span class="lu-voce-nome">{{ voce.nome }}</span>
+                <span class="minuscolo tenue numeri">{{ voce.scatti|numero }} scatt{{ 'o' if voce.scatti == 1 else 'i' }}</span>
+                {% if not voce.ha_coordinate %}<span class="minuscolo tenue lu-senza-gps" title="Le coordinate le prende dal luogo che lo contiene, o te le chiede">senza coordinate sue</span>{% endif %}
+            </summary>
+            <div class="lu-voce-dentro">
+                <a class="tasto-comando piccolo" href="/?luogo={{ voce.posto_id }}">{{ icona('foto', 14) }} Guardali</a>
+                <form method="post" action="/luoghi/nuovo" class="in-fila">
+                    <input type="hidden" name="genitore_id" value="{{ voce.posto_id }}">
+                    <input class="campo" type="text" name="nome" placeholder="Nuovo luogo qui dentro" required aria-label="Nuovo luogo dentro {{ voce.nome }}">
+                    <button class="tasto-comando nudo piccolo" type="submit">Aggiungi</button>
+                </form>
+                <form method="post" action="/luoghi/{{ voce.posto_id }}/nome" class="in-fila">
+                    <input class="campo" type="text" name="nome" value="{{ voce.nome }}" required aria-label="Nome del luogo">
+                    <button class="tasto-comando nudo piccolo" type="submit">Rinomina</button>
+                </form>
+                <form method="post" action="/luoghi/{{ voce.posto_id }}/sposta" class="in-fila">
+                    {{ scegli_padre('genitore_id', voce.posto_id) }}
+                    <button class="tasto-comando nudo piccolo" type="submit">Sposta</button>
+                </form>
+                <form method="post" action="/luoghi/{{ voce.posto_id }}/cestina">
+                    <button class="tasto-comando nudo piccolo" type="submit" title="Toglie questo luogo e quelli dentro. Gli scatti restano">Togli</button>
+                </form>
+            </div>
+        </details>
+        {% if voce.figli %}{{ ramo(voce.figli) }}{% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% endmacro %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-luoghi">
+
+    <div class="lu-testa">
+        <div>
+            <h1 class="titolo-pagina">I luoghi{% call spiega("Nessuna mappa da consultare") %}
+                <p>I luoghi li scrivi tu, ad albero: Italia › Firenze › Casa ›
+                Cucina. Nessuna mappa da internet: le coordinate delle tue foto
+                non escono mai di casa.</p>
+                <p>Il programma usa il GPS delle foto che hai già messo in un luogo
+                per capire dov'è, e da lì propone il luogo per le foto nuove.
+                Una stanza senza coordinate sue usa quelle della casa che la
+                contiene.</p>
+            {% endcall %}</h1>
+            <p class="sottotitolo">Ogni scatto ha bisogno di un luogo, oppure di un «Non so dove». Scatti non ancora finiti: <b class="numeri">{{ non_finiti|numero }}</b>.</p>
+        </div>
+    </div>
+
+    {% if dove_sono %}
+    <section class="carta lu-dove">
+        <h2>Dov'è questo posto?</h2>
+        <p class="piccolo attenuato">Questi luoghi non hanno abbastanza foto col GPS, e nemmeno il luogo che li contiene ne ha. Aiutami: scegli una foto fatta lì, oppure scrivi le coordinate.</p>
+        {% for voce in dove_sono %}
+        <div class="lu-dove-riga">
+            <div class="lu-dove-nome"><b>{{ voce.nome }}</b>{% if voce.percorso %}<span class="minuscolo tenue">{{ voce.percorso }}</span>{% endif %}</div>
+            {% if voce.foto %}
+            <div class="lu-dove-foto">
+                {% for foto in voce.foto %}
+                <form method="post" action="/luoghi/{{ voce.posto_id }}/dallo-scatto">
+                    <input type="hidden" name="scatto_id" value="{{ foto.scatto_id }}">
+                    <button type="submit" title="È stata fatta qui: usa il suo GPS"><img src="/miniatura/{{ foto.file_id }}" alt="" loading="lazy"></button>
+                </form>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <form method="post" action="/luoghi/{{ voce.posto_id }}/coordinate" class="in-fila">
+                <input class="campo" type="text" name="coordinate" placeholder="43.77, 11.25" required aria-label="Le coordinate di {{ voce.nome }}">
+                <button class="tasto-comando piccolo" type="submit">Salva</button>
+            </form>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="carta lu-albero">
+        <div class="lu-albero-testa">
+            <h2>L'albero dei luoghi</h2>
+            <span class="segmenti" role="group" aria-label="Come vedere i luoghi">
+                <button type="button" data-vista="lista" aria-pressed="true">Lista</button>
+                <button type="button" data-vista="albero" aria-pressed="false">Albero</button>
+            </span>
+            <form method="post" action="/luoghi/nuovo" class="in-fila">
+                <input class="campo" type="text" name="nome" placeholder="Nuovo luogo" required aria-label="Nome del nuovo luogo">
+                {{ scegli_padre('genitore_id') }}
+                <button class="tasto-comando principale piccolo" type="submit">Aggiungi</button>
+            </form>
+        </div>
+        {% if albero %}
+        <div class="lu-vista" data-vista-di="lista">{{ ramo(albero) }}</div>
+        <div class="lu-vista mappa lu-mappa" data-vista-di="albero" hidden>
+            <div class="mappa-testa">{{ mappa_luoghi.testa("pl-") }}</div>
+            {{ mappa_luoghi.corpo("pl-", dati_dei_luoghi, nascosto=False) }}
+        </div>
+        {% else %}
+        <p class="piccolo attenuato">Nessun luogo, ancora. Aggiungine uno qui sopra, oppure trasforma un albero che hai già.</p>
+        {% endif %}
+    </section>
+
+    {% if cime %}
+    <details class="carta lu-da-ramo" {% if not albero %}open{% endif %}>
+        <summary>Usa un albero che hai già come Luoghi</summary>
+        <p class="piccolo attenuato">Il ramo che scegli diventa l'albero dei luoghi, con tutti i suoi rami. Le etichette che ci avevi messo tu diventano il luogo dei loro scatti. Il ramo esce dalle tipologie e va nel cestino dell'albero: da lì lo puoi rimettere.</p>
+        <form method="post" action="/luoghi/da-un-ramo" class="in-fila">
+            <select class="campo" name="nodo_id" aria-label="Il ramo da trasformare">
+                {% for cima in cime %}<option value="{{ cima.nodo_id }}">{{ cima.nome }}</option>{% endfor %}
+            </select>
+            <label class="piccolo in-fila"><input type="checkbox" name="con_la_cima" value="1"> tieni anche il nome di cima come luogo</label>
+            <button class="tasto-comando principale piccolo" type="submit">Trasforma in Luoghi</button>
+        </form>
+    </details>
+    {% endif %}
+
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/luoghi.js"></script>
+{% endblock %}

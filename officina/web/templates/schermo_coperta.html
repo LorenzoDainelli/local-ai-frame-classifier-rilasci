@@ -1,0 +1,64 @@
+<!doctype html>
+{% from "_icone.html" import fotina, icona %}
+<html lang="it" {{ attributi_aspetto|safe }}>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Local AI Frame Classifier</title>
+    <link rel="stylesheet" href="/statici/css/fondamenta.css">
+    <link rel="stylesheet" href="/statici/css/componenti.css">
+    {% for foglio in fogli_delle_schermate %}
+    <link rel="stylesheet" href="/statici/css/schermate/{{ foglio }}.css">
+    {% endfor %}
+</head>
+<body class="{% if not impostazioni.movimento %}senza-movimento{% endif %}"
+      style="--gesto: {{ impostazioni.durata_gesto_ms }}ms; --scena: {{ impostazioni.durata_scena_ms }}ms">
+<main class="schermo-coperto sp-coperta">
+    <div class="sp-dentro">
+        <span class="bollino bene">Collegato a {{ collegato.nome }}, cifrato</span>
+        {{ fotina('grande') }}
+        <h1>Il fisso lavora, lo schermo è il portatile</h1>
+        <p class="piccolo tenue">Finché il portatile è collegato, qui si vede solo cosa sta facendo il programma.</p>
+        <div class="carta sp-lavori" id="sp-lavori">
+            <p class="piccolo tenue" data-nessuno>Nessun lavoro in corso.</p>
+        </div>
+        <form method="post" action="/schermo/stacca">
+            <button class="tasto-comando principale" type="submit">Chiudi il collegamento</button>
+        </form>
+    </div>
+</main>
+<script type="module">
+    const zona = document.getElementById("sp-lavori");
+    const guarda = async () => {
+        try {
+            const stato = await fetch("/api/schermo");
+            if (stato.ok && !(await stato.json()).collegato) { window.location.href = "/"; return; }
+            const risposta = await fetch("/api/in-corso");
+            if (!risposta.ok) return;
+            const dati = await risposta.json();
+            const righe = (dati.lavori || []).map((lavoro) => {
+                const riga = document.createElement("div");
+                riga.className = "sp-lavoro";
+                const nome = document.createElement("span");
+                nome.textContent = lavoro.nome;
+                const quanto = document.createElement("span");
+                quanto.className = "minuscolo tenue numeri";
+                quanto.textContent = typeof lavoro.percento === "number"
+                    ? lavoro.percento + "%" : (lavoro.detto || "");
+                riga.append(nome, quanto);
+                return riga;
+            });
+            if (!righe.length) {
+                const vuoto = document.createElement("p");
+                vuoto.className = "piccolo tenue";
+                vuoto.textContent = "Nessun lavoro in corso.";
+                righe.push(vuoto);
+            }
+            zona.replaceChildren(...righe);
+        } catch (errore) {}
+    };
+    guarda();
+    setInterval(guarda, 2000);
+</script>
+</body>
+</html>

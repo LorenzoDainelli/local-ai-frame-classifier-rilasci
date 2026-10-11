@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Aggiungi foto — Local AI Frame Classifier{% endblock %}
+
+{% macro mandata_riga(mandata) %}
+<div class="ag-mandata">
+    <div class="piccolo attenuato">
+        {{ mandata.quando }} · {{ mandata.come_e_finita }}{% if mandata.durata %} · {{ mandata.durata }}{% endif %}
+    </div>
+    <div class="riga-fra">
+        <b>Importazione {{ mandata.id }} · {{ mandata.come_si_chiama }}</b>
+        {% if mandata.quanti_scatti %}
+        <a class="tasto-comando piccolo" href="/?importazione={{ mandata.id }}"
+           title="Apre nella galleria solo gli scatti arrivati con questa importazione.">
+            Apri {{ mandata.quanti_scatti }}
+        </a>
+        {% endif %}
+    </div>
+    <div class="piccolo numeri">
+        {{ mandata.totale|numero }} file · {{ mandata.nuovi_scatti }} nuovi ·
+        {{ mandata.coppie_live }} live · {{ mandata.gia_presenti }} già presenti{% if mandata.saltati %} ·
+        {{ mandata.saltati }} saltati{% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro finestra(quale, titolo) -%}
+<dialog class="finestra" id="{{ quale }}" aria-label="{{ titolo }}">
+    <header><h2>{{ titolo }}</h2><button class="tasto-comando nudo piccolo" type="button" data-chiudi-finestra aria-label="Chiudi">{{ icona('x', 18) }}</button></header>
+    <div class="finestra-dentro">{{ caller() }}</div>
+</dialog>
+{%- endmacro %}
+
+{% block corpo %}
+{% set sta_importando = stato.stato == 'in_corso' %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-aggiungi">
+
+    <div class="ag-testa">
+        <h1 class="titolo-pagina">Aggiungi foto</h1>
+        <p class="sottotitolo">Tre passi: dove stanno, quante sono, dentro. Le foto non vengono mai spostate né modificate.</p>
+    </div>
+
+    <div id="dove-va-il-guasto"></div>
+
+    <ol class="ag-passi">
+        <li class="carta ag-passo {{ 'fatto' if cartelle else 'qui' }}">
+            <div class="ag-passo-testa"><span class="ag-numero">{{ icona('spunta', 13) if cartelle else '1' }}</span><h2>Le cartelle</h2></div>
+            <p class="piccolo attenuato">Se ne aggiungono quante se ne vuole, anche su dischi diversi.</p>
+            {% include "_cartella_nuova.html" %}
+        </li>
+
+        <li class="carta ag-passo {{ 'fatto' if piano else ('qui' if cartelle else 'dopo') }}">
+            <div class="ag-passo-testa"><span class="ag-numero">{{ icona('spunta', 13) if piano else '2' }}</span><h2>Cosa ho trovato</h2></div>
+            {% if piano %}
+            <div class="ag-trovato">
+                <span class="ag-grosso numeri">{{ piano.file|numero }}</span>
+                <span class="piccolo attenuato">file · <span class="numeri">{{ piano.peso }}</span></span>
+            </div>
+            <p class="piccolo attenuato">{{ piano.spazio }}</p>
+            {% if not piano.spazio_basta %}
+            <div class="avviso forte">
+                Lo spazio potrebbe non bastare. Meglio liberarne prima:
+                un'importazione che si ferma a metà non perde niente, ma è
+                tempo buttato.
+            </div>
+            {% endif %}
+            <form method="post" action="/importazione/prepara">
+                <button class="tasto-comando nudo piccolo" type="submit">Conta di nuovo</button>
+            </form>
+            {% else %}
+            <p class="piccolo attenuato">Prima si conta, poi si decide. Non viene elaborato niente finché non lo dici tu.</p>
+            <form method="post" action="/importazione/prepara">
+                <button class="tasto-comando {{ 'principale' if cartelle }}" type="submit">Conta i file</button>
+            </form>
+            {% endif %}
+        </li>
+
+        <li class="carta ag-passo {{ 'qui' if piano or sta_importando else 'dopo' }}" id="pannello-avanzamento">
+            <div class="ag-passo-testa"><span class="ag-numero">3</span><h2>Dentro l'archivio</h2></div>
+            {% if piano and not sta_importando %}
+            <form method="post" action="/importazione/parti">
+                <button class="tasto-comando accento" type="submit">Importa {{ piano.file|numero }} file</button>
+            </form>
+            {% endif %}
+            {% if mai_importato %}
+            {% if not piano %}
+            <p class="piccolo tenue">Quando hai contato, da qui parte l'importazione.</p>
+            {% endif %}
+            {% else %}
+            <div class="ag-trovato">
+                <span class="ag-grosso numeri" id="numero-fatti">{{ stato.fatti }}</span>
+                <span class="piccolo attenuato" id="riga-stato">di {{ stato.totale }} file · {{ stato.quanto_manca }}</span>
+            </div>
+            <span class="barretta" aria-hidden="true"><span id="barra" style="width: {{ stato.percentuale }}%"></span></span>
+            <dl class="ag-numeri">
+                <dt>Scatti nuovi</dt><dd class="numeri" id="conto-scatti">{{ stato.nuovi_scatti|numero }}</dd>
+                <dt>Coppie live</dt><dd class="numeri" id="conto-live">{{ stato.coppie_live|numero }}</dd>
+                <dt>Già presenti</dt><dd class="numeri" id="conto-gia">{{ stato.gia_presenti|numero }}</dd>
+                <dt>Saltati</dt><dd class="numeri" id="conto-saltati">{{ stato.saltati|numero }}</dd>
+            </dl>
+            <div class="in-fila">
+                <form method="post" action="/importazione/riprendi">
+                    <button class="tasto-comando piccolo" type="submit">Riprendi</button>
+                </form>
+                <form method="post" action="/importazione/ferma">
+                    <button class="tasto-comando piccolo" type="submit">Fermati</button>
+                </form>
+            </div>
+            <p class="minuscolo tenue">Si può chiudere tutto a metà: ogni scatto finito è già scritto, e alla riapertura si riprende dalla riga dopo.</p>
+            {% if stato.percentuale >= 100 %}
+            <p class="piccolo attenuato">
+                Adesso le foto si guardano. Il passo dopo è calcolare le
+                <b>impronte</b>, che si fa una volta sola e rende possibile tutto
+                il resto: proposte, somiglianza, ricerca.
+            </p>
+            <a class="tasto-comando piccolo" href="/stato#misura">Vai alla misura</a>
+            {% endif %}
+            {% endif %}
+        </li>
+    </ol>
+
+    <section class="ag-arrivo" {% if mai_importato %}hidden{% endif %}>
+        <h2 class="etichetta">Quello che sta arrivando</h2>
+        <div class="mosaico-vivo" id="mosaico"></div>
+    </section>
+
+    <div class="ag-sotto">
+        <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="raccolta">Metti tutto in una cartella sola…</button>
+        {% if mandate %}
+        <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="pannello-storico">Le importazioni di prima · {{ mandate|length }}</button>
+        {% endif %}
+    </div>
+
+    {% call finestra("raccolta", "Tutte in una cartella sola") %}
+        <p class="piccolo attenuato">
+            Le foto vengono <b>copiate</b>: gli originali non si toccano, ma lo
+            spazio occupato raddoppia.{% call spiega("Come vengono messe") %}
+                <p>Una cartella per importazione, «Importazione 1 - Foto
+                vacanze», «Importazione 2 - DCIM», tutte sotto lo stesso
+                tetto.</p>
+                <p>Gli originali restano dove sono e non vengono toccati:
+                quello che nasce qui è una copia in più, non uno
+                spostamento.</p>
+            {% endcall %}
+        </p>
+        <form method="post" action="/raccolta/conta" class="in-colonna" data-cartella-nuova>
+            <input class="campo" name="dove" placeholder="D:\Le mie foto"
+                   value="{{ impostazioni.cartella_raccolta or '' }}" required>
+            <div class="in-fila">
+                {% if si_puo_sfogliare %}
+                <button class="tasto-comando" type="button" data-sfoglia hidden
+                        title="Apre la finestra di Windows per scegliere la cartella.">
+                    Sfoglia...
+                </button>
+                {% endif %}
+                <button class="tasto-comando" type="submit">Conta quanto serve</button>
+            </div>
+        </form>
+        <p class="minuscolo tenue" data-a-mano>
+            Una cartella <b>fuori</b> da quelle da cui prendi le foto: copiandoci
+            dentro, alla prossima importazione il programma troverebbe le copie e
+            le importerebbe come foto nuove.
+        </p>
+
+        {% if piano_raccolta %}
+        <dl class="ag-numeri">
+            <dt>Da copiare</dt>
+            <dd class="numeri">{{ piano_raccolta.da_copiare|numero }} di {{ piano_raccolta.quanti|numero }}</dd>
+            <dt>Peso</dt><dd class="numeri">{{ piano_raccolta.peso }}</dd>
+            <dt>Liberi sul disco</dt><dd class="numeri">{{ piano_raccolta.liberi }}</dd>
+        </dl>
+        {% if not piano_raccolta.spazio_basta %}
+        <div class="avviso forte">
+            Lo spazio non basta. Libera il disco, oppure scegli un disco diverso:
+            una copia che si ferma a metà non rovina niente, ma lascia una
+            cartella incompleta che sembra completa.
+        </div>
+        {% elif piano_raccolta.da_copiare == 0 %}
+        <p class="piccolo attenuato">Non c'è niente da copiare: è già tutto lì.</p>
+        {% else %}
+        <form method="post" action="/raccolta/parti">
+            <button class="tasto-comando principale" type="submit">Copiale</button>
+        </form>
+        {% endif %}
+        {% endif %}
+
+        <div id="avanzamento-raccolta" hidden>
+            <span class="barretta" aria-hidden="true"><span id="barra-raccolta" style="width:0%"></span></span>
+            <div class="piccolo attenuato" id="riga-raccolta"></div>
+        </div>
+    {% endcall %}
+
+    {% if mandate %}
+    {% call finestra("pannello-storico", "Le importazioni di prima") %}
+        <p class="piccolo attenuato">
+            Ogni volta che hai premuto «Importa». I doppioni sono contati
+            sull'archivio intero, non sulla singola cartella.
+        </p>
+        {% for mandata in mandate %}
+            {{ mandata_riga(mandata) }}
+        {% endfor %}
+    {% endcall %}
+    {% endif %}
+
+</div>
+</main>
+</div>
+{% endblock %}
+
+{% block coda %}
+<script type="module">
+    import { chiedi, comeSiScorre, numeroAParole } from "/statici/js/comune.js";
+
+    const zonaRaccolta = document.getElementById("avanzamento-raccolta");
+    const barraRaccolta = document.getElementById("barra-raccolta");
+    const rigaRaccolta = document.getElementById("riga-raccolta");
+
+    async function guardaLaRaccolta() {
+        if (document.hidden) return;
+        try {
+            const dati = await chiedi("/api/raccolta");
+            if (dati.finito && !(dati.righe || []).length) { zonaRaccolta.hidden = true; return; }
+            zonaRaccolta.hidden = false;
+            const numeri = dati.numeri || {};
+            barraRaccolta.style.width = (numeri.percento || 0) + "%";
+            const ultima = (dati.righe || []).slice(-1)[0] || "";
+            rigaRaccolta.textContent = dati.guasto || ultima;
+            rigaRaccolta.classList.toggle("forte", Boolean(dati.guasto));
+        } catch (e) {  }
+    }
+
+    guardaLaRaccolta();
+    setInterval(guardaLaRaccolta, 2000);
+
+    let giro = 0;
+    let finoA = 0;
+    const mosaico = document.getElementById("mosaico");
+    const arrivo = mosaico.closest(".ag-arrivo");
+    const visti = new Set();
+    const scrivi = (quale, testo) => {
+        const dove = document.getElementById(quale);
+        if (dove) dove.textContent = testo;
+    };
+
+    async function guarda() {
+        if (document.hidden) return;
+        try {
+            const dati = await chiedi("/api/importazione");
+
+            if (dati.guasto && !document.getElementById("guasto-importazione")) {
+                const avviso = document.createElement("div");
+                avviso.id = "guasto-importazione";
+                avviso.className = "avviso forte";
+                avviso.setAttribute("role", "alert");
+                avviso.textContent = dati.guasto;
+                document.getElementById("dove-va-il-guasto").append(avviso);
+                avviso.scrollIntoView({ block: "nearest", behavior: comeSiScorre() });
+            }
+
+            scrivi("numero-fatti", numeroAParole(dati.fatti));
+            scrivi("riga-stato", `di ${numeroAParole(dati.totale)} file · ${dati.quanto_manca}`);
+            const barra = document.getElementById("barra");
+            if (barra) barra.style.width = `${dati.percentuale}%`;
+            scrivi("conto-scatti", numeroAParole(dati.nuovi_scatti));
+            scrivi("conto-live", numeroAParole(dati.coppie_live));
+            scrivi("conto-gia", numeroAParole(dati.gia_presenti));
+            scrivi("conto-saltati", numeroAParole(dati.saltati));
+
+            const nuove = [];
+            (dati.ultime || []).forEach((voce) => {
+                if (visti.has(voce.file_id)) return;
+                visti.add(voce.file_id);
+                const figura = document.createElement("img");
+                figura.src = `/miniatura/${voce.file_id}`;
+                figura.alt = "";
+                mosaico.prepend(figura);
+                nuove.push(figura);
+                while (mosaico.children.length > 120) mosaico.lastChild.remove();
+            });
+            if (arrivo && mosaico.children.length) arrivo.hidden = false;
+            if (giro > 0 && nuove.length && window.movimenti?.arrivanoInArchivio) {
+                window.movimenti.arrivanoInArchivio(nuove, document.getElementById("numero-fatti"));
+            }
+            if (giro > 0 && dati.percentuale >= 100 && finoA < 100 && window.movimenti?.riepilogo) {
+                window.movimenti.riepilogo(document.querySelector(".ag-numeri"));
+            }
+            finoA = dati.percentuale;
+            giro += 1;
+        } catch (errore) {  }
+    }
+
+    guarda();
+    setInterval(guarda, 2500);
+</script>
+{% endblock %}

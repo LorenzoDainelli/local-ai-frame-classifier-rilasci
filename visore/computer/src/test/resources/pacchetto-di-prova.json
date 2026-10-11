@@ -1,0 +1,186 @@
+{
+  "archivio": "29921967e88876bb",
+  "cerca": {
+    "date": [],
+    "luoghi": [],
+    "nodi": [
+      "cartoline"
+    ],
+    "note": [],
+    "parole": 0,
+    "persone": [],
+    "testo": "cartoline"
+  },
+  "cerca_anno": {
+    "date": [
+      [
+        "2021",
+        4
+      ]
+    ],
+    "luoghi": [],
+    "nodi": [],
+    "note": [],
+    "parole": 0,
+    "persone": [],
+    "testo": "2021"
+  },
+  "completo": true,
+  "dettagli": {
+    "id": 4,
+    "luogo": "il molo",
+    "nodi": [
+      [
+        "francobolli",
+        "utente"
+      ]
+    ],
+    "nota": null,
+    "persone": []
+  },
+  "giorni": [
+    {
+      "giorno": "2021-04-02",
+      "luoghi": [
+        "il molo"
+      ],
+      "quanti": 2
+    },
+    {
+      "giorno": "2021-03-14",
+      "luoghi": [
+        "il molo"
+      ],
+      "quanti": 2
+    },
+    {
+      "giorno": null,
+      "luoghi": [],
+      "quanti": 1
+    }
+  ],
+  "informazioni": {
+    "archivio": "29921967e88876bb",
+    "fatto_il": "2026-09-01T21:40:08Z",
+    "nuove_ultimo_travaso": "5",
+    "quanti_nodi": "4",
+    "quanti_scatti": "5",
+    "stato": "completo",
+    "telefono": "iPhone",
+    "versione_formato": "1",
+    "versione_officina": "0.5.0"
+  },
+  "nodi": [
+    "cartoline",
+    "gite",
+    "francobolli",
+    "brughiera"
+  ],
+  "persone": [
+    "Ada",
+    "Bruno"
+  ],
+  "pezzi": [
+    {
+      "da": 0,
+      "id": 2,
+      "impronta": "a62b76e31a9b0b96824ddd445416f3e191f6e7d9850c1601ad87c721f1e12769",
+      "lungo": 100,
+      "quanti": 100
+    },
+    {
+      "da": 1048526,
+      "id": 2,
+      "impronta": "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8",
+      "lungo": 0,
+      "quanti": 100
+    },
+    {
+      "da": 4970,
+      "id": 2,
+      "impronta": "41f91588c2e65158cbafdcfbe86f9d79222ea07d13486f95185f170d5fccf768",
+      "lungo": 100,
+      "quanti": 100
+    }
+  ],
+  "quanti": 5,
+  "scatti": [
+    {
+      "dimensione": 4923,
+      "genere": "live",
+      "giorno": "2021-04-02",
+      "id": 4,
+      "impronta": "0560613a477b5f16144a54899886f7ffd347be3671557ed1f6eaeab846846cf1",
+      "posto": "foto/2021/04/IMG_2004.JPG"
+    },
+    {
+      "dimensione": 4335,
+      "genere": "foto",
+      "giorno": "2021-04-02",
+      "id": 3,
+      "impronta": "be091f95db2bada3291248c747c793ef4ecafb7f927f178762c61576fa48bce8",
+      "posto": "foto/2021/04/IMG_2003.JPG"
+    },
+    {
+      "dimensione": 5070,
+      "genere": "foto",
+      "giorno": "2021-03-14",
+      "id": 2,
+      "impronta": "3a2a44bd6f1c5afb523b7e7133758a5492964f4b0fb8ca98cc8e59b9b2fe9804",
+      "posto": "foto/2021/03/IMG_2002.JPG"
+    },
+    {
+      "dimensione": 4654,
+      "genere": "foto",
+      "giorno": "2021-03-14",
+      "id": 1,
+      "impronta": "45821895edd04065402a633a0c79cf6f51faf145e56dfdc6e6e09a97f7b55ac4",
+      "posto": "foto/2021/03/IMG_2001.JPG"
+    },
+    {
+      "dimensione": 4726,
+      "genere": "foto",
+      "giorno": null,
+      "id": 5,
+      "impronta": "1cf9a9d4791cb37716b8566c71a1572401250d9350bb5eb8d01aeae43caa3c06",
+      "posto": "foto/senza-data/IMG_2005.JPG"
+    }
+  ],
+  "scorta": {
+    "cuori": [
+      {
+        "impronta": "0560613a477b5f16144a54899886f7ffd347be3671557ed1f6eaeab846846cf1",
+        "messo_il": "2021-05-01T10:00:00Z"
+      },
+      {
+        "impronta": "1cf9a9d4791cb37716b8566c71a1572401250d9350bb5eb8d01aeae43caa3c06",
+        "messo_il": "2021-05-01T10:00:00Z"
+      }
+    ],
+    "raccolte": [
+      {
+        "creata_il": "2021-05-02T09:00:00Z",
+        "id": 1,
+        "impronte": [
+          "0560613a477b5f16144a54899886f7ffd347be3671557ed1f6eaeab846846cf1",
+          "1cf9a9d4791cb37716b8566c71a1572401250d9350bb5eb8d01aeae43caa3c06"
+        ],
+        "nome": "quelle da stampare"
+      }
+    ],
+    "tolti": [
+      {
+        "impronta": "3a2a44bd6f1c5afb523b7e7133758a5492964f4b0fb8ca98cc8e59b9b2fe9804",
+        "tolto_il": "2026-09-01T21:40:08Z"
+      }
+    ]
+  },
+  "telefono": "iPhone",
+  "verifica": {
+    "guasti": [],
+    "letti": 11,
+    "peso": 59518,
+    "tutto_a_posto": true
+  },
+  "versione_formato": 1
+}

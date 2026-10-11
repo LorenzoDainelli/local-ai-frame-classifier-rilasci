@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% import "_guida.html" as guida_pezzi %}
+{% set guida = true %}
+{% block titolo %}La cartella — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale guida">
+    {{ guida_pezzi.testa(4) }}
+<div class="pagina guida-corpo">
+
+    {% call guida_pezzi.dice("La cartella") %}
+        Dimmi dove sono le foto: se ne possono aggiungere quante se ne vuole, anche su dischi diversi. Il percorso non lascia mai questa macchina, e le foto non vengono né spostate né modificate.
+    {% endcall %}
+
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('cartella', 18) }}<h1>Le cartelle</h1></div>
+        {% with dove_torno="/benvenuto/cartella", autofocus=True %}
+        {% include "_cartella_nuova.html" %}
+        {% endwith %}
+    </section>
+
+    {% if piano %}
+    <section class="carta guida-carta">
+        <div class="guida-carta-t">{{ icona('occhio', 18) }}<h2>Cosa ho trovato</h2></div>
+        <p class="piccolo attenuato">Non è stato elaborato ancora niente: ho solo guardato e contato.</p>
+        <dl class="scheda-dati">
+            <dt>File</dt><dd class="numeri">{{ piano.file|numero }}</dd>
+            <dt>Peso</dt><dd class="numeri">{{ piano.peso }}</dd>
+            <dt>Spazio</dt><dd class="piccolo">{{ piano.spazio }}</dd>
+        </dl>
+        {% if not piano.spazio_basta %}
+        <div class="avviso forte">
+            Lo spazio potrebbe non bastare. Meglio liberarne prima:
+            un'importazione che si ferma a metà non perde niente,
+            ma è tempo buttato.
+        </div>
+        {% endif %}
+        <form method="post" action="/importazione/parti">
+            <input type="hidden" name="dove_torno" value="/benvenuto/lavoro">
+            <button class="tasto-comando principale" type="submit">Va bene, comincia</button>
+        </form>
+    </section>
+    {% elif cartelle %}
+    <form method="post" action="/importazione/prepara" class="carta guida-carta">
+        <input type="hidden" name="dove_torno" value="/benvenuto/cartella">
+        <div class="guida-carta-t">{{ icona('occhio', 18) }}<h2>Guarda cosa c'è</h2></div>
+        <p class="piccolo attenuato">Prima si conta, poi si decide. Su una cartella grossa ci mette qualche minuto solo a guardare, e non tocca niente.</p>
+        <span><button class="tasto-comando principale" type="submit">Conta i file</button></span>
+    </form>
+    {% endif %}
+
+    <p class="minuscolo tenue">
+        <b>Se hai sbagliato cartella non hai rotto niente.</b>{% call spiega("Come si torna indietro") %}
+            <p>Toglierla dall'elenco non cancella nulla.</p>
+            <p>E anche a importazione avvenuta, gli scatti si mettono
+            &laquo;fuori archivio&raquo; senza toccare un solo file sul
+            disco.</p>
+        {% endcall %}
+    </p>
+</div>
+    {% call guida_pezzi.piede(4, "prima si conta, poi si comincia") %}
+        <a class="tasto-comando {{ 'principale' if not piano }}" href="/benvenuto/lavoro">Avanti {{ icona('avanti', 14) }}</a>
+    {% endcall %}
+</main>
+</div>
+{% endblock %}

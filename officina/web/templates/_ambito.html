@@ -1,0 +1,15 @@
+{% macro ambito(zona, gruppi, scelto, dove) -%}
+{% if gruppi %}
+<form class="ambito" method="post" action="/ambito/{{ zona }}">
+    <input type="hidden" name="dove" value="{{ dove }}">
+    <label class="ambito-riga"><span class="maiuscoletto">Su cosa lavora</span>
+        <select class="campo" name="gruppo" data-ambito>
+            <option value="" {% if not scelto %}selected{% endif %}>Tutto l'archivio</option>
+            {% for g in gruppi %}<option value="{{ g.id }}" {% if scelto == g.id %}selected{% endif %}>Gruppo {{ g.nome }}</option>{% endfor %}
+        </select>
+    </label>
+    <noscript><button class="tasto-comando piccolo" type="submit">Scegli</button></noscript>
+</form>
+<script src="/statici/js/ambito.js" defer></script>
+{% endif %}
+{%- endmacro %}

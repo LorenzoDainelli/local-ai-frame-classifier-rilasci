@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Galleria — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo galleria">
+
+    <main class="zona-principale">
+
+        {% include "_galleria_testa.html" %}
+
+        <div class="fascia-filtri">
+            {% if impostazioni.filtri_forma == 'frase' %}
+                <span class="piccolo">{{ frase_filtri }}</span>
+            {% else %}
+                {% for pillola in pillole_attive %}
+                <a class="pillola piena" href="{{ pillola.senza }}">
+                    {% if pillola.miniatura %}
+
+                    <img class="faccia-pillola" src="/miniatura/{{ pillola.miniatura }}" alt="">
+                    {% endif %}
+                    {{ pillola.testo }} <span class="via">×</span>
+                </a>
+                {% else %}
+                <span class="piccolo tenue">Nessun filtro: stai guardando tutto l'archivio.</span>
+                {% endfor %}
+            {% endif %}
+
+            {% if filtro.senza_etichetta %}
+
+            <span class="segno-modo-lavoro">modo lavoro</span>
+            {% endif %}
+
+            <span class="misura-della-griglia" title="Quanto sono grandi le schede">
+                <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                    <rect x="2" y="2" width="6" height="6" rx="1"/>
+                    <rect x="9" y="2" width="6" height="6" rx="1"/>
+                    <rect x="16" y="2" width="6" height="6" rx="1"/>
+                    <rect x="2" y="9" width="6" height="6" rx="1"/>
+                    <rect x="9" y="9" width="6" height="6" rx="1"/>
+                    <rect x="16" y="9" width="6" height="6" rx="1"/>
+                    <rect x="2" y="16" width="6" height="6" rx="1"/>
+                    <rect x="9" y="16" width="6" height="6" rx="1"/>
+                    <rect x="16" y="16" width="6" height="6" rx="1"/>
+                </svg>
+                <input type="range" id="misura-griglia"
+                       value="{{ impostazioni.griglia_altezza_riga }}"
+                       aria-label="Quanto sono grandi le schede">
+                <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                    <rect x="2" y="2" width="9.5" height="9.5" rx="1.5"/>
+                    <rect x="12.5" y="2" width="9.5" height="9.5" rx="1.5"/>
+                    <rect x="2" y="12.5" width="9.5" height="9.5" rx="1.5"/>
+                    <rect x="12.5" y="12.5" width="9.5" height="9.5" rx="1.5"/>
+                </svg>
+            </span>
+
+        </div>
+
+        {% if oltre_la_soglia and (oltre_la_soglia.vuoto or oltre_la_soglia.larghi) %}
+        <p class="nota-a-margine sotto-soglia">
+            {% if oltre_la_soglia.larghi %}
+            Questi sono i più vicini che ho, non delle risposte: quasi
+            certamente non è quello che cerchi.
+            <a href="{{ oltre_la_soglia.dove }}">Torna a quelli che somigliano</a>
+            {% else %}
+            Nessuno scatto somiglia abbastanza a questo.
+            <a href="{{ oltre_la_soglia.dove }}">Mostra lo stesso i più vicini</a>
+            {% endif %}
+        </p>
+        {% endif %}
+
+        <div class="barra-selezione" id="barra-selezione" hidden>
+            <span data-conto class="piccolo"></span>
+            <button class="tasto-comando nudo" type="button" data-tutti hidden></button>
+            <span class="separatore"></span>
+            <button class="tasto-comando" type="button" data-fuori
+                    title="Sparisce da tutto, ma non viene mai cancellato">
+                Metti fuori archivio
+            </button>
+            <button class="tasto-comando" type="button" data-rimetti>Rimetti in archivio</button>
+            <span class="separatore"></span>
+
+            <button class="tasto-comando" type="button" data-cuore
+                    title="Il cuore, come sul telefono">Fra i preferiti</button>
+            <button class="tasto-comando" type="button" data-scuore>Togli il cuore</button>
+            <button class="tasto-comando" type="button" data-stella
+                    title="Escono dalla coda dell'etichettatura">Metti da parte</button>
+            <button class="tasto-comando" type="button" data-sstella
+                    title="Tornano nella coda esattamente com'erano">Rimetti in coda</button>
+            <span class="separatore"></span>
+
+            <button class="tasto-comando" type="button" data-migliora
+                    title="Porta a FHD le foto e i video piccoli, qui sul computer">
+                Migliora</button>
+            <span class="separatore"></span>
+
+            <span class="scegli-nodo">
+                <input class="campo" type="text" data-nodo-cerca autocomplete="off"
+                       spellcheck="false" placeholder="Cerca un nodo" style="width:180px">
+                <div class="trovati" data-nodo-trovati hidden></div>
+            </span>
+            <button class="tasto-comando principale" type="button" data-metti-nodo disabled>
+                Applica</button>
+            <button class="tasto-comando" type="button" data-togli-nodo disabled
+                    title="Riporta a «non ancora deciso», che non è «no»">
+                Togli</button>
+            <span class="separatore"></span>
+            <input class="campo" type="date" data-giorno style="width:auto">
+            <button class="tasto-comando" type="button" data-data>Dai questa data</button>
+            <span style="margin-left:auto" class="in-fila">
+                <span id="avviso-blocco" class="piccolo" hidden></span>
+                <button class="tasto-comando nudo" type="button" data-lascia>Lascia (Esc)</button>
+            </span>
+        </div>
+
+        <div class="griglia" id="griglia"></div>
+    </main>
+</div>
+
+<script type="application/json" id="dati-griglia">{{ dati_griglia | safe }}</script>
+{% endblock %}
+
+{% block coda %}
+
+<script type="module" src="/statici/js/filtri.js"></script>
+<script type="module">
+    import { avviaGalleria } from "/statici/js/galleria.js";
+    import { avviaConteggi } from "/statici/js/conteggi.js";
+
+    avviaGalleria({{ quanti }});
+    avviaConteggi();
+</script>
+{% endblock %}

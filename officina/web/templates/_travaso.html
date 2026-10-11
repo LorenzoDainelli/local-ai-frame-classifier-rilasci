@@ -1,0 +1,20 @@
+<div class="fascia-giro fascia-travaso">
+    <span class="dove numeri">{{ travaso.percentuale }}%</span>
+    <div class="dice">
+        <b>Sto preparando il pacchetto per {{ travaso.nome }}</b>
+        <span class="piccolo attenuato">
+            {% if travaso.quanti %}{{ travaso.fase }}: {{ travaso.fatti }} di
+            {{ travaso.quanti }}{% else %}{{ travaso.fase }}{% endif %}
+        </span>
+    </div>
+    <div class="avanzamento" style="flex:1; max-width:280px">
+        <div class="fatto" style="width: {{ travaso.percentuale }}%"></div>
+    </div>
+    <a class="tasto-comando nudo" href="/fuori" style="flex:0 0 auto">Guarda</a>
+    <form method="post" action="/telefono/ferma" style="flex:0 0 auto">
+        <button class="tasto-comando" type="submit"
+                title="Quello che è scritto resta, e al giro dopo si riprende da lì">
+            Fermati
+        </button>
+    </form>
+</div>

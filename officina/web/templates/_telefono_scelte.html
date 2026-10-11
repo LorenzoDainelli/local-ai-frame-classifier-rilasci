@@ -1,0 +1,150 @@
+                <form class="in-colonna" id="selezione"
+                      data-telefono="{{ telefono.id }}"
+                      method="post" action="/telefono/{{ telefono.id }}/selezione">
+
+                    <div class="riquadro">
+                        <div class="riga-fra">
+                            <h2>Cosa va su {{ telefono.nome }}</h2>
+                            <button class="tasto-comando nudo" type="button" id="rimetti-tutto"
+                                    title="Riporta la selezione a tutto l'archivio">
+                                rimetti tutto
+                            </button>
+                        </div>
+                        <p class="piccolo attenuato" style="margin-top:var(--s2)">
+                            Di partenza c'è <strong>tutto l'archivio</strong>, e si
+                            toglie. È il verso in cui si ragiona:
+                            «tutto tranne i video del 2015», non «aggiungi il 2019,
+                            aggiungi il 2020, aggiungi...».
+                        </p>
+                        <p class="minuscolo tenue" style="margin-top:var(--s2)">
+                            Non si salva niente a mano: quello che spunti è già
+                            salvato, e fra sei mesi lo ritrovi com'era.
+                        </p>
+                    </div>
+
+                    <div class="riquadro">
+                        <h2>Il periodo</h2>
+                        <div class="in-fila" style="margin-top:var(--s3); flex-wrap:wrap">
+                            <label class="piccolo attenuato">dal
+                                <input class="campo" type="date" name="dal" id="dal"
+                                       value="{{ scelta.dal_giorno or '' }}">
+                            </label>
+                            <label class="piccolo attenuato">al
+                                <input class="campo" type="date" name="al" id="al"
+                                       value="{{ scelta.al_giorno or '' }}">
+                            </label>
+                        </div>
+                        <div class="in-fila" style="margin-top:var(--s3); flex-wrap:wrap">
+                            <button class="pillola" type="button" data-anni="1">ultimo anno</button>
+                            <button class="pillola" type="button" data-anni="3">ultimi 3 anni</button>
+                            <button class="pillola" type="button" data-anni="5">ultimi 5 anni</button>
+                            <button class="pillola" type="button" data-anni="0">tutto il tempo</button>
+                        </div>
+
+                        <label class="interruttore" style="margin-top:var(--s4)">
+                            <input type="checkbox" name="senza_data" value="1"
+                                   id="senza-data"
+                                   {% if scelta.senza_data %}checked{% endif %}>
+                            <span class="binario"></span>
+                            <span class="piccolo">
+                                porta anche gli scatti senza data
+                                <span class="tenue">— vanno in fondo, con scritto
+                                    che una data non ce l'hanno</span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="riquadro">
+                        <div class="riga-fra">
+                            <h2>I rami</h2>
+                            <span class="piccolo tenue" id="quanti-rami"></span>
+                        </div>
+                        <p class="piccolo attenuato" style="margin-top:var(--s2)">
+                            <strong>solo</strong> tiene i rami scelti, e ne basta
+                            <strong>uno qualsiasi</strong>.
+                            <strong>tranne</strong> toglie quel ramo. In tutti e due
+                            i casi <strong>i figli seguono</strong>.
+                        </p>
+                        <div class="campo-cerca" style="margin-top:var(--s3)">
+                            <span class="segno">&#8627;</span>
+                            <input type="text" id="cerca-ramo" autocomplete="off"
+                                   spellcheck="false" placeholder="Cerca un ramo">
+                        </div>
+                        <div class="elenco-scelte" id="elenco-rami">
+                            {% for voce in nodi_voci %}
+                            <div class="riga-scelta{{ ' ereditata' if voce.dentro_un_ramo_gia_preso or voce.dentro_un_ramo_escluso }}"
+                                 data-nodo="{{ voce.id }}"
+                                 data-genitore="{{ voce.genitore if voce.genitore else '' }}"
+                                 data-nome="{{ voce.nome | lower }}"
+                                 style="--rientro: {{ voce.livello }}">
+                                <span class="quale">{{ voce.nome }}</span>
+                                <span class="numeri tenue">{{ voce.esempi|numero }}</span>
+                                <label class="pillola scelta">
+                                    <input type="checkbox" name="nodi" value="{{ voce.id }}"
+                                           {% if voce.preso %}checked{% endif %}>
+                                    solo
+                                </label>
+                                <label class="pillola scelta">
+                                    <input type="checkbox" name="nodi_esclusi" value="{{ voce.id }}"
+                                           {% if voce.escluso %}checked{% endif %}>
+                                    tranne
+                                </label>
+                            </div>
+                            {% else %}
+                            <p class="piccolo tenue">
+                                L'albero è vuoto: non c'è niente da scegliere per
+                                nodo, e va tutto.
+                            </p>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="riquadro">
+                        <div class="riga-fra">
+                            <h2>Le persone</h2>
+                            <span class="piccolo tenue" id="quante-persone"></span>
+                        </div>
+                        <p class="piccolo attenuato" style="margin-top:var(--s2)">
+                            <strong>solo con</strong> tiene le foto in cui ci sono
+                            <strong>tutte</strong> quelle scelte.
+                            <strong>tranne</strong> toglie le foto in cui c'è: è
+                            quello che serve prima di prestare il telefono a
+                            qualcuno.
+                        </p>
+                        <p class="minuscolo tenue" style="margin-top:var(--s2)">
+                            Si guarda in tutti e due i posti — la faccia riconosciuta
+                            e la persona messa a mano — perché una
+                            persona di spalle sta nella foto lo stesso.
+                        </p>
+                        <div class="elenco-scelte" id="elenco-persone">
+                            {% for voce in persone_voci %}
+                            <div class="riga-scelta" data-nome="{{ voce.nome | lower }}">
+                                <span class="quale">{{ voce.nome }}</span>
+                                <span class="numeri tenue">{{ voce.scatti|numero }}</span>
+                                <label class="pillola scelta">
+                                    <input type="checkbox" name="persone" value="{{ voce.id }}"
+                                           {% if voce.presa %}checked{% endif %}>
+                                    solo con
+                                </label>
+                                <label class="pillola scelta">
+                                    <input type="checkbox" name="persone_escluse" value="{{ voce.id }}"
+                                           {% if voce.esclusa %}checked{% endif %}>
+                                    tranne
+                                </label>
+                            </div>
+                            {% else %}
+                            <p class="piccolo tenue">
+                                Nessuna persona ha ancora un nome. Qui compaiono solo
+                                quelle che ne hanno uno: «tranne persona_7» non è un
+                                pensiero che qualcuno ha davvero.
+                            </p>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <noscript>
+                        <button class="tasto-comando principale" type="submit">
+                            Salva la selezione e rifai il conto
+                        </button>
+                    </noscript>
+                </form>

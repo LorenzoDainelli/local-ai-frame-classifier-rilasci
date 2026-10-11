@@ -1,0 +1,112 @@
+<!doctype html>
+{% from "_icone.html" import fotina, icona %}
+<html lang="it" {{ attributi_aspetto|safe }}>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Local AI Frame Classifier</title>
+    <link rel="stylesheet" href="/statici/css/fondamenta.css">
+    <link rel="stylesheet" href="/statici/css/componenti.css">
+    {% for foglio in fogli_delle_schermate %}
+    <link rel="stylesheet" href="/statici/css/schermate/{{ foglio }}.css">
+    {% endfor %}
+</head>
+<body class="{% if not impostazioni.movimento %}senza-movimento{% endif %}"
+      style="--gesto: {{ impostazioni.durata_gesto_ms }}ms; --scena: {{ impostazioni.durata_scena_ms }}ms">
+<main class="schermo-coperto sp-porta" id="sp-porta" data-secondi="{{ secondi }}">
+    <div class="sp-dentro">
+        <span class="bollino attenzione">La porta per il portatile è aperta</span>
+        <h1>Scrivi questo codice sul portatile</h1>
+        <div class="sp-cifre numeri" data-codice aria-label="Il codice: {{ codice }}">
+            {% for cifra in codice %}<span>{{ cifra }}</span>{% endfor %}
+        </div>
+        <p class="piccolo tenue" data-scade>Cambia fra {{ secondi // 60 }}:{{ '%02d'|format(secondi % 60) }} · vale una volta sola</p>
+        <div class="carta sp-come">
+            <p class="piccolo">Sul portatile apri il programma e scegli <b>«Usalo come schermo del fisso»</b>: troverà da solo
+                <b>{{ nome_del_fisso }}</b>. Poi scrivi il codice{% if serve_password %} e la password del forziere{% endif %}.</p>
+            {% if indirizzi %}
+            <p class="piccolo">Se non lo trova, sul portatile premi <b>«Non lo trovo»</b> e scrivi
+                {% for indirizzo in indirizzi %}<b class="numeri">{{ indirizzo }}</b>{% if not loop.last %} oppure {% endif %}{% endfor %}.</p>
+            {% endif %}
+            <p class="minuscolo tenue">La prima volta Windows chiede il permesso di lasciar passare il portatile nella rete di casa:
+                rispondi <b>Sì</b>. Tutto quello che passa è cifrato.</p>
+            {% if not serve_password %}
+            <p class="minuscolo tenue">Il forziere è spento: il portatile abbinato entrerà senza password.</p>
+            {% endif %}
+        </div>
+        {% if portatili %}
+        <div class="sp-abbinati">
+            <span class="etichetta">Già abbinati: si collegano senza codice</span>
+            {% for voce in portatili %}
+            <span class="minuscolo tenue">{{ voce.nome }}{% if voce.ultima_volta %} · ultima volta {{ voce.ultima_volta }}{% endif %}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="sp-tasti">
+            <a class="tasto-comando" href="/fuori?dove=portatile">Torna al programma, la porta resta aperta</a>
+            <form method="post" action="/schermo/chiudi-porta"><button class="tasto-comando nudo" type="submit">Chiudi la porta</button></form>
+        </div>
+    </div>
+</main>
+<script type="module">
+    const zona = document.getElementById("sp-porta");
+    const cifre = zona.querySelector("[data-codice]");
+    const scade = zona.querySelector("[data-scade]");
+    const fermo = document.body.classList.contains("senza-movimento")
+        || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const versione = document.documentElement.getAttribute("data-mv-codice") || "A";
+    const cambiaIlCodice = (codice) => {
+        const vecchie = [...cifre.children];
+        const adesso = vecchie.map((pezzo) => pezzo.textContent).join("");
+        if (adesso === codice) return;
+        if (fermo || vecchie.length !== codice.length) {
+            cifre.replaceChildren(...[...codice].map((cifra) => {
+                const pezzo = document.createElement("span");
+                pezzo.textContent = cifra;
+                return pezzo;
+            }));
+            return;
+        }
+        vecchie.forEach((pezzo, i) => {
+            const nuova = codice[i];
+            if (versione === "C") {
+                const alto = pezzo.getBoundingClientRect().height;
+                const rullo = document.createElement("span");
+                rullo.className = "sp-rullo";
+                rullo.innerHTML = "<span></span><span></span>";
+                rullo.children[0].textContent = pezzo.textContent;
+                rullo.children[1].textContent = nuova;
+                [...rullo.children].forEach((riga) => { riga.style.height = `${alto}px`; });
+                pezzo.replaceChildren(rullo);
+                rullo.animate([{ transform: "none" }, { transform: `translateY(${-alto}px)` }],
+                              { duration: 520, delay: i * 60, easing: "cubic-bezier(.2,.9,.3,1.15)", fill: "both" })
+                    .finished.then(() => { pezzo.textContent = nuova; }).catch(() => {});
+                return;
+            }
+            pezzo.animate([{ transform: "perspective(200px) rotateX(0)" }, { transform: "perspective(200px) rotateX(-90deg)" }],
+                          { duration: 160, delay: i * 80, easing: "cubic-bezier(.55,0,1,.45)", fill: "both" })
+                .finished.then(() => {
+                    pezzo.textContent = nuova;
+                    return pezzo.animate([{ transform: "perspective(200px) rotateX(90deg)" }, { transform: "none" }],
+                                         { duration: 220, easing: "cubic-bezier(0,.55,.45,1)", fill: "both" }).finished;
+                }).catch(() => {});
+        });
+    };
+    const scrivi = (dati) => {
+        if (dati.collegato) { window.location.href = "/schermo/coperta"; return; }
+        if (!dati.aperta) { window.location.href = "/fuori?dove=portatile"; return; }
+        cambiaIlCodice(dati.codice);
+        cifre.setAttribute("aria-label", "Il codice: " + dati.codice);
+        const minuti = Math.floor(dati.secondi / 60);
+        const secondi = String(dati.secondi % 60).padStart(2, "0");
+        scade.textContent = "Cambia fra " + minuti + ":" + secondi + " · vale una volta sola";
+    };
+    setInterval(async () => {
+        try {
+            const risposta = await fetch("/api/schermo");
+            if (risposta.ok) scrivi(await risposta.json());
+        } catch (errore) {}
+    }, 1000);
+</script>
+</body>
+</html>

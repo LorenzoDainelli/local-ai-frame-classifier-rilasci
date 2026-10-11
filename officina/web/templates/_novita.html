@@ -1,0 +1,59 @@
+{% from "_icone.html" import icona, fotina %}
+{% macro versione_semplice(voce, prima) -%}
+<article class="nv-versione {{ 'nv-nuova' if prima }}">
+    <div class="nv-v-testa"><span class="pillola {{ 'accesa' if prima }}">{{ voce.nome }}</span><span class="piccolo tenue">{{ voce.data }}</span></div>
+    <h3 class="nv-v-titolo">{{ voce.titolo }}</h3>
+    <ul class="nv-righe">
+        {% for quale, testo in voce.semplice %}
+        <li>{{ icona(quale, 17) }}<p {% if prima %}data-parole{% endif %}>{{ testo|safe }}</p></li>
+        {% endfor %}
+    </ul>
+</article>
+{%- endmacro %}
+{% macro versione_tecnica(voce) -%}
+<article class="nv-tec-v">
+    <div class="nv-v-testa"><span class="pillola">{{ voce.nome }}</span><span class="nv-tec-tit">{{ voce.titolo }}</span></div>
+    <ul class="nv-tec-righe">
+        {% for riga in voce.tecnico %}<li>{{ riga|safe }}</li>{% endfor %}
+    </ul>
+</article>
+{%- endmacro %}
+
+{% if novita_voci %}
+{% set quante = novita_voci|length %}
+<div class="velo-novita" id="velo-novita" {% if not novita_apri %}hidden{% endif %} data-da-sola="{{ '1' if novita_apri }}">
+    <div class="foglio-novita" role="dialog" aria-modal="true" aria-labelledby="novita-titolo">
+        <button class="tasto-comando nudo nv-chiudi" type="button" data-chiudi aria-label="Chiudi, le rileggo dopo">{{ icona('x', 20) }}</button>
+        <div class="nv-parte" data-parte="semplice">
+            <div class="nv-apre">
+                {{ fotina('grande') }}
+                <div class="nv-apre-testo">
+                    <p class="piccolo tenue">Novità · {{ novita_voci[0].nome }}</p>
+                    <h2 class="nv-titolo" id="novita-titolo" data-parole>Ciao! Da quando ci siamo visti {{ "è uscita una versione nuova." if quante == 1 else "sono uscite " ~ quante ~ " versioni." }}</h2>
+                    <p class="nv-sotto" data-parole>{{ "Te la racconto in breve." if quante == 1 else "Te le racconto in breve, dalla più nuova." }}</p>
+                </div>
+            </div>
+            <div class="nv-elenco">
+                {% for voce in novita_voci %}{{ versione_semplice(voce, loop.first) }}{% endfor %}
+            </div>
+            <footer class="nv-piede">
+                <button class="tasto-comando nudo" type="button" data-vai="tecnico">{{ icona('codice', 15) }} Maggiori dettagli, per i tecnici</button>
+                <button class="tasto-comando accento" type="button" data-ho-capito>Ho capito</button>
+            </footer>
+        </div>
+        <div class="nv-parte" data-parte="tecnico" hidden>
+            <button class="tasto-comando nudo piccolo nv-torna" type="button" data-vai="semplice">{{ icona('indietro', 13) }} Torna alla versione semplice</button>
+            <h2 class="nv-titolo">Cosa è cambiato, per esteso</h2>
+            <p class="nv-sotto">Per chi vuole sapere come e perché. I nomi fra le righe sono quelli del codice.</p>
+            <div class="nv-tec">
+                {% for voce in novita_voci %}{{ versione_tecnica(voce) }}{% endfor %}
+            </div>
+            <footer class="nv-piede">
+                <span class="piccolo tenue">Tutte le versioni passate: Impostazioni › Novità</span>
+                <button class="tasto-comando accento" type="button" data-ho-capito>Ho capito</button>
+            </footer>
+        </div>
+    </div>
+</div>
+<script type="module" src="/statici/js/novita.js"></script>
+{% endif %}

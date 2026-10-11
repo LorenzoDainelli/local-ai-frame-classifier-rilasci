@@ -1,0 +1,130 @@
+{% from "_icone.html" import icona %}
+{% from "_spiega.html" import spiega %}
+{% set PEZZI = {
+    "sx": '<i class="m-lato"></i><i class="m-b" style="left:30%;top:14%;width:62%;height:10%"></i><i class="m-g" style="left:30%;top:30%;width:62%;height:58%"></i>',
+    "casa": '<i class="m-top"></i><i class="m-b" style="left:25%;top:30%;width:50%;height:12%"></i><i class="m-b" style="left:10%;top:52%;width:24%;height:30%"></i><i class="m-b" style="left:38%;top:52%;width:24%;height:30%"></i><i class="m-b" style="left:66%;top:52%;width:24%;height:30%"></i>',
+    "icone": '<i class="m-bin"></i><i class="m-b" style="left:18%;top:10%;width:74%;height:8%"></i><i class="m-g" style="left:18%;top:26%;width:74%;height:62%"></i>',
+    "riass": '<i class="m-b" style="left:8%;top:10%;width:26%;height:20%"></i><i class="m-b" style="left:37%;top:10%;width:26%;height:20%"></i><i class="m-b" style="left:66%;top:10%;width:26%;height:20%"></i><i class="m-b" style="left:8%;top:40%;width:52%;height:48%"></i><i class="m-b" style="left:64%;top:40%;width:28%;height:48%"></i>',
+    "lettera": '<i class="m-b" style="left:30%;top:10%;width:40%;height:8%"></i><i class="m-l" style="left:30%;top:26%;width:40%"></i><i class="m-l" style="left:30%;top:34%;width:36%"></i><i class="m-b" style="left:30%;top:46%;width:40%;height:14%"></i><i class="m-l" style="left:30%;top:68%;width:40%"></i><i class="m-l" style="left:30%;top:76%;width:30%"></i>',
+    "bento": '<i class="m-b" style="left:6%;top:10%;width:52%;height:34%"></i><i class="m-b" style="left:62%;top:10%;width:32%;height:34%"></i><i class="m-b" style="left:6%;top:50%;width:28%;height:40%"></i><i class="m-b" style="left:37%;top:50%;width:28%;height:40%"></i><i class="m-b" style="left:68%;top:50%;width:26%;height:40%"></i>',
+    "eti": '<i class="m-g" style="left:6%;top:10%;width:58%;height:80%"></i><i class="m-b" style="left:68%;top:10%;width:26%;height:12%"></i><i class="m-b" style="left:68%;top:28%;width:26%;height:12%"></i><i class="m-b" style="left:68%;top:46%;width:26%;height:12%"></i>',
+    "foto": '<i class="m-g" style="left:10%;top:8%;width:80%;height:66%"></i><i class="m-b" style="left:10%;top:80%;width:80%;height:10%"></i>',
+    "tre": '<i class="m-b" style="left:4%;top:10%;width:18%;height:80%"></i><i class="m-g" style="left:25%;top:10%;width:46%;height:80%"></i><i class="m-b" style="left:74%;top:10%;width:22%;height:80%"></i>',
+    "cerca": '<i class="m-b" style="left:10%;top:10%;width:60%;height:10%"></i><i class="m-b" style="left:10%;top:28%;width:38%;height:60%"></i><i class="m-b" style="left:52%;top:28%;width:38%;height:60%"></i>',
+    "sei": '<i class="m-b" style="left:8%;top:10%;width:26%;height:24%"></i><i class="m-b" style="left:37%;top:10%;width:26%;height:24%"></i><i class="m-b" style="left:66%;top:10%;width:26%;height:24%"></i><i class="m-l" style="left:8%;top:48%;width:84%"></i><i class="m-l" style="left:8%;top:58%;width:84%"></i><i class="m-l" style="left:8%;top:68%;width:84%"></i><i class="m-l" style="left:8%;top:78%;width:84%"></i>',
+    "scheda": '<i class="m-g" style="left:5%;top:8%;width:62%;height:74%"></i><i class="m-b" style="left:5%;top:86%;width:62%;height:6%"></i><i class="m-b" style="left:71%;top:8%;width:24%;height:84%"></i><i class="m-l" style="left:74%;top:16%;width:18%"></i><i class="m-a" style="left:74%;top:26%;width:12%;height:7%"></i><i class="m-l" style="left:74%;top:42%;width:18%"></i><i class="m-l" style="left:74%;top:50%;width:14%"></i>',
+    "trecarte": '<i class="m-g" style="left:18%;top:6%;width:64%;height:54%"></i><i class="m-b" style="left:6%;top:66%;width:28%;height:26%"></i><i class="m-b" style="left:36%;top:66%;width:28%;height:26%"></i><i class="m-b" style="left:66%;top:66%;width:28%;height:26%"></i>',
+    "facce": '<i class="m-b" style="left:8%;top:9%;width:84%;height:18%"></i><i class="m-a" style="left:76%;top:13%;width:12%;height:10%"></i><i class="m-o" style="left:9%;top:38%;width:13%;height:23%"></i><i class="m-o" style="left:26%;top:38%;width:13%;height:23%"></i><i class="m-o" style="left:43%;top:38%;width:13%;height:23%"></i><i class="m-o" style="left:60%;top:38%;width:13%;height:23%"></i><i class="m-o" style="left:77%;top:38%;width:13%;height:23%"></i><i class="m-o" style="left:9%;top:68%;width:13%;height:23%"></i><i class="m-o" style="left:26%;top:68%;width:13%;height:23%"></i><i class="m-o" style="left:43%;top:68%;width:13%;height:23%"></i>',
+    "mazzo": '<i class="m-b" style="left:5%;top:8%;width:36%;height:84%"></i><i class="m-o" style="left:14%;top:16%;width:18%;height:32%"></i><i class="m-l" style="left:10%;top:58%;width:26%"></i><i class="m-a" style="left:10%;top:68%;width:14%;height:8%"></i><i class="m-o" style="left:48%;top:12%;width:11%;height:20%"></i><i class="m-o" style="left:63%;top:12%;width:11%;height:20%"></i><i class="m-o" style="left:78%;top:12%;width:11%;height:20%"></i><i class="m-o" style="left:48%;top:40%;width:11%;height:20%"></i><i class="m-o" style="left:63%;top:40%;width:11%;height:20%"></i>',
+    "punti": '<i class="m-b" style="left:5%;top:8%;width:62%;height:84%"></i><i class="m-o" style="left:14%;top:22%;width:4%;height:7%"></i><i class="m-o" style="left:30%;top:40%;width:6%;height:10%"></i><i class="m-a m-o" style="left:44%;top:30%;width:5%;height:9%"></i><i class="m-o" style="left:22%;top:66%;width:5%;height:9%"></i><i class="m-o" style="left:52%;top:62%;width:4%;height:7%"></i><i class="m-b" style="left:71%;top:8%;width:24%;height:84%"></i><i class="m-g" style="left:74%;top:14%;width:18%;height:22%"></i>',
+    "peso": '<i class="m-l" style="left:6%;top:9%;width:26%"></i><i class="m-b" style="left:56%;top:6%;width:38%;height:9%"></i><i class="m-b" style="left:6%;top:22%;width:56%;height:18%"></i><i class="m-b" style="left:6%;top:44%;width:56%;height:18%"></i><i class="m-b" style="left:6%;top:66%;width:56%;height:18%"></i><i class="m-b" style="left:66%;top:22%;width:28%;height:62%"></i><i class="m-a" style="left:70%;top:70%;width:20%;height:9%"></i>',
+    "due": '<i class="m-l" style="left:6%;top:9%;width:36%"></i><i class="m-b" style="left:6%;top:20%;width:42%;height:70%"></i><i class="m-b" style="left:52%;top:20%;width:42%;height:70%"></i><i class="m-l" style="left:10%;top:44%;width:34%"></i><i class="m-l" style="left:10%;top:54%;width:34%"></i><i class="m-l" style="left:56%;top:44%;width:34%"></i><i class="m-l" style="left:56%;top:54%;width:34%"></i>',
+    "passi": '<i class="m-o" style="left:8%;top:12%;width:6%;height:11%"></i><i class="m-l" style="left:18%;top:16%;width:50%"></i><i class="m-o" style="left:8%;top:34%;width:6%;height:11%"></i><i class="m-l" style="left:18%;top:38%;width:44%"></i><i class="m-a m-o" style="left:8%;top:56%;width:6%;height:11%"></i><i class="m-l" style="left:18%;top:60%;width:40%"></i><i class="m-a" style="left:74%;top:56%;width:18%;height:11%"></i><i class="m-o" style="left:8%;top:78%;width:6%;height:11%"></i><i class="m-l" style="left:18%;top:82%;width:46%"></i>',
+    "copie": '<i class="m-l" style="left:6%;top:10%;width:30%"></i><i class="m-g" style="left:6%;top:24%;width:28%;height:46%"></i><i class="m-g" style="left:36%;top:24%;width:28%;height:46%"></i><i class="m-g" style="left:66%;top:24%;width:28%;height:46%"></i><i class="m-a" style="left:22%;top:74%;width:12%;height:7%"></i><i class="m-b" style="left:6%;top:86%;width:20%;height:7%"></i>',
+    "coppia": '<i class="m-l" style="left:6%;top:9%;width:60%"></i><i class="m-g" style="left:6%;top:18%;width:43%;height:58%"></i><i class="m-g" style="left:51%;top:18%;width:43%;height:58%"></i><i class="m-b" style="left:18%;top:82%;width:16%;height:9%"></i><i class="m-a" style="left:36%;top:82%;width:16%;height:9%"></i><i class="m-b" style="left:54%;top:82%;width:12%;height:9%"></i><i class="m-b" style="left:68%;top:82%;width:12%;height:9%"></i>',
+    "prima": '<i class="m-b" style="left:6%;top:8%;width:88%;height:26%"></i><i class="m-g" style="left:9%;top:12%;width:24%;height:18%"></i><i class="m-a" style="left:80%;top:16%;width:10%;height:9%"></i><i class="m-b" style="left:6%;top:40%;width:88%;height:12%"></i><i class="m-b" style="left:6%;top:58%;width:28%;height:34%"></i><i class="m-b" style="left:36%;top:58%;width:28%;height:34%"></i><i class="m-b" style="left:66%;top:58%;width:28%;height:34%"></i>',
+    "colonne": '<i class="m-l" style="left:6%;top:9%;width:30%"></i><i class="m-b" style="left:5%;top:20%;width:21%;height:72%"></i><i class="m-b" style="left:28%;top:20%;width:21%;height:72%"></i><i class="m-b" style="left:51%;top:20%;width:21%;height:72%"></i><i class="m-b" style="left:74%;top:20%;width:21%;height:72%"></i><i class="m-g" style="left:7%;top:28%;width:17%;height:16%"></i><i class="m-g" style="left:30%;top:28%;width:17%;height:16%"></i><i class="m-g" style="left:53%;top:28%;width:17%;height:16%"></i><i class="m-g" style="left:53%;top:48%;width:17%;height:16%"></i><i class="m-g" style="left:76%;top:28%;width:17%;height:16%"></i>',
+    "tabella": '<i class="m-l" style="left:6%;top:9%;width:34%"></i><i class="m-b" style="left:6%;top:20%;width:88%;height:34%"></i><i class="m-l" style="left:10%;top:27%;width:70%"></i><i class="m-l" style="left:10%;top:36%;width:70%"></i><i class="m-l" style="left:10%;top:45%;width:70%"></i><i class="m-o" style="left:6%;top:60%;width:14%;height:8%"></i><i class="m-o" style="left:23%;top:60%;width:14%;height:8%"></i><i class="m-g" style="left:6%;top:74%;width:20%;height:18%"></i><i class="m-g" style="left:29%;top:74%;width:20%;height:18%"></i><i class="m-g" style="left:52%;top:74%;width:20%;height:18%"></i>',
+    "barre": '<i class="m-l" style="left:6%;top:9%;width:34%"></i><i class="m-b" style="left:6%;top:22%;width:70%;height:7%"></i><i class="m-b" style="left:6%;top:33%;width:52%;height:7%"></i><i class="m-b" style="left:6%;top:44%;width:38%;height:7%"></i><i class="m-b" style="left:6%;top:55%;width:24%;height:7%"></i><i class="m-g" style="left:6%;top:70%;width:20%;height:22%"></i><i class="m-g" style="left:29%;top:70%;width:20%;height:22%"></i><i class="m-g" style="left:52%;top:70%;width:20%;height:22%"></i>',
+    "righe": '<i class="m-l" style="left:8%;top:12%;width:30%"></i><i class="m-b" style="left:8%;top:24%;width:84%;height:14%"></i><i class="m-l" style="left:8%;top:47%;width:84%"></i><i class="m-l" style="left:8%;top:60%;width:84%"></i><i class="m-l" style="left:8%;top:73%;width:84%"></i><i class="m-l" style="left:8%;top:86%;width:50%"></i>',
+    "racconto": '<i class="m-g" style="left:8%;top:14%;width:18%;height:26%"></i><i class="m-l" style="left:32%;top:18%;width:40%"></i><i class="m-l" style="left:32%;top:28%;width:34%"></i><i class="m-b" style="left:76%;top:14%;width:16%;height:22%"></i><i class="m-l" style="left:8%;top:52%;width:84%"></i><i class="m-b" style="left:8%;top:66%;width:18%;height:10%"></i><i class="m-b" style="left:29%;top:66%;width:18%;height:10%"></i><i class="m-b" style="left:50%;top:66%;width:18%;height:10%"></i>'
+} %}
+{% macro miniatura(tipo, codice="") -%}
+{% if tipo == "mv" %}<span class="mini mini-mv" data-mv="{{ codice }}" aria-hidden="true"><i class="m-g mv-foto"></i><i class="m-b mv-uno"></i><i class="m-b mv-due"></i><i class="m-b mv-tre"></i><i class="m-a mv-segno"></i></span>
+{%- else %}<span class="mini" aria-hidden="true">{{ PEZZI[tipo]|safe }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro segmenti(chiave, valore, voci) -%}
+<span class="segmenti" role="group" data-aspetto="{{ chiave }}">
+    {% for quale, testo in voci %}
+    <button type="button" data-valore="{{ quale }}" aria-pressed="{{ 'true' if valore == quale else 'false' }}">{{ testo }}</button>
+    {% endfor %}
+</span>
+{%- endmacro %}
+
+{% macro sezione(aspetto, aspetto_vero, voci, pronte, prova, tenuta) %}
+<section id="aspetto" class="aspetto">
+    <h2>Aspetto</h2>
+    {% if tenuta %}
+    <p class="avviso forte aspetto-tenuta">{{ icona('spunta', 15) }} Da adesso il programma usa «{{ tenuta }}».</p>
+    {% endif %}
+
+    {% set conto = namespace(mv=0) %}
+    {% for chiave in voci %}{% if chiave.startswith('mv_') %}{% set conto.mv = conto.mv + 1 %}{% endif %}{% endfor %}
+    <div class="asp-linguette" role="tablist" aria-label="Cosa cambiare" data-in-prova="{{ (('movimenti' if prova.chiave.startswith('mv_') else 'pagine') if prova and prova.chiave else '') }}">
+        <button type="button" role="tab" data-linguetta="colori" aria-selected="true">Colori <i>2</i></button>
+        <button type="button" role="tab" data-linguetta="pagine" aria-selected="false">Le pagine <i>{{ voci|length - conto.mv }}</i></button>
+        <button type="button" role="tab" data-linguetta="movimenti" aria-selected="false">I movimenti <i>{{ conto.mv }}</i></button>
+        <button type="button" role="tab" data-linguetta="prova" aria-selected="false">La prova</button>
+    </div>
+
+    <div class="asp-pannello" role="tabpanel" data-pannello="colori">
+    <div class="carta aspetto-colori">
+        <div class="aspetto-colore">
+            <span class="etichetta">Tema</span>
+            {{ segmenti('tema', aspetto.tema, [('scuro', 'Scuro'), ('chiaro', 'Chiaro'), ('sistema', 'Come Windows')]) }}
+        </div>
+        <div class="aspetto-colore">
+            <span class="etichetta">Accento</span>
+            {{ segmenti('accento', aspetto.accento, [('arancio', 'Arancio'), ('bianco', 'Bianco')]) }}
+            <span class="piccolo tenue">bianco diventa nero col tema chiaro</span>
+        </div>
+        <span class="piccolo tenue aspetto-dove">{{ icona('computer', 14) }} vale per questo computer</span>
+    </div>
+    </div>
+
+    <div class="asp-pannello" role="tabpanel" data-pannello="prova" hidden>
+    <div class="aspetto-testa">
+        <h3>Com'è fatto il programma</h3>
+        <span class="aspetto-prova-con">
+            <span class="piccolo tenue">Prova con</span>
+            {{ segmenti('prova_con', aspetto_vero.prova_con, [('copia', 'il tuo archivio, su una copia'), ('finto', 'un archivio finto')]) }}
+        </span>
+    </div>
+    <div class="piccolo tenue aspetto-spiega">Tocca una miniatura: il programma intero diventa quella versione.{% call spiega("Come funziona la prova") %}
+        <p>Ci puoi lavorare davvero: ti muovi, apri le pagine, etichetti. Ma su una copia del tuo archivio, o su quello finto.</p>
+        <p>Quando esci, niente di quello che hai fatto resta. La fascia in alto ti fa tenere la versione o tornare com'era.</p>
+    {% endcall %}</div>
+    <p class="piccolo tenue">Le versioni da provare stanno nelle linguette «Le pagine» e «I movimenti».</p>
+    </div>
+
+    {% for gruppo in ['pagine', 'movimenti'] %}
+    <div class="asp-pannello aspetto-righe" role="tabpanel" data-pannello="{{ gruppo }}" hidden>
+    <p class="piccolo tenue">{{ 'Com\'è fatta ogni pagina del programma.' if gruppo == 'pagine' else 'Come si muovono le cose. Passa sopra una miniatura per vederla muoversi.' }} Tocca una miniatura per provarla.</p>
+    {% for chiave, voce in voci.items() if chiave.startswith('mv_') == (gruppo == 'movimenti') %}
+    {% set pronta = chiave in pronte %}
+    <div class="carta aspetto-riga {{ '' if pronta else 'presto' }}">
+        <div class="aspetto-riga-titolo">
+            {% set nome = voce.titolo|replace('Movimento: ', '') %}<h4>{{ nome[:1]|upper ~ nome[1:] }}</h4>
+            <p class="piccolo tenue">{{ 'Tocca una miniatura per provarla' if pronta else 'Le altre arrivano con le prossime beta' }}</p>
+        </div>
+        <div class="aspetto-versioni">
+            {% for lettera, versione in voce.versioni.items() %}
+            {% set in_uso = aspetto_vero[chiave] == lettera %}
+            {% set in_prova = prova and prova.chiave == chiave and prova.valore == lettera %}
+            {% if pronta and not in_uso %}
+            <form method="post" action="/prova/comincia">
+                <input type="hidden" name="chiave" value="{{ chiave }}">
+                <input type="hidden" name="valore" value="{{ lettera }}">
+                <button class="versione {{ 'si' if in_prova }}" title="{{ versione[2] }}">
+                    {{ miniatura(versione[1], chiave ~ '-' ~ lettera) }}
+                    <span class="versione-nome"><b>{{ lettera }}</b> {{ versione[0] }}</span>
+                    <span class="versione-segno {{ 'in-prova' if in_prova else 'provala' }}">{{ 'in prova adesso' if in_prova else 'Provala' }}</span>
+                </button>
+            </form>
+            {% else %}
+            <div class="versione {{ 'si' if in_uso else 'spenta' }}" title="{{ versione[2] }}">
+                {{ miniatura(versione[1], chiave ~ '-' ~ lettera) }}
+                <span class="versione-nome"><b>{{ lettera }}</b> {{ versione[0] }}</span>
+                {% if in_uso %}<span class="versione-segno in-uso">in uso</span>
+                {% else %}<span class="versione-segno">presto</span>{% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    </div>
+    {% endfor %}
+</section>
+{% endmacro %}

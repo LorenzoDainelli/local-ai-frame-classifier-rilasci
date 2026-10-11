@@ -1,0 +1,37 @@
+{% from "_icone.html" import icona %}
+
+{% macro testa(p) %}
+<div class="campo-cerca solo-luoghi">
+    <span class="segno">{{ icona('cerca', 15) }}</span>
+    <input id="{{ p }}cerca-mappa" type="text" autocomplete="off" spellcheck="false"
+           placeholder="Cerca un luogo" aria-label="Cerca un luogo">
+</div>
+<span class="solo-luoghi" style="flex:1"></span>
+<button class="tasto-comando nudo piccolo solo-luoghi" id="{{ p }}rimetti-a-fuoco" type="button">{{ icona('bersaglio', 14) }} Rimetti a fuoco</button>
+<button class="tasto-comando piccolo solo-luoghi" id="{{ p }}nuovo-nodo" type="button">{{ icona('piu', 14) }} Nuovo luogo <kbd>N</kbd></button>
+{% endmacro %}
+
+{% macro corpo(p, dati, nascosto=True) %}
+<div class="mappa-corpo" id="{{ p }}mappa-luoghi"{% if nascosto %} hidden{% endif %}>
+    <div class="tela" id="{{ p }}albero-tela">
+        <div class="mondo" id="{{ p }}albero-mondo">
+            <svg class="fili" id="{{ p }}fili"></svg>
+        </div>
+
+        <div class="leggenda-salute minuscolo">
+            <span class="bollino attenzione">senza coordinate</span>
+            <span class="bollino">dal luogo che lo contiene</span>
+            <span class="bollino bene">con le sue coordinate</span>
+        </div>
+
+        <div class="suggerimenti minuscolo" id="{{ p }}suggerimenti"></div>
+    </div>
+
+    <aside class="pannello-nodo" id="{{ p }}pannello">
+        <p class="tenue minuscolo" style="text-align:center;padding:var(--s8) 0">
+            Nessun luogo scelto.<br>Clicca un luogo per vedere com'è.
+        </p>
+    </aside>
+</div>
+<script id="{{ p }}dati-albero" type="application/json">{{ dati|safe }}</script>
+{% endmacro %}

@@ -1,0 +1,23 @@
+    <div class="carta st-stanza ar-copie">
+        <div class="riga-fra">
+            <h3>Le copie del database</h3>
+            <form method="post" action="/impostazioni/copia"><button class="tasto-comando piccolo" type="submit">Falla adesso</button></form>
+        </div>
+        <p class="piccolo attenuato">
+            Una copia a ogni chiusura, le ultime trenta. Ognuna viene riaperta e
+            controllata subito dopo: una copia mai provata è solo un file che si
+            spera funzioni.
+        </p>
+        {% if copie %}
+        <div class="mm-elenco">
+            {% for copia in copie %}
+            <div class="mm-riga">
+                <span class="mm-dice"><span>{{ copia.quando }}</span><span class="minuscolo tenue">{{ copia.motivo }}</span></span>
+                <span class="minuscolo tenue numeri">{{ copia.peso }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="piccolo tenue">Nessuna copia, ancora: se ne fa una a ogni chiusura.</p>
+        {% endif %}
+    </div>

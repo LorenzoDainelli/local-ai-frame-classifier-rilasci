@@ -1,0 +1,14 @@
+# Quello che viaggia DENTRO l'installatore della versione 2 (regola 458).
+#
+# E' requirements.txt piu' le tre cose che servono al programma installato:
+# la finestra (pywebview, che su Windows si porta dietro pythonnet), il
+# driver della scheda letto senza aprire niente (nvidia-ml-py, regola 460), e
+# pip, che al primo avvio scarica i motori grandi nella cartella dell'utente
+# (regola 461). Torch e le librerie dei modelli NON sono qui: si scaricano
+# dopo, per la scheda che c'e'.
+
+-r requirements.txt
+
+pywebview==6.2.1          # la finestra del programma, con WebView2 (regola 458)
+nvidia-ml-py==13.590.44   # chiede al driver NVIDIA che scheda c'e' (regola 460)
+pip==26.2.1               # scarica i motori al primo avvio (regola 461)

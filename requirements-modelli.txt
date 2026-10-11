@@ -1,0 +1,87 @@
+# I modelli grandi (regole 74, 101, 174, 175) e il decodificatore dei video
+# (regola 41). Si installano **a parte**, con un comando che si scrive apposta,
+# perche' pesano qualche GB.
+#
+# Senza questo file il programma funziona lo stesso: importa, mostra, calcola
+# le impronte con il descrittore disegnato a mano e fa girare tutta la misura
+# della regola 105. Quello che manca sono i due descrittori veri e i fotogrammi
+# dei video dell'iPhone.
+#
+#     pip install -r requirements-modelli.txt
+#     python -m officina modelli --scarica tutti
+#
+# Il secondo comando e' l'unico del programma che apre una connessione, ed e'
+# dichiarato apposta (regola 74). Dopo, l'Officina funziona a scheda di rete
+# spenta.
+#
+# Su Windows con una scheda NVIDIA, torch va preso dall'indice di PyTorch
+# perche' quello normale non contiene la versione con CUDA:
+#
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+#
+# Senza CUDA funziona lo stesso, sul processore, e sara' circa venti volte
+# piu' lento (regola 71).
+#
+# UNA NOTA ONESTA SUI NUMERI DI VERSIONE QUI SOTTO. Le versioni di
+# requirements.txt sono state installate e provate davvero; queste no —
+# pesano gigabyte e non sono passate per la macchina su cui il programma e'
+# stato scritto. Il 21 agosto 2026 sono state pero' controllate una per una
+# contro l'elenco di PyPI: esistono tutte. Il primo giro le aveva prese di
+# memoria e `transformers==4.58.2` non esisteva affatto — un numero
+# plausibile e falso, che e' il modo piu' silenzioso in cui un file come
+# questo puo' sbagliare.
+#
+# Se pip dice lo stesso di una di queste, non e' un difetto del programma:
+# togli il numero e lascia solo il nome. Sono pinnate per la disciplina della
+# regola 1, non perche' il programma dipenda da quel numero preciso.
+#
+# `transformers` e' sulla 5 dal 3 ottobre 2026, per Qwen3.5 9B. Prima di
+# passare sono stati provati con la 4.57.6 e con la 5.18.0 gli stessi pesi
+# finti di DINOv3, SigLIP 2, FaceMe e LucidFlux: escono gli stessi numeri.
+# La 5 vuole huggingface-hub 1.x e safetensors 0.8, che salgono insieme.
+
+-r requirements.txt
+
+# TORCH E TORCHVISION SONO GLI UNICI DUE SENZA NUMERO, E NON E' UNA
+# DIMENTICANZA. Su Windows con una scheda NVIDIA questi due si prendono
+# dall'indice di PyTorch (il comando qui sopra), e li' le versioni sono
+# poche e diverse da quelle dell'indice normale: per Python 3.13 la piu'
+# recente con CUDA e' la 2.6.0, non la 2.9.1. Se qui restasse scritto
+# «==2.9.1», questo file rimetterebbe la versione senza CUDA sopra a quella
+# giusta, in silenzio e senza nessun errore, e la scheda video tornerebbe
+# invisibile. Le versioni provate sull'indice normale erano torch 2.9.1 e
+# torchvision 0.24.1: sono scritte qui perche' l'informazione resti, non
+# perche' pip debba imporle.
+torch                     # le reti neurali: il motore sotto i tre descrittori
+torchvision               # prepara l'immagine per DINOv3 (va con la torch installata)
+transformers==5.18.0      # carica DINOv3, SigLIP 2 e Qwen3.5 (regole 174, 175)
+# PE-Core non passa da `transformers`: nel suo deposito non c'e' nessun
+# config.json. Si costruisce con il codice copiato in `pe_visione.py` e legge
+# i suoi pesi da qui, che c'era gia'. Fare entrare il terzo modello non ha
+# aggiunto nessuna riga a questo file, ed era la condizione per farlo entrare.
+safetensors==0.8.0        # il formato dei pesi, senza codice eseguibile dentro
+huggingface-hub==1.33.0   # scarica i modelli, una volta sola (regola 74)
+av==16.1.0                # i fotogrammi dei video veri (regole 41, 89)
+nvidia-ml-py==13.590.44   # la temperatura della scheda (regola 181)
+opencv-python-headless==4.14.0.94   # ritagli, raddrizzamenti e ridimensionamenti
+accelerate==1.15.0        # carica Qwen3.5 compresso direttamente sulla scheda
+bitsandbytes==0.50.2      # comprime Qwen3.5 a 4 bit, per farlo stare in 12 GB
+psutil==7.2.2             # serve ad accelerate per misurare la memoria
+
+# OpenCV resta per raddrizzare e ritagliare le immagini; i modelli dei volti
+# li fa girare onnxruntime, qui sotto.
+
+# ONNXRUNTIME: fa girare SCRFD e AdaFace, i modelli dei volti (regola 495).
+#
+# Le loro uscite OpenCV non le sa decodificare. Il conto che le legge e' scritto in casa
+# (`officina/volti/insight.py`) ed e' provato senza i modelli — gli si danno
+# uscite note e si guarda dove finiscono i riquadri. Quello che non si puo'
+# scrivere in casa e' il motore che fa girare un file ONNX, ed e' questo.
+#
+# Senza, tutto il resto del programma funziona: semplicemente non ci sono i
+# volti.
+#
+# Il numero e' stato controllato contro l'elenco di PyPI, come gli altri e per
+# lo stesso motivo: un numero plausibile e falso e' il modo piu' silenzioso in
+# cui questo file puo' sbagliare.
+onnxruntime==1.24.1       # fa girare SCRFD e AdaFace (regole 339, 495)

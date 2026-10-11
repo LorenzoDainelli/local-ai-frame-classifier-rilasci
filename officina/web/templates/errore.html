@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona, fotina %}
+{% block titolo %}Un momento — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-errore">
+    <div class="carta errore-carta">
+        {{ fotina('grande') }}
+        <div class="errore-testo">
+            <h1 class="titolo-pagina">{{ titolo or "Non sono riuscito a farlo" }}</h1>
+            <p class="prosa">{{ messaggio }}</p>
+            <a class="tasto-comando" data-torna href="{{ indietro or '/' }}">{{ icona('indietro', 14) }} Torna indietro</a>
+        </div>
+    </div>
+</div>
+</main>
+</div>
+{% endblock %}

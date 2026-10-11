@@ -1,0 +1,130 @@
+.binario .sezione {
+    padding: var(--s4);
+    border-bottom: 1px solid var(--linea);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+}
+.binario .sezione:last-child { border-bottom: 0; }
+
+.nodo.archiviato { border-style: dashed; opacity: 0.45; }
+
+.con-indice { max-width: 1080px; }
+
+.con-indice section { margin-bottom: var(--s12); scroll-margin-top: var(--s5); }
+
+.scheda-righe .riga:last-child { border-bottom: 0; }
+.scheda-righe .riga.stretta { padding: var(--s2) var(--s4); }
+.scheda-righe .lato { min-width: 0; }
+
+.scheda-righe .ds b { color: var(--attenuato); font-weight: 500; }
+
+.tacca.mac { border-style: dashed; }
+
+.salvato.si-vede { opacity: 1; }
+
+.commuta i {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--tenue);
+
+    transition: left var(--gesto) var(--uscita),
+                background-color var(--gesto) var(--uscita);
+}
+
+.commuta.acceso i { left: 22px; background: var(--su-fill); }
+
+.zona-pericolosa .riga:last-child { border-bottom: 0; }
+
+.finestrella {
+    width: 420px;
+    max-width: 100%;
+    border: 1px solid var(--tenue);
+    border-radius: var(--raggio-scheda);
+    background: var(--superficie);
+    padding: var(--s5);
+    animation: comparire var(--scena) var(--uscita) both;
+}
+.finestrella h3 { margin: 0 0 var(--s2); }
+.finestrella p { font-size: var(--testo-comando); color: var(--attenuato); }
+.finestrella p b { color: var(--ink); font-weight: 500; }
+
+.aspetto-tenuta { display: flex; align-items: center; gap: 8px; margin: 0; }
+
+.aspetto-testa h3 { margin: 0; font: 400 19px/1.3 var(--serif); }
+
+.aspetto-spiega { margin: -6px 0 0; max-width: 72ch; }
+
+.aspetto-riga h4 { margin: 0 0 4px; font: 400 17px/1.25 var(--serif); }
+.aspetto-riga p { margin: 0; }
+
+.aspetto-versioni form { display: contents; }
+
+.versione-nome b { color: var(--ink); font-weight: 600; }
+
+button.versione:hover .versione-segno.provala { color: var(--ink); }
+.versione-segno.in-uso { padding: 1px 8px; border-radius: var(--raggio-pillola); background: var(--accento); color: var(--su-accento); font-size: 11px; font-weight: 600; }
+.versione-segno.in-prova { color: var(--ink); font-weight: 500; }
+
+.mini .m-b { background: var(--carta-sopra); }
+.mini .m-g { background: linear-gradient(135deg, var(--linea-forte), var(--carta-sopra)); }
+.mini .m-l { height: 4%; background: var(--linea-forte); }
+.mini .m-lato { left: 0; top: 0; bottom: 0; width: 22%; border-radius: 0; background: var(--laterale); border-right: 0.5px solid var(--linea); }
+.mini .m-top { left: 0; right: 0; top: 0; height: 14%; border-radius: 0; background: var(--laterale); border-bottom: 0.5px solid var(--linea); }
+.mini .m-bin { left: 0; top: 0; bottom: 0; width: 10%; border-radius: 0; background: var(--laterale); border-right: 0.5px solid var(--linea); }
+.mini .m-o { border-radius: 50%; background: var(--linea-forte); }
+.mini .m-a { background: var(--accento); }
+@media (max-width: 900px) { .aspetto-riga { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .aspetto-versioni { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.officina .binario .sezione { border-bottom: 0.5px solid var(--linea); }
+.binario details.sezione { display: block; }
+
+.imp-a .due-colonne > div > section[id]:not(.in-vista) { display: none; }
+.imp-a .due-colonne > div > section.in-vista { animation: entra var(--passo) var(--uscita); }
+.imp-a .indice { display: grid; gap: 2px; }
+.imp-a .indice a { padding: 8px 12px; border: 0; border-radius: 9px; color: var(--attenuato); font-size: 14px; }
+.imp-a .indice a:hover { background: var(--carta-sopra); color: var(--ink); text-decoration: none; }
+.imp-a .indice a.qui { background: var(--carta-sopra); color: var(--ink); font-weight: 500; }
+.imp-a .indice a.pericolo { color: var(--tenue); }
+.imp-a .due-colonne > div > section > h2 { font: 400 24px/1.25 var(--serif); }
+
+.imp-b .indice { display: none; }
+.imp-b .due-colonne { grid-template-columns: minmax(0, 1fr); }
+
+.imp-cerca:focus-within { outline: 2px solid var(--fill); outline-offset: 2px; border-color: var(--accento); }
+.imp-cerca .icona { color: var(--tenue); }
+.imp-cerca input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 16px var(--serif); }
+.imp-cerca input:focus { outline: none; }
+.imp-b .riga .ds { display: none; }
+.imp-b .riga.con-spiegazione .ds { display: block; animation: entra var(--gesto) var(--uscita); }
+.imp-b .fuori-ricerca { display: none !important; }
+.imp-b .due-colonne > div > section > .sd { display: none; }
+
+.imp-i:hover, .imp-i[aria-expanded="true"] { color: var(--ink); border-color: var(--ink-2); }
+
+.imp-c .indice { display: none; }
+.imp-c .due-colonne { grid-template-columns: minmax(0, 1fr); }
+
+a.imp-una:hover { text-decoration: none; border-color: var(--linea-forte); }
+.imp-una b { font: 400 24px/1.1 var(--serif); }
+.imp-una .tasto-comando, .imp-una .segmenti { justify-self: start; }
+.imp-c .due-colonne > div > section[id] { margin-bottom: 8px; }
+.imp-c .due-colonne > div > section.chiusa > :not(h2) { display: none; }
+.imp-c .due-colonne > div > section[id] > h2[role="button"] { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0; padding: 14px 18px; border-radius: var(--raggio-scheda); background: var(--carta); border: 0.5px solid var(--linea); font: 400 18px/1.3 var(--serif); cursor: pointer; }
+.imp-c .due-colonne > div > section[id]:not(.chiusa) > h2[role="button"] { margin-bottom: 12px; }
+
+.imp-c .due-colonne > div > section:not(.chiusa) .imp-riassunto { display: none; }
+@media (max-width: 760px) { .imp-sei { grid-template-columns: minmax(0, 1fr); } }
+
+.imp-c .aspetto-colori { display: none; }
+
+.asp-linguette button { padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--attenuato); font: inherit; font-size: var(--testo-minore); cursor: pointer; margin-bottom: -1px; }
+.asp-linguette button:hover { color: var(--ink); }
+.asp-linguette button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accento); }
+.asp-linguette button:focus-visible { outline: 2px solid var(--accento); outline-offset: 2px; }
+.asp-linguette i { font-style: normal; font-size: 11px; color: var(--attenuato); margin-left: 4px; font-variant-numeric: tabular-nums; }
+.asp-pannello[hidden] { display: none !important; }
+.imp-c .asp-linguette [data-linguetta="colori"] { display: none; }
