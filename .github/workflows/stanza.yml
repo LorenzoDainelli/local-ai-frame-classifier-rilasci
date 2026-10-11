@@ -1,0 +1,52 @@
+name: Stanza in 3D
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/collaudo_stanza.py"
+      - ".github/workflows/stanza.yml"
+      - "officina/stanza/**"
+  workflow_dispatch:
+    inputs:
+      parte:
+        description: "esplora i pesi dei modelli della stanza"
+        type: choice
+        options: [esplora]
+        default: esplora
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stanza-${{ github.ref }}-${{ github.event.inputs.parte || 'esplora' }}
+  cancel-in-progress: true
+
+jobs:
+  stanza:
+    name: Stanza in 3D (${{ github.event.inputs.parte || 'esplora' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Le librerie
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install huggingface_hub safetensors numpy
+      - name: Il collaudo
+        run: |
+          python strumenti/collaudo_stanza.py esplora --uscita stanza-collaudo.json
+      - name: Cosa ha detto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stanza-collaudo
+          path: stanza-collaudo.json
+          if-no-files-found: ignore
