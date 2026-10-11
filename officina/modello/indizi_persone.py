@@ -69,6 +69,25 @@ def _ore_a_parole(ore: float) -> str:
 def proposte(connessione: sqlite3.Connection, scatto_id: int,
              gia: set[int], compagni: set[int] | None = None,
              quante: int = QUANTE) -> list[dict]:
+    fuori = []
+    for persona_id, (punteggio, perche) in sorted(
+            punteggi(connessione, scatto_id, gia, compagni).items(), key=lambda x: -x[1][0]):
+        if punteggio < SOGLIA:
+            continue
+        riga = connessione.execute(
+            "SELECT nome FROM persone WHERE id = ? AND stato = 'attiva'",
+            (persona_id,)).fetchone()
+        if riga is None:
+            continue
+        fuori.append({"persona_id": persona_id, "nome": riga[0] or "senza nome",
+                      "punteggio": round(punteggio, 3), "perche": perche})
+        if len(fuori) >= quante:
+            break
+    return fuori
+
+
+def punteggi(connessione: sqlite3.Connection, scatto_id: int, gia: set[int],
+             compagni: set[int] | None = None) -> dict[int, tuple[float, str]]:
     punti: dict[int, float] = {}
     motivi: dict[int, list[tuple[float, str]]] = {}
 
@@ -136,18 +155,5 @@ def proposte(connessione: sqlite3.Connection, scatto_id: int,
                      f"sta con {nome_amico[0] if nome_amico and nome_amico[0] else 'chi c’è'} "
                      f"{volte} volte su {insieme}")
 
-    fuori = []
-    for persona_id, punteggio in sorted(punti.items(), key=lambda x: -x[1]):
-        if punteggio < SOGLIA:
-            continue
-        riga = connessione.execute(
-            "SELECT nome FROM persone WHERE id = ? AND stato = 'attiva'",
-            (persona_id,)).fetchone()
-        if riga is None:
-            continue
-        perche = max(motivi[persona_id], key=lambda x: x[0])[1]
-        fuori.append({"persona_id": persona_id, "nome": riga[0] or "senza nome",
-                      "punteggio": round(min(1.0, punteggio), 3), "perche": perche})
-        if len(fuori) >= quante:
-            break
-    return fuori
+    return {persona_id: (min(1.0, punteggio), max(motivi[persona_id], key=lambda x: x[0])[1])
+            for persona_id, punteggio in punti.items()}

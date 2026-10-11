@@ -523,8 +523,10 @@ function disegnaLeTre() {
     const { conferm, dalVolto } = personeDelloScatto();
     $("pillole-persone").innerHTML =
         conferm.map((chi) => `<button type="button" class="et-pillola et-mio" data-gente="${chi.persona_id}" data-come="togli" title="Clic per togliere">${scampa(chi.nome)}${chi.volto ? "" : ' <span class="via">· senza volto</span>'}</button>`).join("") +
-        dalVolto.map((chi) => `<button type="button" class="et-pillola et-ia" data-gente="${chi.persona_id}" data-come="metti" title="${chi.perche ? `${scampa(chi.perche)}: clic per confermare` : "Il volto somiglia: clic per confermare"}">${scampa(chi.nome)}?${chi.perche ? ` <span class="via">· ${scampa(chi.perche)}</span>` : ""}</button>`).join("") +
-        `<button type="button" class="et-pillola et-scappa${tre.nessuna_persona ? " et-mio" : ""}" data-nessuna="1" title="Nessuna persona (N)">Nessuna persona</button>`;
+        dalVolto.map((chi) => (chi.corpo ? pillolaDalCorpo(chi) : `<button type="button" class="et-pillola et-ia" data-gente="${chi.persona_id}" data-come="metti" title="${chi.perche ? `${scampa(chi.perche)}: clic per confermare` : "Il volto somiglia: clic per confermare"}">${scampa(chi.nome)}?${chi.perche ? ` <span class="via">· ${scampa(chi.perche)}</span>` : ""}</button>`)).join("") +
+        `<button type="button" class="et-pillola et-scappa${tre.nessuna_persona ? " et-mio" : ""}" data-nessuna="1" title="Nessuna persona (N)">Nessuna persona</button>` +
+        (primaDalCorpo() ? '<span class="et-tasti-corpo"><span><kbd>Invio</kbd> conferma</span><span><kbd>Canc</kbd> scarta</span></span>' : "");
+    disegnaSagome();
     const luoghiQui = st.pezzo.luoghi || [];
     const altro = proposte(2)[0];
     const via = (voce) => (voce.percorso ? `<span class="via">${scampa(voce.percorso.split(" › ").slice(-1)[0])} ›</span>&nbsp;` : "");
@@ -590,6 +592,8 @@ function cambiaParte(parte) {
 
 async function gente(personaId, come) {
     if (!st.pezzo) return;
+    const dalSuoCorpo = come === "metti" && dalCorpo().find((x) => x.persona_id === personaId);
+    if (dalSuoCorpo) { rispondiCorpo(dalSuoCorpo.corpo.id, personaId, "si"); return; }
     const scattoId = questoScatto();
     const qui = st.pezzo.persone || [];
     const chi = qui.find((x) => x.persona_id === personaId) || st.persone.find((x) => x.persona_id === personaId);
@@ -751,6 +755,105 @@ function disegnaVolti() {
     quadro.appendChild(strato);
 }
 
+function dalCorpo() {
+    return ((st.pezzo && st.pezzo.persone) || []).filter((chi) => chi.corpo && !chi.confermata);
+}
+
+function primaDalCorpo() {
+    return dalCorpo()[0] || null;
+}
+
+function pillolaDalCorpo(chi) {
+    const nome = scampa(chi.nome);
+    const perche = scampa(chi.perche || "le somiglia");
+    return `<span class="et-pillola et-ia et-dal-corpo" role="group" aria-label="Proposta ${nome}" data-sopra-corpo="${chi.corpo.id}">` +
+        `<button type="button" class="et-sceglie" data-corpo="${chi.corpo.id}" data-chi="${chi.persona_id}" data-risposta="si" title="${perche}: clic per confermare (Invio)">${nome}? <span class="via">· ${perche}</span></button>` +
+        `<button type="button" class="et-x" data-corpo="${chi.corpo.id}" data-chi="${chi.persona_id}" data-risposta="no" aria-label="Non è ${nome}" title="Non è ${nome} (Canc)">×</button></span>`;
+}
+
+function disegnaSagome() {
+    const quadro = $("quadro");
+    const media = $("media");
+    if (!quadro) return;
+    quadro.querySelector(".et-sagome")?.remove();
+    const qui = dalCorpo().filter((chi) => !chi.corpo.fotogramma && Array.isArray(chi.corpo.riquadro));
+    if (!qui.length || !media || media.tagName !== "IMG") return;
+    const strato = document.createElement("div");
+    strato.className = "et-sagome";
+    Object.assign(strato.style, {
+        left: `${media.offsetLeft}px`, top: `${media.offsetTop}px`,
+        width: `${media.offsetWidth}px`, height: `${media.offsetHeight}px`,
+    });
+    qui.forEach((chi) => {
+        const [x, y, w, h] = chi.corpo.riquadro;
+        if ([x, y, w, h].some((v) => typeof v !== "number")) return;
+        const sagoma = document.createElement("div");
+        sagoma.className = "et-sagoma";
+        sagoma.dataset.sagoma = chi.corpo.id;
+        Object.assign(sagoma.style, { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${h * 100}%` });
+        const nome = scampa(chi.nome);
+        sagoma.innerHTML = `<span class="et-cartellino${y < 0.08 ? " sotto" : ""}" data-sopra-corpo="${chi.corpo.id}">${nome}? ` +
+            `<button type="button" data-corpo="${chi.corpo.id}" data-chi="${chi.persona_id}" data-risposta="si" aria-label="È ${nome}" title="È ${nome} (Invio)">✓</button>` +
+            `<button type="button" data-corpo="${chi.corpo.id}" data-chi="${chi.persona_id}" data-risposta="no" aria-label="Non è ${nome}" title="Non è ${nome} (Canc)">×</button></span>`;
+        strato.appendChild(sagoma);
+    });
+    quadro.appendChild(strato);
+}
+
+function didascalia(perche) {
+    const trovata = /(foto (?:delle|del) .+)$/.exec(perche || "");
+    return trovata ? trovata[1] : "la foto più simile";
+}
+
+function mostraConfronto(corpoId, vicino) {
+    nascondiConfronto();
+    const chi = dalCorpo().find((voce) => voce.corpo.id === corpoId);
+    document.querySelectorAll(".et-sagoma").forEach((sagoma) => sagoma.classList.toggle("acceso", Number(sagoma.dataset.sagoma) === corpoId));
+    if (!chi || !vicino) return;
+    const fumetto = document.createElement("div");
+    fumetto.className = "et-fumetto";
+    fumetto.setAttribute("role", "tooltip");
+    const simile = chi.corpo.simile
+        ? `<figure><img src="/corpo/${chi.corpo.simile}?lato=240" alt=""><figcaption>${scampa(didascalia(chi.perche))}</figcaption></figure>`
+        : "";
+    fumetto.innerHTML = `<div class="et-fumetto-due"><figure><img src="/corpo/${chi.corpo.id}?lato=240" alt=""><figcaption>qui</figcaption></figure>${simile}</div>` +
+        `<span>${scampa((chi.perche || "le somiglia").replace(/^./, (c) => c.toUpperCase()))}.</span>`;
+    document.body.appendChild(fumetto);
+    const dove = vicino.getBoundingClientRect();
+    const largo = fumetto.offsetWidth;
+    const alto = fumetto.offsetHeight;
+    fumetto.style.left = `${Math.max(8, dove.left - largo - 10)}px`;
+    fumetto.style.top = `${Math.min(window.innerHeight - alto - 8, Math.max(8, dove.top + dove.height / 2 - alto / 2))}px`;
+}
+
+function nascondiConfronto() {
+    document.querySelector(".et-fumetto")?.remove();
+    document.querySelectorAll(".et-sagoma.acceso").forEach((sagoma) => sagoma.classList.remove("acceso"));
+}
+
+async function rispondiCorpo(corpoId, personaId, risposta) {
+    if (!st.pezzo) return;
+    const scattoId = questoScatto();
+    nascondiConfronto();
+    const qui = st.pezzo.persone || [];
+    if (risposta === "si") {
+        qui.forEach((x) => { if (x.persona_id === personaId) { x.confermata = true; x.corpo = null; } });
+        st.pezzo.tre = { ...(st.pezzo.tre || {}), persone: true, nessuna_persona: false };
+    } else {
+        st.pezzo.persone = qui.filter((x) => !(x.corpo && x.corpo.id === corpoId && x.persona_id === personaId));
+    }
+    disegnaTutto();
+    try {
+        const fatto = await salva("/api/corpo-risposta", { corpo_id: corpoId, persona_id: personaId, risposta });
+        giaPronti.delete(scattoId);
+        if (questoScatto() === scattoId) {
+            if (Array.isArray(fatto.persone)) st.pezzo.persone = fatto.persone;
+            prendiLeTre(fatto);
+            disegnaTutto();
+        }
+    } catch (errore) {  }
+}
+
 function disegnaStriscia() {
     const striscia = $("striscia");
     const fotogrammi = st.pezzo.striscia || [];
@@ -769,7 +872,7 @@ function disegnaInfo() {
     const pannello = $("info");
     pannello.hidden = !st.info;
     $("b-info").setAttribute("aria-pressed", st.info ? "true" : "false");
-    disegnaVolti();
+    disegnaVolti(); disegnaSagome();
     if (!st.info || !st.pezzo) return;
     const scatto = st.pezzo.scatto;
     const dettagli = st.pezzo.dettagli || {};
@@ -1149,7 +1252,7 @@ function intero(si) {
     document.body.classList.toggle("et-intero", si);
     $("b-intero").setAttribute("aria-pressed", si ? "true" : "false");
     $("b-intero").title = si ? "Esci dal tutto schermo (Esc)" : "Tutto schermo (anche col clic della rotella)";
-    requestAnimationFrame(() => { disegnaPillole(); disegnaVolti(); });
+    requestAnimationFrame(() => { disegnaPillole(); disegnaVolti(); disegnaSagome(); });
     if (si) avviso("Tutto schermo: frecce per cambiare foto, Esc esce");
 }
 
@@ -1183,7 +1286,7 @@ function scampa(testo) {
 let trascinato = false;
 
 document.addEventListener("click", (evento) => {
-    const t = evento.target.closest("[data-nodo],[data-piu],[data-chiudi],[data-recente],[data-pmio],[data-pia],[data-altre],[data-ris],[data-quadro],[data-persona],[data-togli-persona],[data-ripasso],[data-parte],[data-gente],[data-nessuna],[data-nonso]");
+    const t = evento.target.closest("[data-nodo],[data-piu],[data-chiudi],[data-recente],[data-pmio],[data-pia],[data-altre],[data-ris],[data-quadro],[data-persona],[data-togli-persona],[data-ripasso],[data-parte],[data-gente],[data-nessuna],[data-nonso],[data-corpo]");
     if (!t) return;
     if (trascinato && t.closest("#tela")) return;
     const d = t.dataset;
@@ -1200,6 +1303,7 @@ document.addEventListener("click", (evento) => {
     else if (d.pmio) togli(Number(d.pmio), d.di !== undefined ? Number(d.di) : st.parte);
     else if (d.pia) metti(Number(d.pia), d.di !== undefined ? Number(d.di) : st.parte);
     else if (d.parte !== undefined) cambiaParte(Number(d.parte));
+    else if (d.corpo) rispondiCorpo(Number(d.corpo), Number(d.chi), d.risposta);
     else if (d.gente) gente(Number(d.gente), d.come);
     else if (d.nessuna) scappatoia("persone");
     else if (d.nonso) scappatoia("luogo");
@@ -1216,6 +1320,9 @@ document.addEventListener("click", (evento) => {
 });
 
 document.addEventListener("mouseover", (evento) => {
+    const sopraCorpo = evento.target.closest("[data-sopra-corpo]");
+    if (sopraCorpo) mostraConfronto(Number(sopraCorpo.dataset.sopraCorpo), sopraCorpo.closest(".et-pillole") ? sopraCorpo : null);
+    else if (document.querySelector(".et-fumetto, .et-sagoma.acceso")) nascondiConfronto();
     const voce = evento.target.closest("[data-pia]");
     const sulNodo = evento.target.closest(".et-nodo[data-nodo]");
     if (voce) mostraPerche(proposta(Number(voce.dataset.pia)));
@@ -1320,6 +1427,12 @@ document.addEventListener("keydown", (evento) => {
             const media = $("media");
             if (media && media.tagName === "VIDEO") { if (media.paused) media.play(); else media.pause(); }
         }
+        return;
+    }
+    if (st.parte === 1 && (evento.key === "Enter" || evento.key === "Delete") && primaDalCorpo()) {
+        evento.preventDefault();
+        const primo = primaDalCorpo();
+        rispondiCorpo(primo.corpo.id, primo.persona_id, evento.key === "Enter" ? "si" : "no");
         return;
     }
     if (evento.key === "ArrowRight") { evento.preventDefault(); avanti(); }
@@ -1458,17 +1571,17 @@ document.addEventListener("keydown", (evento) => {
         linea.classList.remove("attivo");
         ricorda("eti-bordo-sx", corpo.style.getPropertyValue("--sx"));
         disegnaPillole();
-        disegnaVolti();
+        disegnaVolti(); disegnaSagome();
     });
     linea.addEventListener("dblclick", () => {
         corpo.style.setProperty("--sx", PREDEFINITO);
         ricorda("eti-bordo-sx", PREDEFINITO);
         disegnaPillole();
-        disegnaVolti();
+        disegnaVolti(); disegnaSagome();
     });
 }());
 
-window.addEventListener("resize", () => { disegnaPillole(); disegnaVolti(); });
+window.addEventListener("resize", () => { disegnaPillole(); disegnaVolti(); disegnaSagome(); });
 
 function controllaLAlbero() {
     if (indice.size && !$("mondo").querySelector(".et-nodo")) disegnaAlbero();

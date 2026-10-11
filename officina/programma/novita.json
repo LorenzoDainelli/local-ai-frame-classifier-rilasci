@@ -176,6 +176,26 @@
       [
         "pannello",
         "In Intelligenza artificiale i quattro lavori stanno in un quadrato: impronte e volti sopra, corpi e scritte sotto"
+      ],
+      [
+        "persone",
+        "In Etichetta l'IA propone chi è una persona anche quando il volto non si vede: guarda la corporatura e i vestiti, e ti scrive il perché, per esempio «stessi vestiti della foto delle 15:32»"
+      ],
+      [
+        "etichetta",
+        "La proposta è una pillola con la ×, e sulla foto un cartellino con ✓ e × attaccato alla persona. Invio conferma, Canc scarta. Passandoci sopra vedi accanto la foto che le somiglia"
+      ],
+      [
+        "cuore",
+        "Ogni tua conferma e ogni no insegnano: il programma impara persona per persona quanto contano corporatura e vestiti, e dopo una risposta rifà i conti solo per quella persona"
+      ],
+      [
+        "persona",
+        "Nella pagina di ogni persona c'è il suo fascicolo: ritagli del corpo presi in anni diversi, i vestiti visti più spesso con il loro nome, dove sta e con chi sta più spesso, e come la riconosce il programma"
+      ],
+      [
+        "stato",
+        "Stato ed Etichetta si preparano appena parte il programma; Stato ti mostra subito i conti di prima mentre rifà quelli nuovi"
       ]
     ],
     "tecnico": [
@@ -223,6 +243,22 @@
       [
         "scarica",
         "scaricamento dei corpi: SAM 3D Body e Puffin con revisione e sha256 fissati; la chiave si controlla anche per facebook/sam-3d-body-dinov3"
+      ],
+      [
+        "disco",
+        "Migrazione 49: <code>corpi_delle_persone</code> (le tue risposte sì/no), <code>proposte_dei_corpi</code> (le prime 3 per corpo, col perché e il corpo simile), <code>pesi_delle_persone</code> e <code>parole_dei_vestiti</code> (234 frasi di SigLIP 2, capo e colore)"
+      ],
+      [
+        "persone",
+        "<code>corpi.chi_e</code>: KPR, vestiti (che contano meno coi giorni), corporatura di SAM 3D Body e contesto messi insieme da una regressione logistica, prima per tutti e poi per ogni persona (con i giorni dei vestiti e della corporatura scelti fra pochi valori). Soglia 0,30. Riparte dopo «I corpi» e, con calma, 20 secondi dopo le tue risposte"
+      ],
+      [
+        "persona",
+        "<code>corpi.fascicolo</code>: i ritagli si scelgono uno per anno, i vestiti si raggruppano per nome (almeno 2 scatti), luoghi e compagni dagli scatti con il volto o messi a mano"
+      ],
+      [
+        "stato",
+        "All'avvio un filo <code>preparazione</code> calcola la pagella e la bottega delle proposte; la pagella si calcola una volta sola anche con più richieste insieme"
       ]
     ]
   },

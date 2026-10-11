@@ -85,10 +85,30 @@
 .ps-campo .campo { flex: 1; min-width: 0; }
 .ps-insegnate { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ps-insegnate form { display: inline; margin: 0; }
+.ps-corpi { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; max-width: 1080px; }
+.ps-ritaglio { display: block; aspect-ratio: 3 / 4; border-radius: var(--raggio-piccolo); overflow: hidden; background: var(--pozzo); border: 0.5px solid var(--linea); }
+.ps-ritaglio img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+.ps-vestiti { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; max-width: 1080px; }
+.ps-capo { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: center; padding: 8px; border-radius: var(--raggio-scheda); background: var(--carta); border: 0.5px solid var(--linea); }
+.ps-capo-testo { display: grid; gap: 1px; min-width: 0; }
+.ps-capo-testo b { font-weight: 500; }
+.ps-due { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; max-width: 1080px; }
+.ps-elenco { display: grid; gap: 8px; }
+.ps-luogo { display: grid; grid-template-columns: minmax(0, 140px) minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.ps-luogo-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-barra { height: 6px; border-radius: 999px; background: var(--pozzo); overflow: hidden; }
+.ps-barra i { display: block; height: 100%; border-radius: inherit; background: var(--accento); }
+.ps-compagno { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; color: inherit; text-decoration: none; border-radius: var(--raggio-piccolo); }
+.ps-compagno:hover .pe-tondo { box-shadow: 0 0 0 3px var(--alone); border-color: var(--accento); }
+.ps-compagno:hover .ps-luogo-nome { color: var(--accento); }
+.ps-come { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; max-width: 1080px; }
+.ps-come p { margin: 0; color: var(--ink-2); }
+.ps-come b { font-weight: 600; color: var(--ink); }
 #insegna .conchiglia .pannello { font-family: var(--sans); }
 @media (max-width: 700px) {
     .ps-copertina { width: 72px; }
     .ps-campo { flex-direction: column; }
+    .ps-corpi { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 .mz-vuoto > div { display: grid; gap: 10px; }

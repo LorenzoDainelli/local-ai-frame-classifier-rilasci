@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 
 from officina.archivio import accesso
+from officina.corpi import chi_e
 from officina.errori import ErroreOfficina
 from officina.modello import etichette, nodi, ripassi, persone, scatti
 from officina.modello import posti as posti_mod
@@ -12,6 +15,8 @@ from officina.web import etichettatura, vista
 from officina.web.strade import albero, base, comune
 
 strada = APIRouter()
+
+QUIETE_DOPO_LE_RISPOSTE = 20.0
 
 
 @strada.get("/officina", response_class=HTMLResponse)
@@ -220,6 +225,8 @@ def api_persona_a_mano(scatto_id: int = Form(...), persona_id: int = Form(...),
     with accesso.aperto().scrittura() as connessione:
         if stato == "togli":
             persone.togli_a_mano(connessione, scatto_id, persona_id)
+            if chi_e.dimentica_nello_scatto(connessione, scatto_id, persona_id):
+                _rifai_chi_e_con_calma()
         else:
             persone.metti_a_mano(connessione, scatto_id, persona_id)
             posti_mod.nessuna_persona(connessione, scatto_id, False)
@@ -307,10 +314,47 @@ def api_persona_conferma(scatto_id: int = Form(...), persona_id: int = Form(...)
     with accesso.aperto().scrittura() as connessione:
         if stato == "togli":
             persone.togli_a_mano(connessione, scatto_id, persona_id)
+            if chi_e.dimentica_nello_scatto(connessione, scatto_id, persona_id):
+                _rifai_chi_e_con_calma()
         else:
             persone.metti_a_mano(connessione, scatto_id, persona_id)
             posti_mod.nessuna_persona(connessione, scatto_id, False)
     return _le_tre(scatto_id)
+
+
+@strada.post("/api/corpo-risposta")
+def api_corpo_risposta(corpo_id: int = Form(...), persona_id: int = Form(...),
+                       risposta: str = Form("si")):
+    if risposta not in ("si", "no"):
+        raise ErroreOfficina("La risposta per una persona dal corpo è «sì» o «no».")
+    with accesso.aperto().scrittura() as connessione:
+        scatto_id = chi_e.rispondi(connessione, corpo_id, persona_id, risposta)
+        if scatto_id is None:
+            raise ErroreOfficina("Questa persona non c'è più nello scatto.")
+        if risposta == "si":
+            posti_mod.nessuna_persona(connessione, scatto_id, False)
+    _rifai_chi_e_con_calma()
+    with accesso.aperto().lettura() as connessione:
+        chi = etichettatura.chi_c_e(connessione, scatto_id)
+    return {**_le_tre(scatto_id), "persone": chi}
+
+
+def _rifai_chi_e_con_calma() -> None:
+    comune.ultima_risposta_dei_corpi["quando"] = time.monotonic()
+    if comune.lavoro_chi_e.sta_lavorando or comune.lavoro_corpi.sta_lavorando:
+        return
+    archivio = accesso.aperto()
+
+    def lavora() -> None:
+        while True:
+            while time.monotonic() - comune.ultima_risposta_dei_corpi["quando"] < QUIETE_DOPO_LE_RISPOSTE:
+                time.sleep(min(1.0, QUIETE_DOPO_LE_RISPOSTE))
+            partito = time.monotonic()
+            chi_e.Passata(archivio).esegui()
+            if comune.ultima_risposta_dei_corpi["quando"] < partito:
+                return
+
+    comune.lavoro_chi_e.parti(lavora, "chi_e")
 
 
 @strada.post("/api/nessuna-persona")

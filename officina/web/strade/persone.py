@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from officina import registro
 from officina.archivio import accesso
 from officina.archivio.database import uno
+from officina.corpi import fascicolo
 from officina.errori import ErroreOfficina
 from officina.immagini import consegna, lettura
 from officina.modello import file_media, persone
@@ -95,14 +96,20 @@ def pagina_cassetto(richiesta: Request):
     })
 
 
-def _dove_sta_il_volto(volto_id: int) -> tuple:
+DOVE_STA = {
+    "volti": "SELECT v.*, f.id AS file, f.genere AS genere, f.impronta AS impronta "
+             "FROM volti v LEFT JOIN file_media f ON f.id = v.file_id WHERE v.id = ?",
+    "corpi": "SELECT v.*, f.id AS file, f.genere AS genere, f.impronta AS impronta "
+             "FROM corpi v LEFT JOIN file_media f ON f.id = v.file_id WHERE v.id = ?",
+}
+
+
+def _dove_sta_il_volto(volto_id: int, tabella: str = "volti") -> tuple:
     with accesso.aperto().lettura() as connessione:
-        riga = uno(connessione,
-                   "SELECT v.*, f.id AS file, f.genere AS genere, f.impronta AS impronta "
-                   "FROM volti v LEFT JOIN file_media f ON f.id = v.file_id "
-                   "WHERE v.id = ?", volto_id)
+        riga = uno(connessione, DOVE_STA[tabella], volto_id)
         if riga is None or riga["file"] is None:
-            raise ErroreOfficina("Questo volto non c'è più.")
+            raise ErroreOfficina("Questo volto non c'è più." if tabella == "volti"
+                                 else "Questa persona non c'è più nello scatto.")
         percorso = file_media.percorso_migliore(connessione, riga["file"])
         istante = None
         if riga["genere"] == "video":
@@ -117,8 +124,9 @@ def _dove_sta_il_volto(volto_id: int) -> tuple:
 
 
 def _ritaglia_il_volto(riga, percorso: Path, istante: int | None,
-                       lato: int) -> tuple[bytes, str]:
-    chiave = f"volto#{riga['impronta']}#{riga['fotogramma'] or 0}#{riga['riquadro']}#{lato}"
+                       lato: int, aria: float = 0.18) -> tuple[bytes, str]:
+    chiave = (f"volto#{riga['impronta']}#{riga['fotogramma'] or 0}#{riga['riquadro']}#{lato}"
+              f"#{aria}")
     pronto = consegna.gia_pronte.prendi(chiave)
     if pronto is not None:
         return pronto
@@ -134,7 +142,6 @@ def _ritaglia_il_volto(riga, percorso: Path, istante: int | None,
 
     x, y, larga, alta = json.loads(riga["riquadro"])
     larghezza, altezza = immagine.size
-    aria = 0.18
     riquadro = (
         max(0, int((x - larga * aria) * larghezza)),
         max(0, int((y - alta * aria) * altezza)),
@@ -162,6 +169,21 @@ async def un_volto(richiesta: Request, volto_id: int, lato: int = 220):
     dati, tipo = fatto
     return Response(content=dati, media_type=tipo,
                     headers={"Cache-Control": "no-store"})
+
+
+@strada.get("/corpo/{corpo_id}")
+async def un_corpo(richiesta: Request, corpo_id: int, lato: int = 240):
+    trovato = await consegna.subito(_dove_sta_il_volto, corpo_id, "corpi")
+    if trovato is None:
+        return Response(status_code=404)
+    riga, percorso, istante = trovato
+    fatto = await consegna.a_parte(richiesta, _ritaglia_il_volto, riga, percorso,
+                                   istante, min(max(lato, 16), 1600), 0.06,
+                                   filmato=riga["genere"] == "video")
+    if fatto is None:
+        return Response(status_code=404)
+    dati, tipo = fatto
+    return Response(content=dati, media_type=tipo, headers={"Cache-Control": "no-store"})
 
 
 @strada.post("/persone/unisci")
@@ -374,13 +396,13 @@ def pagina_persona(richiesta: Request, persona_id: int):
         chi = dict(voce)
         chi["copertina"] = persone.copertina(connessione, persona_id)
         chi["volti"] = persone.volti_di(connessione, persona_id, 12)
-        chi["scatti"] = uno(connessione,
-                            "SELECT count(DISTINCT scatto_id) AS q FROM volti "
-                            "WHERE persona_id = ?", persona_id)["q"]
+        suo = fascicolo.di(connessione, persona_id, chi.get("nome"))
+        chi["scatti"] = suo["scatti"]
         insegnate = volti_riferimento.elenco(connessione, persona_id)
     return base.pagine.TemplateResponse(richiesta, "persona.html", {
         **base.comune(richiesta, "persone"),
         "chi": chi,
+        "fascicolo": suo,
         "insegnate": insegnate,
         "manca_il_modello": volti_rilevatore.cosa_manca(archivio.dove.modelli),
         "lavoro": comune.lavoro_riferimento.come_va(),

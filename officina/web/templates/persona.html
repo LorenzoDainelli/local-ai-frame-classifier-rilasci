@@ -16,7 +16,7 @@
         {% endif %}
         <div class="ps-chi">
             <h1 class="titolo-pagina">{{ chi.nome or 'Senza nome' }}</h1>
-            <p class="sottotitolo">in <b class="numeri">{{ chi.scatti|numero }}</b> {{ 'scatto' if chi.scatti == 1 else 'scatti' }}</p>
+            <p class="sottotitolo">in <b class="numeri">{{ chi.scatti|numero }}</b> {{ 'scatto' if chi.scatti == 1 else 'scatti' }}{% if fascicolo.dal_corpo %} · <b class="numeri">{{ fascicolo.dal_corpo|numero }}</b> {{ 'riconosciuto' if fascicolo.dal_corpo == 1 else 'riconosciuti' }} dal corpo{% endif %}</p>
         </div>
         <a class="tasto-comando principale" href="/?persona={{ chi.id }}">{{ icona('foto', 15) }} Vedi i suoi scatti</a>
     </div>
@@ -31,6 +31,83 @@
         </div>
     </section>
     {% endif %}
+
+    {% if fascicolo.corpi %}
+    <section class="ps-sezione">
+        <div class="ps-sez-testa"><h2 class="titolo-sezione">Il suo corpo</h2><span class="minuscolo tenue">{{ 'ritagli presi in anni diversi' if fascicolo.anni > 1 else 'ritagli presi in momenti diversi' }}</span></div>
+        <div class="ps-corpi">
+            {% for corpo in fascicolo.corpi %}
+            <span class="ps-ritaglio" title="{{ corpo.quando }}"><img src="/corpo/{{ corpo.id }}?lato=320" alt="" loading="lazy"></span>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if fascicolo.quanti_corpi %}
+    <section class="ps-sezione">
+        <div class="ps-sez-testa"><h2 class="titolo-sezione">I vestiti visti</h2><span class="minuscolo tenue">dal più frequente</span></div>
+        {% if fascicolo.vestiti.capi %}
+        <div class="ps-vestiti">
+            {% for capo in fascicolo.vestiti.capi %}
+            <div class="ps-capo">
+                <span class="ps-ritaglio">{% if capo.corpo_id %}<img src="/corpo/{{ capo.corpo_id }}?lato=200" alt="" loading="lazy">{% endif %}</span>
+                <div class="ps-capo-testo">
+                    <b>{{ capo.nome }}</b>
+                    <span class="minuscolo tenue">{{ capo.visti }}</span>
+                    {% if capo.quando %}<span class="minuscolo tenue">{{ capo.quando }}</span>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% elif not fascicolo.vestiti.pronti %}
+        <p class="minuscolo tenue">I nomi dei vestiti arrivano con la prossima passata dell'intelligenza artificiale.</p>
+        {% else %}
+        <p class="minuscolo tenue">Ancora nessun capo visto almeno due volte.</p>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    {% if fascicolo.luoghi or fascicolo.compagni %}
+    <div class="ps-due">
+        <section class="ps-sezione">
+            <div class="ps-sez-testa"><h2 class="titolo-sezione">Dove sta più spesso</h2></div>
+            {% if fascicolo.luoghi %}
+            <div class="ps-elenco">
+                {% for luogo in fascicolo.luoghi %}
+                <div class="ps-luogo">
+                    <span class="ps-luogo-nome">{{ luogo.nome }}</span>
+                    <span class="ps-barra"><i style="width:{{ luogo.parte }}%"></i></span>
+                    <span class="minuscolo tenue numeri">{{ luogo.volte|numero }} {{ 'scatto' if luogo.volte == 1 else 'scatti' }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="minuscolo tenue">Nessun luogo, per ora, nei suoi scatti.</p>
+            {% endif %}
+        </section>
+        <section class="ps-sezione">
+            <div class="ps-sez-testa"><h2 class="titolo-sezione">Con chi sta più spesso</h2></div>
+            {% if fascicolo.compagni %}
+            <div class="ps-elenco">
+                {% for compagno in fascicolo.compagni %}
+                <a class="ps-compagno" href="/persone/{{ compagno.id }}">
+                    <span class="pe-tondo">{% if compagno.volto_id %}<img src="/volto/{{ compagno.volto_id }}?lato=80" alt="" loading="lazy">{% endif %}</span>
+                    <span class="ps-luogo-nome">{{ compagno.nome }}</span>
+                    <span class="minuscolo tenue numeri">{{ compagno.volte|numero }} {{ 'scatto' if compagno.volte == 1 else 'scatti' }} insieme</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="minuscolo tenue">Nei suoi scatti non c'è ancora nessun altro con un nome.</p>
+            {% endif %}
+        </section>
+    </div>
+    {% endif %}
+
+    <div class="carta ps-come">
+        <span class="ps-riga-icona">{{ icona('info', 20) }}</span>
+        <p><b>Come la riconosco.</b> {{ fascicolo.come|join(' ') }}</p>
+    </div>
 
     <div class="carta ps-riga">
         <span class="ps-riga-icona">{{ icona('volto', 20) }}</span>

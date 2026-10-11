@@ -5,6 +5,7 @@ import time
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+from officina import registro
 from officina.archivio import accesso
 from officina.archivio.database import uno
 from officina.errori import ErroreOfficina
@@ -138,6 +139,8 @@ def _guarda_i_corpi(passata) -> None:
     comune.lavoro_corpi.di(passata.avanzamento.a_parole())
     if not passata.fermata:
         _fai_le_figure(passata)
+    if not passata.fermata:
+        cerca_chi_e(passata.archivio, comune.lavoro_corpi, fermato=lambda: passata.fermata)
 
 
 def _fai_le_figure(passata_corpi) -> None:
@@ -166,6 +169,35 @@ def _fai_le_figure(passata_corpi) -> None:
 
     passata.esegui(al_passo=al_passo)
     comune.lavoro_corpi.di(passata.avanzamento.a_parole())
+
+
+def cerca_chi_e(archivio, lavoro, fermato=None) -> None:
+    from officina.corpi import chi_e, vestiti_a_parole
+    from officina.parole.motore import Avanzamento as Misuratore
+
+    try:
+        vestiti_a_parole.prepara(archivio)
+    except ErroreOfficina as errore:
+        lavoro.di("i nomi dei vestiti aspettano SigLIP 2: " + errore.messaggio.split("\n")[0])
+    except Exception as guasto:
+        registro.errore("chi_e.parole_dei_vestiti_rotte", **registro.dove_si_e_rotto(guasto))
+    passata = chi_e.Passata(archivio, fermato=fermato)
+    partito = time.monotonic()
+
+    def al_passo(avanzamento) -> None:
+        misura = Misuratore(totale=avanzamento.totale)
+        misura.letti = avanzamento.fatti
+        if avanzamento.fatti:
+            misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / avanzamento.fatti
+        lavoro.numeri = {
+            "fatti": avanzamento.fatti,
+            "totale": avanzamento.totale,
+            "corpi": avanzamento.proposte,
+            "quanto_manca": misura.quanto_manca(),
+        }
+
+    passata.esegui(al_passo=al_passo)
+    lavoro.di(passata.avanzamento.a_parole())
 
 
 IA_IN_FILA = ("impronte", "volti", "corpi", "scritte")

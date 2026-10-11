@@ -4,6 +4,7 @@ import json
 import sqlite3
 from pathlib import PureWindowsPath
 
+from officina.corpi import chi_e
 from officina.modello import posti
 from officina.modello import etichette as magazzino
 from officina.modello import file_media, indizi_persone, nodi, scatti
@@ -110,6 +111,10 @@ def _perche_niente_proposte(connessione: sqlite3.Connection, bottega) -> str:
     return ""
 
 
+def chi_c_e(connessione: sqlite3.Connection, scatto_id: int) -> list[dict]:
+    return _chi_c_e(connessione, scatto_id)
+
+
 def _chi_c_e(connessione: sqlite3.Connection, scatto_id: int) -> list[dict]:
     fuori: dict[int, dict] = {}
     for riga in tutti(
@@ -141,6 +146,18 @@ def _chi_c_e(connessione: sqlite3.Connection, scatto_id: int) -> list[dict]:
                 "confermata": True,
             }
     confermati = {k for k, v in fuori.items() if v["confermata"]}
+    dal_corpo = chi_e.proposte_dello_scatto(connessione, scatto_id, set(fuori))
+    for voce in dal_corpo:
+        fuori[voce["persona_id"]] = {
+            "persona_id": voce["persona_id"],
+            "nome": voce["nome"],
+            "volto": None,
+            "a_mano": False,
+            "confermata": False,
+            "perche": voce["perche"],
+            "corpo": {"id": voce["corpo_id"], "riquadro": voce["riquadro"],
+                      "fotogramma": voce["fotogramma"], "simile": voce["simile"]},
+        }
     for voce in indizi_persone.proposte(connessione, scatto_id, set(fuori), confermati):
         fuori[voce["persona_id"]] = {
             "persona_id": voce["persona_id"],

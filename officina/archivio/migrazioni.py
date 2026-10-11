@@ -992,6 +992,65 @@ def _versione_48(connessione: sqlite3.Connection) -> None:
         connessione.execute(f"DROP INDEX IF EXISTS {doppione}")
 
 
+def _versione_49(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE corpi_delle_persone (
+            corpo_id    INTEGER NOT NULL REFERENCES corpi(id) ON DELETE CASCADE,
+            persona_id  INTEGER NOT NULL REFERENCES persone(id) ON DELETE CASCADE,
+            risposta    TEXT NOT NULL CHECK (risposta IN ('si','no')),
+            deciso_il   TEXT NOT NULL,
+            PRIMARY KEY (corpo_id, persona_id)
+        )
+        """
+    )
+    connessione.execute(
+        "CREATE INDEX corpi_delle_persone_per_persona ON corpi_delle_persone(persona_id, risposta)")
+    connessione.execute(
+        """
+        CREATE TABLE proposte_dei_corpi (
+            corpo_id         INTEGER NOT NULL REFERENCES corpi(id) ON DELETE CASCADE,
+            persona_id       INTEGER NOT NULL REFERENCES persone(id) ON DELETE CASCADE,
+            scatto_id        INTEGER NOT NULL REFERENCES scatti(id) ON DELETE CASCADE,
+            punteggio        REAL NOT NULL,
+            perche           TEXT NOT NULL,
+            simile_corpo_id  INTEGER REFERENCES corpi(id) ON DELETE SET NULL,
+            calcolata_il     TEXT NOT NULL,
+            PRIMARY KEY (corpo_id, persona_id)
+        )
+        """
+    )
+    connessione.execute(
+        "CREATE INDEX proposte_dei_corpi_per_scatto ON proposte_dei_corpi(scatto_id)")
+    connessione.execute(
+        "CREATE INDEX proposte_dei_corpi_per_persona ON proposte_dei_corpi(persona_id)")
+    connessione.execute(
+        """
+        CREATE TABLE pesi_delle_persone (
+            persona_id          INTEGER PRIMARY KEY REFERENCES persone(id) ON DELETE CASCADE,
+            pesi                TEXT NOT NULL,
+            vestiti_giorni      REAL NOT NULL,
+            corporatura_giorni  REAL NOT NULL,
+            si                  INTEGER NOT NULL,
+            no                  INTEGER NOT NULL,
+            esempi              INTEGER NOT NULL,
+            firma               TEXT NOT NULL,
+            imparati_il         TEXT NOT NULL
+        )
+        """
+    )
+    connessione.execute(
+        """
+        CREATE TABLE parole_dei_vestiti (
+            modello  TEXT NOT NULL,
+            frase    TEXT NOT NULL,
+            vettore  BLOB NOT NULL,
+            PRIMARY KEY (modello, frase)
+        )
+        """
+    )
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1072,6 +1131,9 @@ MIGRAZIONI: list[Migrazione] = [
     Migrazione(48, "le pagine dell'intelligenza più veloci con tante segnalazioni, "
                "e via quattro indici doppi",
                _versione_48),
+    Migrazione(49, "chi è una persona senza volto: proposte dal corpo e dai vestiti, "
+               "le tue risposte e quello che impara di ognuno",
+               _versione_49),
 ]
 
 
