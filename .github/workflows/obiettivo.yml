@@ -5,8 +5,13 @@ on:
     branches: [prove]
     paths:
       - "strumenti/collaudo_obiettivo.py"
+      - "officina/corpi/obiettivo.py"
       - ".github/workflows/obiettivo.yml"
   workflow_dispatch:
+    inputs:
+      cosa:
+        description: "confronta oppure esplora"
+        default: confronta
 
 permissions:
   contents: read
@@ -18,6 +23,7 @@ concurrency:
 jobs:
   esplora:
     name: Com'è fatto Puffin
+    if: github.event.inputs.cosa == 'esplora'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -34,3 +40,56 @@ jobs:
           python -m pip install huggingface_hub numpy
       - name: Guarda
         run: python strumenti/collaudo_obiettivo.py esplora --uscita obiettivo-esplora.json
+
+  confronta:
+    name: Puffin, l'originale contro il mio
+    if: github.event.inputs.cosa != 'esplora'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        id: loro
+        with:
+          python-version: "3.10"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Spazio sul disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+      - name: L'originale di Puffin e le sue librerie
+        run: |
+          PY="${{ steps.loro.outputs.python-path }}"
+          mkdir puffin
+          git -C puffin init -q
+          git -C puffin remote add origin https://github.com/KangLiao929/Puffin
+          git -C puffin fetch -q --depth 1 origin c6d9ae5e63bc79d5d01554235b7c1d3772c327c8
+          git -C puffin checkout -q FETCH_HEAD
+          "$PY" -m pip install --upgrade pip
+          "$PY" -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.7.0 torchvision==0.22.0
+          "$PY" -m pip install requests pillow numpy huggingface_hub
+          grep -v -i -E "^(petrel-oss-sdk|embreex|moderngl|glcontext|viser|streamlit|jupyter|notebook|ipykernel|ipywidgets|ipython|widgetsnbextension|debugpy|torch|torchvision|torchaudio|duckduckgo|lagent|arxiv|boto3|botocore|s3transfer|manifold3d|vhacdx|yourdfpy|pydeck|altair)" \
+            puffin/Puffin-World/requirements.txt > richieste-puffin.txt
+          "$PY" -m pip install -r richieste-puffin.txt || while read -r riga; do
+            "$PY" -m pip install "$riga" || echo "salto $riga"
+          done < richieste-puffin.txt
+      - name: Le librerie del programma
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install transformers==5.18.0 safetensors==0.8.0 huggingface-hub==1.33.0 \
+            pillow==12.3.0 numpy==2.4.6 jinja2==3.1.6 requests
+      - name: Le foto pubbliche
+        run: python strumenti/collaudo_obiettivo.py foto --cartella "$RUNNER_TEMP/foto"
+      - name: L'originale
+        run: |
+          "${{ steps.loro.outputs.python-path }}" strumenti/collaudo_obiettivo.py loro --puffin puffin/Puffin-World \
+            --foto "$RUNNER_TEMP/foto" --uscita "$RUNNER_TEMP/loro"
+      - name: Il confronto
+        run: |
+          python strumenti/collaudo_obiettivo.py confronta --foto "$RUNNER_TEMP/foto" --loro "$RUNNER_TEMP/loro" \
+            --cartella "$RUNNER_TEMP/mio" --uscita obiettivo-confronto.json

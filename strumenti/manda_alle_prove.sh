@@ -15,7 +15,7 @@ if [ "$ZITTO" = "zitto" ]; then OGGETTO="$OGGETTO [skip actions]"; fi
 
 cd "$COPIA"
 if git ls-remote --exit-code --heads origin "$RAMO" > /dev/null; then
-  git fetch --quiet --depth 1 origin "$RAMO:refs/remotes/origin/$RAMO"
+  git fetch --quiet --depth 1 origin "+$RAMO:refs/remotes/origin/$RAMO"
   git checkout --quiet -B "$RAMO" "origin/$RAMO"
 else
   git checkout --quiet --orphan "$RAMO"
