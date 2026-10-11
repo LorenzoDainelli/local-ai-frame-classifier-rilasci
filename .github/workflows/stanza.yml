@@ -10,43 +10,58 @@ on:
   workflow_dispatch:
     inputs:
       parte:
-        description: "esplora i pesi dei modelli della stanza"
+        description: "da3: l'originale contro il mio; esplora: i pesi dei modelli della stanza"
         type: choice
-        options: [esplora]
-        default: esplora
+        options: [da3, esplora]
+        default: da3
+      quanti:
+        description: "fotogrammi del video d'esempio da provare"
+        default: "10"
 
 permissions:
   contents: read
 
 concurrency:
-  group: stanza-${{ github.ref }}-${{ github.event.inputs.parte || 'esplora' }}
+  group: stanza-${{ github.ref }}-${{ github.event.inputs.parte || 'da3' }}
   cancel-in-progress: true
 
 jobs:
   stanza:
-    name: Stanza in 3D (${{ github.event.inputs.parte || 'esplora' }})
+    name: Stanza in 3D (${{ github.event.inputs.parte || 'da3' }})
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 300
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: "1"
+      PARTE: ${{ github.event.inputs.parte || 'da3' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.11"
       - name: Le librerie
         run: |
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
-          python -m pip install huggingface_hub safetensors numpy
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install huggingface_hub safetensors numpy opencv-python-headless pillow
+          if [ "$PARTE" = "da3" ]; then
+            python -m pip install omegaconf addict einops evo trimesh imageio tqdm
+            git clone -q https://github.com/ByteDance-Seed/Depth-Anything-3 Depth-Anything-3
+            git -C Depth-Anything-3 checkout -q 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+          fi
+          df -h /
       - name: Il collaudo
         run: |
-          python strumenti/collaudo_stanza.py esplora --uscita stanza-collaudo.json
+          if [ "$PARTE" = "esplora" ]; then
+            python strumenti/collaudo_stanza.py esplora --uscita stanza-collaudo.json
+          else
+            python strumenti/collaudo_stanza.py da3 --originale Depth-Anything-3 \
+              --quanti "${{ github.event.inputs.quanti || '10' }}" --uscita stanza-collaudo.json
+          fi
       - name: Cosa ha detto
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: stanza-collaudo
+          name: stanza-collaudo-${{ github.event.inputs.parte || 'da3' }}
           path: stanza-collaudo.json
           if-no-files-found: ignore
