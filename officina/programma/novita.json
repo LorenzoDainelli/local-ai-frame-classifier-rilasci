@@ -196,6 +196,14 @@
       [
         "stato",
         "Stato ed Etichetta si preparano appena parte il programma; Stato ti mostra subito i conti di prima mentre rifà quelli nuovi"
+      ],
+      [
+        "persona",
+        "Le persone trovate dal corpo devono essere più sicure: il collaudo su foto pubbliche ha mostrato che così gli sbagli si dimezzano. Quelle già trovate con poca sicurezza, su cui non avevi risposto, vanno via; le tue risposte restano"
+      ],
+      [
+        "occhio",
+        "SAM 3 e RTMW si scaricano sempre nella versione collaudata: se un file non è identico, il programma non lo tiene"
       ]
     ],
     "tecnico": [
@@ -259,6 +267,14 @@
       [
         "stato",
         "All'avvio un filo <code>preparazione</code> calcola la pagella e la bottega delle proposte; la pagella si calcola una volta sola anche con più richieste insieme"
+      ],
+      [
+        "persona",
+        "<code>corpi.rilevatore.SICUREZZA_MINIMA</code> da 0,50 a 0,65: su 40 foto COCO 17 sbagli invece di 36, 97 persone vere su 121 invece di 99. Migrazione 50: via i corpi sotto 0,65 senza una risposta in <code>corpi_delle_persone</code>, e <code>corpi_guardati.quanti</code> ricontato"
+      ],
+      [
+        "occhio",
+        "SAM 3 fissato alla revisione <code>3c879f39</code> con lo SHA-256 degli 8 file; RTMW con lo SHA-256 di <code>end2end.onnx</code>, uguale sul sito di OpenMMLab e nella copia su Hugging Face"
       ]
     ]
   },

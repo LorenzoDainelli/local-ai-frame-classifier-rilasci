@@ -1051,6 +1051,24 @@ def _versione_49(connessione: sqlite3.Connection) -> None:
     )
 
 
+def _versione_50(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        DELETE FROM corpi
+        WHERE sicurezza < 0.65
+          AND NOT EXISTS (SELECT 1 FROM corpi_delle_persone d WHERE d.corpo_id = corpi.id)
+        """
+    )
+    connessione.execute(
+        """
+        UPDATE corpi_guardati SET quanti = (
+            SELECT count(*) FROM corpi c
+            WHERE c.scatto_id = corpi_guardati.scatto_id
+              AND c.modello = corpi_guardati.modello AND c.versione = corpi_guardati.versione)
+        """
+    )
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1134,6 +1152,9 @@ MIGRAZIONI: list[Migrazione] = [
     Migrazione(49, "chi è una persona senza volto: proposte dal corpo e dai vestiti, "
                "le tue risposte e quello che impara di ognuno",
                _versione_49),
+    Migrazione(50, "via le persone trovate dal corpo con poca sicurezza, sotto 0,65 come dice "
+               "il collaudo; restano quelle su cui hai già risposto",
+               _versione_50),
 ]
 
 

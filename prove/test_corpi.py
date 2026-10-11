@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import zipfile
+from pathlib import Path
 
 import numpy
 import pytest
@@ -165,6 +167,29 @@ def test_i_corpi_si_salvano_e_il_volto_si_collega(archivio):
     assert legato[0]["punti"][0][2] == pytest.approx(0.9, abs=0.01)
 
 
+def test_la_migrazione_toglie_i_corpi_poco_sicuri_senza_risposta(archivio):
+    from officina.archivio import migrazioni
+    from officina.modello import corpi, persone
+
+    with archivio.scrittura() as connessione:
+        scatto_id = _scatto(connessione)
+        chi = persone.crea(connessione, "Persona A")
+        corpi.salva(connessione, scatto_id, None, [
+            (0, Corpo((0.05, 0.05, 0.2, 0.9), 0.95, maschera_piena(), punti_finti())),
+            (0, Corpo((0.30, 0.05, 0.2, 0.9), 0.55, maschera_piena(), punti_finti())),
+            (0, Corpo((0.60, 0.05, 0.2, 0.9), 0.60, maschera_piena(), punti_finti())),
+        ], "corpi", "1")
+        risposto = connessione.execute("SELECT id FROM corpi WHERE sicurezza < 0.58").fetchone()[0]
+        connessione.execute(
+            "INSERT INTO corpi_delle_persone (corpo_id, persona_id, risposta, deciso_il) "
+            "VALUES (?, ?, 'no', ?)", (risposto, chi, adesso()))
+        migrazioni._versione_50(connessione)
+        rimasti = sorted(r[0] for r in connessione.execute("SELECT sicurezza FROM corpi"))
+        quanti = connessione.execute("SELECT quanti FROM corpi_guardati").fetchone()[0]
+    assert rimasti == [pytest.approx(0.55), pytest.approx(0.95)]
+    assert quanti == 2
+
+
 def test_se_i_volti_si_rifanno_il_corpo_si_ricollega(archivio):
     from officina.modello import corpi
 
@@ -307,6 +332,54 @@ def test_rtmw_diverso_da_quello_collaudato_si_butta(tmp_path, monkeypatch):
     with pytest.raises(scaricamento.ScaricamentoFallito, match="non è identico"):
         scaricamento._scarica_la_pose(dove, None, None, None)
     assert not finto.exists() and not dove.exists()
+
+
+def _sam3_finto(monkeypatch, scrivi):
+    import sys
+    import types
+
+    chiesto = {}
+
+    def snapshot_download(repo_id, local_dir, revision=None, **_):
+        chiesto.update(repo=repo_id, revisione=revision)
+        scrivi(Path(local_dir))
+
+    finto = types.ModuleType("huggingface_hub")
+    finto.snapshot_download = snapshot_download
+    monkeypatch.setitem(sys.modules, "huggingface_hub", finto)
+    return chiesto
+
+
+def test_sam3_si_scarica_alla_versione_collaudata(tmp_path, monkeypatch):
+    from officina.corpi import scaricamento
+
+    impronte = {nome: hashlib.sha256(nome.encode()).hexdigest() for nome in scaricamento.SHA256_SAM3}
+    monkeypatch.setattr(scaricamento, "SHA256_SAM3", impronte)
+
+    def scrivi(dove):
+        for nome in impronte:
+            (dove / nome).write_bytes(nome.encode())
+
+    chiesto = _sam3_finto(monkeypatch, scrivi)
+    scaricamento._scarica_sam3(tmp_path / "sam3", None, None, None)
+    assert chiesto == {"repo": "facebook/sam3", "revisione": scaricamento.REVISIONE_SAM3}
+    assert len(scaricamento.REVISIONE_SAM3) == 40 and len(scaricamento.SHA256_SAM3) == 8
+    assert all(len(v) == 64 for v in scaricamento.SHA256_SAM3.values())
+
+
+def test_sam3_diverso_da_quello_collaudato_si_butta(tmp_path, monkeypatch):
+    from officina.corpi import rilevatore, scaricamento
+
+    def scrivi(dove):
+        for nome in scaricamento.SHA256_SAM3:
+            (dove / nome).write_bytes(b"cambiato")
+
+    _sam3_finto(monkeypatch, scrivi)
+    dove = tmp_path / "sam3"
+    with pytest.raises(scaricamento.ScaricamentoFallito, match="non è identico"):
+        scaricamento._scarica_sam3(dove, None, None, None)
+    assert not (dove / "model.safetensors").exists()
+    assert not (dove / rilevatore.PROVA_SAM3).exists()
 
 
 def test_la_foto_aperta_ha_il_tasto_dei_corpi(archivio_pieno):

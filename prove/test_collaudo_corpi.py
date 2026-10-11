@@ -182,7 +182,7 @@ def test_la_prova_intera_con_modelli_finti(collaudo, monkeypatch, tmp_path):
     assert esito["prova"]["sicurezze_grezze"]["corpo"]["al_posto_giusto"]["quanti"] == 1
     assert esito["prova"]["sicurezze_grezze"]["corpo"]["non_segnati"]["quanti"] == 16
     riassunto = collaudo.riassunto(esito)
-    assert riassunto["persona"]["adesso"] == 0.5
+    assert riassunto["persona"]["adesso"] == 0.65
     assert collaudo.controlla(esito) == []
 
     solo = {"prova": collaudo.prova_dei_punti(tmp_path, tmp_path, 5)}

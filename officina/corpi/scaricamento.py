@@ -36,6 +36,17 @@ SAM3 = Scheda(
     cosa_serve=("*.json", "*.safetensors", "*.txt"),
 )
 PAGINA_SAM3 = "https://huggingface.co/facebook/sam3"
+REVISIONE_SAM3 = "3c879f39826c281e95690f02c7821c4de09afae7"
+SHA256_SAM3 = {
+    "config.json": "4616385e4b21f2e5e22c875b65679185cbccfa95de42542b9166f7dc3d57160f",
+    "merges.txt": "9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a",
+    "model.safetensors": "6d06f0a5f84e435071fe6603e61d0b4cc7b40e0d39d487cfd4d67d8cc11cc14a",
+    "processor_config.json": "6420cf2671fa9309ea95bc0144a8b9861666d1c5f43c8db09e410dacda974fce",
+    "special_tokens_map.json": "2cdb3b8331a60c92fc1e55a13e9fd61fd2293c5a51275fdcccd62b780052530e",
+    "tokenizer.json": "6d9109cc838977f3ca94a379eec36aecc7c807e1785cd729660ca2fc0171fb35",
+    "tokenizer_config.json": "39670ad98457fe8f14ca59f6bb74591e9fc850974380a63993e5b8ffc865baa2",
+    "vocab.json": "5047b556ce86ccaf6aa22b3ffccfc52d391ea4accdab9c2f2407da5b742d4363",
+}
 
 
 @dataclass(frozen=True)
@@ -164,7 +175,7 @@ def _scarica_sam3(dove: Path, chiave: str | None,
 
     def davvero() -> None:
         snapshot_download(repo_id=SAM3.identificatore, local_dir=str(dove),
-                          allow_patterns=list(SAM3.cosa_serve),
+                          revision=REVISIONE_SAM3, allow_patterns=list(SAM3.cosa_serve),
                           token=chiave or None)
 
     try:
@@ -180,6 +191,16 @@ def _scarica_sam3(dove: Path, chiave: str | None,
             "Non sono riuscito a scaricare SAM 3, il modello che separa le "
             "persone.\n" + _perche_sam3(errore, chiave)
             + "\n  Il resto del programma funziona lo stesso.") from errore
+    diversi = [nome for nome, impronta in SHA256_SAM3.items()
+               if not (dove / nome).is_file() or _sha256(dove / nome) != impronta]
+    if diversi:
+        for nome in {*diversi, rilevatore_mod.PROVA_SAM3}:
+            (dove / nome).unlink(missing_ok=True)
+        registro.errore("corpi.sam3_diverso", quanti=len(diversi))
+        raise ScaricamentoFallito(
+            "SAM 3 è arrivato, ma non è identico a quello provato: per sicurezza "
+            "non lo tengo. Riprova più tardi; se succede ancora, il file "
+            "pubblicato è cambiato e va controllato in un aggiornamento.")
 
 
 def _perche_sam3(errore: Exception, chiave: str | None) -> str:
