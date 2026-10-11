@@ -5,8 +5,10 @@ on:
     branches: [prove]
     paths:
       - "strumenti/collaudo_stanza.py"
-      - ".github/workflows/stanza.yml"
-      - "officina/stanza/**"
+      - "officina/stanza/da3.py"
+      - "officina/stanza/da3_rete.py"
+      - "officina/stanza/geometria.py"
+      - "officina/stanza/allineamento.py"
   workflow_dispatch:
     inputs:
       parte:

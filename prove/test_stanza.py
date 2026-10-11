@@ -105,3 +105,37 @@ def test_quaternioni_e_pose_tornano_indietro():
     assert torch.allclose(fuochi, intrinseci, atol=1e-3)
     assert torch.allclose(geometria.inversa_affine(estrinseci) @ estrinseci, torch.eye(4).expand(1, 3, 4, 4),
                           atol=1e-5)
+
+
+def test_vggt_ritaglia_le_foto_troppo_lunghe_o_troppo_alte():
+    from PIL import Image
+
+    from officina.stanza import vggt
+
+    larga, taglio = vggt._ritaglia(Image.new("RGB", (1000, 300)))
+    assert larga.size == (600, 300) and taglio == (200, 0)
+    alta, taglio = vggt._ritaglia(Image.new("RGB", (300, 900)))
+    assert alta.size == (300, 600) and taglio == (0, 150)
+    normale, taglio = vggt._ritaglia(Image.new("RGB", (640, 480)))
+    assert normale.size == (640, 480) and taglio == (0, 0)
+
+
+def test_vggt_misure_come_l_originale():
+    from officina.stanza import vggt
+
+    assert vggt._misura_bilanciata(2 / 3, 512, 16) == (416, 624)
+    assert vggt._misura_bilanciata(1.0, 512, 16) == (512, 512)
+    assert vggt._misura_massima(2 / 3, 512, 16) == (336, 512)
+    assert vggt._misura_massima(1.5, 512, 16) == (512, 336)
+
+
+def test_vggt_riporta_gli_intrinseci_sulla_foto_vera():
+    from officina.stanza import vggt
+
+    viaggio = {"taglio": (200, 0), "scala": (624 / 600, 416 / 400), "aggiunta": (0, 104), "foto": (600, 400)}
+    sulla_lastra = np.array([[500.0, 0, 312], [0, 520, 312], [0, 0, 1]])
+    sulla_foto = vggt.intrinseci_sulla_foto(sulla_lastra, viaggio)
+    assert sulla_foto[0, 0] == pytest.approx(500 * 600 / 624)
+    assert sulla_foto[1, 1] == pytest.approx(520 * 400 / 416)
+    assert sulla_foto[0, 2] == pytest.approx(312 * 600 / 624 + 200)
+    assert sulla_foto[1, 2] == pytest.approx((312 - 104) * 400 / 416)

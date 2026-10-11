@@ -1,0 +1,58 @@
+name: VGGT-Omega
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/collaudo_vggt.py"
+      - ".github/workflows/vggt.yml"
+      - "officina/stanza/vggt.py"
+      - "officina/stanza/vggt_rete.py"
+      - "officina/stanza/geometria.py"
+      - "officina/corpi/dinov3_rete.py"
+      - "officina/corpi/solo_numeri.py"
+  workflow_dispatch:
+    inputs:
+      quanti:
+        description: "fotogrammi del video d'esempio da provare"
+        default: "8"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vggt-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  confronta:
+    name: VGGT-Omega, l'originale contro il mio
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Le librerie e il codice originale
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install huggingface_hub safetensors numpy opencv-python-headless pillow
+          git clone -q https://github.com/facebookresearch/vggt-omega vggt-omega
+          git -C vggt-omega checkout -q 48b23c8ce72c9a8fcf987f0d7f43d8e4870759f6
+          df -h /
+      - name: Il confronto
+        run: |
+          python strumenti/collaudo_vggt.py --originale vggt-omega \
+            --quanti "${{ github.event.inputs.quanti || '8' }}" --uscita vggt-confronto.json
+      - name: Cosa ha detto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vggt-confronto
+          path: vggt-confronto.json
+          if-no-files-found: ignore
