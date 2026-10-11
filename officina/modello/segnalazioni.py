@@ -8,6 +8,7 @@ from officina.archivio.database import adesso, tutti, uno
 NON_SI_APRE = "non_si_apre"
 VOLTI_NON_LETTI = "volti_non_letti"
 CORPI_NON_LETTI = "corpi_non_letti"
+FIGURE_NON_FATTE = "figure_non_fatte"
 
 
 def clausola(tipo: str, alias: str = "s") -> str:

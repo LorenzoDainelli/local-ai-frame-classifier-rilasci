@@ -158,6 +158,18 @@
         "KPR arriva da Google Drive insieme agli altri modelli del corpo, senza chiave: circa 1,2 GB, controllato con l'impronta e aperto in un modo che legge solo numeri"
       ],
       [
+        "persone",
+        "Il lavoro «I corpi» fa anche la figura in 3D di ogni persona con SAM 3D Body: altezza, proporzioni e posa, anche delle mani. Servirà a riconoscere le persone dalla corporatura"
+      ],
+      [
+        "occhio",
+        "Per fare la figura giusta serve sapere com'era l'obiettivo: lo leggo dai dati della foto e, quando non c'è scritto, lo capisce Puffin guardando la foto"
+      ],
+      [
+        "scarica",
+        "SAM 3D Body (circa 2,8 GB) e Puffin (circa 2,8 GB) arrivano da soli con gli altri modelli del corpo, controllati con l'impronta. SAM 3D Body chiede di accettare la licenza di Meta su Hugging Face; Puffin si può usare solo per scopi non commerciali"
+      ],
+      [
         "computer",
         "Con una scheda video da almeno 12 GB i modelli del corpo restano tutti accesi; con meno si accendono uno alla volta su gruppi di foto, così la memoria non finisce"
       ],
@@ -199,7 +211,19 @@
       "Migrazione 45: <code>corpi</code> (riquadro, maschera compressa a bit, 133 punti in float16, <code>volto_id</code> e <code>vicinanza</code>) e <code>corpi_guardati</code>. <code>officina/corpi</code>: SAM 3 da <code>transformers</code> col testo «person», RTMW-x 384×288 SimCC su <code>onnxruntime</code>, abbinamento volto-corpo coi punti del viso e, se mancano, col contorno. <code>volti.motore</code> richiama <code>corpi.ricollega</code> dopo aver riscritto i volti.",
       "I modelli del corpo sono fra gli <code>OBBLIGATORI</code>: SAM 3 da <code>facebook/sam3</code> con la chiave, RTMW dallo zip ufficiale di OpenMMLab con la copia <code>SceneWorks/dwpose-onnx</code> di riserva. Il collaudo <code>--motori --corpi</code> li scarica, li prova su due foto pubbliche di COCO e scrive le impronte SHA-256.",
       "<code>indizi_persone</code>: i vicini nel tempo si cercano camminando sull'indice di <code>istante_utc</code> (o di <code>giorno</code>) prima e dopo lo scatto, invece di leggere tutti gli scatti.",
-      "Migrazione 46: <code>aspetti</code> (<code>corpo_id</code>, <code>modello</code>, <code>parti</code>, <code>vettore</code> float32, <code>visibili</code>). <code>corpi.Rilevatore</code> fa SAM 3 e RTMW sulla copia a 1280 e poi ritaglia ogni persona dalla foto intera: KPR con SOLIDER nelle tre versioni (PoseTrack, Market, Duke; (K+1)×512 normalizzati, con le parti visibili) e SigLIP 2 sulla sagoma su grigio a 384. <code>VERSIONE</code> diventa 2, quindi gli scatti si riguardano. Con meno di 12 GB di scheda video (o 24 GB di RAM senza scheda) i modelli vanno a turno su gruppi di 32 scatti o 96 fotogrammi."
+      "Migrazione 46: <code>aspetti</code> (<code>corpo_id</code>, <code>modello</code>, <code>parti</code>, <code>vettore</code> float32, <code>visibili</code>). <code>corpi.Rilevatore</code> fa SAM 3 e RTMW sulla copia a 1280 e poi ritaglia ogni persona dalla foto intera: KPR con SOLIDER nelle tre versioni (PoseTrack, Market, Duke; (K+1)×512 normalizzati, con le parti visibili) e SigLIP 2 sulla sagoma su grigio a 384. <code>VERSIONE</code> diventa 2, quindi gli scatti si riguardano. Con meno di 12 GB di scheda video (o 24 GB di RAM senza scheda) i modelli vanno a turno su gruppi di 32 scatti o 96 fotogrammi.",
+      [
+        "persone",
+        "figure.Passata: dopo i corpi, una figura SAM 3D Body (corpo3d-1, 631 numeri e 2 byte per le mani) per ogni corpo in aspetti, a precisione piena"
+      ],
+      [
+        "occhio",
+        "obiettivo.py: Puffin-World-Caption riscritto (C-RADIOv3-H, proiettore, Qwen3.5-0.8B), identico all'originale su 7 foto COCO; migrazione 47 aggiunge la tabella obiettivi (EXIF, Puffin o di base)"
+      ],
+      [
+        "scarica",
+        "scaricamento dei corpi: SAM 3D Body e Puffin con revisione e sha256 fissati; la chiave si controlla anche per facebook/sam-3d-body-dinov3"
+      ]
     ]
   },
   {

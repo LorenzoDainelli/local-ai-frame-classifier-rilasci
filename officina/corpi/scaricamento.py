@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 from officina import istruzioni, registro
+from officina.corpi import corpo3d, obiettivo
 from officina.corpi import rilevatore as rilevatore_mod
 from officina.descrittori import torcia
 from officina.descrittori.base import VISIVO, Scheda
@@ -66,7 +67,42 @@ LICENZA_POSE = "Apache 2.0 (OpenMMLab) — libera"
 LICENZA_KPR = "Hippocratic 3.0 (KPR) e Apache 2.0 (SOLIDER) — uso personale consentito"
 
 BYTE_KPR = 1_179_290_822
-BYTE_IN_TUTTO = SAM3.byte_attesi + POSE_BYTE + BYTE_KPR
+
+
+@dataclass(frozen=True)
+class DaHuggingFace:
+
+    titolo: str
+    repo: str
+    revisione: str
+    file: str
+    dove: str
+    sha256: str
+    byte: int
+
+
+REPO_CORPO3D = "facebook/sam-3d-body-dinov3"
+PAGINA_CORPO3D = f"https://huggingface.co/{REPO_CORPO3D}"
+REVISIONE_CORPO3D = "11aaa346c7204874a1cbafe3d39a979080b2c55a"
+LICENZA_CORPO3D = "SAM License (Meta) — uso consentito, da accettare su Hugging Face"
+FIGURE = (
+    DaHuggingFace("SAM 3D Body", REPO_CORPO3D, REVISIONE_CORPO3D, "model.ckpt",
+                  f"{corpo3d.NOME}/{corpo3d.FILE_PESI}",
+                  "b5a2f9d305dd02626b967aa2e86021fba07065df66ce7a7e00ffb9664f150abf", 2_109_129_346),
+    DaHuggingFace("SAM 3D Body", REPO_CORPO3D, REVISIONE_CORPO3D, "model_config.yaml",
+                  f"{corpo3d.NOME}/{corpo3d.FILE_MISURE}",
+                  "1012fc3f39cb5e90e3f8fbadf7bded31604bfafdce0321d17a7c1a2d3f08b88d", 1_488),
+    DaHuggingFace("SAM 3D Body", REPO_CORPO3D, REVISIONE_CORPO3D, "assets/mhr_model.pt",
+                  f"{corpo3d.NOME}/{corpo3d.FILE_MHR}",
+                  "352e271a6c42729c68554ceaea0c955e866970160c31e35506d782dc0f7377bc", 696_110_248),
+    DaHuggingFace("Puffin", obiettivo.REPO_PUFFIN, obiettivo.REVISIONE_PUFFIN, obiettivo.FILE_PESI,
+                  f"{obiettivo.NOME}/{obiettivo.FILE_PESI}", obiettivo.SHA256_PESI, obiettivo.BYTE_PESI),
+) + tuple(
+    DaHuggingFace("Puffin", obiettivo.REPO_LINGUA, obiettivo.REVISIONE_LINGUA, nome,
+                  f"{obiettivo.NOME}/{obiettivo.CARTELLA_LINGUA}/{nome}", impronta, 0)
+    for nome, impronta in obiettivo.SHA256_LINGUA.items())
+BYTE_FIGURE = sum(f.byte for f in FIGURE) + 20_000_000
+BYTE_IN_TUTTO = SAM3.byte_attesi + POSE_BYTE + BYTE_KPR + BYTE_FIGURE
 
 
 @dataclass
@@ -78,7 +114,8 @@ class Rapporto:
 
 
 def gia_in_casa(cartella_modelli: Path) -> bool:
-    return rilevatore_mod.ci_sono_i_modelli(cartella_modelli)
+    return (rilevatore_mod.ci_sono_i_modelli(cartella_modelli)
+            and corpo3d.ci_sono(cartella_modelli) and obiettivo.ci_sono(cartella_modelli))
 
 
 def scarica(cartella_modelli: Path, al_passo: Callable[[str], None] | None = None,
@@ -99,6 +136,7 @@ def scarica(cartella_modelli: Path, al_passo: Callable[[str], None] | None = Non
         if rifai or not file_pose.exists():
             _scarica_la_pose(file_pose, chiave, al_passo, a_che_punto)
         _scarica_kpr(cartella_modelli, rifai, al_passo, a_che_punto)
+        _scarica_le_figure(casa, chiave, rifai, al_passo, a_che_punto)
     finally:
         torcia.rimetti_la_rete_com_era(prima)
 
@@ -225,6 +263,69 @@ def _scarica_kpr(cartella_modelli: Path, rifai: bool,
             + "\n  Il resto del programma funziona lo stesso.") from errore
 
 
+def _scarica_le_figure(casa: Path, chiave: str | None, rifai: bool,
+                       al_passo: Callable[[str], None] | None,
+                       a_che_punto: Callable[[int, int], None] | None) -> None:
+    da_fare = [f for f in FIGURE if rifai or not (casa / f.dove).exists()]
+    if not da_fare:
+        return
+    detti: set[str] = set()
+    for pezzo in da_fare:
+        if al_passo and pezzo.titolo not in detti:
+            detti.add(pezzo.titolo)
+            byte = sum(f.byte for f in da_fare if f.titolo == pezzo.titolo)
+            al_passo(f"scarico {pezzo.titolo} — circa {byte / 1e9:.1f} GB")
+        finale = casa / pezzo.dove
+        finale.parent.mkdir(parents=True, exist_ok=True)
+        arrivo = Path(tempfile.mkdtemp(prefix="arriva-", dir=finale.parent))
+        try:
+            if a_che_punto is None:
+                preso = _prendi(pezzo, arrivo, chiave)
+            else:
+                with Sorvegliante(casa, BYTE_IN_TUTTO, a_che_punto):
+                    preso = _prendi(pezzo, arrivo, chiave)
+            if _sha256(preso) != pezzo.sha256:
+                raise ScaricamentoFallito(
+                    f"{pezzo.titolo} è arrivato, ma il file «{pezzo.file}» non è identico a "
+                    "quello provato: per sicurezza non lo tengo. Riprova più tardi; se "
+                    "succede ancora, il file pubblicato è cambiato e va controllato in un "
+                    "aggiornamento.")
+            os.replace(preso, finale)
+        except ScaricamentoFallito:
+            raise
+        except ImportError as errore:
+            raise ScaricamentoFallito(
+                "Per scaricare i modelli serve la libreria «huggingface-hub», che "
+                "si installa insieme alle altre dei modelli:\n"
+                f"{istruzioni.motori()}") from errore
+        except Exception as errore:
+            registro.errore("corpi.figure_non_scaricate",
+                            ragione=registro.Parola(_che_genere(errore)))
+            raise ScaricamentoFallito(
+                f"Non sono riuscito a scaricare {pezzo.titolo}, che serve per la figura in 3D "
+                "delle persone.\n" + _perche_figure(errore, pezzo, chiave)
+                + "\n  Il resto del programma funziona lo stesso.") from errore
+        finally:
+            shutil.rmtree(arrivo, ignore_errors=True)
+
+
+def _prendi(pezzo: DaHuggingFace, arrivo: Path, chiave: str | None) -> Path:
+    from huggingface_hub import hf_hub_download
+
+    return Path(hf_hub_download(repo_id=pezzo.repo, filename=pezzo.file, revision=pezzo.revisione,
+                                local_dir=str(arrivo), token=chiave or None))
+
+
+def _perche_figure(errore: Exception, pezzo: DaHuggingFace, chiave: str | None) -> str:
+    if _che_genere(errore) == "permesso" and pezzo.repo == REPO_CORPO3D:
+        return ("  Hugging Face dice che questa chiave non ha ancora il permesso per "
+                "SAM 3D Body. Apri la sua pagina,\n"
+                f"      {PAGINA_CORPO3D}\n"
+                "  compila il modulo per accettare la licenza, aspetta la conferma di "
+                "Meta e poi riprova.")
+    return _dettaglio_tecnico(errore, chiave)
+
+
 def _da_indirizzo(indirizzo: Indirizzo, vicino: Path,
                   a_che_punto: Callable[[int, int], None] | None) -> Path:
     import urllib.request
@@ -310,7 +411,8 @@ def _annota(casa: Path) -> None:
 
     (casa / SCHEDA_SUL_DISCO).write_text(json.dumps({
         "che_cosa": "i modelli del corpo: SAM 3 separa le persone, RTMW trova i punti, "
-                    "KPR riconosce corporatura e vestiti",
+                    "KPR riconosce corporatura e vestiti, SAM 3D Body fa la figura in 3D "
+                    "e Puffin capisce l'obiettivo della foto",
         "versione": rilevatore_mod.VERSIONE,
         "da_dove": {
             rilevatore_mod.CARTELLA_SAM3: {"repo": SAM3.identificatore,
@@ -318,6 +420,11 @@ def _annota(casa: Path) -> None:
             rilevatore_mod.FILE_POSE: {"indirizzo": POSE.url,
                                        "riserva": f"{POSE_RISERVA.repo}/{POSE_RISERVA.file}",
                                        "licenza": LICENZA_POSE},
+            corpo3d.NOME: {"repo": REPO_CORPO3D, "revisione": REVISIONE_CORPO3D,
+                           "licenza": LICENZA_CORPO3D},
+            obiettivo.NOME: {"repo": obiettivo.REPO_PUFFIN, "revisione": obiettivo.REVISIONE_PUFFIN,
+                             "lingua": f"{obiettivo.REPO_LINGUA}@{obiettivo.REVISIONE_LINGUA}",
+                             "licenza": obiettivo.LICENZA},
             "kpr": {"cartella": kpr_pesi.PAGINA_DRIVE, "codice": kpr_pesi.RIPOSTIGLIO,
                     "licenza": kpr_pesi.LICENZA,
                     "file": {p.versione: {"nome": p.file, "sha256": p.sha256}
@@ -354,7 +461,8 @@ def verifica(cartella_modelli: Path) -> dict:
     quanti = len(dati.get("impronte") or {})
     return {"stato": "intatto",
             "dettaglio": f"corpi: intatti ({quanti} file controllati) — "
-                         f"{SAM3.licenza}, {LICENZA_POSE}, {LICENZA_KPR}"}
+                         f"{SAM3.licenza}, {LICENZA_POSE}, {LICENZA_KPR}, "
+                         f"{LICENZA_CORPO3D}, {obiettivo.LICENZA}"}
 
 
 def togli(cartella_modelli: Path) -> bool:

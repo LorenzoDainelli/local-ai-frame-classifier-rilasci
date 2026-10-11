@@ -14,7 +14,13 @@ SHA256_PESI = "ad0b8a8bee2a663ce1f2f837de2c819716e35995c333499e932e58fe3528880a"
 BYTE_PESI = 2_820_754_563
 REPO_LINGUA = "Qwen/Qwen3.5-0.8B"
 REVISIONE_LINGUA = "2fc06364715b967f1860aea9cf38778875588b17"
-FILE_LINGUA = ("config.json", "tokenizer.json", "tokenizer_config.json", "chat_template.jinja")
+SHA256_LINGUA = {
+    "config.json": "b90b86f35c8e6925ef74ee04d0e758f0a845c83a42089ad82bbaa948de9b4204",
+    "tokenizer.json": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    "tokenizer_config.json": "49e2b6e395f959f077f1e992b338919c0d4a9732fc6e613995e06557f843500c",
+    "chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+}
+FILE_LINGUA = tuple(SHA256_LINGUA)
 CARTELLA_LINGUA = "lingua"
 LICENZA = ("S-Lab License 1.0 (Puffin, solo uso non commerciale), NVIDIA Open Model License "
            "(C-RADIOv3-H) e Apache 2.0 (Qwen3.5)")

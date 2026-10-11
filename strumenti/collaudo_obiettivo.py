@@ -260,7 +260,8 @@ def confronta(cartella_foto: Path, cartella_loro: Path, cartella: Path, uscita: 
     casa, impronte = _casa_mia(cartella)
     partito = time.monotonic()
     rete, tokenizzatore = obiettivo.costruisci(casa)
-    esito: dict = {"impronte_lingua": impronte, "carica_secondi": round(time.monotonic() - partito, 1),
+    esito: dict = {"impronte_lingua": impronte, "impronte_giuste": impronte == obiettivo.SHA256_LINGUA,
+                   "carica_secondi": round(time.monotonic() - partito, 1),
                    "legati": rete.llm.lm_head.weight.data_ptr() == rete.llm.model.embed_tokens.weight.data_ptr(),
                    "fine": tokenizzatore.eos_token_id,
                    "loro": json.loads((cartella_loro / "loro.json").read_text()), "prove": {}}
@@ -286,7 +287,7 @@ def confronta(cartella_foto: Path, cartella_loro: Path, cartella: Path, uscita: 
         esito["prove"][percorso.stem] = prova
         print(percorso.stem, json.dumps(prova), flush=True)
     prove = esito["prove"].values()
-    esito["uguali"] = bool(esito["prove"]) and all(
+    esito["uguali"] = bool(esito["prove"]) and esito["impronte_giuste"] and all(
         p["richiesta_uguale"] and p["posizioni_uguali"] and p["visti_relativo"] < 1e-3 and p["testo_uguale"]
         for p in prove)
     uscita.write_text(json.dumps(esito, indent=1, ensure_ascii=False))

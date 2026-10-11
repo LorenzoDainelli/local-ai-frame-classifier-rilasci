@@ -136,6 +136,36 @@ def _guarda_i_corpi(passata) -> None:
 
     passata.esegui(al_passo=al_passo)
     comune.lavoro_corpi.di(passata.avanzamento.a_parole())
+    if not passata.fermata:
+        _fai_le_figure(passata)
+
+
+def _fai_le_figure(passata_corpi) -> None:
+    from officina.corpi import figure
+    from officina.parole.motore import Avanzamento as Misuratore
+
+    manca = figure.cosa_manca(passata_corpi.archivio.dove.modelli)
+    if manca:
+        comune.lavoro_corpi.di(manca.split("\n")[0])
+        return
+    passata = figure.Passata(passata_corpi.archivio, fermato=lambda: passata_corpi.fermata)
+    partito = time.monotonic()
+
+    def al_passo(avanzamento) -> None:
+        fatti = avanzamento.fatti + avanzamento.saltati
+        misura = Misuratore(totale=avanzamento.totale)
+        misura.letti = fatti
+        if fatti >= 3:
+            misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / fatti
+        comune.lavoro_corpi.numeri = {
+            "fatti": fatti,
+            "totale": avanzamento.totale,
+            "corpi": avanzamento.figure,
+            "quanto_manca": misura.quanto_manca(),
+        }
+
+    passata.esegui(al_passo=al_passo)
+    comune.lavoro_corpi.di(passata.avanzamento.a_parole())
 
 
 IA_IN_FILA = ("impronte", "volti", "corpi", "scritte")
@@ -208,6 +238,13 @@ def quanti_mancano_ia(archivio) -> dict:
             corpi_mancano = corpi_motore.quanti_mancano_senza_aprire(connessione)
         except Exception:
             corpi_mancano = 0
+        try:
+            from officina.corpi import figure
+
+            if not figure.cosa_manca(archivio.dove.modelli):
+                corpi_mancano += figure.quanti_mancano_senza_aprire(connessione)
+        except Exception:
+            pass
         try:
             scritte_mancano = scritte.quanti_da_leggere(
                 connessione, parole_mod.SCHEDA.nome, parole_mod.SCHEDA.versione)

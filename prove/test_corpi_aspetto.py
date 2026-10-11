@@ -445,9 +445,15 @@ def test_scaricare_i_corpi_porta_anche_kpr(tmp_path, monkeypatch):
             (kpr_casa / f"kpr-{pesi.versione}.json").write_text("{}")
         return []
 
+    def figure(casa, *_):
+        for pezzo in scaricamento.FIGURE:
+            (casa / pezzo.dove).parent.mkdir(parents=True, exist_ok=True)
+            (casa / pezzo.dove).write_bytes(b"finto")
+
     monkeypatch.setattr(scaricamento, "_scarica_sam3", sam3)
     monkeypatch.setattr(scaricamento, "_scarica_la_pose", pose)
     monkeypatch.setattr(kpr_pesi, "scarica", kpr)
+    monkeypatch.setattr(scaricamento, "_scarica_le_figure", figure)
     punti = []
     scaricamento.scarica(tmp_path, a_che_punto=lambda fatti, totale: punti.append((fatti, totale)))
     assert chiesti == [tmp_path]
@@ -457,6 +463,7 @@ def test_scaricare_i_corpi_porta_anche_kpr(tmp_path, monkeypatch):
     scheda = json.loads((casa / scaricamento.SCHEDA_SUL_DISCO).read_text(encoding="utf-8"))
     assert "kpr" in scheda["da_dove"]
     assert "kpr/kpr-duke.safetensors" in scheda["impronte"]
+    assert "corpo3d/model.ckpt" in scheda["impronte"] and "obiettivo/lingua/config.json" in scheda["impronte"]
     assert scaricamento.verifica(tmp_path)["stato"] == "intatto"
 
 

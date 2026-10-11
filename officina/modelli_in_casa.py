@@ -15,7 +15,7 @@ CONSIGLIATI = ("seedvr2", "codeformer")
 
 PESI = {
     "volti": 266_000_000,
-    "corpi": 4_860_000_000,
+    "corpi": 10_510_000_000,
     "seedvr2": 9_000_000_000,
     "codeformer": 460_000_000,
     "faceme": 12_000_000_000,
@@ -24,7 +24,7 @@ PESI = {
 
 NOMI = {
     "volti": "SCRFD e AdaFace",
-    "corpi": "SAM 3, RTMW e KPR",
+    "corpi": "SAM 3, RTMW, KPR, SAM 3D Body e Puffin",
     "seedvr2": "SeedVR2",
     "codeformer": "CodeFormer",
     "faceme": "FaceMe",
@@ -118,7 +118,8 @@ def _con_le_condizioni() -> tuple[tuple[str, str], ...]:
     from officina.corpi import scaricamento as scarica_corpi
 
     return ((tutte_le_carte()["dinov3"].identificatore, "DINOv3"),
-            (scarica_corpi.SAM3.identificatore, "SAM 3"))
+            (scarica_corpi.SAM3.identificatore, "SAM 3"),
+            (scarica_corpi.REPO_CORPO3D, "SAM 3D Body"))
 
 
 def controlla_la_chiave(chiave: str) -> None:
@@ -187,7 +188,7 @@ def porta_in_casa(quale: str, dove: Path, lavoro) -> None:
         scarica_corpi.scarica(dove, al_passo=lavoro.di, chiave=chiave,
                               a_che_punto=lavoro.a_che_punto)
         finito()
-        lavoro.di("I modelli del corpo sono in casa: SAM 3, RTMW e KPR.")
+        lavoro.di("I modelli del corpo sono in casa: SAM 3, RTMW, KPR, SAM 3D Body e Puffin.")
         return
 
     if quale == "faceme":

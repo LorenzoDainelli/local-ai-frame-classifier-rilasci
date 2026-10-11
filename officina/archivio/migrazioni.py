@@ -966,6 +966,23 @@ def _versione_46(connessione: sqlite3.Connection) -> None:
     )
 
 
+def _versione_47(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE obiettivi (
+            scatto_id        INTEGER PRIMARY KEY REFERENCES scatti(id) ON DELETE CASCADE,
+            fonte            TEXT NOT NULL,
+            campo_verticale  REAL NOT NULL,
+            rollio           REAL,
+            beccheggio       REAL,
+            distorsione      REAL,
+            versione         TEXT NOT NULL,
+            guardato_il      TEXT NOT NULL
+        )
+        """
+    )
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1041,6 +1058,8 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_45),
     Migrazione(46, "la corporatura e i vestiti di ogni persona trovata dal corpo",
                _versione_46),
+    Migrazione(47, "l'obiettivo di ogni scatto, per la figura in 3D delle persone",
+               _versione_47),
 ]
 
 

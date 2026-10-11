@@ -68,15 +68,19 @@ def come_stanno_i_modelli(dove: Path) -> list[dict]:
         "in_casa": scarica_corpi.gia_in_casa(dove),
         "peso": vista.peso_a_parole(scarica_corpi.BYTE_IN_TUTTO),
         "pesa_davvero": False,
-        "licenza": "SAM License (Meta), Apache 2.0 e Hippocratic 3.0 (KPR)",
-        "si_chiama": "SAM 3 · RTMW-x · KPR con SOLIDER, 3 versioni",
+        "licenza": ("SAM License (Meta), Apache 2.0, Hippocratic 3.0 (KPR), "
+                    "S-Lab 1.0 (Puffin, solo uso non commerciale) e NVIDIA Open Model License"),
+        "si_chiama": "SAM 3 · RTMW-x · KPR con SOLIDER, 3 versioni · SAM 3D Body · Puffin",
         "a_cosa_serve": ("separare ogni persona nella foto, anche quando si coprono, "
-                         "capire di chi è ogni mano, gamba e volto, e riconoscere la "
+                         "capire di chi è ogni mano, gamba e volto, riconoscere la "
                          "stessa persona dalla corporatura e dai vestiti, anche di "
-                         "spalle. Per scaricarlo serve aver accettato la licenza di "
-                         "SAM 3 su Hugging Face; KPR arriva da Google Drive, senza chiave. "
-                         "La licenza di KPR chiede di non usarlo contro i diritti "
-                         "delle persone, per esempio per sorvegliarle"),
+                         "spalle, e farne la figura in 3D con altezza e proporzioni. "
+                         "Puffin capisce com'era l'obiettivo quando nei dati della foto "
+                         "non c'è scritto. Per scaricarlo serve aver accettato le licenze "
+                         "di SAM 3 e di SAM 3D Body su Hugging Face; KPR arriva da Google "
+                         "Drive, senza chiave. La licenza di KPR chiede di non usarlo "
+                         "contro i diritti delle persone, per esempio per sorvegliarle; "
+                         "quella di Puffin permette solo l'uso non commerciale"),
         "precisione": "nessuna",
         "codice_di_terzi": False,
     })
