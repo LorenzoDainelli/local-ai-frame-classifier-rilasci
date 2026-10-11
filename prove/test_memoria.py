@@ -103,7 +103,7 @@ def test_non_ne_tiene_piu_di_quanti_ne_ha_promessi(db):
     ricordi = memoria.Ricordi("prova", quanti_al_massimo=4)
     for n in range(40):
         ricordi.prendi(db, n, lambda n=n: n)
-    assert len(ricordi._tenuti) == 4
+    assert [len(tenuti) for _, _, tenuti in ricordi._per_connessione.values()] == [4]
 
 
 def test_il_segno_cambia_solo_quando_cambia_il_database(db):
@@ -111,3 +111,30 @@ def test_il_segno_cambia_solo_quando_cambia_il_database(db):
     assert memoria.com_e_adesso(db) == prima
     db.execute("INSERT INTO cose (valore) VALUES ('d')")
     assert memoria.com_e_adesso(db) != prima
+
+
+def test_ogni_connessione_tiene_il_suo_ricordo(db, tmp_path):
+    ricordo = memoria.Ricordo("prova")
+    ricordi = memoria.Ricordi("prova")
+    altra = sqlite3.connect(tmp_path / "prova.sqlite")
+    try:
+        volte = []
+        for _ in range(3):
+            for connessione in (db, altra):
+                ricordo.prendi(connessione, lambda: volte.append(1) or 7)
+                ricordi.prendi(connessione, "a", lambda: volte.append(1) or 8)
+        assert len(volte) == 4
+    finally:
+        altra.close()
+
+
+def test_le_connessioni_ricordate_non_crescono_senza_fine(tmp_path):
+    ricordo = memoria.Ricordo("prova")
+    aperte = [sqlite3.connect(tmp_path / f"c{n}.sqlite") for n in range(memoria.CONNESSIONI_AL_MASSIMO + 5)]
+    try:
+        for connessione in aperte:
+            ricordo.prendi(connessione, lambda: 1)
+        assert len(ricordo._tenuti) == memoria.CONNESSIONI_AL_MASSIMO
+    finally:
+        for connessione in aperte:
+            connessione.close()

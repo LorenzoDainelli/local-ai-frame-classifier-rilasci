@@ -21,6 +21,9 @@ PAGINE = [
     "/luoghi", "/doppioni", "/telefono", "/misura/banco",
     "/api/griglia", "/api/nodi", "/api/albero", "/api/cerca?frase=cat_1",
     "/api/doppioni", "/scatto/1",
+    "/casa", "/lavoro", "/intelligenza", "/api/intelligenza", "/sistemare", "/miglioramento",
+    "/novita", "/api/conteggi", "/api/in-corso", "/api/luoghi/albero", "/api/volti",
+    "/api/impronte", "/api/periodo", "/api/spazio", "/api/modelli",
 ]
 
 
@@ -128,6 +131,15 @@ def costruisci(dove: Path, quante: int = QUANTE, seme: int = 7):
             " inquadratura, metodo, dimensione, valori, calcolata_il)"
             " VALUES (?, ?, 'clip', '1', 'intera', 'pieno', 32, ?, ?)",
             [(s, s, b"\x00" * 128, quando) for s in range(1, quante // 2)])
+        c.executemany(
+            "INSERT INTO segnalazioni (tipo, scatto_id, dettaglio, creata_il) VALUES (?, ?, 'x', ?)",
+            [(("non_si_apre", "volti_non_letti", "corpi_non_letti")[s % 3], s, quando)
+             for s in range(1, quante + 1, 15)])
+        c.executemany(
+            "INSERT INTO corpi (scatto_id, fotogramma, riquadro, area, sicurezza, maschera, punti,"
+            " modello, versione, trovato_il) VALUES (?, 0, '[0.1,0.1,0.3,0.8]', 0.24, 0.9, x'',"
+            " x'', 'corpi', '1', ?)",
+            [(s, quando) for s in range(1, quante + 1, 4)])
 
     from officina.archivio import database
 
@@ -139,9 +151,11 @@ def costruisci(dove: Path, quante: int = QUANTE, seme: int = 7):
 def misura(dove: Path) -> list[tuple[float, float, int, str]]:
     from fastapi.testclient import TestClient
 
+    from officina.web import in_disparte
     from officina.web.server import app
 
-    cliente = TestClient(app, client=("127.0.0.1", 51000))
+    in_disparte.A_PARTE = False
+    cliente = TestClient(app, base_url="http://127.0.0.1", client=("127.0.0.1", 51000))
     fuori = []
     for pagina in PAGINE:
         risposta = cliente.get(pagina)
@@ -157,10 +171,12 @@ def misura(dove: Path) -> list[tuple[float, float, int, str]]:
 
 
 def main() -> int:
+    quante = int(sys.argv[1]) if len(sys.argv) > 1 else QUANTE
     dove = Path(tempfile.mkdtemp(prefix="officina-cronometro-")) / "archivio"
-    print(f"Costruisco {QUANTE} fotografie finte...", flush=True)
+    os.environ.setdefault("OFFICINA_CASA_PROGRAMMA", str(dove.parent / "casa-programma"))
+    print(f"Costruisco {quante} fotografie finte...", flush=True)
     avvio = time.perf_counter()
-    costruisci(dove, QUANTE)
+    costruisci(dove, quante)
     print(f"  fatte in {time.perf_counter() - avvio:.1f} s\n")
     try:
         print(f"{'mediana':>10}  {'minimo':>8}         pagina")

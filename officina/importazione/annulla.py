@@ -32,19 +32,21 @@ def conta(connessione: sqlite3.Connection, cartella_id: int) -> Conto | None:
     cartella = uno(connessione, "SELECT * FROM cartelle_sorgente WHERE id = ?", cartella_id)
     if cartella is None:
         return None
-    soli = json.dumps(_soli_qui(connessione, cartella_id))
+    soli = _soli_qui(connessione, cartella_id)
     tutti_qui = uno(
         connessione,
         "SELECT count(DISTINCT f.scatto_id) AS scatti, count(DISTINCT f.id) AS file "
         "FROM file_media f JOIN percorsi p ON p.file_id = f.id WHERE p.cartella_id = ?",
         cartella_id)
-    spariscono = uno(
-        connessione,
-        "SELECT count(*) AS quanti FROM scatti s "
-        "WHERE EXISTS (SELECT 1 FROM file_media f WHERE f.scatto_id = s.id "
-        "AND f.id IN (SELECT value FROM json_each(?))) "
-        "AND NOT EXISTS (SELECT 1 FROM file_media f WHERE f.scatto_id = s.id "
-        "AND f.id NOT IN (SELECT value FROM json_each(?)))", soli, soli)["quanti"]
+    solo_qui = set(soli)
+    tutto_qui: dict[int, bool] = {}
+    for riga in tutti(
+            connessione,
+            "SELECT f.scatto_id, f.id FROM file_media f WHERE f.scatto_id IN ("
+            "SELECT g.scatto_id FROM file_media g WHERE g.id IN (SELECT value FROM json_each(?)))",
+            json.dumps(soli)):
+        tutto_qui[riga["scatto_id"]] = tutto_qui.get(riga["scatto_id"], True) and riga["id"] in solo_qui
+    spariscono = sum(tutto_qui.values())
     return Conto(cartella_id=cartella_id, percorso=cartella["percorso"],
                  attiva=bool(cartella["attiva"]), file=tutti_qui["file"],
                  spariscono=spariscono,
