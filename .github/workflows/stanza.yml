@@ -45,7 +45,7 @@ jobs:
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
           python -m pip install huggingface_hub safetensors numpy opencv-python-headless pillow
           if [ "$PARTE" = "da3" ]; then
-            python -m pip install omegaconf addict einops evo trimesh imageio tqdm
+            python -m pip install omegaconf addict einops evo trimesh imageio tqdm plyfile matplotlib
             git clone -q https://github.com/ByteDance-Seed/Depth-Anything-3 Depth-Anything-3
             git -C Depth-Anything-3 checkout -q 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
           fi
