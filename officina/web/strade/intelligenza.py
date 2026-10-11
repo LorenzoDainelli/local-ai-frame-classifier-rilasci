@@ -138,9 +138,29 @@ def _guarda_i_corpi(passata) -> None:
     passata.esegui(al_passo=al_passo)
     comune.lavoro_corpi.di(passata.avanzamento.a_parole())
     if not passata.fermata:
+        _rifai_i_punti(passata)
+    if not passata.fermata:
         _fai_le_figure(passata)
     if not passata.fermata:
         cerca_chi_e(passata.archivio, comune.lavoro_corpi, fermato=lambda: passata.fermata)
+
+
+def _rifai_i_punti(passata) -> None:
+    from officina.parole.motore import Avanzamento as Misuratore
+
+    partito = time.monotonic()
+
+    def al_passo(fatti: int, totale: int) -> None:
+        misura = Misuratore(totale=totale)
+        misura.letti = fatti
+        if fatti >= 3:
+            misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / fatti
+        comune.lavoro_corpi.numeri = {"fatti": fatti, "totale": totale, "corpi": 0,
+                                      "quanto_manca": misura.quanto_manca()}
+
+    rifatti = passata.rifai_i_punti(al_passo=al_passo)
+    if rifatti:
+        comune.lavoro_corpi.di(f"punti del corpo rifatti per {rifatti} persone")
 
 
 def _fai_le_figure(passata_corpi) -> None:
@@ -267,7 +287,8 @@ def quanti_mancano_ia(archivio) -> dict:
         except Exception:
             volti_mancano = 0
         try:
-            corpi_mancano = corpi_motore.quanti_mancano_senza_aprire(connessione)
+            corpi_mancano = (corpi_motore.quanti_mancano_senza_aprire(connessione)
+                             + corpi_motore.quanti_da_ripuntare_senza_aprire(connessione))
         except Exception:
             corpi_mancano = 0
         try:

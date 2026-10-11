@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from officina.corpi import maschere
-from officina.corpi.rilevatore import PUNTO_VISTO, VISO, VISO_DAL_CORPO
+from officina.corpi.rilevatore import PUNTO_VISTO_VISO, VISO, VISO_DAL_CORPO
 
 ALLARGA = 0.15
 PUNTI_MINIMI = 3
@@ -12,7 +12,7 @@ BASTA_COL_CONTORNO = 0.30
 def punteggio(riquadro_corpo, maschera: bytes, punti, riquadro_volto) -> float:
     largo = _allargato(riquadro_volto)
     del_viso = [punti[i] for i in (*VISO_DAL_CORPO, *VISO) if i < len(punti)]
-    visti = [(x, y) for x, y, sicuro in del_viso if sicuro >= PUNTO_VISTO]
+    visti = [(x, y) for x, y, sicuro in del_viso if sicuro >= PUNTO_VISTO_VISO]
     if len(visti) >= PUNTI_MINIMI:
         dentro = sum(1 for x, y in visti if _dentro(largo, x, y))
         if dentro < PUNTI_MINIMI:
@@ -49,7 +49,7 @@ def abbina(corpi, volti) -> list[tuple[int, int, float]]:
 def _quanto_basta(corpo) -> float:
     punti = corpo.get("punti") or []
     visti = sum(1 for i in (*VISO_DAL_CORPO, *VISO)
-                if i < len(punti) and punti[i][2] >= PUNTO_VISTO)
+                if i < len(punti) and punti[i][2] >= PUNTO_VISTO_VISO)
     return BASTA_COI_PUNTI if visti >= PUNTI_MINIMI else BASTA_COL_CONTORNO
 
 

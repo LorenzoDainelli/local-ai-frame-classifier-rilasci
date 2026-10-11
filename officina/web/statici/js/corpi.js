@@ -1,4 +1,5 @@
 const VISTO = 0.3;
+const VISTO_VISO = 0.4;
 const OSSA = [[15, 13], [13, 11], [16, 14], [14, 12], [11, 12], [5, 11], [6, 12], [5, 6], [5, 7], [6, 8],
               [7, 9], [8, 10], [1, 2], [0, 1], [0, 2], [1, 3], [2, 4], [15, 17], [15, 18], [15, 19],
               [16, 20], [16, 21], [16, 22], [9, 91], [10, 112]];
@@ -32,6 +33,11 @@ function comeSiVede(img, strato, posto) {
     return "translate(" + (x + (z - 1) * posto.x) + "px," + (y + (z - 1) * posto.y) + "px) scale(" + z + ")";
 }
 
+function siVede(terna, i) {
+    const delViso = i < 5 || (i >= 23 && i < 91);
+    return Boolean(terna) && terna[2] >= (delViso ? VISTO_VISO : VISTO);
+}
+
 function chiE(corpo, numero) {
     if (corpo.nome) return corpo.nome;
     if (corpo.volto) return "Persona " + numero + " · volto senza nome";
@@ -55,7 +61,7 @@ function disegna(strato, img, elenco) {
             Object.assign(forma.style, { left: x * 100 + "%", top: y * 100 + "%", width: w * 100 + "%", height: h * 100 + "%" });
             strato.append(forma);
         }
-        const punto = (i) => corpo.punti[i] && corpo.punti[i][2] >= VISTO ? corpo.punti[i] : null;
+        const punto = (i) => siVede(corpo.punti[i], i) ? corpo.punti[i] : null;
         LINEE.forEach(([a, b]) => {
             const pa = punto(a), pb = punto(b);
             if (!pa || !pb) return;
@@ -63,7 +69,7 @@ function disegna(strato, img, elenco) {
                                            stroke: corpo.colore, "stroke-width": a >= 91 ? 1.2 : 2.2, "stroke-linecap": "round" }));
         });
         corpo.punti.forEach((terna, i) => {
-            if (terna[2] < VISTO) return;
+            if (!siVede(terna, i)) return;
             const piccolo = i >= 23;
             tela.append(elemento("circle", { cx: terna[0] * posto.w, cy: terna[1] * posto.h, r: piccolo ? 1.4 : 3,
                                              fill: piccolo ? corpo.colore : "#fff", stroke: corpo.colore,

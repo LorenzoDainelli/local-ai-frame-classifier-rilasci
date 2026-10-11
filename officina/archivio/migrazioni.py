@@ -1069,6 +1069,10 @@ def _versione_50(connessione: sqlite3.Connection) -> None:
     )
 
 
+def _versione_51(connessione: sqlite3.Connection) -> None:
+    connessione.execute("ALTER TABLE corpi ADD COLUMN punti_scala REAL NOT NULL DEFAULT 1")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1155,6 +1159,8 @@ MIGRAZIONI: list[Migrazione] = [
     Migrazione(50, "via le persone trovate dal corpo con poca sicurezza, sotto 0,65 come dice "
                "il collaudo; restano quelle su cui hai già risposto",
                _versione_50),
+    Migrazione(51, "i punti del corpo con la sicurezza vera di RTMW: quelli vecchi si rifanno",
+               _versione_51),
 ]
 
 

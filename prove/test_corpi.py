@@ -80,8 +80,8 @@ def test_i_punti_di_rtmw_tornano_al_loro_posto_nella_foto():
     centro, scala = rtmw.centro_e_scala((100, 50, 200, 450))
     lungo_x = numpy.zeros((1, PUNTI, int(rtmw.LARGO * rtmw.DIVISO)), dtype=numpy.float32)
     lungo_y = numpy.zeros((1, PUNTI, int(rtmw.ALTO * rtmw.DIVISO)), dtype=numpy.float32)
-    lungo_x[0, :, int(rtmw.LARGO * rtmw.DIVISO / 2)] = 0.8
-    lungo_y[0, :, int(rtmw.ALTO * rtmw.DIVISO / 2)] = 0.6
+    lungo_x[0, :, int(rtmw.LARGO * rtmw.DIVISO / 2)] = 4.0
+    lungo_y[0, :, int(rtmw.ALTO * rtmw.DIVISO / 2)] = 3.0
     lungo_x[0, 5, :] = 0.0
     lungo_y[0, 5, :] = 0.0
     punti = rtmw.leggi([lungo_x, lungo_y], centro, scala, 640, 480)
@@ -89,8 +89,23 @@ def test_i_punti_di_rtmw_tornano_al_loro_posto_nella_foto():
     x, y, sicuro = punti[0]
     assert x == pytest.approx(150 / 640, abs=0.01)
     assert y == pytest.approx(250 / 480, abs=0.01)
-    assert sicuro == pytest.approx(0.7)
+    assert sicuro == pytest.approx(0.35)
     assert punti[5] == (0.0, 0.0, 0.0)
+
+
+def test_kpr_riceve_le_sicurezze_di_prima():
+    punti = [(0.1, 0.2, 0.35), (0.3, 0.4, 0.05), (0.5, 0.6, 1.0), (0.0, 0.0, 0.0)]
+    assert rtmw.per_kpr(punti) == [(0.1, 0.2, 1.0), (0.3, 0.4, pytest.approx(0.5)),
+                                   (0.5, 0.6, 1.0), (0.0, 0.0, 0.0)]
+
+
+def test_i_punti_del_viso_chiedono_piu_sicurezza():
+    riquadro_volto = (0.10, 0.08, 0.08, 0.10)
+    incerti = punti_finti((0.12, 0.10), sicuri=0.35)
+    sicuri = punti_finti((0.12, 0.10), sicuri=0.45)
+    assert abbinamento.punteggio((0.05, 0.05, 0.3, 0.9), b"", incerti,
+                                 riquadro_volto) == abbinamento.BASTA_COL_CONTORNO
+    assert abbinamento.punteggio((0.05, 0.05, 0.3, 0.9), b"", sicuri, riquadro_volto) == 1.0
 
 
 def test_il_volto_va_al_corpo_che_ha_il_viso_dentro():
@@ -235,6 +250,73 @@ def test_la_passata_guarda_tutti_gli_scatti_una_volta(archivio_pieno):
     assert fatto.corpi == fatto.fatti
     assert finto.spento
     assert Passata(archivio_pieno, rilevatore=RilevatoreFinto(), intensita=100).quanti_mancano() == 0
+
+
+class RipuntatoreFinto(RilevatoreFinto):
+
+    def __init__(self):
+        super().__init__()
+        self.chiesti = []
+
+    def punti_di(self, immagine, riquadri):
+        self.chiesti.append(len(riquadri))
+        return [punti_finti((0.2, 0.15), sicuri=0.45) for _ in riquadri]
+
+
+def test_i_punti_vecchi_si_rifanno_e_il_volto_si_ricollega(archivio_pieno):
+    from officina.corpi import motore
+    from officina.corpi.motore import Passata
+
+    Passata(archivio_pieno, rilevatore=RilevatoreFinto(), intensita=100).esegui()
+    with archivio_pieno.scrittura() as connessione:
+        nuovi = connessione.execute("SELECT count(*) FROM corpi WHERE punti_scala = 10").fetchone()[0]
+        connessione.execute("UPDATE corpi SET punti_scala = 1")
+        quanti = motore.quanti_da_ripuntare_senza_aprire(connessione)
+    assert nuovi > 0 and quanti > 0
+    finto = RipuntatoreFinto()
+    passi = []
+    rifatti = Passata(archivio_pieno, rilevatore=finto, intensita=100).rifai_i_punti(
+        al_passo=lambda fatti, totale: passi.append((fatti, totale)))
+    assert rifatti == nuovi and sum(finto.chiesti) == nuovi and finto.spento
+    assert passi[-1] == (quanti, quanti)
+    with archivio_pieno.lettura() as connessione:
+        assert motore.quanti_da_ripuntare_senza_aprire(connessione) == 0
+        riga = connessione.execute("SELECT punti FROM corpi LIMIT 1").fetchone()[0]
+    from officina.modello import corpi
+
+    assert corpi.punti_da_byte(riga)[0][2] == pytest.approx(0.45, abs=0.01)
+
+
+class RipuntatoreRotto(RilevatoreFinto):
+
+    def punti_di(self, immagine, riquadri):
+        raise RuntimeError("guasto finto")
+
+
+def test_i_punti_che_non_si_rifanno_non_restano_in_fila(archivio_pieno):
+    from officina.corpi import motore
+    from officina.corpi.motore import Passata
+
+    Passata(archivio_pieno, rilevatore=RilevatoreFinto(), intensita=100).esegui()
+    with archivio_pieno.scrittura() as connessione:
+        connessione.execute("UPDATE corpi SET punti_scala = 1")
+    finto = RipuntatoreRotto()
+    assert Passata(archivio_pieno, rilevatore=finto, intensita=100).rifai_i_punti() == 0
+    assert finto.spento
+    with archivio_pieno.lettura() as connessione:
+        assert motore.quanti_da_ripuntare_senza_aprire(connessione) == 0
+
+
+def test_un_archivio_vecchio_ha_i_punti_da_rifare():
+    import sqlite3
+
+    from officina.archivio import migrazioni
+
+    connessione = sqlite3.connect(":memory:")
+    connessione.execute("CREATE TABLE corpi (id INTEGER PRIMARY KEY, punti BLOB)")
+    connessione.execute("INSERT INTO corpi (punti) VALUES (NULL)")
+    migrazioni._versione_51(connessione)
+    assert connessione.execute("SELECT punti_scala FROM corpi").fetchone()[0] == 1
 
 
 def test_uno_scatto_che_si_rompe_viene_segnalato_e_saltato(archivio_pieno):

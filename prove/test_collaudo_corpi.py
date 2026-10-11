@@ -142,7 +142,7 @@ class PoseFinta:
 
     def punti(self, immagine, riquadri):
         larga, alta = immagine.size
-        return [[(40 / larga, 30 / alta, 0.8)] * 17 for _ in riquadri]
+        return [[(40 / larga, 30 / alta, 4.5)] * 17 for _ in riquadri]
 
 
 def test_la_prova_intera_con_modelli_finti(collaudo, monkeypatch, tmp_path):

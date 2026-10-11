@@ -471,12 +471,14 @@ def riassunto(esito: dict) -> dict:
                              "migliore": float(max(contorni, key=lambda s: contorni[s]["media"])),
                              "media_adesso": contorni[str(sam3.SOGLIA_MASCHERA)]["media"]}
     punti = prova_.get("punti_sui_riquadri_di_sam3") or prova_["punti_sui_riquadri_veri"]
+    corpo = round(rilevatore.PUNTO_VISTO * rilevatore.SCALA_DEI_PUNTI, 2)
+    viso = round(rilevatore.PUNTO_VISTO_VISO * rilevatore.SCALA_DEI_PUNTI, 2)
     fuori.update({
-        "punto": {"adesso": rilevatore.PUNTO_VISTO,
+        "punto": {"adesso_corpo": corpo, "adesso_viso": viso,
                   "migliore_corpo": float(_la_migliore(punti["corpo"])),
                   "migliore_viso": float(_la_migliore(punti["viso"])),
-                  "voti_adesso_corpo": punti["corpo"][str(rilevatore.PUNTO_VISTO)],
-                  "voti_adesso_viso": punti["viso"][str(rilevatore.PUNTO_VISTO)]},
+                  "voti_adesso_corpo": punti["corpo"][str(corpo)],
+                  "voti_adesso_viso": punti["viso"][str(viso)]},
         "colori": {"rgb": prova_["al_posto_giusto"]["veri"], "bgr": prova_["al_posto_giusto"]["veri_bgr"]},
     })
     return fuori

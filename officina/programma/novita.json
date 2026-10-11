@@ -204,6 +204,14 @@
       [
         "occhio",
         "SAM 3 e RTMW si scaricano sempre nella versione collaudata: se un file non è identico, il programma non lo tiene"
+      ],
+      [
+        "persona",
+        "I punti del corpo (spalle, gomiti, ginocchia, occhi…) si fidano solo di quelli davvero visti: il collaudo su 500 foto pubbliche ha mostrato che così si sbaglia molto meno. Per il viso il programma chiede ancora più sicurezza"
+      ],
+      [
+        "persona",
+        "Le persone già trovate rifanno solo i loro punti, da sole nella fila dell'IA: contorni, vestiti, figure e le tue risposte restano come sono"
       ]
     ],
     "tecnico": [
@@ -275,6 +283,14 @@
       [
         "occhio",
         "SAM 3 fissato alla revisione <code>3c879f39</code> con lo SHA-256 degli 8 file; RTMW con lo SHA-256 di <code>end2end.onnx</code>, uguale sul sito di OpenMMLab e nella copia su Hugging Face"
+      ],
+      [
+        "persona",
+        "RTMW salva la sicurezza vera di SimCC divisa per <code>SCALA_DEI_PUNTI</code> = 10, non più tagliata a 1. Soglie: corpo 3,0 (<code>PUNTO_VISTO</code> 0,30), viso 4,0 (<code>PUNTO_VISTO_VISO</code> 0,40, indici 0–4 e 23–90). Su 500 foto COCO con 1267 persone: corpo F1 0,862 invece di 0,756, viso F1 0,858"
+      ],
+      [
+        "persona",
+        "Migrazione 51: colonna <code>corpi.punti_scala</code>; i corpi con scala 1 rifanno solo RTMW (<code>Passata.rifai_i_punti</code>) e poi <code>ricollega</code> i volti. KPR riceve le sicurezze di prima (<code>rtmw.per_kpr</code>), quindi gli aspetti salvati restano validi"
       ]
     ]
   },

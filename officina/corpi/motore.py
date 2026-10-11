@@ -100,6 +100,58 @@ class Passata:
                         corpi=self.avanzamento.corpi)
         return self.avanzamento
 
+    def rifai_i_punti(self, al_passo: Callable[[int, int], None] | None = None) -> int:
+        freno = torcia.Freno(self.intensita, fermato=lambda: self.fermata)
+        with self.archivio.lettura() as connessione:
+            da_fare = [riga["id"] for riga in tutti(
+                connessione, _domanda_da_ripuntare(
+                    "DISTINCT s.id", gruppi.clausola(connessione, "intelligenza")),
+                rilevatore_mod.SCALA_DEI_PUNTI)]
+        rifatti = 0
+        try:
+            for numero, scatto_id in enumerate(da_fare, start=1):
+                if self.fermata:
+                    break
+                partito = time.monotonic()
+                try:
+                    rifatti += self._ripunta(scatto_id)
+                except Interrotta:
+                    break
+                except ErroreOfficina as errore:
+                    self._segnala(scatto_id, errore)
+                except Exception as guasto:              # noqa: BLE001
+                    registro.avviso("corpi.punti_non_rifatti", **registro.dove_si_e_rotto(guasto))
+                    self._segnala(scatto_id, ErroreOfficina(
+                        "Questo scatto non si è lasciato guardare."))
+                if al_passo:
+                    al_passo(numero, len(da_fare))
+                freno.riposa(time.monotonic() - partito)
+        finally:
+            self.rilevatore.spegni()
+        registro.evento("corpi.punti_rifatti", scatti=len(da_fare), corpi=rifatti)
+        return rifatti
+
+    def _ripunta(self, scatto_id: int) -> int:
+        with self.archivio.lettura() as connessione:
+            vecchi = corpi_mod.da_ripuntare(connessione, scatto_id)
+        if not vecchi:
+            return 0
+        _, quadri = self._leggi(scatto_id)
+        nuovi: dict[int, list] = {}
+        for numero, lavoro, _intera in quadri:
+            if self.fermata:
+                raise Interrotta()
+            qui = [corpo for corpo in vecchi if corpo["fotogramma"] == numero]
+            if not qui:
+                continue
+            punti = self.rilevatore.punti_di(lavoro, [corpo["riquadro"] for corpo in qui])
+            for corpo, suoi in zip(qui, punti, strict=True):
+                nuovi[corpo["id"]] = suoi
+        if nuovi:
+            with self.archivio.scrittura() as connessione:
+                corpi_mod.ripunta(connessione, scatto_id, nuovi)
+        return len(nuovi)
+
     def _a_gruppi(self, da_fare: list[int]):
         insieme = max(1, int(getattr(self.rilevatore, "quanti_insieme", 1) or 1))
         for inizio in range(0, len(da_fare), insieme):
@@ -265,6 +317,24 @@ def _domanda_da_fare(cosa: str, piu: str = "") -> str:
           {segnalazioni.clausola(segnalazioni.NON_SI_APRE)}
         ORDER BY s.id
     """
+
+
+def _domanda_da_ripuntare(cosa: str, piu: str = "") -> str:
+    return f"""
+        SELECT {cosa} FROM scatti s
+        JOIN corpi c ON c.scatto_id = s.id
+        WHERE s.fuori_archivio = 0{piu} AND c.punti_scala < ?
+          {segnalazioni.clausola(segnalazioni.CORPI_NON_LETTI)}
+          {segnalazioni.clausola(segnalazioni.NON_SI_APRE)}
+        ORDER BY s.id
+    """
+
+
+def quanti_da_ripuntare_senza_aprire(connessione) -> int:
+    riga = uno(connessione, _domanda_da_ripuntare(
+        "count(DISTINCT s.id) AS q", gruppi.clausola(connessione, "intelligenza")),
+        rilevatore_mod.SCALA_DEI_PUNTI)
+    return riga["q"] if riga else 0
 
 
 def quanti_mancano_senza_aprire(connessione) -> int:

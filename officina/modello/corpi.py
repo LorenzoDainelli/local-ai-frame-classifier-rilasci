@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from officina.archivio.database import adesso, tutti
+from officina.corpi.rilevatore import SCALA_DEI_PUNTI
 from officina.descrittori import vettori
 
 
@@ -64,13 +65,13 @@ def salva(connessione, scatto_id: int, file_id: int | None, trovati,
         cursore = connessione.execute(
             """
             INSERT INTO corpi (scatto_id, file_id, fotogramma, riquadro, area,
-                               sicurezza, maschera, punti, modello, versione,
+                               sicurezza, maschera, punti, punti_scala, modello, versione,
                                trovato_il)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (scatto_id, file_id, fotogramma, json.dumps([round(v, 5) for v in corpo.riquadro]),
              corpo.area, corpo.sicurezza, corpo.maschera or None,
-             punti_a_byte(corpo.punti) or None, modello, versione, adesso()))
+             punti_a_byte(corpo.punti) or None, SCALA_DEI_PUNTI, modello, versione, adesso()))
         _salva_l_aspetto(connessione, cursore.lastrowid, corpo)
     connessione.execute(
         "INSERT OR REPLACE INTO corpi_guardati "
@@ -78,6 +79,22 @@ def salva(connessione, scatto_id: int, file_id: int | None, trovati,
         (scatto_id, modello, versione, len(trovati), adesso()))
     ricollega(connessione, scatto_id)
     return len(trovati)
+
+
+def da_ripuntare(connessione, scatto_id: int) -> list[dict]:
+    return [{"id": riga["id"], "fotogramma": riga["fotogramma"],
+             "riquadro": json.loads(riga["riquadro"])}
+            for riga in tutti(connessione,
+                              "SELECT id, fotogramma, riquadro FROM corpi "
+                              "WHERE scatto_id = ? AND punti_scala < ? ORDER BY id",
+                              scatto_id, SCALA_DEI_PUNTI)]
+
+
+def ripunta(connessione, scatto_id: int, nuovi: dict[int, list]) -> int:
+    for corpo_id, punti in nuovi.items():
+        connessione.execute("UPDATE corpi SET punti = ?, punti_scala = ? WHERE id = ?",
+                            (punti_a_byte(punti) or None, SCALA_DEI_PUNTI, corpo_id))
+    return ricollega(connessione, scatto_id)
 
 
 def ricollega(connessione, scatto_id: int) -> int:

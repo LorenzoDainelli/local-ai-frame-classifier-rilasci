@@ -201,14 +201,21 @@ class Rilevatore:
                 punti=suoi))
         return corpi
 
+    def punti_di(self, immagine, riquadri) -> list[list[tuple[float, float, float]]]:
+        intera = immagine.convert("RGB")
+        larga, alta = intera.size
+        self.pose.accendi()
+        return self.pose.punti(intera, [(x * larga, y * alta, (x + w) * larga, (y + h) * alta)
+                                        for x, y, w, h in riquadri])
+
     def _prepara(self, immagine, corpi: list[Corpo]):
-        from officina.corpi import kpr, vestiti
+        from officina.corpi import kpr, rtmw, vestiti
 
         intera = immagine.convert("RGB")
         larga, alta = intera.size
         persone = [((c.riquadro[0] * larga, c.riquadro[1] * alta,
                      (c.riquadro[0] + c.riquadro[2]) * larga,
-                     (c.riquadro[1] + c.riquadro[3]) * alta), list(c.punti)) for c in corpi]
+                     (c.riquadro[1] + c.riquadro[3]) * alta), rtmw.per_kpr(c.punti)) for c in corpi]
         lato = self.vestiti.scheda.lato
         sagome = [vestiti.sagoma(intera, c.riquadro, c.maschera, lato_finale=lato)
                   for c in corpi]

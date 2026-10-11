@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from officina.corpi.rilevatore import SCALA_DEI_PUNTI
 from officina.descrittori import vettori
 
 LARGO = 288
@@ -90,5 +91,9 @@ def leggi(uscite, centro, scala, larga: int, alta: int) -> list[tuple[float, flo
             fuori.append((0.0, 0.0, 0.0))
             continue
         fuori.append((min(1.0, max(0.0, px / larga)), min(1.0, max(0.0, py / alta)),
-                      min(1.0, max(0.0, float(sicuro)))))
+                      min(1.0, max(0.0, float(sicuro) / SCALA_DEI_PUNTI))))
     return fuori
+
+
+def per_kpr(punti) -> list[tuple[float, float, float]]:
+    return [(x, y, min(1.0, c * SCALA_DEI_PUNTI)) for x, y, c in punti]
