@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
-from officina.archivio import memoria
+from officina import registro
+from officina.archivio import database, memoria
 from officina.apprendimento import esempi as esempi_mod
 from officina.apprendimento import gruppi as divisione
 from officina.apprendimento import pagella, proposte
@@ -320,12 +324,23 @@ def _coda(connessione: sqlite3.Connection, fuori: Pagella) -> list[Compito]:
     return compiti[:8]
 
 
+QUIETE_PRIMA_DI_RIFARE = 10.0
+
+
+def _dove(connessione: sqlite3.Connection) -> str:
+    riga = connessione.execute("PRAGMA database_list").fetchone()
+    return (riga[2] or "") if riga else ""
+
+
 class Sempre:
 
     def __init__(self):
         self.pagella: Pagella | None = None
         self.firma: tuple | None = None
+        self.dove: str | None = None
         self._tenuta = memoria.Ricordo("la firma della pagella")
+        self._lucchetto = threading.Lock()
+        self._in_corso = False
 
     def _firma(self, connessione: sqlite3.Connection) -> tuple:
         return self._tenuta.prendi(connessione,
@@ -349,14 +364,68 @@ class Sempre:
     def per(self, connessione: sqlite3.Connection,
             senza_etichetta: int = 0) -> Pagella:
         firma = self._firma(connessione)
-        if self.pagella is None or firma != self.firma:
-            self.pagella = calcola(connessione, senza_etichetta=senza_etichetta)
-            self.firma = firma
+        dove = _dove(connessione)
+        if self.pagella is None or firma != self.firma or dove != self.dove:
+            nuova = calcola(connessione, senza_etichetta=senza_etichetta)
+            with self._lucchetto:
+                self.pagella, self.firma, self.dove = nuova, firma, dove
         elif senza_etichetta and self.pagella.senza_etichetta != senza_etichetta:
             self.pagella.senza_etichetta = senza_etichetta
             self.pagella.coda = _coda(connessione, self.pagella)
         return self.pagella
 
+    def per_subito(self, connessione: sqlite3.Connection) -> Pagella:
+        firma = self._firma(connessione)
+        dove = _dove(connessione)
+        tenuta = self.pagella
+        if tenuta is None or not dove or dove != self.dove:
+            return self.per(connessione)
+        if firma != self.firma:
+            self._rifai_in_disparte(dove)
+        return tenuta
+
+    def _rifai_in_disparte(self, dove: str) -> None:
+        with self._lucchetto:
+            if self._in_corso:
+                return
+            self._in_corso = True
+
+        def lavora() -> None:
+            try:
+                connessione = database.connetti(Path(dove))
+                try:
+                    firma = self._conta(connessione)
+                    while True:
+                        time.sleep(QUIETE_PRIMA_DI_RIFARE)
+                        adesso = self._conta(connessione)
+                        if adesso == firma:
+                            break
+                        firma = adesso
+                    senza = self.pagella.senza_etichetta if self.pagella else 0
+                    nuova = calcola(connessione, senza_etichetta=senza)
+                finally:
+                    connessione.close()
+                with self._lucchetto:
+                    if self.dove == dove:
+                        self.pagella, self.firma = nuova, firma
+            except Exception:
+                try:
+                    registro.errore("pagella.in_disparte_rotta")
+                except Exception:
+                    pass
+            finally:
+                with self._lucchetto:
+                    self._in_corso = False
+
+        threading.Thread(target=lavora, name="pagella", daemon=True).start()
+
+    def aspetta(self, secondi: float = 30.0) -> None:
+        fine = time.monotonic() + secondi
+        while self._in_corso and time.monotonic() < fine:
+            time.sleep(0.01)
+
     def dimentica(self) -> None:
-        self.pagella = None
-        self.firma = None
+        with self._lucchetto:
+            self.pagella = None
+            self.firma = None
+            self.dove = None

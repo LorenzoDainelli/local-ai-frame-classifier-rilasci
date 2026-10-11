@@ -182,3 +182,44 @@ def test_a_griglia_conta_la_casella_che_ci_crede_di_piu(bottega, archivio_misura
     media = {p.nodo_id: p.punteggio
              for p in bottega.per_scatto(connessione, scatto_id, quante=99)}
     assert all(media[n] <= dopo[n] for n in prima)
+
+
+def test_dopo_un_etichetta_si_riaddestrano_solo_i_nodi_toccati(archivio_misurabile, monkeypatch):
+    connessione = archivio_misurabile.connessione
+    bottega = proposte.Bottega()
+    bottega.riaddestra(connessione)
+    nodo_id = next(iter(bottega.modelli))
+    scatto_id = connessione.execute(
+        "SELECT id FROM scatti WHERE id NOT IN "
+        "(SELECT scatto_id FROM etichette WHERE nodo_id = ?) LIMIT 1", (nodo_id,)).fetchone()[0]
+    etichette.metti(connessione, scatto_id, nodo_id, "si", "utente")
+    connessione.commit()
+
+    rifatti = []
+    vero = proposte._addestra_uno
+    monkeypatch.setattr(proposte, "_addestra_uno",
+                        lambda c, esempi, d, v: rifatti.append(esempi.nodo_id) or vero(c, esempi, d, v))
+    bottega.riaddestra(connessione)
+    assert nodo_id in rifatti and len(rifatti) < len(bottega.esempi_di)
+
+    da_capo = proposte.Bottega()
+    da_capo.riaddestra(connessione)
+    assert set(da_capo.modelli) == set(bottega.modelli)
+    for quale, modello in da_capo.modelli.items():
+        assert list(modello.pesi) == list(bottega.modelli[quale].pesi)
+        assert modello.scarto == bottega.modelli[quale].scarto
+
+
+def test_impronte_nuove_fanno_riaddestrare_tutto(archivio_misurabile, monkeypatch):
+    connessione = archivio_misurabile.connessione
+    bottega = proposte.Bottega()
+    bottega.riaddestra(connessione)
+    connessione.execute("UPDATE impronte SET calcolata_il = '2099-01-01T00:00:00' "
+                        "WHERE id = (SELECT max(id) FROM impronte WHERE inquadratura = 'intera')")
+    connessione.commit()
+    rifatti = []
+    vero = proposte._addestra_uno
+    monkeypatch.setattr(proposte, "_addestra_uno",
+                        lambda c, esempi, d, v: rifatti.append(esempi.nodo_id) or vero(c, esempi, d, v))
+    bottega.riaddestra(connessione)
+    assert len(rifatti) == len(bottega.esempi_di)

@@ -54,7 +54,7 @@ def forma_dell_albero(connessione, con_archiviati: bool = True) -> list[dict]:
             raccogli(nodo.figli)
 
     raccogli(nodi.albero(connessione))
-    corsie = {riga.nodo_id: riga.corsia for riga in comune.pagella_pronta.per(connessione).righe}
+    corsie = {riga.nodo_id: riga.corsia for riga in comune.pagella_pronta.per_subito(connessione).righe}
 
     stati = ("attivo", "congelato") if con_archiviati else ("attivo",)
     segnaposti = ",".join("?" * len(stati))
@@ -117,7 +117,7 @@ def api_nodo(nodo_id: int):
 
 
 def _pagella_di(connessione, nodo_id: int) -> dict:
-    conto = comune.pagella_pronta.per(connessione)
+    conto = comune.pagella_pronta.per_subito(connessione)
     for riga in conto.righe:
         if riga.nodo_id == nodo_id:
             return {"voto": riga.a_dizionario()}

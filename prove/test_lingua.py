@@ -234,6 +234,10 @@ def test_nessun_filo_puo_morire_in_silenzio():
         "officina/miglioria/preparazione.py":
             "il filo che racconta le librerie prende dentro qualunque errore: "
             "chi racconta non deve poter fermare chi installa",
+        "officina/apprendimento/rendiconto.py":
+            "il filo che rifà la pagella prende dentro qualunque errore e lo "
+            "scrive nel registro: la pagella vecchia resta, e la prossima "
+            "pagina ne chiede un'altra",
     }
 
     radice = Path(__file__).resolve().parent.parent

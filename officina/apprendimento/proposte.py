@@ -77,6 +77,7 @@ class Bottega:
         self.quando: str | None = None
         self.quante: int = 0
         self.pronta = False
+        self.impronte: tuple | None = None
         self._tenuta = memoria.Ricordo("la firma delle etichette")
 
 
@@ -104,8 +105,14 @@ class Bottega:
 
 
     def riaddestra(self, connessione: sqlite3.Connection) -> dict:
-        self.descrittore, self.versione = scegli_descrittore(
-            connessione, self.descrittore)
+        descrittore, versione = scegli_descrittore(connessione, self.descrittore)
+        impronte = _firma_delle_impronte(connessione, descrittore, versione) if descrittore else None
+        if (self.pronta and (descrittore, versione, impronte)
+                == (self.descrittore, self.versione, self.impronte)):
+            prima_modelli, prima_esempi = self.modelli, self.esempi_di
+        else:
+            prima_modelli, prima_esempi = {}, {}
+        self.descrittore, self.versione, self.impronte = descrittore, versione, impronte
         self.il_luogo_aiuta = bool(leggi_impostazione(
             connessione, "luogo_aiuta", True))
         self.modelli = {}
@@ -118,8 +125,11 @@ class Bottega:
                     connessione, minimo=MINIMO_ESEMPI):
                 self.esempi_di[nodo_id] = gli_esempi
                 self.luoghi_di[nodo_id] = _dove_stanno(connessione, gli_esempi)
-                modello = _addestra_uno(connessione, gli_esempi,
-                                        self.descrittore, self.versione)
+                if prima_esempi.get(nodo_id) == gli_esempi:
+                    modello = prima_modelli.get(nodo_id)
+                else:
+                    modello = _addestra_uno(connessione, gli_esempi,
+                                            self.descrittore, self.versione)
                 if modello is None:
                     saltati += 1
                 else:
@@ -241,6 +251,15 @@ def _impronta_di(connessione: sqlite3.Connection, scatto_id: int,
     riga = impronte_mod.una(connessione, scatto_id, descrittore, versione,
                             "intera", 0)
     return riga["valori"] if riga else None
+
+
+def _firma_delle_impronte(connessione: sqlite3.Connection, descrittore: str,
+                          versione: str | None) -> tuple:
+    riga = uno(connessione,
+               "SELECT count(*) AS quante, max(calcolata_il) AS quando FROM impronte "
+               "WHERE descrittore = ? AND versione = ? AND inquadratura = 'intera'",
+               descrittore, versione)
+    return (riga["quante"], riga["quando"]) if riga else (0, None)
 
 
 def _addestra_uno(connessione: sqlite3.Connection, gli_esempi: esempi_mod.Esempi,
