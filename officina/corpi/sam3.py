@@ -55,6 +55,10 @@ class Separatore:
         torcia.libera()
 
     def trova(self, immagine) -> list[tuple[tuple[float, float, float, float], float, object]]:
+        uscita, misura = self.guarda(immagine)
+        return self.scegli(uscita, misura)
+
+    def guarda(self, immagine):
         import torch
 
         self.accendi()
@@ -70,9 +74,13 @@ class Separatore:
             pred_masks=uscita.pred_masks.float(),
             presence_logits=(None if getattr(uscita, "presence_logits", None) is None
                              else uscita.presence_logits.float()))
+        return leggibile, (alta, larga)
+
+    def scegli(self, uscita, misura, sicurezza_minima: float | None = None,
+               soglia_maschera: float = SOGLIA_MASCHERA):
         esito = self._preparatore.post_process_instance_segmentation(
-            leggibile, threshold=self.sicurezza_minima, mask_threshold=SOGLIA_MASCHERA,
-            target_sizes=[(alta, larga)])[0]
+            uscita, threshold=self.sicurezza_minima if sicurezza_minima is None else sicurezza_minima,
+            mask_threshold=soglia_maschera, target_sizes=[misura])[0]
         fuori = []
         for sicurezza, riquadro, maschera in zip(esito["scores"].tolist(),
                                                  esito["boxes"].tolist(),
