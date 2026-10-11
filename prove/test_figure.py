@@ -286,3 +286,25 @@ def test_i_corpi_sono_in_casa_solo_con_le_figure(tmp_path, monkeypatch):
         (casa / pezzo.dove).write_bytes(b"finto")
     assert scaricamento.gia_in_casa(tmp_path)
     assert figure.cosa_manca(tmp_path) == ""
+
+
+def test_tante_persone_si_fanno_a_gruppi(archivio_pieno, monkeypatch):
+    class Folla(RilevatoreFinto):
+        def guarda(self, immagine):
+            return [Corpo((0.01 * i, 0.1, 0.05, 0.5), 0.9, b"", _punti()) for i in range(19)]
+
+    from officina.corpi.motore import Passata
+
+    Passata(archivio_pieno, rilevatore=Folla(), intensita=100).esegui()
+    monkeypatch.setattr(figure, "PERSONE_A_TURNO", 8)
+    finte = FigureFinte()
+    lotti = []
+    vera = finte.ricostruisci
+
+    def contata(pixel, riquadri, intere, fuoco):
+        lotti.append(len(riquadri))
+        return vera(pixel, riquadri, intere, fuoco)
+
+    finte.ricostruisci = contata
+    fatto = figure.Passata(archivio_pieno, figure=finte).esegui(quanti=1)
+    assert lotti == [8, 8, 3] and fatto.figure == 19

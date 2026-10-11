@@ -5,8 +5,7 @@ from pathlib import Path
 from officina.errori import ErroreOfficina
 from officina.volti import allineamento
 from officina.volti.rilevatore import (Conteggio, Faccia, FILE_RICONOSCITORE,
-                                       FILE_RILEVATORE, LATO_MASSIMO,
-                                       LATO_MINIMO, NOME, SICUREZZA_MINIMA,
+                                       FILE_RILEVATORE, LATO_MINIMO, NOME, SICUREZZA_MINIMA,
                                        VERSIONE, c_e_onnxruntime,
                                        ci_sono_i_modelli, cosa_manca,
                                        dove_stanno, nitidezza_di,

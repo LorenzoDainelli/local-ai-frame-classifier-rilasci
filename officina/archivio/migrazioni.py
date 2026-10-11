@@ -983,6 +983,15 @@ def _versione_47(connessione: sqlite3.Connection) -> None:
     )
 
 
+def _versione_48(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS segnalazioni_per_scatto "
+        "ON segnalazioni(scatto_id, tipo, risolta)")
+    for doppione in ("etichette_per_scatto", "impronte_per_scatto", "diario_per_telefono",
+                     "cambiamenti_da_mandare"):
+        connessione.execute(f"DROP INDEX IF EXISTS {doppione}")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1060,6 +1069,9 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_46),
     Migrazione(47, "l'obiettivo di ogni scatto, per la figura in 3D delle persone",
                _versione_47),
+    Migrazione(48, "le pagine dell'intelligenza più veloci con tante segnalazioni, "
+               "e via quattro indici doppi",
+               _versione_48),
 ]
 
 

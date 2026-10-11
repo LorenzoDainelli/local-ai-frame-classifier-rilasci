@@ -109,7 +109,10 @@ def test_le_impronte_gia_calcolate_sopravvivono_alla_griglia(tmp_path, monkeypat
 
         indici = {r[0] for r in aperto.connessione.execute(
             "SELECT name FROM sqlite_master WHERE type = 'index'")}
-        assert {"impronte_per_passata", "impronte_per_scatto"} <= indici
+        assert "impronte_per_passata" in indici
+        piano = " ".join(r[3] for r in aperto.connessione.execute(
+            "EXPLAIN QUERY PLAN SELECT id FROM impronte WHERE scatto_id = 1"))
+        assert "INDEX" in piano and "scatto_id=?" in piano
     finally:
         accesso.chiudi(con_copia=False)
 

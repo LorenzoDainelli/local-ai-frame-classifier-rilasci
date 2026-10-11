@@ -603,7 +603,6 @@ def test_il_deposito_dei_rilasci_si_sceglie_alla_costruzione(tmp_path, monkeypat
 
 
 def test_fermare_uccide_subito_pip(casa):
-    import subprocess
     import sys
 
     lavoratore = librerie.Installatore()

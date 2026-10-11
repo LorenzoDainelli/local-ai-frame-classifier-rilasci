@@ -303,7 +303,7 @@ def main() -> int:
     for pesi in kpr_pesi.PESI:
         try:
             esito = _una(pesi, kpr, lavoro / "modelli", elenco, campioni, file_campioni)
-        except Exception as guasto:
+        except Exception:
             import traceback
 
             esito = {"versione": pesi.versione, "guasto": traceback.format_exc()[-6000:]}

@@ -7,7 +7,6 @@ import numpy
 import pytest
 from PIL import Image
 
-from officina.archivio.database import adesso
 from officina.corpi.rilevatore import PUNTI, Corpo
 
 

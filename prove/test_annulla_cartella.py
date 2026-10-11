@@ -48,7 +48,7 @@ def test_annullare_toglie_gli_scatti_ma_non_gli_originali(archivio, tmp_path):
         "SELECT count(*) FROM cartelle_sorgente WHERE id = ?", (snap_id,)).fetchone()[0] == 0
     assert all(file.exists() for file in snap.rglob("*"))
     assert connessione.execute(
-        "SELECT count(*) FROM percorsi WHERE percorso LIKE ?", (f"%copia_%",)).fetchone()[0] == 0
+        "SELECT count(*) FROM percorsi WHERE percorso LIKE ?", ("%copia_%",)).fetchone()[0] == 0
 
 
 def test_il_doppione_tenuto_dalla_cartella_annullata_rimette_l_originale(archivio):

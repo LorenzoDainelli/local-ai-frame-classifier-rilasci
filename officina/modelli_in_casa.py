@@ -294,7 +294,7 @@ def scarica_in_fila(fila: Fila, dove: Path, lavoro,
             try:
                 porta_in_casa(quale, dove, lavoro)
                 break
-            except Exception as guasto:
+            except Exception:
                 if fila.fermata:
                     return
                 if c_e_rete():

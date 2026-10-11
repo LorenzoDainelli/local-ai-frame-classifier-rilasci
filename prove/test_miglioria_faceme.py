@@ -114,6 +114,7 @@ def finto(tmp_path, monkeypatch):
         "photomaker": {"repo": "esempio/pm", "file": "photomaker-v1.bin"},
         "byte_circa": 1000}), encoding="utf-8")
     monkeypatch.setattr(scaricamento, "TERZI", terzi)
+    monkeypatch.setattr(faceme_pesi, "_controlla_lo_spazio", lambda cartella, serve: None)
     depositi = {
         "esempio/base": {n: b"x-" + n.encode() for n in (
             "unet/config.json", "unet/diffusion_pytorch_model.fp16.safetensors",

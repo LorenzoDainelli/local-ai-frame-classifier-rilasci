@@ -492,7 +492,6 @@ def test_tenere_una_copia_toglie_l_altra_dalla_griglia_senza_cancellarla(
 
 
 def test_i_segni_sulla_scheda_non_si_pestano_i_piedi():
-    from pathlib import Path
 
     foglio = schermate()
 
@@ -513,7 +512,6 @@ def test_i_segni_sulla_scheda_non_si_pestano_i_piedi():
 
 
 def test_una_riga_spenta_si_riaccende_anche_senza_il_mouse():
-    from pathlib import Path
 
     foglio = schermate()
 

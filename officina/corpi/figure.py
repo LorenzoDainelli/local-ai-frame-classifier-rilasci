@@ -19,6 +19,7 @@ ASPETTO = "corpo3d-1"
 VERSIONE_OBIETTIVO = "1-puffin-caption"
 LATO_DELLE_FIGURE = 2048
 SCATTI_A_TURNO = 16
+PERSONE_A_TURNO = 8
 DIAGONALE_35MM = math.hypot(36.0, 24.0)
 RAPPORTI_INTERI = (4 / 3, 3 / 2, 16 / 9, 1.0)
 IFD_EXIF = 0x8769
@@ -353,15 +354,21 @@ class Passata:
                     if self.fermata:
                         raise Interrotta()
                     larga, alta = quadro.immagine.size
-                    riquadri_norm = [json.loads(c["riquadro"]) for c in quadro.corpi]
-                    riquadri = numpy.array([[r[0] * larga, r[1] * alta, (r[0] + r[2]) * larga,
-                                             (r[1] + r[3]) * alta] for r in riquadri_norm], dtype=numpy.float64)
-                    intere = numpy.stack([maschera_intera(c["maschera"], r, larga, alta)
-                                          for c, r in zip(quadro.corpi, riquadri_norm, strict=True)])
-                    figure, mani = self.figure.ricostruisci(numpy.asarray(quadro.immagine), riquadri,
-                                                           intere, letto.lente.fuoco(alta))
-                    for corpo, figura, sue in zip(quadro.corpi, figure, mani, strict=True):
-                        fatte.append((corpo["id"], figura_a_numeri(figura, larga, alta), sue))
+                    pixel = numpy.asarray(quadro.immagine)
+                    for primo in range(0, len(quadro.corpi), PERSONE_A_TURNO):
+                        if self.fermata:
+                            raise Interrotta()
+                        corpi = quadro.corpi[primo:primo + PERSONE_A_TURNO]
+                        riquadri_norm = [json.loads(c["riquadro"]) for c in corpi]
+                        riquadri = numpy.array([[r[0] * larga, r[1] * alta, (r[0] + r[2]) * larga,
+                                                 (r[1] + r[3]) * alta] for r in riquadri_norm],
+                                               dtype=numpy.float64)
+                        intere = numpy.stack([maschera_intera(c["maschera"], r, larga, alta)
+                                              for c, r in zip(corpi, riquadri_norm, strict=True)])
+                        figure, mani = self.figure.ricostruisci(pixel, riquadri, intere,
+                                                               letto.lente.fuoco(alta))
+                        for corpo, figura, sue in zip(corpi, figure, mani, strict=True):
+                            fatte.append((corpo["id"], figura_a_numeri(figura, larga, alta), sue))
             except Interrotta:
                 raise
             except ErroreOfficina as errore:
