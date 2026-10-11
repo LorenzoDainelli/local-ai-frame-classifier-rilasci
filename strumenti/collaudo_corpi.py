@@ -25,7 +25,9 @@ GIUSTO = 0.5
 STESSA_PERSONA = 0.5
 SOGLIE_PERSONA = (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7)
 SOGLIE_MASCHERA = (0.3, 0.4, 0.5, 0.6, 0.7)
-SOGLIE_PUNTO = (0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7)
+SOGLIE_PUNTO = (0.1, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0)
+CENTESIMI = (5, 10, 25, 50, 75, 90, 95)
+GRUPPI = ("al_posto_giusto", "fuori_posto", "non_segnati")
 PIU_BASSA = 0.2
 TESTI_NELLO_ZIP = (".json", ".txt")
 
@@ -206,8 +208,13 @@ def _conti_vuoti() -> dict:
     return {s: {"giusti": 0, "sbagliati": 0, "persi": 0} for s in SOGLIE_PUNTO}
 
 
+def _sicurezze_vuote() -> dict:
+    return {nome: {gruppo: [] for gruppo in GRUPPI} for nome, _ in PARTI}
+
+
 def confronta_i_punti(punti, annotazione: dict, larga: int, alta: int, conti: dict,
-                      quali: range, segnati: dict | None = None) -> None:
+                      quali: range, segnati: dict | None = None,
+                      sicurezze: dict | None = None) -> None:
     area = max(float(annotazione["area"]), 1.0)
     veri = annotazione["keypoints"]
     for k in quali:
@@ -222,6 +229,9 @@ def confronta_i_punti(punti, annotazione: dict, larga: int, alta: int, conti: di
                 segnati["al_posto_giusto"] += int(giusto)
         else:
             giusto = False
+        if sicurezze is not None:
+            gruppo = "non_segnati" if visto <= 0 else ("al_posto_giusto" if giusto else "fuori_posto")
+            sicurezze[gruppo].append(float(sicuro))
         for soglia, conto in conti.items():
             if sicuro >= soglia:
                 conto["giusti" if visto > 0 and giusto else "sbagliati"] += 1
@@ -239,6 +249,64 @@ def _voti(giusti: int, sbagliati: int, persi: int) -> dict:
 
 def _la_migliore(tabella: dict) -> float:
     return max(tabella, key=lambda soglia: (tabella[soglia]["f1"], -abs(float(soglia) - 0.5)))
+
+
+def _quantili(valori: list[float]) -> dict:
+    if not valori:
+        return {"quanti": 0}
+    ordinati = sorted(valori)
+    fuori: dict = {"quanti": len(ordinati), "sotto_1": round(sum(1 for v in ordinati if v < 1.0) / len(ordinati), 4)}
+    for centesimo in CENTESIMI:
+        fuori[f"p{centesimo}"] = round(ordinati[min(len(ordinati) - 1, len(ordinati) * centesimo // 100)], 3)
+    fuori["massimo"] = round(ordinati[-1], 3)
+    return fuori
+
+
+def _punti_grezzi(pose, immagine, riquadri) -> list[list[tuple[float, float, float]]]:
+    import numpy as np
+
+    from officina.corpi import rtmw
+
+    if not riquadri:
+        return []
+    pose.accendi()
+    nome = pose._sessione.get_inputs()[0].name
+    larga, alta = immagine.size
+    fuori = []
+    for riquadro in riquadri:
+        ingresso, centro, scala = rtmw.prepara(immagine, riquadro)
+        uscite = pose._sessione.run(None, {nome: ingresso})
+        lungo_x = np.asarray(uscite[0], dtype=np.float32)
+        lungo_y = np.asarray(uscite[1], dtype=np.float32)
+        grezzi = 0.5 * (lungo_x.reshape(-1, lungo_x.shape[-1]).max(axis=1)
+                        + lungo_y.reshape(-1, lungo_y.shape[-1]).max(axis=1))
+        punti = rtmw.leggi(uscite, centro, scala, larga, alta)
+        fuori.append([(x, y, float(g)) for (x, y, _), g in zip(punti, grezzi.tolist(), strict=True)])
+    return fuori
+
+
+def _punti_sui_veri(pose, immagine, annotazioni, sui_veri, sui_veri_bgr, segnati, sicurezze, tempi) -> int:
+    larga, alta = immagine.size
+    con_punti = [j for j, a in enumerate(annotazioni) if a["num_keypoints"] > 0 and not a["iscrowd"]]
+    riquadri_veri = [(annotazioni[j]["bbox"][0], annotazioni[j]["bbox"][1],
+                      annotazioni[j]["bbox"][0] + annotazioni[j]["bbox"][2],
+                      annotazioni[j]["bbox"][1] + annotazioni[j]["bbox"][3]) for j in con_punti]
+    inizio = time.monotonic()
+    punti_veri = _punti_grezzi(pose, immagine, riquadri_veri)
+    if riquadri_veri:
+        tempi.append((time.monotonic() - inizio) / len(riquadri_veri))
+    punti_bgr = _punti_grezzi(pose, _bgr(immagine), riquadri_veri)
+    for j, suoi, suoi_bgr in zip(con_punti, punti_veri, punti_bgr, strict=True):
+        for nome, quali in PARTI:
+            confronta_i_punti(suoi, annotazioni[j], larga, alta, sui_veri[nome], quali,
+                              segnati["veri"] if nome == "corpo" else None, sicurezze[nome])
+            confronta_i_punti(suoi_bgr, annotazioni[j], larga, alta, sui_veri_bgr[nome], quali,
+                              segnati["veri_bgr"] if nome == "corpo" else None)
+    return len(con_punti)
+
+
+def _tabelle_dei_punti(tabelle: dict) -> dict:
+    return {nome: {str(s): _voti(**c) for s, c in tabella.items()} for nome, tabella in tabelle.items()}
 
 
 def _bgr(immagine):
@@ -270,6 +338,7 @@ def prova(casa: Path, cartella: Path, quante: int) -> dict:
     sui_veri = {"corpo": _conti_vuoti(), "viso": _conti_vuoti()}
     sui_veri_bgr = {"corpo": _conti_vuoti(), "viso": _conti_vuoti()}
     sui_trovati = {"corpo": _conti_vuoti(), "viso": _conti_vuoti()}
+    dei_punti = _sicurezze_vuote()
     segnati = {nome: {"segnati": 0, "al_posto_giusto": 0}
                for nome in ("veri", "veri_bgr", "trovati")}
     tempi = {"sam3": [], "rtmw": []}
@@ -306,25 +375,11 @@ def prova(casa: Path, cartella: Path, quante: int) -> dict:
                 unione = float(np.logical_or(maschera, vere[j]).sum())
                 contorni[soglia_maschera].append(comune / unione if unione else 0.0)
 
-        con_punti = [j for j, a in enumerate(annotazioni) if a["num_keypoints"] > 0 and not a["iscrowd"]]
-        riquadri_veri = [(annotazioni[j]["bbox"][0], annotazioni[j]["bbox"][1],
-                          annotazioni[j]["bbox"][0] + annotazioni[j]["bbox"][2],
-                          annotazioni[j]["bbox"][1] + annotazioni[j]["bbox"][3]) for j in con_punti]
-        inizio = time.monotonic()
-        punti_veri = pose.punti(immagine, riquadri_veri)
-        if riquadri_veri:
-            tempi["rtmw"].append((time.monotonic() - inizio) / len(riquadri_veri))
-        punti_bgr = pose.punti(_bgr(immagine), riquadri_veri)
-        for j, suoi, suoi_bgr in zip(con_punti, punti_veri, punti_bgr, strict=True):
-            for nome, quali in PARTI:
-                confronta_i_punti(suoi, annotazioni[j], larga, alta, sui_veri[nome], quali,
-                                  segnati["veri"] if nome == "corpo" else None)
-                confronta_i_punti(suoi_bgr, annotazioni[j], larga, alta, sui_veri_bgr[nome], quali,
-                                  segnati["veri_bgr"] if nome == "corpo" else None)
+        _punti_sui_veri(pose, immagine, annotazioni, sui_veri, sui_veri_bgr, segnati, dei_punti, tempi["rtmw"])
 
         trovate_con_punti = [(i, j) for i, j in coppie_del_programma.items()
                              if annotazioni[j]["num_keypoints"] > 0]
-        punti_trovati = pose.punti(immagine, [base[tenute[i]][0] for i, _ in trovate_con_punti])
+        punti_trovati = _punti_grezzi(pose, immagine, [base[tenute[i]][0] for i, _ in trovate_con_punti])
         for (_, j), suoi in zip(trovate_con_punti, punti_trovati, strict=True):
             for nome, quali in PARTI:
                 confronta_i_punti(suoi, annotazioni[j], larga, alta, sui_trovati[nome], quali,
@@ -348,15 +403,57 @@ def prova(casa: Path, cartella: Path, quante: int) -> dict:
         "contorni": {str(s): {"quanti": len(v), "media": round(sum(v) / len(v), 4) if v else 0.0,
                               "sotto_0_5": sum(1 for x in v if x < 0.5)}
                      for s, v in contorni.items()},
-        "punti_sui_riquadri_veri": {nome: {str(s): _voti(**c) for s, c in tabella.items()}
-                                    for nome, tabella in sui_veri.items()},
-        "punti_sui_riquadri_veri_bgr": {nome: {str(s): _voti(**c) for s, c in tabella.items()}
-                                        for nome, tabella in sui_veri_bgr.items()},
-        "punti_sui_riquadri_di_sam3": {nome: {str(s): _voti(**c) for s, c in tabella.items()}
-                                       for nome, tabella in sui_trovati.items()},
-        "al_posto_giusto": {nome: round(v["al_posto_giusto"] / v["segnati"], 4) if v["segnati"] else 0.0
-                            for nome, v in segnati.items()},
+        "punti_sui_riquadri_veri": _tabelle_dei_punti(sui_veri),
+        "punti_sui_riquadri_veri_bgr": _tabelle_dei_punti(sui_veri_bgr),
+        "punti_sui_riquadri_di_sam3": _tabelle_dei_punti(sui_trovati),
+        "al_posto_giusto": _al_posto_giusto(segnati),
+        "sicurezze_grezze": _sicurezze_in_breve(dei_punti),
         "per_foto": per_foto,
+    }
+
+
+def _al_posto_giusto(segnati: dict) -> dict:
+    return {nome: round(v["al_posto_giusto"] / v["segnati"], 4) if v["segnati"] else 0.0
+            for nome, v in segnati.items()}
+
+
+def _sicurezze_in_breve(sicurezze: dict) -> dict:
+    return {nome: {gruppo: _quantili(valori) for gruppo, valori in gruppi.items()}
+            for nome, gruppi in sicurezze.items()}
+
+
+def prova_dei_punti(casa: Path, cartella: Path, quante: int) -> dict:
+    from PIL import Image
+
+    from officina.corpi import rilevatore
+    from officina.corpi.rtmw import Pose
+
+    dati = _annotazioni(cartella)
+    scelte = scegli_le_foto(dati, quante)
+    pose = Pose(casa / rilevatore.FILE_POSE)
+    pose.accendi()
+    sui_veri = {"corpo": _conti_vuoti(), "viso": _conti_vuoti()}
+    sui_veri_bgr = {"corpo": _conti_vuoti(), "viso": _conti_vuoti()}
+    sicurezze = _sicurezze_vuote()
+    segnati = {nome: {"segnati": 0, "al_posto_giusto": 0} for nome in ("veri", "veri_bgr")}
+    tempi: list[float] = []
+    persone = 0
+    for numero, (foto, annotazioni) in enumerate(scelte, start=1):
+        percorso = _scarica(FOTO + foto["file_name"], cartella / "foto" / foto["file_name"])
+        immagine = Image.open(percorso).convert("RGB")
+        persone += _punti_sui_veri(pose, immagine, annotazioni, sui_veri, sui_veri_bgr, segnati,
+                                   sicurezze, tempi)
+        if numero % 25 == 0 or numero == len(scelte):
+            print(f"[{numero}/{len(scelte)}] persone coi punti: {persone}", flush=True)
+    pose.spegni()
+    return {
+        "foto": len(scelte),
+        "persone_coi_punti": persone,
+        "secondi_rtmw_per_persona": round(sum(tempi) / max(1, len(tempi)), 3),
+        "punti_sui_riquadri_veri": _tabelle_dei_punti(sui_veri),
+        "punti_sui_riquadri_veri_bgr": _tabelle_dei_punti(sui_veri_bgr),
+        "al_posto_giusto": _al_posto_giusto(segnati),
+        "sicurezze_grezze": _sicurezze_in_breve(sicurezze),
     }
 
 
@@ -364,22 +461,25 @@ def riassunto(esito: dict) -> dict:
     from officina.corpi import rilevatore, sam3
 
     prova_ = esito["prova"]
-    persone = prova_["persone"]
-    contorni = prova_["contorni"]
-    punti = prova_["punti_sui_riquadri_di_sam3"]
-    return {
-        "persona": {"adesso": rilevatore.SICUREZZA_MINIMA, "migliore": float(_la_migliore(persone)),
-                    "voti_adesso": persone[str(rilevatore.SICUREZZA_MINIMA)]},
-        "contorno": {"adesso": sam3.SOGLIA_MASCHERA,
-                     "migliore": float(max(contorni, key=lambda s: contorni[s]["media"])),
-                     "media_adesso": contorni[str(sam3.SOGLIA_MASCHERA)]["media"]},
+    fuori: dict = {}
+    if "persone" in prova_:
+        persone = prova_["persone"]
+        contorni = prova_["contorni"]
+        fuori["persona"] = {"adesso": rilevatore.SICUREZZA_MINIMA, "migliore": float(_la_migliore(persone)),
+                            "voti_adesso": persone[str(rilevatore.SICUREZZA_MINIMA)]}
+        fuori["contorno"] = {"adesso": sam3.SOGLIA_MASCHERA,
+                             "migliore": float(max(contorni, key=lambda s: contorni[s]["media"])),
+                             "media_adesso": contorni[str(sam3.SOGLIA_MASCHERA)]["media"]}
+    punti = prova_.get("punti_sui_riquadri_di_sam3") or prova_["punti_sui_riquadri_veri"]
+    fuori.update({
         "punto": {"adesso": rilevatore.PUNTO_VISTO,
                   "migliore_corpo": float(_la_migliore(punti["corpo"])),
                   "migliore_viso": float(_la_migliore(punti["viso"])),
                   "voti_adesso_corpo": punti["corpo"][str(rilevatore.PUNTO_VISTO)],
                   "voti_adesso_viso": punti["viso"][str(rilevatore.PUNTO_VISTO)]},
         "colori": {"rgb": prova_["al_posto_giusto"]["veri"], "bgr": prova_["al_posto_giusto"]["veri_bgr"]},
-    }
+    })
+    return fuori
 
 
 def controlla(esito: dict) -> list[str]:
@@ -387,16 +487,17 @@ def controlla(esito: dict) -> list[str]:
 
     guai = []
     prova_ = esito["prova"]
-    adesso = prova_["persone"][str(rilevatore.SICUREZZA_MINIMA)]
-    if not adesso["giusti"]:
-        guai.append("SAM 3 non ha trovato nessuna persona giusta")
-    elif adesso["richiamo"] < 0.6:
-        guai.append(f"SAM 3 trova troppo poche persone: {adesso['richiamo']}")
+    if "persone" in prova_:
+        adesso = prova_["persone"][str(rilevatore.SICUREZZA_MINIMA)]
+        if not adesso["giusti"]:
+            guai.append("SAM 3 non ha trovato nessuna persona giusta")
+        elif adesso["richiamo"] < 0.6:
+            guai.append(f"SAM 3 trova troppo poche persone: {adesso['richiamo']}")
     if prova_["al_posto_giusto"]["veri"] < 0.7:
         guai.append(f"RTMW mette troppo pochi punti al posto giusto: {prova_['al_posto_giusto']['veri']}")
     if prova_["al_posto_giusto"]["veri_bgr"] > prova_["al_posto_giusto"]["veri"] + 0.02:
         guai.append("RTMW va meglio coi colori al contrario: la preparazione è sbagliata")
-    if not all(f["uguale_a_hugging_face"] for f in esito["sam3"]["file"].values()):
+    if "sam3" in esito and not all(f["uguale_a_hugging_face"] for f in esito["sam3"]["file"].values()):
         guai.append("un file di SAM 3 non è uguale a quello di Hugging Face")
     return guai
 
@@ -406,23 +507,26 @@ def main() -> int:
     parser.add_argument("--cartella", type=Path, required=True)
     parser.add_argument("--quante", type=int, default=60)
     parser.add_argument("--uscita", type=Path, required=True)
+    parser.add_argument("--parte", choices=("tutto", "punti"), default="tutto")
     argomenti = parser.parse_args()
     sys.path.insert(0, str(RADICE))
     from officina.descrittori import torcia
 
     torcia.con_la_rete_accesa()
     chiave = os.environ.get("HF_TOKEN") or None
-    if not chiave:
+    if not chiave and argomenti.parte == "tutto":
         raise SystemExit("manca HF_TOKEN nei segreti del deposito")
     cartella = argomenti.cartella
     casa = cartella / "modelli" / "corpi"
     casa.mkdir(parents=True, exist_ok=True)
     esito: dict = {}
-    esito["sam3"] = _sam3(casa, chiave)
+    if argomenti.parte == "tutto":
+        esito["sam3"] = _sam3(casa, chiave)
     esito["rtmw"] = _rtmw(casa, cartella, chiave)
-    print(json.dumps({"sam3": esito["sam3"], "rtmw": {k: v for k, v in esito["rtmw"].items()
-                                                       if k != "testi_nello_zip"}}, indent=1), flush=True)
-    esito["prova"] = prova(casa, cartella, argomenti.quante)
+    print(json.dumps({"sam3": esito.get("sam3"), "rtmw": {k: v for k, v in esito["rtmw"].items()
+                                                           if k != "testi_nello_zip"}}, indent=1), flush=True)
+    esito["prova"] = (prova(casa, cartella, argomenti.quante) if argomenti.parte == "tutto"
+                      else prova_dei_punti(casa, cartella, argomenti.quante))
     esito["riassunto"] = riassunto(esito)
     esito["guai"] = controlla(esito)
     argomenti.uscita.write_text(json.dumps(esito, ensure_ascii=False, indent=1), encoding="utf-8")

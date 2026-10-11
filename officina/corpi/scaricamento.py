@@ -61,8 +61,8 @@ POSE = Indirizzo(
 POSE_RISERVA = Riserva(
     "SceneWorks/dwpose-onnx",
     "rtmw-dw-x-l_simcc-cocktail14_270e-384x288_20231122.onnx")
-POSE_SHA256 = ""
-POSE_BYTE = 230_000_000
+POSE_SHA256 = "bd033156e5104c4f5d2edfe0453e02661e30a2f3da453ec93c8764d561b83054"
+POSE_BYTE = 229_320_930
 LICENZA_POSE = "Apache 2.0 (OpenMMLab) — libera"
 LICENZA_KPR = "Hippocratic 3.0 (KPR) e Apache 2.0 (SOLIDER) — uso personale consentito"
 

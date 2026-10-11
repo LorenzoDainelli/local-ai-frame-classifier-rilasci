@@ -295,6 +295,20 @@ def test_un_file_diverso_da_quello_provato_non_si_tiene(tmp_path):
     assert list(vicino.iterdir()) == []
 
 
+def test_rtmw_diverso_da_quello_collaudato_si_butta(tmp_path, monkeypatch):
+    from officina.corpi import scaricamento
+
+    assert len(scaricamento.POSE_SHA256) == 64
+    finto = tmp_path / "arrivato.preso"
+    finto.write_bytes(b"onnx finto")
+    monkeypatch.setattr(scaricamento, "_da_indirizzo", lambda *_: finto)
+    dove = tmp_path / "corpi" / "rtmw.onnx"
+    dove.parent.mkdir()
+    with pytest.raises(scaricamento.ScaricamentoFallito, match="non è identico"):
+        scaricamento._scarica_la_pose(dove, None, None, None)
+    assert not finto.exists() and not dove.exists()
+
+
 def test_la_foto_aperta_ha_il_tasto_dei_corpi(archivio_pieno):
     from fastapi.testclient import TestClient
 

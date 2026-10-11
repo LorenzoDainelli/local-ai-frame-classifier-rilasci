@@ -15,17 +15,22 @@ on:
       quante:
         description: "foto pubbliche COCO da provare"
         default: "40"
+      parte:
+        description: "tutto (SAM 3 e RTMW) oppure solo i punti di RTMW, più veloce"
+        type: choice
+        options: [tutto, punti]
+        default: tutto
 
 permissions:
   contents: read
 
 concurrency:
-  group: corpi-${{ github.ref }}
+  group: corpi-${{ github.ref }}-${{ github.event.inputs.parte || 'tutto' }}
   cancel-in-progress: true
 
 jobs:
   collaudo:
-    name: SAM 3 e RTMW su foto COCO
+    name: SAM 3 e RTMW su foto COCO (${{ github.event.inputs.parte || 'tutto' }})
     runs-on: ubuntu-latest
     timeout-minutes: 300
     env:
@@ -45,7 +50,8 @@ jobs:
       - name: Il collaudo
         run: |
           python strumenti/collaudo_corpi.py --cartella "$RUNNER_TEMP/corpi" \
-            --quante "${{ github.event.inputs.quante || '40' }}" --uscita corpi-collaudo.json
+            --quante "${{ github.event.inputs.quante || '40' }}" \
+            --parte "${{ github.event.inputs.parte || 'tutto' }}" --uscita corpi-collaudo.json
       - name: Cosa ha detto
         if: always()
         uses: actions/upload-artifact@v4
