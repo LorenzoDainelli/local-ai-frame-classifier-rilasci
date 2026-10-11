@@ -443,10 +443,25 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                 registro.errore("schermo.porta_non_riaperta", **registro.dove_si_e_rotto(guasto))
         self.fase_apertura = 3
         self._parti_le_copie_in_sottofondo()
+        threading.Thread(target=self._prepara_i_conti, name="preparazione", daemon=True).start()
         registro.evento("programma.acceso", in_rete=in_rete,
                         archivio_ms=round(aperto_in * 1000),
                         tutto_ms=round((time.monotonic() - partenza) * 1000))
         return self.servitore.indirizzo
+
+    def _prepara_i_conti(self) -> None:
+        from officina.web.strade import comune
+
+        partenza = time.monotonic()
+        try:
+            comune.prepara_i_conti()
+        except ErroreOfficina:
+            return
+        except Exception as guasto:
+            registro.errore("programma.conti_non_preparati", **registro.dove_si_e_rotto(guasto))
+            return
+        registro.evento("programma.conti_pronti",
+                        ms=round((time.monotonic() - partenza) * 1000))
 
     def _parti_le_copie_in_sottofondo(self) -> None:
         if getattr(self, "_copie", None) is not None:

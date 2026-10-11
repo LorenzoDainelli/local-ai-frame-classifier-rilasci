@@ -18,7 +18,7 @@ def _dati_della_pagella() -> dict:
     archivio = accesso.aperto()
     with archivio.lettura() as connessione:
         senza = etichette.quanti_senza_etichetta(connessione)
-        conto = comune.pagella_pronta.per(connessione, senza_etichetta=senza)
+        conto = comune.pagella_pronta.per_subito(connessione, senza_etichetta=senza)
     return {"pagella": conto.a_dizionario()}
 
 

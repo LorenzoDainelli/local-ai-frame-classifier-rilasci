@@ -223,3 +223,44 @@ def test_impronte_nuove_fanno_riaddestrare_tutto(archivio_misurabile, monkeypatc
                         lambda c, esempi, d, v: rifatti.append(esempi.nodo_id) or vero(c, esempi, d, v))
     bottega.riaddestra(connessione)
     assert len(rifatti) == len(bottega.esempi_di)
+
+
+def test_mentre_si_riaddestra_chi_chiede_vede_i_modelli_di_prima(archivio_misurabile, monkeypatch):
+    connessione = archivio_misurabile.connessione
+    bottega = proposte.Bottega()
+    bottega.riaddestra(connessione)
+    prima = dict(bottega.modelli)
+    connessione.execute("UPDATE impronte SET calcolata_il = '2099-01-01T00:00:00' "
+                        "WHERE id = (SELECT max(id) FROM impronte WHERE inquadratura = 'intera')")
+    connessione.commit()
+    visti = []
+    vero = proposte._addestra_uno
+
+    def addestra_e_guarda(c, esempi, d, v):
+        visti.append(dict(bottega.modelli))
+        return vero(c, esempi, d, v)
+
+    monkeypatch.setattr(proposte, "_addestra_uno", addestra_e_guarda)
+    bottega.riaddestra(connessione)
+    assert visti and all(visto == prima for visto in visti)
+
+
+def test_due_richieste_insieme_addestrano_una_volta_sola(archivio_misurabile, monkeypatch):
+    import threading
+
+    bottega = proposte.Bottega()
+    fatte = []
+    vero = proposte._addestra_uno
+    monkeypatch.setattr(proposte, "_addestra_uno",
+                        lambda c, esempi, d, v: fatte.append(esempi.nodo_id) or vero(c, esempi, d, v))
+
+    def chiedi():
+        with archivio_misurabile.lettura() as connessione:
+            bottega.assicura(connessione)
+
+    fili = [threading.Thread(target=chiedi) for _ in range(3)]
+    for filo in fili:
+        filo.start()
+    for filo in fili:
+        filo.join(30)
+    assert len(fatte) == len(bottega.esempi_di)

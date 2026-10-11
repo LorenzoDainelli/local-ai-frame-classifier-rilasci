@@ -38,6 +38,18 @@ gia_ripreso = False
 bottega = proposte.Bottega()
 
 pagella_pronta = rendiconto.Sempre()
+
+
+def prepara_i_conti() -> None:
+    from officina.archivio import accesso
+    from officina.modello import etichette
+
+    with accesso.aperto().lettura() as connessione:
+        pagella_pronta.per(connessione,
+                           senza_etichetta=etichette.quanti_senza_etichetta(connessione))
+        bottega.assicura(connessione)
+
+
 lavoro_doppioni = lavori.Lavoro("i doppioni")
 passata_doppioni = None
 programma_di_qui = None

@@ -87,3 +87,56 @@ def test_mentre_si_etichetta_aspetta_una_pausa(archivio, monkeypatch):
     with archivio.lettura() as connessione:
         assert sempre.per_subito(connessione).motivo_vuota == "2"
         assert sempre.firma == sempre._conta(connessione)
+
+
+def test_due_pagine_insieme_fanno_il_conto_una_volta_sola(archivio, monkeypatch):
+    via = threading.Event()
+    fatte = []
+
+    def calcola(connessione, descrittore=None, senza_etichetta=0):
+        via.wait(5)
+        fatte.append(1)
+        return rendiconto.Pagella(descrittore="finto", senza_etichetta=senza_etichetta)
+
+    monkeypatch.setattr(rendiconto, "calcola", calcola)
+    sempre = rendiconto.Sempre()
+
+    def chiedi():
+        with archivio.lettura() as connessione:
+            sempre.per(connessione)
+
+    fili = [threading.Thread(target=chiedi) for _ in range(3)]
+    for filo in fili:
+        filo.start()
+    time.sleep(0.2)
+    via.set()
+    for filo in fili:
+        filo.join(10)
+    assert fatte == [1]
+
+
+def test_lo_stato_mostra_quella_di_prima_mentre_rifà(archivio, monkeypatch):
+    via = threading.Event()
+    fatte = _finta(monkeypatch, via)
+    sempre = rendiconto.Sempre()
+    with archivio.lettura() as connessione:
+        assert sempre.per_subito(connessione, senza_etichetta=3).senza_etichetta == 3
+    _un_nodo(archivio, "nuovo")
+    with archivio.lettura() as connessione:
+        tenuta = sempre.per_subito(connessione, senza_etichetta=4)
+    assert tenuta.motivo_vuota == "1"
+    assert tenuta.senza_etichetta == 4
+    via.set()
+    sempre.aspetta()
+    assert len(fatte) == 2
+
+
+def test_all_avvio_si_preparano_pagella_e_proposte(archivio_misurabile, monkeypatch):
+    from officina.apprendimento import proposte
+    from officina.web.strade import comune
+
+    monkeypatch.setattr(comune, "pagella_pronta", rendiconto.Sempre())
+    monkeypatch.setattr(comune, "bottega", proposte.Bottega())
+    comune.prepara_i_conti()
+    assert comune.pagella_pronta.pagella is not None
+    assert comune.bottega.pronta and comune.bottega.modelli

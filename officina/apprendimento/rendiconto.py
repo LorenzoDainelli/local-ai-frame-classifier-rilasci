@@ -340,6 +340,7 @@ class Sempre:
         self.dove: str | None = None
         self._tenuta = memoria.Ricordo("la firma della pagella")
         self._lucchetto = threading.Lock()
+        self._calcolo = threading.Lock()
         self._in_corso = False
 
     def _firma(self, connessione: sqlite3.Connection) -> tuple:
@@ -361,28 +362,38 @@ class Sempre:
             nodi_riga["forma"] if nodi_riga else 0,
         )
 
+    def _da_rifare(self, firma: tuple, dove: str) -> bool:
+        return self.pagella is None or firma != self.firma or dove != self.dove
+
     def per(self, connessione: sqlite3.Connection,
             senza_etichetta: int = 0) -> Pagella:
         firma = self._firma(connessione)
         dove = _dove(connessione)
-        if self.pagella is None or firma != self.firma or dove != self.dove:
-            nuova = calcola(connessione, senza_etichetta=senza_etichetta)
-            with self._lucchetto:
-                self.pagella, self.firma, self.dove = nuova, firma, dove
-        elif senza_etichetta and self.pagella.senza_etichetta != senza_etichetta:
-            self.pagella.senza_etichetta = senza_etichetta
-            self.pagella.coda = _coda(connessione, self.pagella)
-        return self.pagella
+        if self._da_rifare(firma, dove):
+            with self._calcolo:
+                if self._da_rifare(firma, dove):
+                    nuova = calcola(connessione, senza_etichetta=senza_etichetta)
+                    with self._lucchetto:
+                        self.pagella, self.firma, self.dove = nuova, firma, dove
+        return self._con_quelle_senza(connessione, self.pagella, senza_etichetta)
 
-    def per_subito(self, connessione: sqlite3.Connection) -> Pagella:
+    def per_subito(self, connessione: sqlite3.Connection,
+                   senza_etichetta: int = 0) -> Pagella:
         firma = self._firma(connessione)
         dove = _dove(connessione)
         tenuta = self.pagella
         if tenuta is None or not dove or dove != self.dove:
-            return self.per(connessione)
+            return self.per(connessione, senza_etichetta=senza_etichetta)
         if firma != self.firma:
             self._rifai_in_disparte(dove)
-        return tenuta
+        return self._con_quelle_senza(connessione, tenuta, senza_etichetta)
+
+    def _con_quelle_senza(self, connessione: sqlite3.Connection, pagella: Pagella,
+                          senza_etichetta: int) -> Pagella:
+        if senza_etichetta and pagella.senza_etichetta != senza_etichetta:
+            pagella.senza_etichetta = senza_etichetta
+            pagella.coda = _coda(connessione, pagella)
+        return pagella
 
     def _rifai_in_disparte(self, dove: str) -> None:
         with self._lucchetto:
@@ -402,7 +413,8 @@ class Sempre:
                             break
                         firma = adesso
                     senza = self.pagella.senza_etichetta if self.pagella else 0
-                    nuova = calcola(connessione, senza_etichetta=senza)
+                    with self._calcolo:
+                        nuova = calcola(connessione, senza_etichetta=senza)
                 finally:
                     connessione.close()
                 with self._lucchetto:

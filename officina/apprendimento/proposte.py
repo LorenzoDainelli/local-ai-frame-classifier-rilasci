@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import sqlite3
+import threading
 from dataclasses import dataclass, field
 
 from officina.archivio import memoria
@@ -79,6 +80,7 @@ class Bottega:
         self.pronta = False
         self.impronte: tuple | None = None
         self._tenuta = memoria.Ricordo("la firma delle etichette")
+        self._lucchetto = threading.Lock()
 
 
     def _firma(self, connessione: sqlite3.Connection) -> tuple[int, str | None]:
@@ -101,10 +103,17 @@ class Bottega:
 
     def assicura(self, connessione: sqlite3.Connection) -> None:
         if self.scaduta(connessione):
-            self.riaddestra(connessione)
+            with self._lucchetto:
+                if self.scaduta(connessione):
+                    self._riaddestra(connessione)
 
 
     def riaddestra(self, connessione: sqlite3.Connection) -> dict:
+        with self._lucchetto:
+            return self._riaddestra(connessione)
+
+    def _riaddestra(self, connessione: sqlite3.Connection) -> dict:
+        firma = self._firma(connessione)
         descrittore, versione = scegli_descrittore(connessione, self.descrittore)
         impronte = _firma_delle_impronte(connessione, descrittore, versione) if descrittore else None
         if (self.pronta and (descrittore, versione, impronte)
@@ -112,49 +121,48 @@ class Bottega:
             prima_modelli, prima_esempi = self.modelli, self.esempi_di
         else:
             prima_modelli, prima_esempi = {}, {}
-        self.descrittore, self.versione, self.impronte = descrittore, versione, impronte
-        self.il_luogo_aiuta = bool(leggi_impostazione(
-            connessione, "luogo_aiuta", True))
-        self.modelli = {}
-        self.esempi_di = {}
-        self.luoghi_di = {}
+        il_luogo_aiuta = bool(leggi_impostazione(connessione, "luogo_aiuta", True))
+        modelli: dict[int, classificatore.Modello] = {}
+        esempi_di: dict[int, esempi_mod.Esempi] = {}
+        luoghi_di: dict[int, dict[int, tuple[int, int]]] = {}
         saltati = 0
 
-        if self.descrittore:
+        if descrittore:
             for nodo_id, gli_esempi in esempi_mod.nodi_con_esempi(
                     connessione, minimo=MINIMO_ESEMPI):
-                self.esempi_di[nodo_id] = gli_esempi
-                self.luoghi_di[nodo_id] = _dove_stanno(connessione, gli_esempi)
+                esempi_di[nodo_id] = gli_esempi
+                luoghi_di[nodo_id] = _dove_stanno(connessione, gli_esempi)
                 if prima_esempi.get(nodo_id) == gli_esempi:
                     modello = prima_modelli.get(nodo_id)
                 else:
-                    modello = _addestra_uno(connessione, gli_esempi,
-                                            self.descrittore, self.versione)
+                    modello = _addestra_uno(connessione, gli_esempi, descrittore, versione)
                 if modello is None:
                     saltati += 1
                 else:
-                    self.modelli[nodo_id] = modello
+                    modelli[nodo_id] = modello
 
-        self.quante, self.quando = self._firma(connessione)
+        self.descrittore, self.versione, self.impronte = descrittore, versione, impronte
+        self.il_luogo_aiuta = il_luogo_aiuta
+        self.esempi_di, self.luoghi_di, self.modelli = esempi_di, luoghi_di, modelli
+        self.quante, self.quando = firma
         self.pronta = True
-        return {"descrittore": self.descrittore, "nodi": len(self.modelli),
-                "saltati": saltati}
+        return {"descrittore": descrittore, "nodi": len(modelli), "saltati": saltati}
 
 
     def per_scatto(self, connessione: sqlite3.Connection, scatto_id: int,
                    quante: int = 5, escludi: set[int] | None = None
                    ) -> list[Proposta]:
         self.assicura(connessione)
-        if not self.modelli or not self.descrittore:
+        modelli, descrittore, versione = self.modelli, self.descrittore, self.versione
+        esempi_di, luoghi_di = self.esempi_di, self.luoghi_di
+        if not modelli or not descrittore:
             return []
 
-        impronta = _impronta_di(connessione, scatto_id, self.descrittore,
-                                self.versione)
+        impronta = _impronta_di(connessione, scatto_id, descrittore, versione)
         if impronta is None:
             return []
 
-        caselle = _caselle_di(connessione, scatto_id, self.descrittore,
-                              self.versione)
+        caselle = _caselle_di(connessione, scatto_id, descrittore, versione)
         come = str(leggi_impostazione(connessione, "griglia_come_si_somma",
                                       griglia.MASSIMO))
 
@@ -162,7 +170,7 @@ class Bottega:
 
         gia = escludi or set()
         fuori: list[Proposta] = []
-        for nodo_id, modello in self.modelli.items():
+        for nodo_id, modello in modelli.items():
             if nodo_id in gia:
                 continue
             riga = nodi.per_id(connessione, nodo_id)
@@ -172,7 +180,7 @@ class Bottega:
             if caselle:
                 punteggio = griglia.combina(
                     [punteggio] + [modello.punteggio_di(c) for c in caselle], come)
-            gli_esempi = self.esempi_di.get(nodo_id)
+            gli_esempi = esempi_di.get(nodo_id)
             proposta = Proposta(
                 nodo_id=nodo_id,
                 nome=riga["nome"],
@@ -183,7 +191,7 @@ class Bottega:
             )
             if self.il_luogo_aiuta and luogo_id is not None and gli_esempi:
                 _aggiungi_il_luogo(proposta, gli_esempi,
-                                   self.luoghi_di.get(nodo_id, {}), luogo_id,
+                                   luoghi_di.get(nodo_id, {}), luogo_id,
                                    nome_del_luogo)
             fuori.append(proposta)
 
