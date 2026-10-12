@@ -54,6 +54,7 @@ FOGLI_DELLE_SCHERMATE = (
     "sistemare",
     "senza_data",
     "intelligenza",
+    "in3d",
 )
 pagine.env.globals["fogli_delle_schermate"] = FOGLI_DELLE_SCHERMATE
 pagine.env.globals["istruzioni_motori"] = istruzioni.motori_in_una_riga

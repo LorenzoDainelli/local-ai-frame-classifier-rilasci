@@ -104,7 +104,7 @@ def prepara(immagini, intrinseci=None, lato: int = LATO):
         alto_minimo = min(a for a, _ in misure)
         largo_minimo = min(b for _, b in misure)
         tagliati = []
-        for numero, (tensore, (alto, largo)) in enumerate(zip(tensori, misure)):
+        for numero, (tensore, (alto, largo)) in enumerate(zip(tensori, misure, strict=True)):
             tagliati.append(TF.center_crop(tensore, [alto_minimo, largo_minimo]))
             if matrici[numero] is not None:
                 matrici[numero] = matrici[numero].copy()

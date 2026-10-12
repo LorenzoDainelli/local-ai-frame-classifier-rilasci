@@ -19,6 +19,7 @@ from officina.descrittori.scaricamento import (ScaricamentoFallito, Sorvegliante
                                                _che_genere, _dettaglio_tecnico,
                                                _perche_e_andata_male, quanto_pesa)
 from officina.errori import ErroreOfficina
+from officina.stanza import costruzione, da3, vggt
 
 SCHEDA_SUL_DISCO = "scheda.json"
 
@@ -90,8 +91,10 @@ class DaHuggingFace:
     dove: str
     sha256: str
     byte: int
+    serve: str = "che serve per la figura in 3D delle persone"
 
 
+PER_LA_STANZA = "che serve per la stanza in 3D dei luoghi"
 REPO_CORPO3D = "facebook/sam-3d-body-dinov3"
 PAGINA_CORPO3D = f"https://huggingface.co/{REPO_CORPO3D}"
 REVISIONE_CORPO3D = "11aaa346c7204874a1cbafe3d39a979080b2c55a"
@@ -111,7 +114,12 @@ FIGURE = (
 ) + tuple(
     DaHuggingFace("Puffin", obiettivo.REPO_LINGUA, obiettivo.REVISIONE_LINGUA, nome,
                   f"{obiettivo.NOME}/{obiettivo.CARTELLA_LINGUA}/{nome}", impronta, 0)
-    for nome, impronta in obiettivo.SHA256_LINGUA.items())
+    for nome, impronta in obiettivo.SHA256_LINGUA.items()) + (
+    DaHuggingFace("VGGT-Omega", vggt.REPO, vggt.REVISIONE, vggt.FILE_PESI,
+                  f"{costruzione.NOME}/{costruzione.FILE_VGGT}", vggt.SHA256, vggt.BYTE, PER_LA_STANZA),
+    DaHuggingFace("Depth Anything 3", da3.REPO, da3.REVISIONE, da3.FILE_PESI,
+                  f"{costruzione.NOME}/{costruzione.FILE_DA3}", da3.SHA256, da3.BYTE, PER_LA_STANZA),
+)
 BYTE_FIGURE = sum(f.byte for f in FIGURE) + 20_000_000
 BYTE_IN_TUTTO = SAM3.byte_attesi + POSE_BYTE + BYTE_KPR + BYTE_FIGURE
 
@@ -126,7 +134,8 @@ class Rapporto:
 
 def gia_in_casa(cartella_modelli: Path) -> bool:
     return (rilevatore_mod.ci_sono_i_modelli(cartella_modelli)
-            and corpo3d.ci_sono(cartella_modelli) and obiettivo.ci_sono(cartella_modelli))
+            and corpo3d.ci_sono(cartella_modelli) and obiettivo.ci_sono(cartella_modelli)
+            and costruzione.ci_sono(cartella_modelli))
 
 
 def scarica(cartella_modelli: Path, al_passo: Callable[[str], None] | None = None,
@@ -323,8 +332,8 @@ def _scarica_le_figure(casa: Path, chiave: str | None, rifai: bool,
             registro.errore("corpi.figure_non_scaricate",
                             ragione=registro.Parola(_che_genere(errore)))
             raise ScaricamentoFallito(
-                f"Non sono riuscito a scaricare {pezzo.titolo}, che serve per la figura in 3D "
-                "delle persone.\n" + _perche_figure(errore, pezzo, chiave)
+                f"Non sono riuscito a scaricare {pezzo.titolo}, {pezzo.serve}.\n"
+                + _perche_figure(errore, pezzo, chiave)
                 + "\n  Il resto del programma funziona lo stesso.") from errore
         finally:
             shutil.rmtree(arrivo, ignore_errors=True)
@@ -344,6 +353,11 @@ def _perche_figure(errore: Exception, pezzo: DaHuggingFace, chiave: str | None) 
                 f"      {PAGINA_CORPO3D}\n"
                 "  compila il modulo per accettare la licenza, aspetta la conferma di "
                 "Meta e poi riprova.")
+    if _che_genere(errore) == "permesso" and pezzo.repo == vggt.REPO:
+        return ("  Hugging Face dice che questa chiave non ha ancora il permesso per "
+                "VGGT-Omega. Apri la sua pagina,\n"
+                f"      {vggt.PAGINA}\n"
+                "  accetta la licenza e poi riprova.")
     return _dettaglio_tecnico(errore, chiave)
 
 
@@ -432,8 +446,9 @@ def _annota(casa: Path) -> None:
 
     (casa / SCHEDA_SUL_DISCO).write_text(json.dumps({
         "che_cosa": "i modelli del corpo: SAM 3 separa le persone, RTMW trova i punti, "
-                    "KPR riconosce corporatura e vestiti, SAM 3D Body fa la figura in 3D "
-                    "e Puffin capisce l'obiettivo della foto",
+                    "KPR riconosce corporatura e vestiti, SAM 3D Body fa la figura in 3D, "
+                    "Puffin capisce l'obiettivo della foto, VGGT-Omega trova da dove è stata "
+                    "fatta ogni foto e Depth Anything 3 dà la forma e i metri della stanza",
         "versione": rilevatore_mod.VERSIONE,
         "da_dove": {
             rilevatore_mod.CARTELLA_SAM3: {"repo": SAM3.identificatore,
@@ -446,6 +461,10 @@ def _annota(casa: Path) -> None:
             obiettivo.NOME: {"repo": obiettivo.REPO_PUFFIN, "revisione": obiettivo.REVISIONE_PUFFIN,
                              "lingua": f"{obiettivo.REPO_LINGUA}@{obiettivo.REVISIONE_LINGUA}",
                              "licenza": obiettivo.LICENZA},
+            costruzione.NOME: {"vggt_omega": {"repo": vggt.REPO, "revisione": vggt.REVISIONE,
+                                              "licenza": vggt.LICENZA},
+                               "depth_anything_3": {"repo": da3.REPO, "revisione": da3.REVISIONE,
+                                                    "licenza": da3.LICENZA}},
             "kpr": {"cartella": kpr_pesi.PAGINA_DRIVE, "codice": kpr_pesi.RIPOSTIGLIO,
                     "licenza": kpr_pesi.LICENZA,
                     "file": {p.versione: {"nome": p.file, "sha256": p.sha256}
@@ -483,7 +502,7 @@ def verifica(cartella_modelli: Path) -> dict:
     return {"stato": "intatto",
             "dettaglio": f"corpi: intatti ({quanti} file controllati) — "
                          f"{SAM3.licenza}, {LICENZA_POSE}, {LICENZA_KPR}, "
-                         f"{LICENZA_CORPO3D}, {obiettivo.LICENZA}"}
+                         f"{LICENZA_CORPO3D}, {obiettivo.LICENZA}, {vggt.LICENZA}, {da3.LICENZA}"}
 
 
 def togli(cartella_modelli: Path) -> bool:

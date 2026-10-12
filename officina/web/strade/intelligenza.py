@@ -142,7 +142,63 @@ def _guarda_i_corpi(passata) -> None:
     if not passata.fermata:
         _fai_le_figure(passata)
     if not passata.fermata:
+        _fai_le_superfici(passata)
+    if not passata.fermata:
         cerca_chi_e(passata.archivio, comune.lavoro_corpi, fermato=lambda: passata.fermata)
+    if not passata.fermata:
+        _fai_le_stanze(passata)
+
+
+def _fai_le_superfici(passata_corpi) -> None:
+    from officina.corpi import superfici
+    from officina.parole.motore import Avanzamento as Misuratore
+
+    if superfici.cosa_manca(passata_corpi.archivio.dove.modelli):
+        return
+    passata = superfici.Passata(passata_corpi.archivio, fermato=lambda: passata_corpi.fermata)
+    partito = time.monotonic()
+
+    def al_passo(avanzamento) -> None:
+        misura = Misuratore(totale=avanzamento.totale)
+        misura.letti = avanzamento.fatti
+        if avanzamento.fatti >= 3:
+            misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / avanzamento.fatti
+        comune.lavoro_corpi.numeri = {
+            "fatti": avanzamento.fatti,
+            "totale": avanzamento.totale,
+            "corpi": avanzamento.superfici,
+            "quanto_manca": misura.quanto_manca(),
+        }
+
+    if passata.esegui(al_passo=al_passo).totale:
+        comune.lavoro_corpi.di(passata.avanzamento.a_parole())
+
+
+def _fai_le_stanze(passata_corpi) -> None:
+    from officina.parole.motore import Avanzamento as Misuratore
+    from officina.stanza import costruzione
+
+    manca = costruzione.cosa_manca(passata_corpi.archivio.dove.modelli)
+    if manca:
+        comune.lavoro_corpi.di(manca.split("\n")[0])
+        return
+    passata = costruzione.Passata(passata_corpi.archivio, fermato=lambda: passata_corpi.fermata)
+    partito = time.monotonic()
+
+    def al_passo(avanzamento) -> None:
+        misura = Misuratore(totale=avanzamento.totale)
+        misura.letti = avanzamento.fatti
+        if avanzamento.fatti:
+            misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / avanzamento.fatti
+        comune.lavoro_corpi.numeri = {
+            "fatti": avanzamento.fatti,
+            "totale": avanzamento.totale,
+            "corpi": avanzamento.foto_messe,
+            "quanto_manca": misura.quanto_manca(),
+        }
+
+    if passata.esegui(al_passo=al_passo).totale:
+        comune.lavoro_corpi.di(passata.avanzamento.a_parole())
 
 
 def _rifai_i_punti(passata) -> None:
@@ -296,6 +352,20 @@ def quanti_mancano_ia(archivio) -> dict:
 
             if not figure.cosa_manca(archivio.dove.modelli):
                 corpi_mancano += figure.quanti_mancano_senza_aprire(connessione)
+        except Exception:
+            pass
+        try:
+            from officina.corpi import superfici
+
+            if not superfici.cosa_manca(archivio.dove.modelli):
+                corpi_mancano += superfici.quanti_mancano_senza_aprire(connessione)
+        except Exception:
+            pass
+        try:
+            from officina.stanza import costruzione
+
+            if costruzione.ci_sono(archivio.dove.modelli):
+                corpi_mancano += len(costruzione.da_fare(connessione))
         except Exception:
             pass
         try:

@@ -60,10 +60,18 @@ class Posizione:
     def registro(self) -> Path:
         return self.radice / "registro"
 
+    @property
+    def stanze(self) -> Path:
+        return self.radice / "stanze"
+
+    @property
+    def superfici(self) -> Path:
+        return self.radice / "superfici"
+
     def prepara(self) -> None:
         for cartella in (self.radice, self.miniature, self.copie,
                          self.modelli, self.imparato, self.registro,
-                         self.ricevute):
+                         self.ricevute, self.stanze, self.superfici):
             cartella.mkdir(parents=True, exist_ok=True)
         self._porta_fuori_i_modelli_vecchi()
 

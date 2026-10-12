@@ -234,7 +234,7 @@ def test_i_modelli_delle_figure_arrivano_al_loro_posto(tmp_path, monkeypatch):
     assert (tmp_path / obiettivo.NOME / obiettivo.CARTELLA_LINGUA / "tokenizer.json").exists()
     assert ("facebook/sam-3d-body-dinov3", "assets/mhr_model.pt", scaricamento.REVISIONE_CORPO3D) in chiesti
     assert [p for p in tmp_path.rglob("arriva-*")] == []
-    assert len(passi) == 2
+    assert len(passi) == 4
     chiesti.clear()
     scaricamento._scarica_le_figure(tmp_path, None, False, None, None)
     assert chiesti == []

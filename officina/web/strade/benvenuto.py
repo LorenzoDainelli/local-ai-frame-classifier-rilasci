@@ -33,6 +33,7 @@ def benvenuto(richiesta: Request):
 @strada.get("/benvenuto/chiave", response_class=HTMLResponse)
 def benvenuto_chiave(richiesta: Request):
     from officina import modelli_in_casa
+    from officina.corpi import scaricamento as scarica_corpi
     from officina.miglioria import lucidflux_pesi
 
     return base.pagine.TemplateResponse(richiesta, "benvenuto-chiave.html", {
@@ -40,6 +41,8 @@ def benvenuto_chiave(richiesta: Request):
         "pagina_del_cancello": lucidflux_pesi.PAGINA_DEL_CANCELLO,
         "pagina_dinov3": modelli_in_casa.PAGINA_DINOV3,
         "pagina_sam3": modelli_in_casa.PAGINA_SAM3,
+        "pagina_corpo3d": scarica_corpi.PAGINA_CORPO3D,
+        "pagina_vggt": scarica_corpi.vggt.PAGINA,
     })
 
 

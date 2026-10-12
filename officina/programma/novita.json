@@ -212,6 +212,34 @@
       [
         "persona",
         "Le persone già trovate rifanno solo i loro punti, da sole nella fila dell'IA: contorni, vestiti, figure e le tue risposte restano come sono"
+      ],
+      [
+        "cubo",
+        "Nella foto aperta c'è il tasto «In 3D»: vedi le persone della foto in 3D e, se il luogo ha almeno 5 foto, anche la stanza intorno a loro"
+      ],
+      [
+        "cubo",
+        "Nella stanza ogni foto è un cono: lo clicchi e ti metti dove stava la macchina fotografica. Col cursore passi dalla foto vera alla stanza ricostruita e vedi se combaciano"
+      ],
+      [
+        "persona",
+        "Le persone in 3D hanno il loro corpo vero: davanti i colori della foto, dietro, dove la foto non arriva, l'argilla"
+      ],
+      [
+        "persona",
+        "Anche se la foto è storta, nel 3D le persone stanno dritte con i piedi a terra: il programma usa quanto era inclinata la macchina fotografica"
+      ],
+      [
+        "luoghi",
+        "La stanza si costruisce da sola nella fila dell'IA: servono almeno 5 foto con lo stesso luogo, ne usa fino a 50, le più diverse, e poi mette al loro posto anche le altre"
+      ],
+      [
+        "occhio",
+        "Prima di costruire la stanza le persone vengono coperte, così non lasciano macchie sui muri. Poi tornano come corpi in 3D"
+      ],
+      [
+        "occhio",
+        "Per la stanza si scaricano due modelli in più, VGGT-Omega e Depth Anything 3, sempre nella versione collaudata. VGGT-Omega chiede di accettare le sue condizioni su Hugging Face: la pagina della chiave ti dice dove"
       ]
     ],
     "tecnico": [
@@ -291,6 +319,26 @@
       [
         "persona",
         "Migrazione 51: colonna <code>corpi.punti_scala</code>; i corpi con scala 1 rifanno solo RTMW (<code>Passata.rifai_i_punti</code>) e poi <code>ricollega</code> i volti. KPR riceve le sicurezze di prima (<code>rtmw.per_kpr</code>), quindi gli aspetti salvati restano validi"
+      ],
+      [
+        "cubo",
+        "Stanza: VGGT-Omega trova da dove è stata fatta ogni foto, Depth Anything 3 (<code>DA3NESTED-GIANT-LARGE-1.1</code>) dà la forma e i metri. Tutti e due riscritti nel programma e confrontati con gli originali: DA3 differisce al massimo di 2·10⁻⁷ (relativo), VGGT-Omega è identico"
+      ],
+      [
+        "cubo",
+        "Migrazione 52: tabelle <code>stanze</code>, <code>stanze_foto</code> e <code>superfici</code>. La nuvola di punti sta in un file a parte per ogni luogo, a cubetti di 1,5 cm, al massimo 1 500 000 punti"
+      ],
+      [
+        "persona",
+        "Corpi veri: la mesh MHR di SAM 3D Body (18 439 vertici, 36 874 facce) rifatta dai numeri salvati della figura. Per ogni vertice si salva se la foto lo vede (profondità a 1024 px, contorno di SAM 3 allargato di 2 px) e dove cade nella foto"
+      ],
+      [
+        "cubo",
+        "Finestra «In 3D»: three.js 0.160 dentro il programma, niente da internet. La stanza arriva in <code>int16</code>, le persone in binario con le facce in comune, e la foto sulle persone alla risoluzione massima della scheda video (fino a 16 384 px)"
+      ],
+      [
+        "cubo",
+        "Senza stanza la camera di base si gira con il rollio e il beccheggio di Puffin (regola di GeoCalib: il su nella camera è <code>[−sin r·cos p, −cos r·cos p, sin p]</code>). Con una foto finta storta di 20° in giù e 12° di lato la camera torna quella vera"
       ]
     ]
   },

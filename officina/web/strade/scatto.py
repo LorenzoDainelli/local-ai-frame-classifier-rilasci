@@ -58,6 +58,19 @@ def _corpi_da_mostrare(connessione, scatto_id: int) -> list[dict]:
     return fuori
 
 
+def _c_e_in3d(connessione, scatto_id: int) -> bool:
+    import sqlite3
+
+    from officina import registro
+    from officina.stanza import in3d
+
+    try:
+        return in3d.c_e(connessione, scatto_id)
+    except sqlite3.Error as guasto:
+        registro.avviso("scatto.in3d_non_letto", **registro.dove_si_e_rotto(guasto))
+        return False
+
+
 @strada.get("/scatto/{scatto_id}", response_class=HTMLResponse)
 def uno_scatto(richiesta: Request, scatto_id: int):
     filtro = vista.filtro_da_parametri(richiesta.query_params)
@@ -118,6 +131,8 @@ def uno_scatto(richiesta: Request, scatto_id: int):
 
         corpi_visti = (_corpi_da_mostrare(connessione, scatto_id)
                        if scatto["genere"] != "video" and principale is not None else [])
+        in3d = (_c_e_in3d(connessione, scatto_id)
+                if scatto["genere"] != "video" and principale is not None else False)
 
         striscia = []
         if scatto["genere"] == "video" and principale is not None:
@@ -159,6 +174,7 @@ def uno_scatto(richiesta: Request, scatto_id: int):
         "miglioria": miglioria,
         "volti_visti": volti_visti,
         "corpi_visti": corpi_visti,
+        "in3d": in3d,
         "si_puo_migliorare": bool(
             miglioria is None and scatto["larghezza"] and scatto["altezza"]
             and not miglioria_misura.e_gia_grande(scatto["larghezza"],

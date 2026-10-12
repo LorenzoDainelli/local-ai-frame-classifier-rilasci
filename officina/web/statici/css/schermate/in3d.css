@@ -1,0 +1,61 @@
+dialog.in3d { width: calc(100vw - 28px); height: calc(100vh - 28px); height: calc(100dvh - 28px); max-width: none; max-height: none; margin: auto; padding: 0; border: 0; background: transparent; color: var(--ink); overflow: visible; }
+dialog.in3d [hidden] { display: none !important; }
+dialog.in3d::backdrop { background: var(--velo); backdrop-filter: blur(3px); }
+dialog.in3d[open] { animation: entra var(--passo) var(--uscita); }
+
+.in3d-intera { position: relative; width: 100%; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto minmax(0, 1fr); border-radius: var(--raggio-grande); background: var(--laterale); border: 0.5px solid var(--linea-forte); box-shadow: var(--ombra); overflow: hidden; }
+.in3d-testa { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 12px 10px 16px; border-bottom: 0.5px solid var(--linea); }
+.in3d-testa h2 { margin: 0 auto 0 0; min-width: 0; font: 500 15px/1.3 var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.in3d-aiuto { font-size: 12.5px; color: var(--tenue); white-space: nowrap; }
+.in3d-testa kbd { font: 500 11px/1 var(--mono); padding: 3px 5px; border-radius: 5px; border: 0.5px solid var(--linea-forte); background: var(--pozzo); color: var(--ink-2); }
+
+.in3d-tela { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--pozzo); touch-action: none; cursor: grab; user-select: none; }
+.in3d-tela.trascina { cursor: grabbing; }
+.in3d-tela > canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; z-index: 1; }
+.in3d-foto-sotto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity var(--passo) var(--uscita); pointer-events: none; z-index: 0; }
+.in3d-foto-sotto.si { opacity: 1; }
+.in3d-nomi { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.in3d-chi { position: absolute; transform: translate(-50%, calc(-100% - 6px)); padding: 2px 8px; border-radius: var(--raggio-pillola); color: var(--su-persona); font-size: 11.5px; font-weight: 600; white-space: nowrap; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); }
+.in3d-chi.fotografo { background: var(--carta-sopra); color: var(--ink); font-weight: 500; border: 0.5px solid var(--linea-forte); }
+.in3d-didascalia { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); max-width: calc(100% - 24px); padding: 5px 12px; border-radius: var(--raggio-pillola); background: var(--carta); border: 0.5px solid var(--linea-forte); font-size: 12px; color: var(--ink-2); box-shadow: var(--ombra); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 3; }
+.in3d-angolo { position: absolute; left: 12px; bottom: 12px; width: 196px; aspect-ratio: 3 / 2; max-width: 40%; padding: 0; border-radius: var(--raggio-controllo); overflow: hidden; border: 0.5px solid var(--linea-forte); box-shadow: var(--ombra); background: var(--pozzo); cursor: pointer; z-index: 3; }
+.in3d-angolo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.in3d-angolo span { position: absolute; left: 8px; bottom: 8px; padding: 2px 9px; border-radius: var(--raggio-pillola); background: var(--carta); color: var(--ink); font-size: 11px; font-weight: 500; }
+.in3d-angolo:hover span { background: var(--accento); color: var(--su-accento); }
+.in3d-cursore { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: var(--raggio-pillola); background: var(--carta); border: 0.5px solid var(--linea-forte); box-shadow: var(--ombra); font-size: 12.5px; color: var(--ink-2); white-space: nowrap; cursor: default; z-index: 3; }
+.in3d-cursore label { display: inline-flex; align-items: center; gap: 10px; }
+.in3d-cursore input { width: 180px; accent-color: var(--accento); }
+.in3d-stato { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 16px; text-align: center; font-size: 13px; color: var(--tenue); pointer-events: none; z-index: 4; }
+
+.in3d-scheda { border-left: 0.5px solid var(--linea); background: var(--laterale); display: flex; flex-direction: column; gap: 14px; padding: 16px; min-height: 0; overflow: auto; }
+.in3d-scheda h3 { margin: 0; font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--tenue); }
+.in3d-blocco { display: grid; gap: 8px; }
+.in3d-persone { display: flex; flex-wrap: wrap; gap: 6px; }
+.in3d-pillola { display: inline-flex; align-items: center; gap: 7px; min-height: var(--altezza-pillola); padding: 4px 12px 4px 8px; border-radius: var(--raggio-pillola); border: 0.5px solid var(--linea-forte); font: inherit; font-size: 12.5px; color: var(--ink-2); background: transparent; cursor: pointer; }
+.in3d-pillola i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.in3d-pillola:hover { background: var(--carta-sopra); color: var(--ink); }
+.in3d-pillola[aria-pressed="true"] { background: var(--carta); color: var(--ink); border-color: var(--ink-2); font-weight: 500; }
+.in3d-viste { display: grid; grid-template-columns: 1fr; gap: 2px; padding: 3px; border-radius: 11px; background: var(--pozzo); border: 0.5px solid var(--linea); }
+.in3d-viste button { height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 12.5px; color: var(--ink-2); text-align: left; cursor: pointer; }
+.in3d-viste button:hover { color: var(--ink); }
+.in3d-viste button[aria-pressed="true"] { background: var(--carta); color: var(--ink); font-weight: 500; }
+.in3d-sotto-titolo { margin: 0; font-size: 12px; color: var(--tenue); }
+.in3d-elenco { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.in3d-miniatura { display: grid; gap: 3px; padding: 3px; border-radius: 8px; border: 0.5px solid transparent; background: transparent; font: inherit; text-align: left; min-width: 0; cursor: pointer; }
+.in3d-miniatura img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 5px; display: block; background: var(--pozzo); }
+.in3d-miniatura span { font-size: 10.5px; line-height: 1.25; color: var(--tenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.in3d-miniatura.questa span { color: var(--accento); font-weight: 600; }
+.in3d-miniatura:hover { background: var(--carta-sopra); }
+.in3d-miniatura[aria-pressed="true"] { border-color: var(--accento); background: var(--carta); }
+.in3d-miniatura[aria-pressed="true"] span { color: var(--ink); }
+.in3d-fatti { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 12px; margin: 0; font-size: 12.5px; }
+.in3d-fatti dt { color: var(--tenue); }
+.in3d-fatti dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.in3d-interruttore { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--ink-2); cursor: pointer; }
+.in3d-interruttore input { accent-color: var(--accento); width: 16px; height: 16px; }
+
+@media (max-width: 760px) {
+    .in3d-intera { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) minmax(0, 40%); }
+    .in3d-scheda { border-left: 0; border-top: 0.5px solid var(--linea); }
+    .in3d-aiuto { display: none; }
+}

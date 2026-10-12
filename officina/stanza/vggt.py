@@ -100,7 +100,7 @@ def prepara(immagini, lato: int = LATO, modo: str = "balanced", passo: int = PAS
         alto_massimo = max(a for a, _ in misure)
         largo_massimo = max(b for _, b in misure)
         pieni = []
-        for tensore, viaggio in zip(tensori, viaggi):
+        for tensore, viaggio in zip(tensori, viaggi, strict=True):
             in_alto = alto_massimo - tensore.shape[1]
             di_lato = largo_massimo - tensore.shape[2]
             if in_alto > 0 or di_lato > 0:

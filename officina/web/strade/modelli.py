@@ -69,18 +69,23 @@ def come_stanno_i_modelli(dove: Path) -> list[dict]:
         "peso": vista.peso_a_parole(scarica_corpi.BYTE_IN_TUTTO),
         "pesa_davvero": False,
         "licenza": ("SAM License (Meta), Apache 2.0, Hippocratic 3.0 (KPR), "
-                    "S-Lab 1.0 (Puffin, solo uso non commerciale) e NVIDIA Open Model License"),
-        "si_chiama": "SAM 3 · RTMW-x · KPR con SOLIDER, 3 versioni · SAM 3D Body · Puffin",
+                    "S-Lab 1.0 (Puffin, solo uso non commerciale), NVIDIA Open Model License, "
+                    "FAIR Noncommercial Research License (VGGT-Omega) e CC BY-NC 4.0 (Depth Anything 3)"),
+        "si_chiama": ("SAM 3 · RTMW-x · KPR con SOLIDER, 3 versioni · SAM 3D Body · Puffin · "
+                      "VGGT-Omega · Depth Anything 3 Nested"),
         "a_cosa_serve": ("separare ogni persona nella foto, anche quando si coprono, "
                          "capire di chi è ogni mano, gamba e volto, riconoscere la "
                          "stessa persona dalla corporatura e dai vestiti, anche di "
                          "spalle, e farne la figura in 3D con altezza e proporzioni. "
                          "Puffin capisce com'era l'obiettivo quando nei dati della foto "
-                         "non c'è scritto. Per scaricarlo serve aver accettato le licenze "
-                         "di SAM 3 e di SAM 3D Body su Hugging Face; KPR arriva da Google "
+                         "non c'è scritto. VGGT-Omega e Depth Anything 3 costruiscono in 3D "
+                         "ogni luogo con almeno 5 foto, in metri, e mettono ogni foto nel "
+                         "punto da cui è stata fatta. Per scaricarlo serve aver accettato le "
+                         "licenze di SAM 3, SAM 3D Body e VGGT-Omega su Hugging Face; KPR arriva da Google "
                          "Drive, senza chiave. La licenza di KPR chiede di non usarlo "
                          "contro i diritti delle persone, per esempio per sorvegliarle; "
-                         "quella di Puffin permette solo l'uso non commerciale"),
+                         "quelle di Puffin, VGGT-Omega e Depth Anything 3 permettono solo "
+                         "l'uso non commerciale"),
         "precisione": "nessuna",
         "codice_di_terzi": False,
     })

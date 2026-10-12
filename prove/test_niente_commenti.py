@@ -7,6 +7,7 @@ import tokenize
 from pathlib import Path
 
 CASA = Path(__file__).resolve().parent.parent
+TERZI = CASA / "officina" / "web" / "statici" / "js" / "terzi"
 
 CARTELLE = ("officina", "prove", "strumenti")
 
@@ -52,7 +53,7 @@ def test_nei_fogli_non_restano_commenti():
     colpevoli = []
     for coda in ("*.html", "*.css", "*.js", "*.kt"):
         for f in sorted(CASA.rglob(coda)):
-            if any(p in (".git", "__pycache__") for p in f.parts):
+            if f.is_relative_to(TERZI) or any(p in (".git", "__pycache__") for p in f.parts):
                 continue
             testo = f.read_text(encoding="utf-8")
             for chi, dove in (("/* */", BLOCCO), ("<!-- -->", HTML), ("{# #}", JINJA)):

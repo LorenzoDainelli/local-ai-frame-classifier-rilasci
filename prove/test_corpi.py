@@ -367,7 +367,7 @@ def test_i_corpi_sono_obbligatori_e_si_riconoscono_in_casa(tmp_path):
         (casa / pezzo.dove).parent.mkdir(parents=True, exist_ok=True)
         (casa / pezzo.dove).write_bytes(b"finto")
     assert modelli_in_casa.in_casa("corpi", tmp_path)
-    assert modelli_in_casa.nome("corpi") == "SAM 3, RTMW, KPR, SAM 3D Body e Puffin"
+    assert modelli_in_casa.nome("corpi") == "SAM 3, RTMW, KPR, SAM 3D Body, Puffin, VGGT-Omega e Depth Anything 3"
 
 
 def test_rtmw_si_prende_dallo_zip_ufficiale(tmp_path):

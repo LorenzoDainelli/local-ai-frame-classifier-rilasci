@@ -12,6 +12,8 @@ on:
       - "officina/corpi/mhr.py"
       - "officina/corpi/rotazioni.py"
       - "officina/corpi/solo_numeri.py"
+      - "officina/corpi/superfici.py"
+      - "officina/corpi/figure.py"
   workflow_dispatch:
     inputs:
       quante:

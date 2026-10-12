@@ -52,7 +52,7 @@
     </section>
 
     <section class="carta guida-carta">
-        <div class="guida-carta-t">{{ icona('chiave', 18) }}<h2>DINOv3 e SAM 3</h2></div>
+        <div class="guida-carta-t">{{ icona('chiave', 18) }}<h2>Le condizioni da accettare</h2></div>
         <ol class="piccolo elenco-passi">
             <li>Una volta sola: entra su Hugging Face, apri
                 <span class="indirizzo numeri">{{ pagina_dinov3 | replace("https://", "") }}</span>
@@ -62,6 +62,13 @@
                     <p>Per SAM 3 la conferma arriva per mail, di solito in pochi
                     minuti, a volte in qualche ora. Finché non arriva, i corpi
                     nelle foto non si possono separare.</p>
+                {% endcall %}</li>
+            <li>Infine apri <span class="indirizzo numeri">{{ pagina_corpo3d | replace("https://", "") }}</span>
+                e <span class="indirizzo numeri">{{ pagina_vggt | replace("https://", "") }}</span>
+                e accetta le condizioni anche lì.{% call spiega("A cosa servono") %}
+                    <p>SAM 3D Body fa la figura in 3D delle persone, VGGT-Omega
+                    trova da dove è stata fatta ogni foto di un luogo per
+                    costruirne la stanza in 3D.</p>
                 {% endcall %}</li>
         </ol>
     </section>

@@ -3,6 +3,53 @@
 {% from "_icone.html" import icona %}
 {% block titolo %}Scatto — Local AI Frame Classifier{% endblock %}
 
+{% macro la_finestra_3d() %}
+<dialog class="in3d" id="in3d" aria-labelledby="in3d-titolo" data-scatto="{{ scatto.id }}">
+    <div class="in3d-intera">
+        <div class="in3d-testa">
+            <h2 id="in3d-titolo" data-in3d-titolo>In 3D</h2>
+            <span class="in3d-aiuto" data-in3d-aiuto>Trascina per girarla</span>
+            <kbd>Esc</kbd>
+            <button class="tasto-comando nudo piccolo" type="button" data-in3d-chiudi aria-label="Chiudi">{{ icona('x', 14) }}</button>
+        </div>
+        <div class="in3d-tela" data-in3d-tela>
+            <img class="in3d-foto-sotto" alt="" data-in3d-foto-sotto>
+            <div class="in3d-nomi" data-in3d-nomi aria-hidden="true"></div>
+            <span class="in3d-didascalia" data-in3d-didascalia hidden></span>
+            <button class="in3d-angolo" type="button" data-in3d-angolo hidden><img alt="" data-in3d-angolo-foto><span>Entra nella foto</span></button>
+            <div class="in3d-cursore" data-in3d-cursore hidden>
+                <label>Foto <input type="range" min="0" max="100" value="50" data-in3d-misto aria-label="Quanto si vede la stanza 3D sopra la foto"> <span data-in3d-misto-nome>Stanza 3D</span></label>
+                <a class="tasto-comando piccolo" href="#" data-in3d-apri hidden>Apri questa foto</a>
+            </div>
+            <p class="in3d-stato" data-in3d-stato role="status">Sto preparando il 3D…</p>
+        </div>
+        <aside class="in3d-scheda" aria-label="Cosa guardare">
+            <div class="in3d-blocco" data-in3d-blocco-persone hidden>
+                <h3>Persone</h3>
+                <div class="in3d-persone" role="group" aria-label="Persone" data-in3d-persone></div>
+            </div>
+            <div class="in3d-blocco">
+                <h3>Guarda</h3>
+                <div class="in3d-viste" role="group" aria-label="Da dove guardare">
+                    <button type="button" aria-pressed="true" data-in3d-dove="intorno" data-in3d-intorno>Tutta la stanza</button>
+                    <button type="button" aria-pressed="false" data-in3d-dove="alto">Dall'alto</button>
+                    <button type="button" aria-pressed="false" data-in3d-dove="persona" data-in3d-vicino hidden>La persona da vicino</button>
+                </div>
+                <div class="in3d-blocco" data-in3d-blocco-foto hidden>
+                    <p class="in3d-sotto-titolo">Dalle foto: ti metti dove stava la macchina fotografica</p>
+                    <div class="in3d-elenco" role="group" aria-label="Le foto della stanza" data-in3d-elenco></div>
+                </div>
+            </div>
+            <label class="in3d-interruttore" data-in3d-blocco-coni hidden>I coni delle altre foto <input type="checkbox" checked data-in3d-coni></label>
+            <div class="in3d-blocco" data-in3d-blocco-fatti hidden>
+                <h3 data-in3d-fatti-titolo>La stanza</h3>
+                <dl class="in3d-fatti" data-in3d-fatti></dl>
+            </div>
+        </aside>
+    </div>
+</dialog>
+{% endmacro %}
+
 {% macro il_visore() %}
 {% set filmato = movimento or (principale if scatto.genere == 'video' else none) %}
 {% set si_vede = si_riproduce or copia_pronta %}
@@ -206,6 +253,7 @@
                     <button class="tasto-comando piccolo" type="button" data-apri-info aria-expanded="false" aria-controls="ft-info">{{ icona('info', 14) }} Informazioni</button>
                     <button class="tasto-comando nudo piccolo" type="button" data-apri-nota aria-controls="ft-info">{{ icona('nota', 14) }} Nota{% if scatto.nota %} ·{% endif %}</button>
                     {% if corpi_visti %}<button class="tasto-comando nudo piccolo" type="button" data-mostra-corpi aria-pressed="false" title="Mostra il contorno e i punti del corpo di ogni persona">{{ icona('persona', 14) }} Corpi · {{ corpi_visti|length }}</button>{% endif %}
+                    {% if in3d %}<button class="tasto-comando nudo piccolo" type="button" data-apri-3d aria-haspopup="dialog" aria-controls="in3d" title="Guarda le persone e il luogo di questa foto in 3D">{{ icona('cubo', 14) }} In 3D</button>{% endif %}
                     <span class="ft-tasti-destra in-fila">
                         {{ lo_stato_del_miglioramento() }}
                         {{ fuori_archivio() }}
@@ -223,6 +271,7 @@
             </aside>
         </div>
     </div>
+    {% if in3d %}{{ la_finestra_3d() }}{% endif %}
 </main>
 </div>
 {% endblock %}
@@ -233,6 +282,9 @@
     import { mettiInCoda, scriviEsito } from "/statici/js/migliora.js";
 
     preparaCorpi();
+    if (document.querySelector("[data-apri-3d]")) {
+        import("/statici/js/in3d.js").then(({ preparaIn3d }) => preparaIn3d());
+    }
     import { mandaModulo, quandoSiFerma } from "/statici/js/comune.js";
 
     const migliora = document.getElementById("migliora-scatto");
@@ -445,7 +497,7 @@
     lastra.addEventListener("pointerup", lascia);
     lastra.addEventListener("pointercancel", lascia);
     document.addEventListener("keydown", function (evento) {
-        if (evento.key === "Escape" && vista.z > 1) {
+        if (evento.key === "Escape" && vista.z > 1 && !document.querySelector("dialog[open]")) {
             evento.preventDefault();
             evento.stopImmediatePropagation();
             const r = lastra.getBoundingClientRect();
@@ -475,6 +527,7 @@
 
     document.addEventListener("keydown", function (evento) {
         if (evento.target.tagName === "INPUT" || evento.target.tagName === "TEXTAREA") return;
+        if (document.querySelector("dialog[open]")) return;
         if (evento.key === "ArrowRight" && dopo) {
             evento.preventDefault();
             try { sessionStorage.setItem("mv.sfoglia", JSON.stringify({ verso: 1, quando: Date.now() })); } catch (errore) { }

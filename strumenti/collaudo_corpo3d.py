@@ -205,6 +205,24 @@ def _scarti(loro: list, nostro: dict) -> dict:
     return righe
 
 
+def _superficie(mio, nostro: dict, largo: int, alto: int) -> dict:
+    import numpy as np
+
+    from officina.corpi import corpo3d, figure, superfici
+
+    pelle = superfici.Pelle.__new__(superfici.Pelle)
+    pelle._mhr = mio.head_pose.mhr
+    pelle.dispositivo = "cpu"
+    salvate = [figure.numeri_a_figura(np.asarray(figure.figura_a_numeri(f, largo, alto), dtype="<f4").tolist())
+               for f in corpo3d.in_figure(nostro)]
+    rifatti = np.asarray(pelle.vertici([f["forma"] for f in salvate], [f["parametri"] for f in salvate]))
+    veri = nostro["pred_vertices"].detach().cpu().numpy().astype(np.float64)
+    facce = pelle.facce()
+    return {"scarto": float(np.abs(rifatti - veri).max()), "vertici": int(veri.shape[1]),
+            "facce": int(facce.shape[0]),
+            "facce_come_la_testa": bool(np.array_equal(facce, mio.head_pose.faces.detach().cpu().numpy()))}
+
+
 def confronta(sorgente: Path, dinov3: Path, cartella: Path, quante: int, uscita: Path) -> dict:
     import torch
     from huggingface_hub import hf_hub_download
@@ -261,19 +279,24 @@ def confronta(sorgente: Path, dinov3: Path, cartella: Path, quante: int, uscita:
             prova = {"foto": scatto["id"], "modo": nome, "persone": len(scatto["riquadri"]),
                      "mani_valide": nostro["mani_valide"].tolist(),
                      "secondi_loro": round(secondi_loro, 1), "secondi_miei": round(secondi_miei, 1),
-                     "scarti": _scarti(loro, nostro)}
+                     "scarti": _scarti(loro, nostro),
+                     "superficie": _superficie(mio, nostro, largo, alto)}
             esito["prove"].append(prova)
             print(json.dumps(prova), flush=True)
     peggio = {k: max(p["scarti"][k]["scarto"] for p in esito["prove"]) for k in CHIAVI}
     esito["peggio"] = peggio
-    esito["uguali"] = bool(esito["prove"]) and peggio["pred_vertices"] < 1e-3 and peggio["pred_keypoints_2d"] < 0.5
+    esito["superficie_peggio"] = max(p["superficie"]["scarto"] for p in esito["prove"]) if esito["prove"] else 1.0
+    esito["uguali"] = (bool(esito["prove"]) and peggio["pred_vertices"] < 1e-3 and peggio["pred_keypoints_2d"] < 0.5
+                       and esito["superficie_peggio"] < 1e-4)
     uscita.write_text(json.dumps(esito, indent=1))
-    righe = ["| foto | modo | persone | mani | vertici (m) | punti 2D (px) | secondi loro / miei |",
-             "|---|---|---|---|---|---|---|"]
+    righe = ["| foto | modo | persone | mani | vertici (m) | punti 2D (px) | dai numeri salvati (m) | "
+             "secondi loro / miei |",
+             "|---|---|---|---|---|---|---|---|"]
     for p in esito["prove"]:
         righe.append(f"| {p['foto']} | {p['modo']} | {p['persone']} | {p['mani_valide']} | "
                      f"{p['scarti']['pred_vertices']['scarto']:.2e} | "
                      f"{p['scarti']['pred_keypoints_2d']['scarto']:.2e} | "
+                     f"{p['superficie']['scarto']:.2e} | "
                      f"{p['secondi_loro']} / {p['secondi_miei']} |")
     sommario = os.environ.get("GITHUB_STEP_SUMMARY")
     testo = "\n".join(["## SAM 3D Body: originale contro il mio", "",

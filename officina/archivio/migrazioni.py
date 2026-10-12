@@ -1073,6 +1073,59 @@ def _versione_51(connessione: sqlite3.Connection) -> None:
     connessione.execute("ALTER TABLE corpi ADD COLUMN punti_scala REAL NOT NULL DEFAULT 1")
 
 
+def _versione_52(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE stanze (
+            posto_id      INTEGER PRIMARY KEY REFERENCES posti(id) ON DELETE CASCADE,
+            stato         TEXT NOT NULL CHECK (stato IN ('fatta','non_riuscita')),
+            file          TEXT NOT NULL,
+            versione      TEXT NOT NULL,
+            foto_usate    INTEGER NOT NULL,
+            foto_viste    INTEGER NOT NULL,
+            punti         INTEGER NOT NULL,
+            larga         REAL,
+            lunga         REAL,
+            alta          REAL,
+            metri         REAL,
+            perche        TEXT,
+            costruita_il  TEXT NOT NULL
+        )
+        """
+    )
+    connessione.execute(
+        """
+        CREATE TABLE stanze_foto (
+            posto_id     INTEGER NOT NULL REFERENCES stanze(posto_id) ON DELETE CASCADE,
+            scatto_id    INTEGER NOT NULL REFERENCES scatti(id) ON DELETE CASCADE,
+            usata        INTEGER NOT NULL DEFAULT 0,
+            ordine       INTEGER,
+            macchina     BLOB NOT NULL,
+            campo        REAL NOT NULL,
+            centro_x     REAL NOT NULL,
+            centro_y     REAL NOT NULL,
+            proporzione  REAL NOT NULL,
+            allungo      REAL NOT NULL DEFAULT 1.0,
+            messa_il     TEXT NOT NULL,
+            PRIMARY KEY (posto_id, scatto_id)
+        )
+        """
+    )
+    connessione.execute("CREATE INDEX stanze_foto_per_scatto ON stanze_foto(scatto_id)")
+    connessione.execute(
+        """
+        CREATE TABLE superfici (
+            corpo_id  INTEGER PRIMARY KEY REFERENCES corpi(id) ON DELETE CASCADE,
+            versione  TEXT NOT NULL,
+            file      TEXT NOT NULL,
+            vertici   INTEGER NOT NULL,
+            visti     INTEGER NOT NULL,
+            fatta_il  TEXT NOT NULL
+        )
+        """
+    )
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1161,6 +1214,9 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_50),
     Migrazione(51, "i punti del corpo con la sicurezza vera di RTMW: quelli vecchi si rifanno",
                _versione_51),
+    Migrazione(52, "le stanze in 3D: la forma di ogni luogo con almeno 5 foto, da dove è stata "
+               "fatta ciascuna e il corpo vero di ogni persona",
+               _versione_52),
 ]
 
 

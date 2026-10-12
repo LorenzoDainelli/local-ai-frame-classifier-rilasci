@@ -293,7 +293,7 @@ class Vit(nn.Module):
             normali = [self.norm(strato) for _, strato in fuori]
         else:
             normali = [torch.cat([strato[..., :dim], self.norm(strato[..., dim:])], dim=-1) for _, strato in fuori]
-        return [(normale[..., 1:, :], camera) for normale, (camera, _) in zip(normali, fuori)]
+        return [(normale[..., 1:, :], camera) for normale, (camera, _) in zip(normali, fuori, strict=True)]
 
 
 class DinoV2(nn.Module):

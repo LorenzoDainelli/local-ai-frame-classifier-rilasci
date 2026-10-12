@@ -24,7 +24,7 @@ PESI = {
 
 NOMI = {
     "volti": "SCRFD e AdaFace",
-    "corpi": "SAM 3, RTMW, KPR, SAM 3D Body e Puffin",
+    "corpi": "SAM 3, RTMW, KPR, SAM 3D Body, Puffin, VGGT-Omega e Depth Anything 3",
     "seedvr2": "SeedVR2",
     "codeformer": "CodeFormer",
     "faceme": "FaceMe",
@@ -119,7 +119,8 @@ def _con_le_condizioni() -> tuple[tuple[str, str], ...]:
 
     return ((tutte_le_carte()["dinov3"].identificatore, "DINOv3"),
             (scarica_corpi.SAM3.identificatore, "SAM 3"),
-            (scarica_corpi.REPO_CORPO3D, "SAM 3D Body"))
+            (scarica_corpi.REPO_CORPO3D, "SAM 3D Body"),
+            (scarica_corpi.vggt.REPO, "VGGT-Omega"))
 
 
 def controlla_la_chiave(chiave: str) -> None:
@@ -188,7 +189,8 @@ def porta_in_casa(quale: str, dove: Path, lavoro) -> None:
         scarica_corpi.scarica(dove, al_passo=lavoro.di, chiave=chiave,
                               a_che_punto=lavoro.a_che_punto)
         finito()
-        lavoro.di("I modelli del corpo sono in casa: SAM 3, RTMW, KPR, SAM 3D Body e Puffin.")
+        lavoro.di("I modelli del corpo sono in casa: SAM 3, RTMW, KPR, SAM 3D Body, Puffin, "
+                  "VGGT-Omega e Depth Anything 3.")
         return
 
     if quale == "faceme":

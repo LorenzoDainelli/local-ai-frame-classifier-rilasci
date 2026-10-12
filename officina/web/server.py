@@ -16,7 +16,7 @@ from officina.web import blocco, origine
 from officina.web import in_prova
 
 from officina.web.strade import (albero, aspetto, base, benvenuto, doppioni, etichetta, galleria,
-                                 generale, impostazioni, importazione, intelligenza, lavoro,
+                                 generale, impostazioni, importazione, in3d, intelligenza, lavoro,
                                  luoghi, miglioramento, misura, modelli, persone, scatto, schermo,
                                  senza_data, sincronia, sistemare, stato, telefono)
 
@@ -130,7 +130,7 @@ async def strada_sbagliata(richiesta: Request, errore: ErroreDellaStrada):
 
 ZONE = (importazione, galleria, scatto, etichetta, sistemare, doppioni, albero, persone,
         luoghi, stato, lavoro, aspetto, misura, schermo, impostazioni, modelli,
-        intelligenza, generale, senza_data, telefono, miglioramento, sincronia, benvenuto)
+        intelligenza, generale, senza_data, telefono, miglioramento, sincronia, benvenuto, in3d)
 
 for zona in ZONE:
     app.include_router(zona.strada)
