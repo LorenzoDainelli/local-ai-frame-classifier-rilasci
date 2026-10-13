@@ -3,7 +3,7 @@ from __future__ import annotations
 import ipaddress
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from officina.archivio import accesso
@@ -16,6 +16,8 @@ from officina.web import vista
 from officina.web.strade import base, comune, doppioni
 
 strada = APIRouter()
+
+solo_qui = [Depends(base.solo_da_questo_computer)]
 
 
 def raddrizza_i_video_in_sottofondo(archivio) -> bool:
@@ -91,7 +93,7 @@ def pagina_importazione(richiesta: Request):
     })
 
 
-@strada.post("/importazione/cartella")
+@strada.post("/importazione/cartella", dependencies=solo_qui)
 def aggiungi_cartella(percorso: str = Form(...), dove_torno: str = Form(""),
                       gruppo: str | None = Form(None), gruppo_nuovo: str = Form("")):
     from officina.importazione import gruppi, scansione
@@ -158,6 +160,8 @@ def sfoglia_cartella(richiesta: Request, da_dove: str = Form("")):
         raise ErroreOfficina(
             "La finestra per scegliere la cartella è già aperta. Se non la "
             "vedi, è finita dietro a questa.")
+    if scelto:
+        base.ricorda_la_scelta_del_selettore(scelto)
     return JSONResponse({"percorso": scelto})
 
 
@@ -172,7 +176,7 @@ def _dove_si_raccoglie(scritto: str = "") -> Path:
     return Path(dove)
 
 
-@strada.post("/raccolta/conta")
+@strada.post("/raccolta/conta", dependencies=solo_qui)
 def raccolta_conta(dove: str = Form("")):
     from officina.importazione import raccolta
 
@@ -192,7 +196,7 @@ def raccolta_conta(dove: str = Form("")):
     return RedirectResponse("/importazione#raccolta", status_code=303)
 
 
-@strada.post("/raccolta/parti")
+@strada.post("/raccolta/parti", dependencies=solo_qui)
 def raccolta_parti():
     from officina.importazione import raccolta
 

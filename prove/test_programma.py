@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -11,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from officina.errori import ErroreOfficina
-from officina.programma import aggiornamenti, carta, librerie, scheda, segreti
+from officina.programma import aggiornamenti, carta, firma, librerie, scheda, segreti
 
 
 @pytest.fixture
@@ -385,12 +386,41 @@ def test_le_versioni_si_confrontano_come_si_deve():
     assert aggiornamenti.e_piu_nuova("2.0.0", "0.5.0")
 
 
+def _chiave_di_prova():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    return Ed25519PrivateKey.generate()
+
+
+CHIAVE_DI_PROVA = _chiave_di_prova()
+
+FIRME: dict[str, str] = {}
+
+
+@pytest.fixture(autouse=True)
+def firma_di_prova(monkeypatch):
+    from cryptography.hazmat.primitives import serialization
+
+    pubblica = CHIAVE_DI_PROVA.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    monkeypatch.setattr(firma, "CHIAVI_PUBBLICHE", (base64.b64encode(pubblica).decode(),))
+
+
+def _firma_di(versione, nome, sha256):
+    return base64.b64encode(CHIAVE_DI_PROVA.sign(firma.messaggio(versione, nome, sha256))).decode()
+
+
 def _rilascio(tag, nome="local-ai-frame-classifier-2.0.0.exe", digest="sha256:" + "a" * 64,
               bozza=False):
+    indirizzo_firma = f"https://github.com/x/{tag}/{nome}.firma"
+    if digest.startswith("sha256:"):
+        FIRME[indirizzo_firma] = _firma_di(tag.lstrip("v"), nome, digest.split(":", 1)[1])
     return {"tag_name": tag, "draft": bozza, "body": "note",
             "published_at": "2026-09-25T10:00:00Z",
             "assets": [{"name": nome, "size": 10, "digest": digest,
-                        "browser_download_url": f"https://github.com/x/{nome}"}]}
+                        "browser_download_url": f"https://github.com/x/{nome}"},
+                       {"name": f"{nome}.firma", "size": 88,
+                        "browser_download_url": indirizzo_firma}]}
 
 
 def test_il_canale_decide_quali_rilasci_contano():
@@ -398,11 +428,12 @@ def test_il_canale_decide_quali_rilasci_contano():
             _rilascio("v1.9.0"), _rilascio("v2.0.0-beta.7", bozza=True)]
     rilasci = aggiornamenti.rilasci_da(dati, lambda _: None)
     assert [r.versione for r in rilasci] == ["2.0.0-beta.5", "2.0.0-beta.6", "1.9.0"]
-    beta = aggiornamenti.il_piu_nuovo(rilasci, aggiornamenti.BETA, "2.0.0-beta.5")
+    beta = aggiornamenti.il_piu_nuovo(rilasci, aggiornamenti.BETA, "2.0.0-beta.5", FIRME.get)
     assert beta.versione == "2.0.0-beta.6"
-    assert aggiornamenti.il_piu_nuovo(rilasci, aggiornamenti.FINALE, "1.8.0").versione == "1.9.0"
-    assert aggiornamenti.il_piu_nuovo(rilasci, aggiornamenti.FINALE, "2.0.0") is None
-    assert aggiornamenti.il_piu_nuovo(rilasci, aggiornamenti.SVILUPPO, "0.1.0") is None
+    assert aggiornamenti.il_piu_nuovo(rilasci, aggiornamenti.FINALE, "1.8.0",
+                                      FIRME.get).versione == "1.9.0"
+    assert aggiornamenti.il_piu_nuovo(rilasci, aggiornamenti.FINALE, "2.0.0", FIRME.get) is None
+    assert aggiornamenti.il_piu_nuovo(rilasci, aggiornamenti.SVILUPPO, "0.1.0", FIRME.get) is None
 
 
 def test_un_rilascio_senza_impronta_non_si_installa():
@@ -434,10 +465,12 @@ class RispostaFinta(io.BytesIO):
 
 
 def _rilascio_vero(contenuto: bytes, versione="2.0.0-beta.9") -> aggiornamenti.Rilascio:
+    nome = f"local-ai-frame-classifier-{versione}.exe"
+    impronta = hashlib.sha256(contenuto).hexdigest()
     return aggiornamenti.Rilascio(
         versione=versione, indirizzo="https://github.com/x/i.exe",
-        nome_file=f"local-ai-frame-classifier-{versione}.exe", peso=len(contenuto),
-        sha256=hashlib.sha256(contenuto).hexdigest(), note="", pubblicato="")
+        nome_file=nome, peso=len(contenuto),
+        sha256=impronta, note="", pubblicato="", firma=_firma_di(versione, nome, impronta))
 
 
 def test_lo_scaricamento_controlla_l_impronta(casa):
@@ -476,7 +509,9 @@ def test_cerca_senza_rete_non_si_ferma(casa):
 
 def test_cerca_trova_e_rifiuta_resta_in_sospeso(casa, monkeypatch):
     dati = json.dumps([_rilascio("v2.0.1")]).encode()
-    trovato = aggiornamenti.cerca(chiedi=lambda _: dati, canale="finale", attuale="2.0.0")
+    trovato = aggiornamenti.cerca(
+        chiedi=lambda indirizzo: FIRME[indirizzo].encode() if indirizzo in FIRME else dati,
+        canale="finale", attuale="2.0.0")
     assert trovato.versione == "2.0.1"
     aggiornamenti.rifiuta(trovato)
     monkeypatch.setattr(aggiornamenti, "versione_attuale", lambda: "2.0.0")

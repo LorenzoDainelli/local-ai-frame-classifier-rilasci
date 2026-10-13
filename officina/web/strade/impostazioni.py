@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from officina import forziere, registro
@@ -15,9 +15,15 @@ from officina.web import telefono as telefono_web
 from officina.web import vista
 from officina.programma import aspetto
 
-from officina.web.strade import base, comune, schermo
+from officina.web.strade import base, comune, schermo, tentativi
 
 strada = APIRouter()
+
+solo_qui = [Depends(base.solo_da_questo_computer)]
+
+IMPOSTAZIONI_DEL_COMPUTER = frozenset({
+    "accesso_dalla_rete", "porta_del_portatile", "blocco_dopo_minuti",
+    "cartella_raccolta"})
 
 
 @strada.get("/impostazioni", response_class=HTMLResponse)
@@ -97,7 +103,7 @@ def ripristina_fotografia(numero: int = Form(...)):
         f"/impostazioni?rimesso={fatto['tornano_al_posto']}", status_code=303)
 
 
-@strada.post("/impostazioni/azzera-addestramento")
+@strada.post("/impostazioni/azzera-addestramento", dependencies=solo_qui)
 def azzera_addestramento():
     comune.bottega = proposte.Bottega()
     comune.pagella_pronta.dimentica()
@@ -112,7 +118,7 @@ def azzera_addestramento():
     return RedirectResponse("/impostazioni?azzerato=1", status_code=303)
 
 
-@strada.post("/impostazioni/riporta-i-valori")
+@strada.post("/impostazioni/riporta-i-valori", dependencies=solo_qui)
 def riporta_i_valori():
     archivio = accesso.aperto()
     with archivio.scrittura() as connessione:
@@ -121,7 +127,7 @@ def riporta_i_valori():
     return RedirectResponse("/impostazioni?rimesse=1", status_code=303)
 
 
-@strada.post("/impostazioni/dispositivo/{dispositivo_id}")
+@strada.post("/impostazioni/dispositivo/{dispositivo_id}", dependencies=solo_qui)
 def decidi_dispositivo(dispositivo_id: int, stato: str = Form(...),
                        nome: str = Form("")):
     with accesso.aperto().scrittura() as connessione:
@@ -132,7 +138,7 @@ def decidi_dispositivo(dispositivo_id: int, stato: str = Form(...),
     return RedirectResponse("/impostazioni", status_code=303)
 
 
-@strada.post("/impostazioni")
+@strada.post("/impostazioni", dependencies=solo_qui)
 async def salva_impostazioni(richiesta: Request):
     modulo = await richiesta.form()
     archivio = accesso.aperto()
@@ -146,9 +152,12 @@ async def salva_impostazioni(richiesta: Request):
 
 
 @strada.post("/api/impostazione")
-def api_una_impostazione(chiave: str = Form(...), valore: str = Form("")):
+def api_una_impostazione(richiesta: Request, chiave: str = Form(...),
+                         valore: str = Form("")):
     if chiave not in PREDEFINITE:
         raise ErroreOfficina(f"«{chiave}» non è un'impostazione di questo programma.")
+    if chiave in IMPOSTAZIONI_DEL_COMPUTER:
+        base.solo_da_questo_computer(richiesta)
 
     predefinito = PREDEFINITE[chiave]
     if isinstance(predefinito, bool):
@@ -184,20 +193,29 @@ def copia_adesso():
 @strada.get("/blocco", response_class=HTMLResponse)
 def pagina_blocco(richiesta: Request):
     archivio = accesso.aperto()
-    if not blocco.guardia.e_bloccato(blocco.chi_e(richiesta)):
+    chi = blocco.chi_e(richiesta)
+    if not blocco.guardia.e_bloccato(chi):
         return RedirectResponse("/", status_code=303)
+    attesa = tentativi.freno.da_aspettare(chi)
     return base.pagine.TemplateResponse(richiesta, "blocco.html", {
         "request": richiesta,
         "attributi_aspetto": aspetto.attributi_html(aspetto.leggi()),
         "impostazioni": archivio.tutte_le_impostazioni(),
         "sbagliata": bool(richiesta.query_params.get("sbagliata")),
+        "occupato": tentativi.MESSAGGIO_OCCUPATO if richiesta.query_params.get("occupato") else "",
+        "aspetta": tentativi.messaggio_di_attesa(attesa) if attesa else "",
     })
 
 
 @strada.post("/blocco/apri")
 def apri_il_blocco(richiesta: Request, password: str = Form("")):
-    if not blocco.guardia.sblocca(blocco.chi_e(richiesta),
-                                  accesso.aperto().dove, password):
+    chi = blocco.chi_e(richiesta)
+    dove = accesso.aperto().dove
+    giusta, _, occupato = tentativi.freno.prova(
+        chi, lambda: blocco.guardia.sblocca(chi, dove, password))
+    if occupato:
+        return RedirectResponse("/blocco?sbagliata=1&occupato=1", status_code=303)
+    if not giusta:
         return RedirectResponse("/blocco?sbagliata=1", status_code=303)
     return RedirectResponse("/", status_code=303)
 
@@ -213,7 +231,7 @@ def blocca_adesso(richiesta: Request):
     return {"bloccato": True}
 
 
-@strada.post("/forziere/accendi")
+@strada.post("/forziere/accendi", dependencies=solo_qui)
 def accendi_il_forziere(password: str = Form(""), ancora: str = Form(""),
                         su_carta: str = Form(""), dove_torno: str = Form("")):
     archivio = accesso.aperto()

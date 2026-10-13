@@ -52,18 +52,18 @@ def esplora(uscita: Path) -> dict:
     esito["revisione"] = info.sha
     print(json.dumps({"file": esito["file"], "revisione": esito["revisione"]}, indent=1))
     try:
-        configurazione = hf_hub_download(REPO, "model_config.yaml", token=chiave)
+        configurazione = hf_hub_download(REPO, "model_config.yaml", revision=info.sha, token=chiave)
     except Exception as guasto:
         if type(guasto).__name__ == "GatedRepoError":
             raise SystemExit("Hugging Face non dà ancora il permesso per SAM 3D Body a questa "
                              "chiave: va chiesto su https://huggingface.co/" + REPO) from guasto
         raise
     esito["configurazione"] = Path(configurazione).read_text()
-    mhr = hf_hub_download(REPO, "assets/mhr_model.pt", token=chiave)
+    mhr = hf_hub_download(REPO, "assets/mhr_model.pt", revision=info.sha, token=chiave)
     esito["mhr_sha256"] = _sha256(Path(mhr))
     esito["mhr_uguale_a_github"] = esito["mhr_sha256"] == MHR_GITHUB
     partito = time.monotonic()
-    pesi = hf_hub_download(REPO, "model.ckpt", token=chiave)
+    pesi = hf_hub_download(REPO, "model.ckpt", revision=info.sha, token=chiave)
     esito["ckpt_secondi"] = round(time.monotonic() - partito, 1)
     esito["ckpt_sha256"] = _sha256(Path(pesi))
     try:
@@ -72,7 +72,9 @@ def esplora(uscita: Path) -> dict:
     except Exception as guasto:
         esito["solo_numeri"] = False
         esito["solo_numeri_perche"] = repr(guasto)[:3000]
-        letto = torch.load(pesi, map_location="cpu", weights_only=False)
+        from officina.corpi import solo_numeri
+
+        letto = solo_numeri.leggi(Path(pesi))
     esito["in_cima"] = {k: type(v).__name__ for k, v in letto.items()} if isinstance(letto, dict) else type(letto).__name__
     dentro = letto.get("state_dict", letto) if isinstance(letto, dict) else letto
     esito["pesi"] = _riassunto_dei_pesi(dentro)
@@ -228,12 +230,15 @@ def confronta(sorgente: Path, dinov3: Path, cartella: Path, quante: int, uscita:
     from huggingface_hub import hf_hub_download
 
     from officina.corpi import corpo3d
+    from officina.corpi.scaricamento import REVISIONE_CORPO3D
 
     torch.set_grad_enabled(False)
     chiave = os.environ.get("HF_TOKEN") or None
-    pesi = Path(hf_hub_download(REPO, "model.ckpt", token=chiave))
-    misure = Path(hf_hub_download(REPO, "model_config.yaml", token=chiave))
-    mhr = Path(hf_hub_download(REPO, "assets/mhr_model.pt", token=chiave))
+    pesi = Path(hf_hub_download(REPO, "model.ckpt", revision=REVISIONE_CORPO3D, token=chiave))
+    misure = Path(hf_hub_download(REPO, "model_config.yaml", revision=REVISIONE_CORPO3D,
+                                  token=chiave))
+    mhr = Path(hf_hub_download(REPO, "assets/mhr_model.pt", revision=REVISIONE_CORPO3D,
+                               token=chiave))
     esito: dict = {"impronte": {"model.ckpt": _sha256(pesi), "model_config.yaml": _sha256(misure),
                                 "mhr_model.pt": _sha256(mhr)}}
     print(json.dumps(esito, indent=1), flush=True)

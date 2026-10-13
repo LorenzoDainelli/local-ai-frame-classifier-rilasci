@@ -6,13 +6,13 @@ import re
 import subprocess
 import sys
 import threading
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Callable
 
 from officina import VERSIONE
 from officina.errori import ErroreOfficina
-from officina.programma import DEPOSITO_DEI_RILASCI, carta
+from officina.programma import DEPOSITO_DEI_RILASCI, carta, firma
 
 RADICE = Path(__file__).resolve().parent.parent.parent
 
@@ -81,10 +81,16 @@ class Rilascio:
     sha256: str | None
     note: str
     pubblicato: str
+    indirizzo_firma: str = ""
+    firma: str | None = None
 
     @property
     def finale(self) -> bool:
         return e_una_finale(self.versione)
+
+    @property
+    def firmato(self) -> bool:
+        return firma.e_firmato(self.versione, self.nome_file, self.sha256, self.firma)
 
     def come_dati(self) -> dict:
         return {**asdict(self), "finale": self.finale}
@@ -102,6 +108,14 @@ def _impronta_dell_asset(asset: dict, tutti: list[dict],
             if pezzo and re.fullmatch(r"[0-9a-fA-F]{64}", pezzo[0]):
                 return pezzo[0].lower()
     return None
+
+
+def _indirizzo_della_firma(asset: dict, tutti: list[dict]) -> str:
+    for altro in tutti:
+        if altro.get("name") == f"{asset.get('name')}.firma":
+            indirizzo = str(altro.get("browser_download_url") or "")
+            return indirizzo if indirizzo.startswith("https://") else ""
+    return ""
 
 
 def rilasci_da(dati: list, leggi_testo: Callable[[str], str | None]) -> list[Rilascio]:
@@ -125,19 +139,31 @@ def rilasci_da(dati: list, leggi_testo: Callable[[str], str | None]) -> list[Ril
             sha256=_impronta_dell_asset(asset, risorse, leggi_testo),
             note=str(rilascio.get("body") or "")[:4000],
             pubblicato=str(rilascio.get("published_at") or ""),
+            indirizzo_firma=_indirizzo_della_firma(asset, risorse),
         ))
     return trovati
 
 
-def il_piu_nuovo(rilasci: list[Rilascio], canale: str, attuale: str) -> Rilascio | None:
+def _con_la_firma(rilascio: Rilascio, leggi_testo: Callable[[str], str | None]) -> Rilascio:
+    if rilascio.firma or not rilascio.indirizzo_firma:
+        return rilascio
+    testo = (leggi_testo(rilascio.indirizzo_firma) or "").strip()
+    return replace(rilascio, firma=testo[:200] or None)
+
+
+def il_piu_nuovo(rilasci: list[Rilascio], canale: str, attuale: str,
+                 leggi_testo: Callable[[str], str | None] | None = None) -> Rilascio | None:
     if canale == SVILUPPO:
         return None
     buoni = [r for r in rilasci
              if (canale == BETA or r.finale) and r.sha256 and r.indirizzo.startswith("https://")
              and e_piu_nuova(r.versione, attuale)]
-    if not buoni:
-        return None
-    return max(buoni, key=lambda r: chiave_di(r.versione))
+    for rilascio in sorted(buoni, key=lambda r: chiave_di(r.versione), reverse=True):
+        if leggi_testo is not None:
+            rilascio = _con_la_firma(rilascio, leggi_testo)
+        if rilascio.firmato:
+            return rilascio
+    return None
 
 
 def _chiedi(indirizzo: str, entro: float = ATTESA_RETE) -> bytes | None:
@@ -190,7 +216,8 @@ def cerca(chiedi: Callable[[str], bytes | None] | None = None,
         return risposta.decode("utf-8", "replace") if risposta is not None else None
 
     trovato = il_piu_nuovo(rilasci_da(dati, leggi_testo),
-                           canale or canale_attuale(), attuale or versione_attuale())
+                           canale or canale_attuale(), attuale or versione_attuale(),
+                           leggi_testo)
     carta.aggiorna(aggiornamenti_ultimo_controllo={
         "esito": "trovato" if trovato else "niente",
         "versione": trovato.versione if trovato else None})
@@ -213,6 +240,10 @@ def scarica(rilascio: Rilascio, al_passo: Callable[[int, int], None] | None = No
         raise ImprontaSbagliata(
             "Questo aggiornamento non dichiara la sua impronta, e senza non "
             "lo installo.")
+    if not rilascio.firmato:
+        raise ImprontaSbagliata(
+            "Questo aggiornamento non porta la firma del programma, e senza "
+            "non lo installo.")
     cartella = carta.cartella_scaricati()
     cartella.mkdir(parents=True, exist_ok=True)
     arrivo = cartella / _nome_sicuro(rilascio.nome_file)
@@ -308,7 +339,7 @@ def pronto_da_installare(attuale: str | None = None) -> tuple[Rilascio, Path] | 
         dimentica_lo_scaricato()
         return None
     try:
-        giusto = file.is_file() and rilascio.sha256 and \
+        giusto = file.is_file() and rilascio.sha256 and rilascio.firmato and \
             _impronta_del_file(file).lower() == rilascio.sha256.lower()
     except OSError:
         giusto = False

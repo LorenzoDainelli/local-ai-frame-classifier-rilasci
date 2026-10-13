@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from officina import registro
@@ -17,6 +17,8 @@ from officina.web import vista
 from officina.web.strade import base, schermo
 
 strada = APIRouter()
+
+solo_qui = [Depends(base.solo_da_questo_computer)]
 
 
 def da_fuori(richiesta: Request, altrimenti: str, **dove) -> str:
@@ -151,9 +153,11 @@ async def telefono_selezione(richiesta: Request, telefono_id: int):
     return RedirectResponse(da_fuori(richiesta, _al_telefono(telefono_id)), status_code=303)
 
 
-@strada.post("/telefono/{telefono_id}/dove")
+@strada.post("/telefono/{telefono_id}/dove", dependencies=solo_qui)
 def telefono_dove(richiesta: Request, telefono_id: int, cartella: str = Form(""),
                   spazio: str = Form("")):
+    if base.e_di_rete_e_non_scelto(cartella):
+        raise ErroreOfficina(base.NO_AL_PERCORSO_DI_RETE)
     archivio = accesso.aperto()
     with archivio.lettura() as connessione:
         riga = telefoni.per_id(connessione, telefono_id)
@@ -170,7 +174,7 @@ def telefono_dove(richiesta: Request, telefono_id: int, cartella: str = Form("")
                             status_code=303)
 
 
-@strada.post("/telefono/{telefono_id}/parti")
+@strada.post("/telefono/{telefono_id}/parti", dependencies=solo_qui)
 def telefono_parti(richiesta: Request, telefono_id: int, password: str = Form(""),
                    ancora: str = Form("")):
     archivio = accesso.aperto()

@@ -27,7 +27,11 @@
                    placeholder="La password del forziere">
             <button class="tasto-comando principale" type="submit">Rientra</button>
         </form>
-        {% if sbagliata %}
+        {% if aspetta %}
+        <p class="avviso-blocco" role="alert">{{ aspetta }}</p>
+        {% elif occupato %}
+        <p class="avviso-blocco" role="alert">{{ occupato }}</p>
+        {% elif sbagliata %}
         <p class="avviso-blocco" role="alert">Non è quella. Riprova.</p>
         {% endif %}
         <p class="sotto-il-blocco">Il lavoro sotto non si è fermato.</p>

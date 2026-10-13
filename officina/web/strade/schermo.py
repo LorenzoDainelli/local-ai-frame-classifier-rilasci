@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from officina import forziere
 from officina.archivio import accesso
-from officina.errori import ErroreOfficina
 
-from officina.web.strade import base, comune
+from officina.web.strade import base, comune, tentativi
 
 strada = APIRouter()
+
+solo_qui = [Depends(base.solo_da_questo_computer)]
 
 
 AZIONI_DEL_PROGRAMMA = {
@@ -40,9 +41,14 @@ async def il_programma_del_fisso(azione: str, richiesta: Request):
     return JSONResponse(risposta)
 
 
-def _solo_dal_fisso() -> None:
-    if base.dal_portatile():
-        raise ErroreOfficina("Questo si fa solo sul fisso.", codice="solo_dal_fisso")
+def _pagina_non_da_qui(richiesta: Request):
+    if richiesta.headers.get("accept", "").startswith("application/json"):
+        return JSONResponse({"messaggio": base.NON_DA_QUI}, status_code=403)
+    return base.pagine.TemplateResponse(
+        richiesta, "errore.html",
+        {**base.comune(richiesta), "titolo": "Questo si fa dal computer",
+         "messaggio": base.NON_DA_QUI, "indietro": "/"},
+        status_code=403)
 
 
 class _PasswordDelForziere:
@@ -51,7 +57,18 @@ class _PasswordDelForziere:
         return forziere.per(accesso.aperto().dove).acceso
 
     def e_giusta(self, password: str) -> bool:
-        return forziere.per(accesso.aperto().dove).la_password_e_giusta(password)
+        from officina.schermo.porta import NoDallaPorta
+
+        dove = accesso.aperto().dove
+        provata = []
+        giusta, attesa, occupato = tentativi.freno.prova(
+            "portatile",
+            lambda: provata.append(1) or forziere.per(dove).la_password_e_giusta(password))
+        if occupato:
+            raise NoDallaPorta(tentativi.MESSAGGIO_OCCUPATO)
+        if not provata and attesa:
+            raise NoDallaPorta(tentativi.messaggio_di_attesa(attesa))
+        return giusta
 
 
 def apri_la_porta_del_portatile() -> None:
@@ -65,44 +82,41 @@ def i_portatili() -> list[dict]:
         porta_mod.portatili().items(), key=lambda voce: voce[1].get("nome") or "")]
 
 
-@strada.post("/schermo/apri")
+@strada.post("/schermo/apri", dependencies=solo_qui)
 def apri_la_porta():
     from officina.schermo import rete
 
-    _solo_dal_fisso()
     rete.lascia_passare_il_portatile()
     apri_la_porta_del_portatile()
     accesso.aperto().imposta("porta_del_portatile", True)
     return RedirectResponse("/schermo/porta", status_code=303)
 
 
-@strada.post("/schermo/chiudi-porta")
+@strada.post("/schermo/chiudi-porta", dependencies=solo_qui)
 def chiudi_la_porta():
-    _solo_dal_fisso()
     base.la_porta().chiudi()
     accesso.aperto().imposta("porta_del_portatile", False)
     return RedirectResponse("/fuori?dove=portatile", status_code=303)
 
 
-@strada.post("/schermo/stacca")
+@strada.post("/schermo/stacca", dependencies=solo_qui)
 def stacca_il_portatile():
-    _solo_dal_fisso()
     base.la_porta().stacca()
     return RedirectResponse("/", status_code=303)
 
 
-@strada.post("/schermo/dimentica/{id_portatile}")
+@strada.post("/schermo/dimentica/{id_portatile}", dependencies=solo_qui)
 def dimentica_il_portatile(id_portatile: str):
     from officina.schermo import porta as porta_mod
 
-    _solo_dal_fisso()
     porta_mod.dimentica(id_portatile)
     return RedirectResponse("/fuori?dove=portatile", status_code=303)
 
 
 @strada.get("/schermo/porta", response_class=HTMLResponse)
 def la_porta_del_portatile(richiesta: Request):
-    _solo_dal_fisso()
+    if not base.e_questo_computer(richiesta):
+        return _pagina_non_da_qui(richiesta)
     porta = base.la_porta()
     if not porta.aperta:
         return RedirectResponse("/fuori?dove=portatile", status_code=303)
@@ -119,7 +133,8 @@ def la_porta_del_portatile(richiesta: Request):
 
 @strada.get("/schermo/coperta", response_class=HTMLResponse)
 def il_fisso_coperto(richiesta: Request):
-    _solo_dal_fisso()
+    if not base.e_questo_computer(richiesta):
+        return _pagina_non_da_qui(richiesta)
     collegato = base.la_porta().collegato()
     if collegato is None:
         return RedirectResponse("/", status_code=303)
@@ -129,9 +144,8 @@ def il_fisso_coperto(richiesta: Request):
     })
 
 
-@strada.get("/api/schermo")
+@strada.get("/api/schermo", dependencies=solo_qui)
 def api_schermo():
-    _solo_dal_fisso()
     porta = base.la_porta()
     codice, secondi = porta.codice()
     return {"aperta": porta.aperta, "codice": codice, "secondi": secondi,

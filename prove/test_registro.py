@@ -42,7 +42,7 @@ def test_una_parola_del_programma_passa():
 
 
 def test_una_parola_che_non_e_un_nome_viene_omessa_lo_stesso():
-    for bugia in ["C:\\Users\\loren\\Foto\\IMG_1234.HEIC",
+    for bugia in ["C:\\Users\\qualcuno\\Foto\\IMG_1234.HEIC",
                   "/home/qualcuno/Immagini",
                   "Non sono riuscito ad aprire mamma.jpg",
                   "nonno al mare",

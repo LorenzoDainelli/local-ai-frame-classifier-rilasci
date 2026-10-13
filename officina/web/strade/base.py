@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
@@ -96,6 +96,7 @@ def comune(richiesta: Request, qui: str = "") -> dict:
         "forziere_acceso": forziere.per(archivio.dove).acceso,
         "travaso": (telefono_web.in_corso.come_va()
                     if telefono_web.in_corso.lavoro.sta_lavorando else None),
+        "da_questo_computer": e_questo_computer(richiesta),
         "si_puo_sfogliare": (
             bool(richiesta.client)
             and ipaddress.ip_address(richiesta.client.host).is_loopback
@@ -263,13 +264,59 @@ def dove_torna(richiesta: Request, altrimenti: str) -> str:
     da = urlsplit(richiesta.headers.get("referer", ""))
     if not da.path or da.path.startswith("/prova/"):
         return altrimenti
-    return da.path + (f"?{da.query}" if da.query else "")
+    return percorso_interno(da.path + (f"?{da.query}" if da.query else ""), altrimenti)
+
+
+def percorso_interno(scritto: str, altrimenti: str = "/") -> str:
+    if (not scritto.startswith("/") or scritto.startswith("//") or "\\" in scritto
+            or any(ord(segno) < 32 or ord(segno) == 127 for segno in scritto)):
+        return altrimenti
+    return scritto
 
 
 def dal_portatile() -> bool:
     from officina import schermo
 
     return schermo.dal_portatile()
+
+
+NON_DA_QUI = "Questa scelta si fa dal computer dove gira il programma."
+
+
+def e_questo_computer(richiesta: Request) -> bool:
+    if not richiesta.client:
+        return False
+    try:
+        e_locale = ipaddress.ip_address(richiesta.client.host).is_loopback
+    except ValueError:
+        return False
+    return e_locale and not dal_portatile()
+
+
+def solo_da_questo_computer(richiesta: Request) -> None:
+    if not e_questo_computer(richiesta):
+        registro.avviso("web.scelta_non_da_questo_computer")
+        raise HTTPException(status_code=403, detail=NON_DA_QUI)
+
+
+NO_AL_PERCORSO_DI_RETE = (
+    "Un percorso di rete come «\\\\server\\cartella» non si scrive a mano: "
+    "chi lo legge può farsi consegnare le credenziali di Windows. "
+    "Collega la cartella come un disco (per esempio Z:) e scrivi quello.")
+
+_scelte_col_selettore: set[str] = set()
+
+
+def ricorda_la_scelta_del_selettore(percorso: str) -> None:
+    _scelte_col_selettore.add(percorso)
+
+
+def e_un_percorso_di_rete(percorso: str) -> bool:
+    return percorso.strip().strip('"')[:2] in ("\\\\", "//", "\\/", "/\\")
+
+
+def e_di_rete_e_non_scelto(percorso: str) -> bool:
+    return e_un_percorso_di_rete(percorso) and percorso.strip() not in _scelte_col_selettore
 
 
 def la_porta():

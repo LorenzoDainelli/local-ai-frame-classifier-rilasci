@@ -34,9 +34,13 @@
             veri, e alla fine ti lascia i tasti da ricordare.</p>
         {% endcall %}</h1></div>
         <p class="piccolo attenuato"><b>È un archivio a parte, con un database suo, e non tocca mai il tuo.</b></p>
+        {% if da_questo_computer %}
         <form method="post" action="/giro/parti">
             <button class="tasto-comando {{ 'principale' if not quanti }}" type="submit">Comincia il tutorial</button>
         </form>
+        {% else %}
+        <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+        {% endif %}
         <p class="minuscolo tenue">
             Si esce quando vuoi, e alla fine le foto finte si buttano da sole: te lo dico quando succede.
             {% if giro_gia_costruito %}

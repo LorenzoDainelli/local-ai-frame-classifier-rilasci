@@ -2,16 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
 from officina.archivio import accesso
 from officina.errori import ErroreOfficina
 from officina.web import sincronia as sincronia_web
 
-from officina.web.strade import telefono
+from officina.web.strade import base, telefono
 
 strada = APIRouter()
+
+solo_qui = [Depends(base.solo_da_questo_computer)]
 
 
 @strada.get("/sincronia")
@@ -19,8 +21,10 @@ def pagina_sincronia():
     return RedirectResponse(telefono.AL_COMPUTER, status_code=303)
 
 
-@strada.post("/sincronia/dove")
+@strada.post("/sincronia/dove", dependencies=solo_qui)
 def sincronia_dove(richiesta: Request, cartella: str = Form("")):
+    if base.e_di_rete_e_non_scelto(cartella):
+        raise ErroreOfficina(base.NO_AL_PERCORSO_DI_RETE)
     with accesso.aperto().scrittura() as connessione:
         sincronia_web.ricorda_la_cartella(connessione, cartella)
     return RedirectResponse(telefono.da_fuori(richiesta, telefono.AL_COMPUTER), status_code=303)
@@ -52,7 +56,7 @@ def _parola_da_scrivere(archivio, password: str) -> str:
     return password
 
 
-@strada.post("/sincronia/costruisci")
+@strada.post("/sincronia/costruisci", dependencies=solo_qui)
 def sincronia_costruisci(richiesta: Request, per: str = Form(""),
                          password: str = Form(""), ancora: str = Form("")):
     archivio = accesso.aperto()
@@ -74,7 +78,7 @@ def sincronia_costruisci(richiesta: Request, per: str = Form(""),
     return RedirectResponse(telefono.da_fuori(richiesta, telefono.AL_COMPUTER), status_code=303)
 
 
-@strada.post("/sincronia/applica")
+@strada.post("/sincronia/applica", dependencies=solo_qui)
 def sincronia_applica(richiesta: Request, quale: str = Form(...),
                       password: str = Form("")):
     archivio = accesso.aperto()

@@ -98,7 +98,10 @@
         <p class="cn-nota">Tutto resta nello stesso archivio. Il gruppo serve a vederle anche da sole, con il filtro «Gruppi» della galleria.</p>
     </div>
     {% endif %}
-    <form method="post" action="/importazione/cartella" class="cn-scrivi" id="cn-modulo" data-cartella-nuova>
+    {% if not da_questo_computer %}
+    <p class="cn-nota">Le cartelle si aggiungono dal computer dove gira il programma.</p>
+    {% endif %}
+    <form method="post" action="/importazione/cartella" class="cn-scrivi" id="cn-modulo" data-cartella-nuova{% if not da_questo_computer %} hidden{% endif %}>
         {% if dove_torno %}
         <input type="hidden" name="dove_torno" value="{{ dove_torno }}">
         {% endif %}

@@ -12,6 +12,9 @@
         <span class="bollino attenzione">Porta aperta</span>
         {% endif %}
     </div>
+    {% if not da_questo_computer %}
+    <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+    {% else %}
     {% if portatile_collegato %}
     <form method="post" action="/schermo/stacca"><button class="tasto-comando" type="submit">Stacca il portatile</button></form>
     {% endif %}
@@ -27,17 +30,20 @@
         {% if forziere_acceso %}A ogni collegamento il portatile chiede la password del forziere.{% else %}Il forziere è spento: il portatile abbinato entrerà senza password.{% endif %}</p>
     <form method="post" action="/schermo/apri"><button class="tasto-comando accento" type="submit">Apri la porta</button></form>
     {% endif %}
+    {% endif %}
     {% if portatili %}
     <div class="mm-elenco">
         {% for voce in portatili %}
         <div class="mm-riga">
             <span class="mm-dice"><span>{{ voce.nome }}</span>
                 <span class="minuscolo tenue">abbinato il {{ voce.abbinato_il }}{% if voce.ultima_volta %} · ultima volta {{ voce.ultima_volta }}{% endif %}</span></span>
+            {% if da_questo_computer %}
             <form method="post" action="/schermo/dimentica/{{ voce.id }}"
                   data-danno="Dimentico questo portatile?"
                   data-danno-sotto="Per ricollegarlo servirà di nuovo il codice di sei cifre."
                   data-danno-tasto="Tieni premuto per dimenticarlo">
                 <button class="tasto-comando nudo piccolo" type="submit">Dimentica</button></form>
+            {% endif %}
         </div>
         {% endfor %}
     </div>

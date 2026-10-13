@@ -303,6 +303,8 @@ def spacchetta(testo: str, dove: Path) -> Path:
             raise ValueError(f"«{nome}» doveva essere di {quanti} byte, "
                              f"ne sono usciti {len(dati)}")
         fuori = dove.joinpath(*nome.split("/"))
+        if not fuori.resolve().is_relative_to(dove.resolve()):
+            raise ValueError(f"«{nome}» esce dalla cartella di arrivo")
         fuori.parent.mkdir(parents=True, exist_ok=True)
         fuori.write_bytes(dati)
 

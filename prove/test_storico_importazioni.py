@@ -122,9 +122,9 @@ def test_di_una_mandata_non_finita_non_si_inventa_la_durata():
 
 
 def test_il_nome_della_cartella_si_taglia_su_tutt_e_due_le_barre():
-    assert storico.nome_corto("C:\\Users\\loren\\Foto") == "Foto"
-    assert storico.nome_corto("C:\\Users\\loren\\Foto\\") == "Foto"
-    assert storico.nome_corto("/home/loren/Foto") == "Foto"
+    assert storico.nome_corto("C:\\Users\\qualcuno\\Foto") == "Foto"
+    assert storico.nome_corto("C:\\Users\\qualcuno\\Foto\\") == "Foto"
+    assert storico.nome_corto("/home/qualcuno/Foto") == "Foto"
 
 
 def test_la_pagina_mostra_le_mandate_di_prima_e_non_i_percorsi(archivio, tmp_path):

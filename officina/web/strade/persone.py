@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from officina import registro
@@ -22,6 +22,8 @@ from officina.web import in_disparte
 from officina.web.strade import base, comune
 
 strada = APIRouter()
+
+solo_qui = [Depends(base.solo_da_questo_computer)]
 
 
 @strada.get("/persone", response_class=HTMLResponse)
@@ -410,7 +412,7 @@ def pagina_persona(richiesta: Request, persona_id: int):
     })
 
 
-@strada.post("/persone/{persona_id}/insegna")
+@strada.post("/persone/{persona_id}/insegna", dependencies=solo_qui)
 def insegna_altre_facce(persona_id: int, cartella: str = Form("")):
     scritto = (cartella or "").strip().strip('"')
     if not scritto:

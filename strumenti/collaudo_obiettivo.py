@@ -64,10 +64,13 @@ def esplora(uscita: Path) -> dict:
     for nome in (OCCHIO, LINGUA):
         for file in ("config.json", "generation_config.json", "preprocessor_config.json", "tokenizer_config.json"):
             if file in esito["depositi"][nome]["file"]:
-                testo = Path(hf_hub_download(nome, file, token=chiave)).read_text(encoding="utf-8")
+                testo = Path(hf_hub_download(nome, file, token=chiave,
+                                             revision=esito["depositi"][nome]["revisione"])
+                             ).read_text(encoding="utf-8")
                 esito.setdefault("misure", {})[f"{nome}/{file}"] = json.loads(testo)
     partito = time.monotonic()
-    percorso = Path(hf_hub_download(PUFFIN[0], PUFFIN[1], token=chiave))
+    percorso = Path(hf_hub_download(PUFFIN[0], PUFFIN[1], token=chiave,
+                                    revision=esito["depositi"][PUFFIN[0]]["revisione"]))
     esito["puffin_secondi"] = round(time.monotonic() - partito, 1)
     esito["puffin_sha256"] = _sha256(percorso)
     try:
@@ -76,7 +79,9 @@ def esplora(uscita: Path) -> dict:
     except Exception as guasto:
         esito["solo_numeri"] = False
         esito["solo_numeri_perche"] = repr(guasto)[:3000]
-        letto = torch.load(percorso, map_location="cpu", weights_only=False, mmap=True)
+        from officina.corpi import solo_numeri
+
+        letto = solo_numeri.leggi(percorso)
     esito["in_cima"] = ({k: type(v).__name__ for k, v in list(letto.items())[:20]}
                         if isinstance(letto, dict) else type(letto).__name__)
     dentro = letto

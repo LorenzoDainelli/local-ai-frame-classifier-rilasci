@@ -82,7 +82,7 @@ def prova_esci():
 @strada.get("/prova/qui-no", response_class=HTMLResponse)
 def prova_qui_no(richiesta: Request, da: str = ""):
     if not accesso.in_prova():
-        return RedirectResponse(da if da.startswith("/") else "/", status_code=303)
+        return RedirectResponse(base.percorso_interno(da, "/"), status_code=303)
     return base.pagine.TemplateResponse(richiesta, "prova-qui-no.html", {
         **base.comune(richiesta, "prova"), "da": da})
 

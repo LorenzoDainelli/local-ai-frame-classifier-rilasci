@@ -18,7 +18,8 @@ on:
     inputs:
       quante:
         description: "foto pubbliche da provare"
-        default: "5"
+        type: number
+        default: 5
 
 permissions:
   contents: read
@@ -33,11 +34,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
       PYTHONPATH: ${{ github.workspace }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
       - name: Le librerie e il codice originale
@@ -50,6 +52,8 @@ jobs:
           git clone -q https://github.com/facebookresearch/dinov3 dinov3-originale
           git -C dinov3-originale checkout -q 6876159a11b4df116f30f667f8c9888617df0751
       - name: Il confronto
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python strumenti/collaudo_corpo3d.py confronta --originale sam-3d-body --dinov3 dinov3-originale \
             --cartella "$RUNNER_TEMP/corpo3d" --quante "${{ github.event.inputs.quante || '5' }}" \

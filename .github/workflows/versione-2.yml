@@ -13,19 +13,27 @@ on:
     inputs:
       canale:
         description: "beta oppure finale"
+        type: choice
+        options: [beta, finale]
         default: beta
       pubblica:
-        description: "pubblica il rilascio (si/no)"
+        description: "pubblica il rilascio"
+        type: choice
+        options: ["si", "no"]
         default: "si"
       motori:
-        description: "scarica e prova davvero torch e le librerie dei modelli (si/no)"
+        description: "scarica e prova davvero torch e le librerie dei modelli"
+        type: choice
+        options: ["no", "si"]
         default: "no"
       kpr:
-        description: "scarica KPR da Google Drive e confrontalo con l'originale (si/no)"
+        description: "scarica KPR da Google Drive e confrontalo con l'originale"
+        type: choice
+        options: ["no", "si"]
         default: "no"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: versione-2-${{ github.ref }}
@@ -37,30 +45,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
       - run: python -m pip install -r requirements-sviluppo.txt
       - run: python -m pytest prove -q -p no:cacheprovider
 
-  windows:
-    name: Installatore per Windows
+  costruzione:
+    name: Costruzione dell'installatore
     runs-on: windows-latest
     timeout-minutes: 45
     env:
       PYTHONUTF8: "1"
+    outputs:
+      versione: ${{ steps.versione.outputs.versione }}
+      canale: ${{ steps.versione.outputs.canale }}
+      impronta: ${{ steps.impronta.outputs.impronta }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
-
-      - name: Prove del programma su Windows
-        run: |
-          python -m pip install -r requirements-sviluppo.txt
-          python -m pytest prove/test_programma.py prove/test_programma_finestre.py -q -p no:cacheprovider
 
       - name: Numero di versione
         id: versione
@@ -68,11 +79,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DEPOSITO_RILASCI: ${{ vars.RILASCI_DEPOSITO || github.repository }}
+          CANALE_CHIESTO: ${{ inputs.canale }}
+          NUMERO_DEL_GIRO: ${{ github.run_number }}
         run: |
-          CANALE="${{ github.event.inputs.canale || 'beta' }}"
+          CANALE="${CANALE_CHIESTO:-beta}"
+          case "$CANALE" in beta|finale) ;; *) echo "canale sconosciuto" >&2; exit 1 ;; esac
+          [[ "$NUMERO_DEL_GIRO" =~ ^[0-9]+$ ]] || exit 1
           ULTIMO=$(gh release list --repo "$DEPOSITO_RILASCI" --limit 100 --json tagName \
             --jq '[.[].tagName | capture("(?<n>[0-9]+)$").n | tonumber] | max // 0')
-          NUMERO=${{ github.run_number }}
+          [[ "$ULTIMO" =~ ^[0-9]+$ ]] || exit 1
+          NUMERO=$NUMERO_DEL_GIRO
           if [ "$NUMERO" -le "$ULTIMO" ]; then NUMERO=$((ULTIMO + 1)); fi
           if [ "$CANALE" = "finale" ]; then
             VERSIONE="2.0.$NUMERO"
@@ -84,7 +100,11 @@ jobs:
           echo "numerica=2.0.0.$NUMERO" >> "$GITHUB_OUTPUT"
 
       - name: Prepara Python, librerie e programma
-        run: python installatore/prepara.py --versione "${{ steps.versione.outputs.versione }}" --canale "${{ steps.versione.outputs.canale }}" --commit "${{ github.sha }}" --rilasci "${{ vars.RILASCI_DEPOSITO || github.repository }}"
+        env:
+          VERSIONE: ${{ steps.versione.outputs.versione }}
+          CANALE: ${{ steps.versione.outputs.canale }}
+          DEPOSITO_RILASCI: ${{ vars.RILASCI_DEPOSITO || github.repository }}
+        run: python installatore/prepara.py --versione "$env:VERSIONE" --canale "$env:CANALE" --commit "${{ github.sha }}" --rilasci "$env:DEPOSITO_RILASCI"
 
       - name: Collaudo del pacchetto
         run: |
@@ -104,16 +124,76 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Costruisci l'installatore
+        env:
+          VERSIONE: ${{ steps.versione.outputs.versione }}
+          NUMERICA: ${{ steps.versione.outputs.numerica }}
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
-          & $iscc "/DVersione=${{ steps.versione.outputs.versione }}" "/DVersioneNumerica=${{ steps.versione.outputs.numerica }}" installatore\local-ai-frame-classifier.iss
+          if (-not (Test-Path $iscc)) { Write-Output "su questa macchina di GitHub manca Inno Setup 6"; exit 1 }
+          & $iscc "/DVersione=$env:VERSIONE" "/DVersioneNumerica=$env:NUMERICA" installatore\local-ai-frame-classifier.iss
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          python installatore/prepara.py --versione x --impronta "uscita\local-ai-frame-classifier-${{ steps.versione.outputs.versione }}.exe"
+
+      - name: Impronta dell'installatore
+        id: impronta
+        shell: bash
+        env:
+          VERSIONE: ${{ steps.versione.outputs.versione }}
+        run: |
+          python installatore/prepara.py --versione x --impronta "uscita/local-ai-frame-classifier-$VERSIONE.exe"
+          IMPRONTA=$(cut -d ' ' -f 1 "uscita/local-ai-frame-classifier-$VERSIONE.exe.sha256")
+          [[ "$IMPRONTA" =~ ^[0-9a-f]{64}$ ]] || exit 1
+          echo "impronta=$IMPRONTA" >> "$GITHUB_OUTPUT"
+
+      - name: Cosa hanno detto i collaudi
+        if: always()
+        run: |
+          foreach ($file in Get-ChildItem collaudo-*.json -ErrorAction SilentlyContinue) {
+            Write-Output "===== $($file.Name)"
+            Get-Content $file
+          }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          retention-days: 3
+          name: installatore
+          path: |
+            uscita/*.exe
+            uscita/*.sha256
+          if-no-files-found: error
+
+  collaudo:
+    name: Collaudo dell'installatore su Windows
+    needs: costruzione
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Prove del programma su Windows
+        run: |
+          python -m pip install -r requirements-sviluppo.txt
+          python -m pytest prove/test_programma.py prove/test_programma_finestre.py -q -p no:cacheprovider
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installatore
+          path: uscita
 
       - name: Installa in silenzio, collauda, disinstalla
+        env:
+          VERSIONE: ${{ needs.costruzione.outputs.versione }}
+          IMPRONTA: ${{ needs.costruzione.outputs.impronta }}
         run: |
-          $installatore = "uscita\local-ai-frame-classifier-${{ steps.versione.outputs.versione }}.exe"
+          $installatore = "uscita\local-ai-frame-classifier-$env:VERSIONE.exe"
+          if ((Get-FileHash -Algorithm SHA256 $installatore).Hash.ToLower() -ne $env:IMPRONTA) { Write-Output "l'installatore non è quello costruito"; exit 1 }
           Start-Process -Wait -FilePath $installatore -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'
           $casa = Join-Path $env:LOCALAPPDATA "Programs\Local AI Frame Classifier"
           if (-not (Test-Path "$casa\python\pythonw.exe")) { Write-Output "non installato in $casa"; exit 1 }
@@ -125,61 +205,91 @@ jobs:
           if (Test-Path "$casa\python") { Write-Output "la disinstallazione ha lasciato python"; exit 1 }
           exit $esito
 
-      - name: Cosa hanno detto i collaudi
+      - name: Cosa ha detto il collaudo
         if: always()
-        run: |
-          foreach ($file in Get-ChildItem collaudo-*.json -ErrorAction SilentlyContinue) {
-            Write-Output "===== $($file.Name)"
-            Get-Content $file
-          }
+        run: Get-Content collaudo-installato.json -ErrorAction SilentlyContinue
 
-      - uses: actions/upload-artifact@v4
-        if: always()
-        continue-on-error: true
+  pubblica:
+    name: Pubblica il rilascio firmato
+    needs: [prove, costruzione, collaudo]
+    if: github.event_name == 'push' || inputs.pubblica == 'si'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: rilascio
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          retention-days: 1
-          name: installatore-${{ steps.versione.outputs.versione }}
-          path: |
-            uscita/*.exe
-            uscita/*.sha256
-            collaudo-*.json
-          if-no-files-found: ignore
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installatore
+          path: uscita
+
+      - name: Controlla e firma l'installatore
+        env:
+          VERSIONE: ${{ needs.costruzione.outputs.versione }}
+          IMPRONTA: ${{ needs.costruzione.outputs.impronta }}
+          FIRMA_AGGIORNAMENTI: ${{ secrets.FIRMA_AGGIORNAMENTI }}
+        run: |
+          NOME="local-ai-frame-classifier-$VERSIONE.exe"
+          [ "$(sha256sum "uscita/$NOME" | cut -d ' ' -f 1)" = "$IMPRONTA" ] || { echo "l'installatore non è quello costruito" >&2; exit 1; }
+          [ -n "$FIRMA_AGGIORNAMENTI" ] || { echo "manca la chiave di firma nell'ambiente «rilascio»" >&2; exit 1; }
+          umask 077
+          CHIAVE="$RUNNER_TEMP/firma.pem"
+          printf '%s\n' "$FIRMA_AGGIORNAMENTI" > "$CHIAVE"
+          PUBBLICA=$(openssl pkey -in "$CHIAVE" -pubout -outform DER | tail -c 32 | base64 -w0)
+          if ! grep -qF "\"$PUBBLICA\"" officina/programma/firma.py; then
+            rm -f "$CHIAVE"
+            echo "la chiave di firma non è quella scritta nel programma" >&2
+            exit 1
+          fi
+          printf 'local-ai-frame-classifier aggiornamento 1\nversione %s\nfile %s\nsha256 %s\n' \
+            "$VERSIONE" "$NOME" "$IMPRONTA" > "$RUNNER_TEMP/messaggio.txt"
+          openssl pkeyutl -sign -inkey "$CHIAVE" -rawin -in "$RUNNER_TEMP/messaggio.txt" \
+            -out "$RUNNER_TEMP/firma.bin"
+          rm -f "$CHIAVE"
+          base64 -w0 "$RUNNER_TEMP/firma.bin" > "uscita/$NOME.firma"
+          echo "firmato con la chiave $PUBBLICA"
 
       - name: Pubblica il rilascio
-        if: github.event.inputs.pubblica != 'no'
         env:
           GH_TOKEN: ${{ github.token }}
           TOKEN_RILASCI: ${{ secrets.RILASCI_TOKEN || github.token }}
           DEPOSITO_RILASCI: ${{ vars.RILASCI_DEPOSITO || github.repository }}
-        shell: bash
+          VERSIONE: ${{ needs.costruzione.outputs.versione }}
+          CANALE: ${{ needs.costruzione.outputs.canale }}
         run: |
-          VERSIONE="${{ steps.versione.outputs.versione }}"
           SEGNO=""
-          if [ "${{ steps.versione.outputs.canale }}" != "finale" ]; then SEGNO="--prerelease"; fi
+          if [ "$CANALE" != "finale" ]; then SEGNO="--prerelease"; fi
           git log -1 --pretty=%B > note.txt
           if [ "$DEPOSITO_RILASCI" != "$GITHUB_REPOSITORY" ]; then
-            gh release create "v$VERSIONE" uscita/*.exe uscita/*.sha256 $SEGNO \
-              --target "${{ github.sha }}" --title "Local AI Frame Classifier $VERSIONE" \
+            gh release create "v$VERSIONE" uscita/*.exe uscita/*.sha256 uscita/*.firma $SEGNO \
+              --target "$GITHUB_SHA" --title "Local AI Frame Classifier $VERSIONE" \
               --notes-file note.txt
           fi
           PESO=$(wc -c < "uscita/local-ai-frame-classifier-$VERSIONE.exe")
-          python strumenti/vetrina.py --deposito "$DEPOSITO_RILASCI" --versione "$VERSIONE" \
+          python3 strumenti/vetrina.py --deposito "$DEPOSITO_RILASCI" --versione "$VERSIONE" \
             --peso "$PESO" --note note-pubbliche.md
-          GH_TOKEN="$TOKEN_RILASCI" gh release create "v$VERSIONE" uscita/*.exe uscita/*.sha256 $SEGNO \
+          GH_TOKEN="$TOKEN_RILASCI" gh release create "v$VERSIONE" uscita/*.exe uscita/*.sha256 uscita/*.firma $SEGNO \
             --repo "$DEPOSITO_RILASCI" --target main --title "Local AI Frame Classifier $VERSIONE" \
             --notes-file note-pubbliche.md
-          bash strumenti/vetrina.sh "$VERSIONE" "$PESO"
+          PYTHON=python3 bash strumenti/vetrina.sh "$VERSIONE" "$PESO"
 
   motori:
     name: Motori veri su Windows
-    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.motori == 'si') || contains(github.event.head_commit.message, '[motori]')
+    if: (github.event_name == 'workflow_dispatch' && inputs.motori == 'si') || contains(github.event.head_commit.message, '[motori]')
     runs-on: windows-latest
     timeout-minutes: 90
     env:
       PYTHONUTF8: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
       - name: Prepara il pacchetto
@@ -195,16 +305,18 @@ jobs:
 
   kpr:
     name: KPR confrontato con l'originale
-    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.kpr == 'si') || contains(github.event.head_commit.message, '[kpr]')
+    if: (github.event_name == 'workflow_dispatch' && inputs.kpr == 'si') || contains(github.event.head_commit.message, '[kpr]')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         id: loro
         with:
           python-version: "3.10"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
       - name: L'originale di KPR
@@ -216,10 +328,11 @@ jobs:
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
           python -m pip install numpy safetensors pillow opencv-python-headless
       - name: Le librerie dell'originale
+        env:
+          PY: ${{ steps.loro.outputs.python-path }}
         run: |
-          PY="${{ steps.loro.outputs.python-path }}"
           "$PY" -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
-          "$PY" -m pip install "numpy<2" "opencv-python-headless==4.10.0.84" "albumentations==1.3.1" "torchmetrics==1.3.0" "matplotlib==3.8.4" "pandas<2.3" safetensors pillow scipy yacs tabulate deepdiff timm scikit-image tqdm omegaconf scikit-learn h5py six future tensorboard wandb monai "git+https://github.com/facebookresearch/segment-anything.git" "git+https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup"
+          "$PY" -m pip install "numpy<2" "opencv-python-headless==4.10.0.84" "albumentations==1.3.1" "torchmetrics==1.3.0" "matplotlib==3.8.4" "pandas<2.3" safetensors pillow scipy yacs tabulate deepdiff timm scikit-image tqdm omegaconf scikit-learn h5py six future tensorboard wandb monai "git+https://github.com/facebookresearch/segment-anything.git@dca509fe793f601edb92606367a655c15ac00fdf" "git+https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup@12d03c07553aedd3d9e9155e2b3e31ce8c64081a"
       - name: Confronto con l'originale
         env:
           PYTHON_DI_KPR: ${{ steps.loro.outputs.python-path }}

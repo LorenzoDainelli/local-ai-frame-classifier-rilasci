@@ -1,7 +1,7 @@
 import { chiedi, mandaModulo, leggiDatiIncorporati, siStaScrivendo }
     from "/statici/js/comune.js";
 import { albero_e_aperto, chiudi_albero } from "/statici/js/albero_sopra.js";
-import { chiediUnNome, chiediSeSi, chiediAlcuni } from "/statici/js/finestrina.js";
+import { chiediUnNome, chiediSeSi, chiediAlcuni, htmlFidato } from "/statici/js/finestrina.js";
 
 async function scrivi(indirizzo, dati) {
     const fatto = await mandaModulo(indirizzo, dati);
@@ -733,7 +733,7 @@ function riga(etichetta, valore) {
 async function azione(quale, dati) {
     if (quale === "rinomina") {
         const nuovo = await chiediUnNome({
-            titolo: `Nuovo nome per «${scampa(dati.nome)}»`,
+            titolo: `Nuovo nome per «${dati.nome}»`,
             sotto: "Le foto restano dove sono: cambia solo il nome.",
             valore: dati.nome, tasto: "Rinomina",
         });
@@ -779,7 +779,7 @@ async function azione(quale, dati) {
             }))
             .sort((a, b) => a.testo.localeCompare(b.testo, "it"));
         const scelti = await chiediAlcuni({
-            titolo: `Copia «${scampa(dati.nome)}» dentro…`,
+            titolo: `Copia «${dati.nome}» dentro…`,
             sotto: "Spunta i nodi: sotto ognuno compare una copia con tutti i suoi figli. " +
                    "Si copiano i nomi e «scegline uno», non gli esempi.",
             voci, tasto: "Copia",
@@ -802,14 +802,14 @@ async function azione(quale, dati) {
         const sotto = dati.figli_sotto || 0;
         const foto = dati.scatti_ramo || 0;
         const si = await chiediSeSi({
-            titolo: `Metti «${scampa(dati.nome)}» nel cestino?`,
-            sotto: (sotto
-                ? `Con lui vanno nel cestino anche i <b>${sotto}</b> ${sotto === 1 ? "nodo" : "nodi"} sotto. `
+            titolo: `Metti «${dati.nome}» nel cestino?`,
+            sotto: htmlFidato((sotto
+                ? `Con lui vanno nel cestino anche i <b>${Number(sotto)}</b> ${sotto === 1 ? "nodo" : "nodi"} sotto. `
                 : "") +
                 (foto
-                    ? `<b>${foto}</b> ${foto === 1 ? "foto perde" : "foto perdono"} questa etichetta; le foto restano dove sono. `
+                    ? `<b>${Number(foto)}</b> ${foto === 1 ? "foto perde" : "foto perdono"} questa etichetta; le foto restano dove sono. `
                     : "Nessuna foto ha questa etichetta. ") +
-                "Si rimette a posto da Impostazioni › Nel cestino.",
+                "Si rimette a posto da Impostazioni › Nel cestino."),
             tasto: "Metti nel cestino", annulla: "Lascia stare", pericolo: true,
         });
         if (!si) return;
@@ -916,7 +916,7 @@ async function azioneSulLuogo(quale, dati) {
     const id = dati.posto_id;
     if (quale === "rinomina") {
         const nuovo = await chiediUnNome({
-            titolo: `Nuovo nome per «${scampa(dati.nome)}»`,
+            titolo: `Nuovo nome per «${dati.nome}»`,
             sotto: "Gli scatti restano dove sono: cambia solo il nome.",
             valore: dati.nome, tasto: "Rinomina",
         });
@@ -930,7 +930,7 @@ async function azioneSulLuogo(quale, dati) {
         cominciaSpostamentoAParole(id);
     } else if (quale === "coordinate") {
         const scritte = await chiediUnNome({
-            titolo: `Coordinate di «${scampa(dati.nome)}»`,
+            titolo: `Coordinate di «${dati.nome}»`,
             sotto: "Due numeri separati da una virgola, per esempio 43.77, 11.25.",
             valore: dati.coordinate && dati.coordinate.da !== "padre"
                 ? `${dati.coordinate.latitudine}, ${dati.coordinate.longitudine}` : "",
@@ -945,10 +945,10 @@ async function azioneSulLuogo(quale, dati) {
     } else if (quale === "cestina") {
         const sotto = dati.figli_sotto || 0;
         const si = await chiediSeSi({
-            titolo: `Metti «${scampa(dati.nome)}» nel cestino?`,
-            sotto: (sotto
-                ? `Con lui vanno nel cestino anche i <b>${sotto}</b> ${sotto === 1 ? "luogo" : "luoghi"} dentro. `
-                : "") + "Gli scatti restano dove sono, senza questo luogo.",
+            titolo: `Metti «${dati.nome}» nel cestino?`,
+            sotto: htmlFidato((sotto
+                ? `Con lui vanno nel cestino anche i <b>${Number(sotto)}</b> ${sotto === 1 ? "luogo" : "luoghi"} dentro. `
+                : "") + "Gli scatti restano dove sono, senza questo luogo."),
             tasto: "Metti nel cestino", annulla: "Lascia stare", pericolo: true,
         });
         if (!si) return;
@@ -1069,9 +1069,9 @@ $("cerca-mappa").addEventListener("keydown", async (evento) => {
     const dove = ilMigliore(cercato, inMovimento);
     if (!dove) { avvisa("Nessun nodo con questo nome"); return; }
     const unisco = await chiediSeSi({
-        titolo: `Unisco «${scampa(chi.nome)}» a «${scampa(dove.nome)}»?`,
-        sotto: `Le foto e i nodi sotto passano a «${scampa(dove.nome)}». ` +
-               `«${scampa(chi.nome)}» viene archiviato, non cancellato: si ripesca.`,
+        titolo: `Unisco «${chi.nome}» a «${dove.nome}»?`,
+        sotto: `Le foto e i nodi sotto passano a «${dove.nome}». ` +
+               `«${chi.nome}» viene archiviato, non cancellato: si ripesca.`,
         tasto: "Unisci",
     });
     if (!unisco) { fineRicercaSpeciale(); return; }
@@ -1166,7 +1166,7 @@ $("albero-mondo").addEventListener("click", async (evento) => {
 async function creaUnNodoDentro(id) {
     const padre = id ? nodo(id) : null;
     const nome = await chiediUnNome({
-        titolo: padre ? `${PAROLE.nuovo} dentro «${scampa(padre.nome)}»`
+        titolo: padre ? `${PAROLE.nuovo} dentro «${padre.nome}»`
             : (LUOGHI ? "Nuovo luogo di primo livello" : "Nuova categoria di primo livello"),
         sotto: padre ? "Lo trovi subito nella mappa, sotto il suo genitore." : "Sta in cima alla mappa, senza genitore.",
         segnaposto: padre ? `Nome del ${PAROLE.uno}` : (LUOGHI ? "Nome del luogo" : "Nome della categoria"),

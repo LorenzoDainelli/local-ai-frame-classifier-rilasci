@@ -39,9 +39,13 @@
     </section>
 
     <section class="guida-sezione">
+        {% if da_questo_computer %}
         {% with dove_torno = "/benvenuto", nella_guida = True %}
         {% include "_forziere.html" %}
         {% endwith %}
+        {% else %}
+        <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+        {% endif %}
     </section>
 
     <div class="guida-promesse">

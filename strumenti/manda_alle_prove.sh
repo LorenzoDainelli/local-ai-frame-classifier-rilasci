@@ -26,7 +26,7 @@ find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -r -f {} +
 git -C "$RADICE" archive --format=tar "$CODICE" | tar -x -f - -C .
 for VIA in "${FUORI[@]}"; do rm -r -f "./$VIA"; done
 
-if grep -rIl --exclude-dir=.git -e "@gmail[.]com" -e "hf_[A-Za-z0-9]\{30\}" . > /dev/null; then
+if grep -rIl --exclude-dir=.git -e "@gmail[.]com" -e "hf_[A-Za-z0-9]\{30\}" -e "gh[p]_" -e "github[_]pat[_]" -e "gh[o]_" -e "BEGIN .*PRIVATE[ ]KEY" -e "AKIA[0-9A-Z]\{16\}" . > /dev/null; then
   echo "nella copia c'è un'email o una chiave: non la mando" >&2
   exit 1
 fi

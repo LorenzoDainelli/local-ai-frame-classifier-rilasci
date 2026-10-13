@@ -139,6 +139,8 @@
 
             {% if manca_il_modello %}
             <div class="avviso" style="white-space:pre-line">{{ manca_il_modello }}</div>
+            {% elif not da_questo_computer %}
+            <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
             {% else %}
             <form method="post" action="/persone/{{ chi.id }}/insegna" class="ps-modulo">
                 <label class="minuscolo tenue" for="cartella">

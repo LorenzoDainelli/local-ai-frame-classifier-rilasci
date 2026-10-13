@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from officina import forziere, prova, registro
@@ -17,6 +17,8 @@ from officina.web import vista
 from officina.web.strade import base, comune, importazione, misura, modelli
 
 strada = APIRouter()
+
+solo_qui = [Depends(base.solo_da_questo_computer)]
 
 
 @strada.get("/benvenuto", response_class=HTMLResponse)
@@ -56,7 +58,7 @@ def benvenuto_modelli(richiesta: Request):
     })
 
 
-@strada.post("/giro/parti")
+@strada.post("/giro/parti", dependencies=solo_qui)
 def giro_parti():
 
     if comune.lavoro is not None and comune.lavoro.sta_lavorando:

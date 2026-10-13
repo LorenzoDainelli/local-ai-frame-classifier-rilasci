@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -17,6 +18,12 @@ SCARICATI = CASA / "costruzione-scaricati"
 
 FTP_PYTHON = "https://www.python.org/ftp/python/"
 WEBVIEW2 = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+LIBRERIE_BLOCCATE = CASA / "installatore" / "librerie-del-programma.txt"
+
+PYTHON_INCORPORATA = ""
+IMPRONTE_DI_PYTHON: dict[str, str] = {}
+
+FIRMATARIO_DI_WEBVIEW2 = "O=Microsoft Corporation"
 
 LIBRERIE_DI_VISUAL_CPP = (
     "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "msvcp140_atomic_wait.dll",
@@ -56,9 +63,22 @@ def ultima_python(minore: str) -> str:
     raise SystemExit(f"nessuna Python {minore}.x incorporabile trovata")
 
 
+def controlla_python(archivio: Path, versione: str) -> None:
+    attesa = IMPRONTE_DI_PYTHON.get(versione)
+    trovata = impronta(archivio)
+    if attesa is None:
+        raise SystemExit(f"la Python {versione} non ha un'impronta fissata in prepara.py "
+                         f"(quella scaricata è {trovata})")
+    if trovata != attesa:
+        archivio.unlink(missing_ok=True)
+        raise SystemExit(f"la Python {versione} scaricata non è quella attesa: "
+                         f"{trovata} invece di {attesa}")
+
+
 def prepara_python(versione: str, dove: Path) -> None:
     archivio = scarica(f"{FTP_PYTHON}{versione}/python-{versione}-embed-amd64.zip",
                        SCARICATI / f"python-{versione}-embed-amd64.zip")
+    controlla_python(archivio, versione)
     with zipfile.ZipFile(archivio) as zip_:
         zip_.extractall(dove)
     minore = "".join(versione.split(".")[:2])
@@ -73,7 +93,8 @@ def installa_le_librerie(dove: Path) -> None:
     sito = dove / "Lib" / "site-packages"
     subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir",
                     "--disable-pip-version-check", "--no-warn-script-location",
-                    "--target", str(sito), "-r", str(CASA / "requirements-programma.txt")],
+                    "--require-hashes", "--only-binary", ":all:", "--no-deps",
+                    "--target", str(sito), "-r", str(LIBRERIE_BLOCCATE)],
                    check=True)
     for cartella in sito.rglob("__pycache__"):
         shutil.rmtree(cartella, ignore_errors=True)
@@ -106,6 +127,21 @@ def copia_il_programma(dove: Path, versione: str, canale: str, commit: str,
                                            encoding="utf-8")
 
 
+def controlla_la_firma_di_microsoft(file: Path) -> None:
+    if sys.platform != "win32":
+        return
+    powershell = Path(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
+    comando = ("$f = Get-AuthenticodeSignature -LiteralPath $env:FILE_DA_CONTROLLARE; "
+               "Write-Output $f.Status; Write-Output $f.SignerCertificate.Subject")
+    uscita = subprocess.run([str(powershell), "-NoProfile", "-NonInteractive", "-Command", comando],
+                            capture_output=True, text=True, check=True,
+                            env={**os.environ, "FILE_DA_CONTROLLARE": str(file)})
+    righe = [r.strip() for r in uscita.stdout.splitlines() if r.strip()]
+    if len(righe) < 2 or righe[0] != "Valid" or FIRMATARIO_DI_WEBVIEW2 not in righe[1]:
+        file.unlink(missing_ok=True)
+        raise SystemExit(f"{file.name} non porta una firma valida di Microsoft: {righe}")
+
+
 def impronta(file: Path) -> str:
     calcolo = hashlib.sha256()
     with open(file, "rb") as dentro:
@@ -131,7 +167,7 @@ def principale() -> int:
         return 0
 
     minore = f"{sys.version_info.major}.{sys.version_info.minor}"
-    versione_python = argomenti.python or ultima_python(minore)
+    versione_python = argomenti.python or PYTHON_INCORPORATA or ultima_python(minore)
     if not versione_python.startswith(minore + "."):
         raise SystemExit(f"la Python incorporata ({versione_python}) deve essere la "
                          f"stessa {minore} di chi costruisce")
@@ -142,7 +178,7 @@ def principale() -> int:
     copiate = copia_le_librerie_di_visual_cpp(python) if sys.platform == "win32" else []
     copia_il_programma(COSTRUZIONE / "app", argomenti.versione, argomenti.canale,
                        argomenti.commit, argomenti.rilasci)
-    scarica(WEBVIEW2, COSTRUZIONE / "MicrosoftEdgeWebview2Setup.exe")
+    controlla_la_firma_di_microsoft(scarica(WEBVIEW2, COSTRUZIONE / "MicrosoftEdgeWebview2Setup.exe"))
     print(json.dumps({"python": versione_python, "visual_cpp": copiate,
                       "versione": argomenti.versione}, indent=2))
     return 0

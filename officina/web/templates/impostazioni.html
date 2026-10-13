@@ -497,6 +497,7 @@
 
         <section id="c6">
             <h2>Sicurezza</h2>
+            {% if da_questo_computer %}
             <div class="riquadro scheda-righe">
                 {% call riga("Accesso dagli altri computer di casa",
                              "accesso_dalla_rete", True,
@@ -506,6 +507,9 @@
                 {{ interruttore("accesso_dalla_rete", impostazioni.accesso_dalla_rete) }}
                 {% endcall %}
             </div>
+            {% else %}
+            <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+            {% endif %}
 
             {% if dispositivi %}
             <p class="sd" style="margin:var(--s6) 0 var(--s3)">
@@ -518,6 +522,7 @@
                         <span class="minuscolo tenue">{{ dispositivo.stato }} ·
                             {{ dispositivo.contatti }} volte</span>
                     </div>
+                    {% if da_questo_computer %}
                     <form method="post" class="in-fila"
                           action="/impostazioni/dispositivo/{{ dispositivo.id }}">
                         <button class="tasto-comando nudo" name="stato" value="approvato"
@@ -525,6 +530,7 @@
                         <button class="tasto-comando nudo" name="stato" value="rifiutato"
                                 type="submit">rifiuta</button>
                     </form>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -533,13 +539,20 @@
             <p class="sd" style="margin:var(--s6) 0 var(--s3)">
                 Il forziere <span class="tenue"></span></p>
 
+            {% if da_questo_computer %}
             {% with dove_torno = "/impostazioni#c6", nella_guida = False %}
             {% include "_forziere.html" %}
             {% endwith %}
+            {% else %}
+            <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+            {% endif %}
 
             <p class="sd" style="margin:var(--s6) 0 var(--s3)">
                 Il blocco automatico <span class="tenue"></span></p>
 
+            {% if not da_questo_computer %}
+            <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+            {% else %}
             {% call riga("Chiudi lo schermo dopo", "blocco_dopo_minuti", True,
                 "Copre lo scenario \"mi sono alzato e ho lasciato il
                  PC acceso\". Lo schermo si copre e per rientrare serve la
@@ -552,6 +565,7 @@
                       [(0, "mai"), (5, "5 minuti"), (15, "15 minuti"),
                        (30, "30 minuti"), (60, "un'ora")]) }}
             {% endcall %}
+            {% endif %}
 
             {% if not forziere_acceso %}
 
@@ -647,8 +661,12 @@
                         <span class="costo">qualche minuto · perdi solo
                             l'apprendimento, non il lavoro</span>
                     </div>
+                    {% if da_questo_computer %}
                     <button class="tasto-pericolo" type="button"
                             data-pericolo="Azzera l'addestramento|azzera|Le tue etichette e l'albero non si toccano: il sistema le rilegge da capo.|/impostazioni/azzera-addestramento">avvia</button>
+                    {% else %}
+                    <span class="piccolo tenue">dal computer</span>
+                    {% endif %}
                 </div>
 
                 {% if persone_vive %}
@@ -687,8 +705,12 @@
                             tocca né i dati né l'albero.</p>
                         <span class="costo">immediato · nessun dato perso</span>
                     </div>
+                    {% if da_questo_computer %}
                     <button class="tasto-pericolo" type="button"
                             data-pericolo="Riporta le impostazioni come erano|reimposta|Torna tutto ai valori di partenza. Dati, albero ed etichette non si toccano.|/impostazioni/riporta-i-valori">avvia</button>
+                    {% else %}
+                    <span class="piccolo tenue">dal computer</span>
+                    {% endif %}
                 </div>
             </div>
 

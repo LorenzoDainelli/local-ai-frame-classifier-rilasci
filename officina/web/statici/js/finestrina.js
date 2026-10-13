@@ -6,6 +6,16 @@ const muove = () => {
 const scampa = (testo) => String(testo ?? "").replace(/[&<>"]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+class HtmlFidato {
+    constructor(testo) {
+        this.testo = String(testo ?? "");
+    }
+}
+
+export const htmlFidato = (testo) => new HtmlFidato(testo);
+
+const dentro = (parte) => (parte instanceof HtmlFidato ? parte.testo : scampa(parte));
+
 const TENUTA_MS = 1400;
 
 function costruisci({ titolo, sotto, campo, valore, segnaposto, tasto, pericolo, annulla }) {
@@ -14,16 +24,16 @@ function costruisci({ titolo, sotto, campo, valore, segnaposto, tasto, pericolo,
     finestra.setAttribute("aria-labelledby", "finestrina-titolo");
     finestra.innerHTML =
         `<form method="dialog" class="finestrina-dentro" novalidate>` +
-        `<h2 id="finestrina-titolo">${titolo}</h2>` +
-        (sotto ? `<p class="finestrina-sotto">${sotto}</p>` : "") +
+        `<h2 id="finestrina-titolo">${dentro(titolo)}</h2>` +
+        (sotto ? `<p class="finestrina-sotto">${dentro(sotto)}</p>` : "") +
         (campo ? `<input class="finestrina-campo" type="text" autocomplete="off" spellcheck="false" ` +
                  `value="${scampa(valore)}" placeholder="${scampa(segnaposto)}" aria-label="${scampa(segnaposto || "Nome")}">` : "") +
         `<p class="finestrina-errore" role="alert" hidden></p>` +
         `<div class="finestrina-tasti">` +
-        `<button type="button" class="tasto-comando nudo" data-no>${annulla} <kbd>Esc</kbd></button>` +
+        `<button type="button" class="tasto-comando nudo" data-no>${scampa(annulla)} <kbd>Esc</kbd></button>` +
         (pericolo
-            ? `<button type="button" class="tasto-comando finestrina-tieni" data-si><i aria-hidden="true"></i><span>${tasto}</span></button>`
-            : `<button type="submit" class="tasto-comando principale" data-si>${tasto} <kbd>&crarr;</kbd></button>`) +
+            ? `<button type="button" class="tasto-comando finestrina-tieni" data-si><i aria-hidden="true"></i><span>${scampa(tasto)}</span></button>`
+            : `<button type="submit" class="tasto-comando principale" data-si>${scampa(tasto)} <kbd>&crarr;</kbd></button>`) +
         `</div></form>`;
     return finestra;
 }
@@ -161,22 +171,22 @@ export function chiediAlcuni({ titolo, sotto = "", voci, tasto = "Conferma", ann
     finestra.setAttribute("aria-labelledby", "finestrina-titolo");
     finestra.innerHTML =
         `<form method="dialog" class="finestrina-dentro" novalidate>` +
-        `<h2 id="finestrina-titolo">${titolo}</h2>` +
-        (sotto ? `<p class="finestrina-sotto">${sotto}</p>` : "") +
+        `<h2 id="finestrina-titolo">${dentro(titolo)}</h2>` +
+        (sotto ? `<p class="finestrina-sotto">${dentro(sotto)}</p>` : "") +
         `<input class="finestrina-campo" type="search" autocomplete="off" spellcheck="false" ` +
         `placeholder="Cerca" aria-label="Cerca">` +
         `<div class="finestrina-scelte" role="group">` +
         voci.map((voce) =>
             `<label class="finestrina-scelta${voce.spento ? " spenta" : ""}" data-testo="${scampa(voce.testo.toLowerCase())}">` +
-            `<input type="checkbox" value="${voce.id}"${voce.spento ? " disabled" : ""}>` +
+            `<input type="checkbox" value="${scampa(voce.id)}"${voce.spento ? " disabled" : ""}>` +
             `<span>${scampa(voce.testo)}</span>` +
             (voce.spento ? `<small>${scampa(voce.spento)}</small>` : "") +
             `</label>`).join("") +
         `</div>` +
         `<p class="finestrina-errore" role="alert" hidden></p>` +
         `<div class="finestrina-tasti">` +
-        `<button type="button" class="tasto-comando nudo" data-no>${annulla} <kbd>Esc</kbd></button>` +
-        `<button type="submit" class="tasto-comando principale" data-si>${tasto} <kbd>&crarr;</kbd></button>` +
+        `<button type="button" class="tasto-comando nudo" data-no>${scampa(annulla)} <kbd>Esc</kbd></button>` +
+        `<button type="submit" class="tasto-comando principale" data-si>${scampa(tasto)} <kbd>&crarr;</kbd></button>` +
         `</div></form>`;
     document.body.appendChild(finestra);
     const campo = finestra.querySelector(".finestrina-campo");
@@ -221,7 +231,7 @@ export function chiediAlcuni({ titolo, sotto = "", voci, tasto = "Conferma", ann
     });
 }
 
-window.finestrina = { chiediUnNome, chiediSeSi, chiediAlcuni };
+window.finestrina = { chiediUnNome, chiediSeSi, chiediAlcuni, htmlFidato };
 
 document.addEventListener("submit", async (evento) => {
     const modulo = evento.target;
@@ -247,8 +257,8 @@ export function chiediFraTre({ titolo, sotto = "", primo, secondo, annulla = "An
     finestra.setAttribute("aria-labelledby", "finestrina-titolo");
     finestra.innerHTML =
         `<form method="dialog" class="finestrina-dentro" novalidate>` +
-        `<h2 id="finestrina-titolo">${titolo}</h2>` +
-        (sotto ? `<p class="finestrina-sotto">${sotto}</p>` : "") +
+        `<h2 id="finestrina-titolo">${dentro(titolo)}</h2>` +
+        (sotto ? `<p class="finestrina-sotto">${dentro(sotto)}</p>` : "") +
         `<div class="finestrina-tasti">` +
         `<button type="button" class="tasto-comando nudo" data-no>${scampa(annulla)} <kbd>Esc</kbd></button>` +
         `<button type="button" class="tasto-comando" data-secondo>${scampa(secondo)}</button>` +

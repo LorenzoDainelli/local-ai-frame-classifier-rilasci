@@ -109,5 +109,15 @@ htmlcov/
 
 # La versione 2: quello che l'installatore costruisce, e l'installatore stesso.
 /costruzione/
+/costruzione-scaricati/
 /uscita/
 /collaudo*.json
+
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*

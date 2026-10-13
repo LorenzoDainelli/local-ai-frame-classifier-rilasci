@@ -94,9 +94,15 @@ function scegliNodo(zona, quandoCambia) {
         trovati.forEach((voce) => {
             const riga = document.createElement("div");
             riga.className = "trovato";
-            riga.innerHTML =
-                (voce.percorso ? `<span class="cammino">${voce.percorso} › </span>` : "") +
-                `<span>${voce.nome}</span>`;
+            if (voce.percorso) {
+                const cammino = document.createElement("span");
+                cammino.className = "cammino";
+                cammino.textContent = `${voce.percorso} › `;
+                riga.append(cammino);
+            }
+            const nome = document.createElement("span");
+            nome.textContent = voce.nome;
+            riga.append(nome);
             riga.addEventListener("click", () => {
                 scelto = voce;
                 campo.value = voce.nome;

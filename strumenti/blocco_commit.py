@@ -16,6 +16,7 @@ ESTENSIONI_VIETATE = {
     ".sqlite", ".sqlite3", ".db", ".db3", ".wal", ".shm",
     ".onnx", ".pt", ".pth", ".safetensors", ".bin", ".gguf",
     ".pacchetto", ".zip", ".7z", ".rar", ".tar", ".gz",
+    ".jks", ".keystore", ".p12", ".pfx", ".pem", ".key",
 }
 
 
@@ -39,7 +40,7 @@ PESO_MASSIMO = 2 * 1024 * 1024
 
 CARTELLE_VIETATE_ALLA_RADICE = {
     "archivio", "dati", "esportazioni", "pacchetti", "modelli",
-    "finto-generato", "miniature", "copie",
+    "finto-generato", "miniature", "copie", "costruzione-scaricati",
 }
 
 ESTENSIONI_TESTO = {".py", ".md", ".txt", ".html", ".css", ".js", ".json",
@@ -95,6 +96,9 @@ def controlla(percorso: str, contenuto: bytes, vietate: list[str]) -> list[str]:
 
     if p.suffix.lower() in ESTENSIONI_VIETATE:
         motivi.append(f"estensione {p.suffix} non ammessa")
+
+    if p.name.lower() == ".env" or p.name.lower().startswith(".env."):
+        motivi.append("un file di variabili segrete (.env)")
 
     if len(p.parts) > 1 and normalizza(p.parts[0]) in CARTELLE_VIETATE_ALLA_RADICE:
         motivi.append(

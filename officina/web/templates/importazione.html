@@ -135,6 +135,9 @@
     </div>
 
     {% call finestra("raccolta", "Tutte in una cartella sola") %}
+        {% if not da_questo_computer %}
+        <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+        {% else %}
         <p class="piccolo attenuato">
             Le foto vengono <b>copiate</b>: gli originali non si toccano, ma lo
             spazio occupato raddoppia.{% call spiega("Come vengono messe") %}
@@ -191,6 +194,7 @@
             <span class="barretta" aria-hidden="true"><span id="barra-raccolta" style="width:0%"></span></span>
             <div class="piccolo attenuato" id="riga-raccolta"></div>
         </div>
+        {% endif %}
     {% endcall %}
 
     {% if mandate %}

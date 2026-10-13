@@ -23,6 +23,9 @@
 {% endmacro %}
 
 {% macro il_dove() %}
+{% if not da_questo_computer %}
+<p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+{% else %}
 <form method="post" action="/telefono/{{ telefono.id }}/dove" class="fu-dove">
     <label class="piccolo attenuato">La cartella dove costruisco
         <input class="campo" name="cartella" value="{{ cartella }}" placeholder="D:\Visore-{{ telefono.nome }}">
@@ -32,10 +35,14 @@
     </label>
     <button class="tasto-comando piccolo" type="submit">Ricorda questi due</button>
 </form>
+{% endif %}
 <p class="minuscolo tenue">Lo spazio me lo dici tu: da qui non lo so vedere. La cartella è quella da cui poi copi col cavo: il programma non tocca il telefono.</p>
 {% endmacro %}
 
 {% macro la_partenza() %}
+{% if not da_questo_computer %}
+<p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+{% else %}
 <form method="post" action="/telefono/{{ telefono.id }}/parti" class="fu-parti">
     {% if serve_password %}
     <input class="campo" type="password" name="password" placeholder="Password del pacchetto" required autocomplete="new-password">
@@ -47,6 +54,7 @@
     <button class="tasto-comando accento" type="submit" id="tasto-parti" {{ 'disabled' if in_corso.sta_lavorando }}>{{ conto.tasto }}</button>
     {% if a_meta %}<p class="minuscolo tenue">C'è un travaso lasciato a metà: riprende da dov'era, non ricomincia.</p>{% endif %}
 </form>
+{% endif %}
 {% endmacro %}
 
 {% macro il_travaso() %}
@@ -166,14 +174,21 @@
 {% endmacro %}
 
 {% macro la_cartella_dei_pacchetti() %}
+{% if da_questo_computer %}
 <form method="post" action="/sincronia/dove" class="fu-nuovo">
     <input class="campo" name="cartella" value="{{ cartella_pacchetti }}" placeholder="D:\pacchetti" aria-label="La cartella dei pacchetti">
     <button class="tasto-comando piccolo" type="submit">Ricorda questa</button>
 </form>
+{% else %}
+<p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+{% endif %}
 <p class="minuscolo tenue">È la cartella dove nascono quelli che fai tu, e dove cerco quelli arrivati dall'altro computer. La stessa per tutti e due i versi.</p>
 {% endmacro %}
 
 {% macro farne_uno() %}
+{% if not da_questo_computer %}
+<p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+{% else %}
 <form method="post" action="/sincronia/costruisci" class="fu-parti">
     {% if computer.altre %}
     <label class="piccolo attenuato">Per quale computer
@@ -192,6 +207,7 @@
     {% endif %}
     <button class="tasto-comando accento" type="submit" {{ 'disabled' if in_sincronia.sta_lavorando }}>Fai il pacchetto</button>
 </form>
+{% endif %}
 {% endmacro %}
 
 {% macro gli_arrivati() %}
@@ -202,7 +218,7 @@
         <div class="minuscolo tenue">cambiamenti dal {{ uno.dal }} al {{ uno.al }} · {{ uno.quanti_file }} file · archivio «{{ uno.archivio }}»</div>
         {% if not uno.intero %}<div class="minuscolo avviso">Incompleto: chi lo ha scritto non ha finito, oppure la copia si è interrotta. Va rifatto.</div>{% endif %}
     </div>
-    {% if uno.intero and uno.archivio == archivio_nome %}
+    {% if uno.intero and uno.archivio == archivio_nome and da_questo_computer %}
     <form method="post" action="/sincronia/applica" class="in-fila">
         <input type="hidden" name="quale" value="{{ uno.cartella }}">
         {% if serve_password %}<input class="campo" type="password" name="password" placeholder="password del pacchetto" autocomplete="off">{% endif %}
@@ -364,7 +380,7 @@
                 <dt>Conosciuti</dt><dd>{{ computer.altre|length|numero if computer.altre else 'nessuno, ancora' }}</dd>
             </dl>
             <div class="in-fila">
-                {% if da_aprire %}
+                {% if da_aprire and da_questo_computer %}
                 <form method="post" action="/sincronia/applica" class="in-fila">
                     <input type="hidden" name="quale" value="{{ da_aprire[0].cartella }}">
                     {% if serve_password %}<input class="campo" type="password" name="password" placeholder="password del pacchetto" autocomplete="off">{% endif %}

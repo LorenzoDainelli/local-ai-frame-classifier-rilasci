@@ -2,3 +2,4 @@
 -r requirements.txt
 pytest==8.3.4
 httpx==0.28.1             # per provare il server nelle prove automatiche
+pyyaml==6.0.3             # per leggere i flussi di GitHub nelle prove di sicurezza

@@ -60,9 +60,9 @@ def test_annullare_non_e_un_errore(da_questa_macchina, monkeypatch):
 def test_la_cartella_scelta_torna_indietro(da_questa_macchina, monkeypatch):
     monkeypatch.setattr(sfoglia, "si_puo", lambda: True)
     monkeypatch.setattr(sfoglia, "scegli_cartella",
-                        lambda _d=None: r"C:\Users\loren\Foto")
+                        lambda _d=None: r"C:\Users\qualcuno\Foto")
     risposta = da_questa_macchina.post("/api/sfoglia-cartella", data={"da_dove": ""})
-    assert risposta.json() == {"percorso": r"C:\Users\loren\Foto"}
+    assert risposta.json() == {"percorso": r"C:\Users\qualcuno\Foto"}
 
 
 def test_due_clic_non_aprono_due_finestre(da_questa_macchina, monkeypatch):

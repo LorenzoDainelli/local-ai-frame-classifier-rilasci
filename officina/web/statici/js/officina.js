@@ -561,7 +561,7 @@ function disegnaGente() {
         const nota = mia ? (sua && sua.volto ? "col volto" : "senza volto") : volto.has(chi.persona_id) ? ((sua && sua.perche) || "il volto somiglia") : "";
         return `<button type="button" class="et-chi ${classe}" data-gente="${chi.persona_id}" data-come="${mia ? "togli" : "metti"}">` +
             (chi.volto ? `<img class="faccina" src="/volto/${chi.volto}?lato=44" alt="">` : '<span class="faccina vuota"></span>') +
-            `<span>${scampa(chi.nome)}</span><small>${nota}</small></button>`;
+            `<span>${scampa(chi.nome)}</span><small>${scampa(nota)}</small></button>`;
     }).join("") +
         `<button type="button" class="et-chi et-scappa${tre.nessuna_persona ? " et-mio" : ""}" data-nessuna="1"><span class="faccina vuota"></span><span>Nessuna persona</span><small>N</small></button>` +
         (elenco.length ? "" : `<p class="minuscolo tenue">${scritto ? "Nessuna persona con questo nome." : "Non hai ancora persone con un nome."} Le persone nascono in Persone, dando un nome ai volti.</p>`);

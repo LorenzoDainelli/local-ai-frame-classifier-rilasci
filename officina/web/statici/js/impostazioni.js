@@ -2,6 +2,8 @@ import { mandaModulo } from "/statici/js/comune.js";
 import { segueLoScorrimento } from "/statici/js/indice.js";
 
 const $ = (nome) => document.getElementById(nome);
+const scampa = (testo) => String(testo ?? "").replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const tutti = (dove) => Array.from(document.querySelectorAll(dove));
 
 function segnalaSalvato(chiave) {
@@ -95,7 +97,7 @@ const dimentica = $("dimentica-persona");
 if (dimentica) {
     dimentica.addEventListener("click", () => {
         const scelta = $("chi-dimenticare");
-        const chi = scelta.options[scelta.selectedIndex].textContent.trim();
+        const chi = scampa(scelta.options[scelta.selectedIndex].textContent.trim());
         chiediUnaParola(
             "Dimentica una persona", "dimentica",
             `Sto per cancellare <b>${chi}</b>: il volto e tutti i suoi ` +
