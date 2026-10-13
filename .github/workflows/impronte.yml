@@ -1,6 +1,11 @@
 name: Impronte da fissare
 
 on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/impronte_da_fissare.py"
+      - ".github/workflows/impronte.yml"
   workflow_dispatch:
 
 permissions:
