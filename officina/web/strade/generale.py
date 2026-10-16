@@ -31,7 +31,7 @@ def scegli_l_ambito(zona: str, gruppo: str = Form(""), dove: str = Form("")):
 
 def _tutti_i_lavori() -> list:
     return [comune.lavoro_impronte_passata, comune.lavoro_modelli, comune.lavoro_volti,
-            comune.lavoro_corpi,
+            comune.lavoro_corpi, comune.lavoro_chi_e,
             comune.lavoro_parole, comune.lavoro_riferimento, comune.lavoro_raccolta,
             comune.lavoro_copia_video, comune.lavoro_doppioni, comune.lavoro_raddrizza,
             comune.lavoro_date, comune.lavoro_macchine, comune.lavoro_misura,
@@ -42,7 +42,7 @@ def _tutti_i_lavori() -> list:
 _DOVE_SI_GUARDA = {
     "le impronte": "/intelligenza", "i modelli": "/stato", "i volti": "/intelligenza",
     "i corpi": "/intelligenza", "chi è senza volto": "/intelligenza", "l'intelligenza artificiale": "/intelligenza",
-    "i doppioni": "/doppioni",
+    "i doppioni": "/doppioni", "il travaso": "/telefono", "la sincronizzazione": "/sincronia",
     "le scritte nelle foto": "/intelligenza", "le facce insegnate": "/persone",
     "le foto raccolte in un posto solo": "/importazione", "la misura": "/stato#misura", "la copia del video": "/miglioramento",
     "il controllo degli scatti": "/miglioramento#qualita",
