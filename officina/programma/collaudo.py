@@ -325,8 +325,9 @@ def _finestra_col_forziere(entro: float) -> dict:
     from officina import forziere
     from officina.archivio import accesso
     from officina.impostazioni import REALE, posizione
-    from officina.programma import avvio, carta, ponti
+    from officina.programma import avvio, carta, ponti, sigillo
 
+    sigillo.come_si_puo = lambda: None
     carta.comincia_da_zero()
     carta.aggiorna(obblighi_sospesi=True, chiave_chiesta=True, motori_rimandati=True)
     accesso.apri(REALE)
