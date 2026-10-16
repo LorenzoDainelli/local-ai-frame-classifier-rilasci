@@ -453,6 +453,7 @@ def test_scaricare_i_corpi_porta_anche_kpr(tmp_path, monkeypatch):
     monkeypatch.setattr(scaricamento, "_scarica_la_pose", pose)
     monkeypatch.setattr(kpr_pesi, "scarica", kpr)
     monkeypatch.setattr(scaricamento, "_scarica_le_figure", figure)
+    monkeypatch.setattr(scaricamento, "_controlla_lo_spazio", lambda casa, manca: None)
     punti = []
     scaricamento.scarica(tmp_path, a_che_punto=lambda fatti, totale: punti.append((fatti, totale)))
     assert chiesti == [tmp_path]
@@ -479,13 +480,52 @@ def test_se_drive_non_lascia_scaricare_kpr_si_spiega(tmp_path, monkeypatch):
         raise ErroreOfficina("Google Drive in questo momento non lascia scaricare il file.",
                              codice="drive_chiuso")
 
+    figure = []
     monkeypatch.setattr(scaricamento, "_scarica_sam3", sam3)
     monkeypatch.setattr(scaricamento, "_scarica_la_pose", lambda dove, *_: dove.write_bytes(b"x"))
     monkeypatch.setattr(kpr_pesi, "scarica", chiuso)
+    monkeypatch.setattr(scaricamento, "_scarica_le_figure", lambda casa, *_: figure.append(casa))
+    monkeypatch.setattr(scaricamento, "_controlla_lo_spazio", lambda casa, manca: None)
     with pytest.raises(ScaricamentoFallito) as preso:
         scaricamento.scarica(tmp_path)
     assert "KPR" in preso.value.messaggio and "Google Drive" in preso.value.messaggio
+    assert "Alcuni modelli" not in preso.value.messaggio
+    assert figure == [rilevatore.dove_stanno(tmp_path)]
     assert not scaricamento.gia_in_casa(tmp_path)
+
+
+def test_se_piu_pezzi_dei_corpi_non_arrivano_si_dicono_tutti_e_gli_altri_arrivano(tmp_path, monkeypatch):
+    from officina.corpi import rilevatore, scaricamento
+    from officina.descrittori.scaricamento import ScaricamentoFallito
+
+    rete = []
+    monkeypatch.setattr(scaricamento.torcia, "con_la_rete_accesa", lambda: rete.append("su") or {})
+    monkeypatch.setattr(scaricamento.torcia, "rimetti_la_rete_com_era", lambda prima: rete.append("giu"))
+
+    def sam3(dove, *_):
+        raise ScaricamentoFallito("Non sono riuscito a scaricare SAM 3.")
+
+    def pose(dove, *_):
+        dove.write_bytes(b"onnx finto")
+
+    def kpr(*_):
+        raise ScaricamentoFallito("Non sono riuscito a scaricare KPR da Google Drive.")
+
+    figure = []
+    monkeypatch.setattr(scaricamento, "_scarica_sam3", sam3)
+    monkeypatch.setattr(scaricamento, "_scarica_la_pose", pose)
+    monkeypatch.setattr(scaricamento, "_scarica_kpr", kpr)
+    monkeypatch.setattr(scaricamento, "_scarica_le_figure", lambda casa, *_: figure.append(casa))
+    monkeypatch.setattr(scaricamento, "_controlla_lo_spazio", lambda casa, manca: None)
+    with pytest.raises(ScaricamentoFallito) as preso:
+        scaricamento.scarica(tmp_path)
+    messaggio = preso.value.messaggio
+    assert "SAM 3." in messaggio and "KPR da Google Drive" in messaggio
+    assert "Quelli arrivati restano" in messaggio
+    assert (rilevatore.dove_stanno(tmp_path) / rilevatore.FILE_POSE).read_bytes() == b"onnx finto"
+    assert figure == [rilevatore.dove_stanno(tmp_path)]
+    assert rete == ["su", "giu"]
+    assert not (rilevatore.dove_stanno(tmp_path) / scaricamento.SCHEDA_SUL_DISCO).exists()
 
 
 def test_la_sagoma_esce_della_misura_di_siglip2():

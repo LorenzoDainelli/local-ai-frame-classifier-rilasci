@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 from officina.errori import ErroreOfficina
 from officina.telefono import cifratura
 
-VERSIONE_FORMATO = 1
+VERSIONE_FORMATO = 2
 
 CARTA = "visore.json"
 DATI = "dati.db"
@@ -16,15 +17,13 @@ RITORNO = "ritorno.db"
 FOTO = "foto"
 MINI = "mini"
 VOLTI = "volti"
-SENZA_DATA = "senza-data"
-
-CODA = 8
 
 COMPLETO = "completo"
 INTERROTTO = "interrotto"
 
 VIETATI = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 FINALI_SCOMODI = " ."
+A_CASO = re.compile(r"(?:(?:foto|mini)/[0-9a-f]{2}|volti)/[0-9a-f]{32}")
 
 
 @dataclass
@@ -80,8 +79,17 @@ class Carta:
                 "La carta d'identita' del pacchetto è rovinata. Il pacchetto "
                 "va ricopiato dal computer.",
                 codice="carta_rovinata") from errore
-        conosciuti = {c for c in cls.__dataclass_fields__}
-        return cls(**{c: v for c, v in dati.items() if c in conosciuti})
+        if not isinstance(dati, dict):
+            raise ErroreOfficina(ROVINATA, codice="carta_rovinata")
+        conosciuti = set(cls.__dataclass_fields__)
+        scelti = {c: v for c, v in dati.items() if c in conosciuti}
+        for nome, valore in scelti.items():
+            if not _del_tipo_giusto(cls.__dataclass_fields__[nome].type, valore):
+                raise ErroreOfficina(ROVINATA, codice="carta_rovinata")
+        try:
+            return cls(**scelti)
+        except TypeError as errore:
+            raise ErroreOfficina(ROVINATA, codice="carta_rovinata") from errore
 
 
     @property
@@ -100,9 +108,27 @@ class Carta:
         return self.versione_formato < VERSIONE_FORMATO
 
     def chiave(self, password: str) -> cifratura.Chiave:
+        try:
+            sale = bytes.fromhex(self.sale)
+        except ValueError as errore:
+            raise ErroreOfficina(ROVINATA, codice="carta_rovinata") from errore
         return cifratura.controlla_la_password(
-            password, bytes.fromhex(self.sale), self.prova,
-            self.n, self.r, self.p)
+            password, sale, self.prova, self.n, self.r, self.p)
+
+
+ROVINATA = ("La carta d'identità del pacchetto è rovinata. Il pacchetto va "
+            "ricopiato dal computer.")
+
+TIPI = {"str": str, "int": int, "list": list}
+
+
+def _del_tipo_giusto(tipo, valore) -> bool:
+    atteso = TIPI.get(tipo if isinstance(tipo, str) else getattr(tipo, "__name__", ""))
+    if atteso is None:
+        return True
+    if atteso is int:
+        return type(valore) is int
+    return isinstance(valore, atteso)
 
 
 def nome_cartella(telefono: str) -> str:
@@ -115,30 +141,34 @@ def nome_utile(nome: str) -> str:
     return pulito[:120]
 
 
-def posto_dell_originale(giorno: str | None, nome: str, impronta: str,
-                         gia_presi: set[str]) -> str:
-    if giorno and len(giorno) >= 7:
-        cartella = f"{FOTO}/{giorno[:4]}/{giorno[5:7]}"
-    else:
-        cartella = f"{FOTO}/{SENZA_DATA}"
-
-    base = nome_utile(Path(nome).name) or f"{impronta[:CODA]}.dat"
-    posto = f"{cartella}/{base}"
-    if posto not in gia_presi:
-        return posto
-
-    pezzo = Path(base)
-    marchiato = f"{pezzo.stem}-{impronta[:CODA]}{pezzo.suffix}"
-    return f"{cartella}/{marchiato}"
+def nome_a_caso() -> str:
+    return secrets.token_hex(16)
 
 
-def posto_della_miniatura(impronta: str) -> str:
-    return f"{MINI}/{impronta[:2]}/{impronta}.jpg"
+def posto_dell_originale() -> str:
+    nome = nome_a_caso()
+    return f"{FOTO}/{nome[:2]}/{nome}"
 
 
-def posto_del_volto(persona_id: int) -> str:
-    return f"{VOLTI}/{int(persona_id)}.jpg"
+def posto_della_miniatura() -> str:
+    nome = nome_a_caso()
+    return f"{MINI}/{nome[:2]}/{nome}"
+
+
+def posto_del_volto() -> str:
+    return f"{VOLTI}/{nome_a_caso()}"
+
+
+def e_a_caso(posto: str) -> bool:
+    return A_CASO.fullmatch(posto) is not None
 
 
 def dentro(cartella: Path, posto: str) -> Path:
-    return Path(cartella).joinpath(*posto.split("/"))
+    radice = Path(cartella).resolve()
+    dove = radice.joinpath(*posto.split("/")).resolve()
+    if radice != dove and radice not in dove.parents:
+        raise ErroreOfficina(
+            "Questo pacchetto contiene un percorso che esce dalla sua "
+            "cartella. Non lo apro.",
+            codice="percorso_sospetto")
+    return dove

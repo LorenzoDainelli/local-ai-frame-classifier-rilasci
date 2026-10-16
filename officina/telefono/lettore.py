@@ -54,7 +54,7 @@ class Pacchetto:
             raise ErroreOfficina(
                 "Questo pacchetto non ha il suo database: è rimasto a metà. "
                 "Va ricopiato dal computer.", codice="pacchetto_senza_dati")
-        dentro = _in_memoria(chiave.leggi_tutto(dove))
+        dentro = _in_memoria(chiave.leggi_tutto(dove, formato.DATI))
         return cls(cartella, carta, chiave, dentro)
 
     def chiudi(self) -> None:
@@ -148,7 +148,7 @@ class Pacchetto:
         scritto = testo.strip()
         pezzo = f"%{scritto}%"
         date = []
-        if len(scritto) == 4 and scritto.isdigit():
+        if len(scritto) == 4 and scritto.isdecimal():
             date = self.dentro.execute(
                 "SELECT ? AS anno, count(*) AS quanti FROM scatti "
                 "WHERE giorno LIKE ?", (scritto, f"{scritto}-%")).fetchall()
@@ -178,29 +178,31 @@ class Pacchetto:
         if not riga["mini"]:
             raise ErroreOfficina("Questo scatto non ha una miniatura.")
         return self.chiave.leggi_tutto(
-            formato.dentro(self.cartella, riga["mini"]))
+            formato.dentro(self.cartella, riga["mini"]), riga["mini"])
 
     def originale(self, scatto_id: int) -> bytes:
         riga = self.scatto(scatto_id)
         return self.chiave.leggi_tutto(
-            formato.dentro(self.cartella, riga["posto"]))
+            formato.dentro(self.cartella, riga["posto"]), riga["posto"])
 
     def movimento(self, scatto_id: int) -> bytes | None:
         riga = self.scatto(scatto_id)
         if not riga["posto_movimento"]:
             return None
         return self.chiave.leggi_tutto(
-            formato.dentro(self.cartella, riga["posto_movimento"]))
+            formato.dentro(self.cartella, riga["posto_movimento"]),
+            riga["posto_movimento"])
 
     def pezzo(self, scatto_id: int, da: int, quanti: int) -> bytes:
         riga = self.scatto(scatto_id)
         return self.chiave.leggi_pezzo(
-            formato.dentro(self.cartella, riga["posto"]), da, quanti)
+            formato.dentro(self.cartella, riga["posto"]), da, quanti, riga["posto"])
 
     def tira_fuori(self, scatto_id: int, destinazione: Path) -> str:
         riga = self.scatto(scatto_id)
         return self.chiave.decifra_file(
-            formato.dentro(self.cartella, riga["posto"]), Path(destinazione))
+            formato.dentro(self.cartella, riga["posto"]), Path(destinazione),
+            riga["posto"])
 
 
     def verifica(self, solo: int | None = None) -> Verifica:
@@ -235,7 +237,7 @@ class Pacchetto:
             esito.guasti.append(Guasto(posto, "manca dal pacchetto"))
             return None
         try:
-            return self.chiave.leggi_tutto(dove)
+            return self.chiave.leggi_tutto(dove, posto)
         except cifratura.PacchettoRovinato as guaio:
             esito.guasti.append(Guasto(posto, guaio.messaggio))
             return None
@@ -244,20 +246,13 @@ class Pacchetto:
 def _in_memoria(grezzo: bytes) -> sqlite3.Connection:
     memoria = sqlite3.connect(":memory:")
     memoria.row_factory = sqlite3.Row
-    if hasattr(memoria, "deserialize"):
+    try:
         memoria.deserialize(grezzo)
-        return memoria
-
-    import tempfile
-
-    with tempfile.TemporaryDirectory(prefix="visore-") as temporanea:
-        appoggio = Path(temporanea) / "dati.sqlite"
-        appoggio.write_bytes(grezzo)
-        da_disco = sqlite3.connect(appoggio)
-        try:
-            da_disco.backup(memoria)
-        finally:
-            da_disco.close()
+    except sqlite3.DatabaseError as errore:
+        memoria.close()
+        raise ErroreOfficina(
+            "Il database del pacchetto non si legge. Va ricopiato dal computer.",
+            codice="pacchetto_senza_dati") from errore
     return memoria
 
 

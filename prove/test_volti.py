@@ -10,6 +10,9 @@ from officina.descrittori import vettori
 from officina.errori import OperazioneNonPermessa
 from officina.modello import persone
 from officina.volti import gruppi
+from prove import impronte_vuote
+
+senza_impronte_vere = impronte_vuote.senza_impronte_vere
 
 
 def impronta(seme: float, quanti: int = 8) -> bytes:
@@ -484,8 +487,6 @@ def test_il_posto_che_non_esiste_resta_un_posto_che_non_esiste(monkeypatch):
 
     from officina.volti import rilevatore, scaricamento
 
-    monkeypatch.setattr(scaricamento, "_posti_che_somigliano",
-                        lambda fonte, chiave: [])
     fonte = replace(scaricamento.DA_DOVE[rilevatore.FILE_RICONOSCITORE],
                     provata=False)
     testo = scaricamento._perche(
@@ -525,14 +526,12 @@ def test_una_pagina_senza_onnx_e_la_pagina_sbagliata(monkeypatch):
     from officina.volti import rilevatore, scaricamento
 
     monkeypatch.setattr(scaricamento, "_gli_onnx_di", lambda repo, chiave: [])
-    monkeypatch.setattr(scaricamento, "_posti_che_somigliano",
-                        lambda fonte, chiave: ["tale/sface"])
     testo = scaricamento._perche(
         _errore_di("EntryNotFoundError", 404),
         rilevatore.FILE_RICONOSCITORE,
         scaricamento.DA_DOVE[rilevatore.FILE_RICONOSCITORE], [], None)
     assert "posto sbagliato" in testo
-    assert "--repo-adaface_ir101 tale/sface" in testo
+    assert "--repo-adaface_ir101 NOME/DEL/POSTO" in testo
 
 
 def test_quello_che_e_gia_arrivato_viene_detto():
@@ -627,8 +626,6 @@ def test_scaricando_si_ferma_al_primo_guasto_ma_tiene_cio_che_e_arrivato(
     monkeypatch.setattr(huggingface_hub, "hf_hub_download", finto_scarica)
     monkeypatch.setattr(scaricamento, "_dentro_la_pagina", lambda repo, chiave: None)
     monkeypatch.setattr(scaricamento, "_gli_onnx_di", lambda repo, chiave: [])
-    monkeypatch.setattr(scaricamento, "_posti_che_somigliano",
-                        lambda fonte, chiave: [])
 
     modelli = tmp_path / "modelli"
     with pytest.raises(ScaricamentoFallito) as guasto:
@@ -659,8 +656,6 @@ def test_la_rete_si_richiude_anche_quando_lo_scaricamento_fallisce(
 
     monkeypatch.setattr(huggingface_hub, "hf_hub_download", finto_scarica)
     monkeypatch.setattr(scaricamento, "_dentro_la_pagina", lambda repo, chiave: None)
-    monkeypatch.setattr(scaricamento, "_posti_che_somigliano",
-                        lambda fonte, chiave: [])
     prima = os.environ.get("HF_HUB_OFFLINE")
     with pytest.raises(ScaricamentoFallito):
         scaricamento.scarica(tmp_path / "modelli", al_passo=lambda _: None)
@@ -713,9 +708,10 @@ def test_cambiare_solo_il_posto_tiene_l_impronta():
     assert fonti[rilevatore.FILE_RICONOSCITORE].sha256 == atteso.sha256
 
 
-def test_se_il_file_non_corrisponde_lo_dice_e_lo_tiene(tmp_path, monkeypatch):
+def test_se_il_file_non_corrisponde_si_butta_e_si_rifiuta(tmp_path, monkeypatch):
     huggingface_hub = pytest.importorskip("huggingface_hub")
 
+    from officina.descrittori.scaricamento import ScaricamentoFallito
     from officina.volti import rilevatore, scaricamento
 
     preso = tmp_path / "preso.onnx"
@@ -723,30 +719,21 @@ def test_se_il_file_non_corrisponde_lo_dice_e_lo_tiene(tmp_path, monkeypatch):
     monkeypatch.setattr(huggingface_hub, "hf_hub_download",
                         lambda repo_id, filename, token=None, **_: str(preso))
     monkeypatch.setattr(scaricamento, "_dentro_la_pagina", lambda repo, chiave: None)
-    monkeypatch.setattr(scaricamento, "_posti_che_somigliano",
-                        lambda fonte, chiave: [])
 
     from dataclasses import replace
 
     fonti = {nome: replace(fonte, sha256="0" * 64)
              for nome, fonte in scaricamento.DA_DOVE.items()}
-    detto = []
     modelli = tmp_path / "modelli"
-    scaricamento.scarica(modelli, fonti=fonti, al_passo=detto.append)
+    with pytest.raises(ScaricamentoFallito) as guasto:
+        scaricamento.scarica(modelli, fonti=fonti, al_passo=lambda _: None)
 
-    avvisi = [riga for riga in detto if "non corrisponde" in riga]
-    assert len(avvisi) == 2, "due file, due avvisi"
-    assert "attesa:" in avvisi[0] and "trovata:" in avvisi[0]
-
+    assert "non lo tengo" in str(guasto.value)
     casa = rilevatore.dove_stanno(modelli)
-    assert (casa / rilevatore.FILE_RILEVATORE).exists(), "il file resta"
-
-    scheda = json.loads(
-        (casa / scaricamento.SCHEDA_SUL_DISCO).read_text(encoding="utf-8"))
-    assert all(riga["corrisponde_all_originale"] is False
-               for riga in scheda["da_dove"].values())
-    assert "non corrispondono all'originale" in \
-        scaricamento.verifica(modelli)["dettaglio"]
+    assert not (casa / rilevatore.FILE_RILEVATORE).exists(), "il file non resta"
+    assert not any(casa.glob("*.nuovo"))
+    assert not preso.exists(), "e nemmeno la copia arrivata dal sito"
+    assert not (casa / scaricamento.SCHEDA_SUL_DISCO).exists()
 
 
 def test_la_scheda_dice_con_quale_licenza(tmp_path):

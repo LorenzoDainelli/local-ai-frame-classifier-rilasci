@@ -62,15 +62,15 @@ def per_file(archivio: Archivio, riga: sqlite3.Row, lato: int = 640) -> str | No
         return None
     if nome:
         dati = archivio.leggi_miniatura(nome)
+        colore = colore_di(dati) if dati else None
         with archivio.scrittura() as connessione:
-            file_media.imposta_miniatura(connessione, riga["id"], nome,
-                                         colore_di(dati) if dati else None)
+            file_media.imposta_miniatura(connessione, riga["id"], nome, colore)
     return nome
 
 
 def colore_di(dati: bytes) -> str | None:
     try:
-        with Image.open(io.BytesIO(dati)) as immagine:
+        with Image.open(io.BytesIO(dati), formats=lettura.formati_aperti()) as immagine:
             immagine.draft("RGB", (32, 32))
             medio = immagine.convert("RGB").resize((1, 1), Image.Resampling.BOX).getpixel((0, 0))
     except Exception:

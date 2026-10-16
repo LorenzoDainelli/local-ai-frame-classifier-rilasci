@@ -70,47 +70,54 @@
         {% endif %}
 
         <div class="barra-selezione" id="barra-selezione" hidden>
-            <span data-conto class="piccolo"></span>
-            <button class="tasto-comando nudo" type="button" data-tutti hidden></button>
-            <span class="separatore"></span>
-            <button class="tasto-comando" type="button" data-fuori
-                    title="Sparisce da tutto, ma non viene mai cancellato">
-                Metti fuori archivio
-            </button>
-            <button class="tasto-comando" type="button" data-rimetti>Rimetti in archivio</button>
-            <span class="separatore"></span>
-
-            <button class="tasto-comando" type="button" data-cuore
-                    title="Il cuore, come sul telefono">Fra i preferiti</button>
-            <button class="tasto-comando" type="button" data-scuore>Togli il cuore</button>
-            <button class="tasto-comando" type="button" data-stella
-                    title="Escono dalla coda dell'etichettatura">Metti da parte</button>
-            <button class="tasto-comando" type="button" data-sstella
-                    title="Tornano nella coda esattamente com'erano">Rimetti in coda</button>
-            <span class="separatore"></span>
-
-            <button class="tasto-comando" type="button" data-migliora
-                    title="Porta a FHD le foto e i video piccoli, qui sul computer">
-                Migliora</button>
-            <span class="separatore"></span>
-
-            <span class="scegli-nodo">
-                <input class="campo" type="text" data-nodo-cerca autocomplete="off"
-                       spellcheck="false" placeholder="Cerca un nodo" style="width:180px">
-                <div class="trovati" data-nodo-trovati hidden></div>
-            </span>
-            <button class="tasto-comando principale" type="button" data-metti-nodo disabled>
-                Applica</button>
-            <button class="tasto-comando" type="button" data-togli-nodo disabled
-                    title="Riporta a «non ancora deciso», che non è «no»">
-                Togli</button>
-            <span class="separatore"></span>
-            <input class="campo" type="date" data-giorno style="width:auto">
-            <button class="tasto-comando" type="button" data-data>Dai questa data</button>
-            <span style="margin-left:auto" class="in-fila">
-                <span id="avviso-blocco" class="piccolo" hidden></span>
-                <button class="tasto-comando nudo" type="button" data-lascia>Lascia (Esc)</button>
-            </span>
+            <div class="bs-sopra">
+                <span data-conto class="bs-conto"></span>
+                <button class="bs-link" type="button" data-tutti hidden></button>
+                <div class="bs-schede" role="tablist" aria-label="Cosa fare con la selezione">
+                    <button type="button" role="tab" data-scheda="nodi" aria-selected="true">Nodi</button>
+                    <button type="button" role="tab" data-scheda="scatto" aria-selected="false">Scatto</button>
+                    <button type="button" role="tab" data-scheda="lavoro" aria-selected="false">Lavoro</button>
+                </div>
+                <span id="avviso-blocco" class="piccolo bs-avviso" hidden></span>
+                <button class="bs-tasto nudo bs-lascia" type="button" data-lascia>Lascia <kbd>Esc</kbd></button>
+            </div>
+            <div class="bs-sotto" data-pannello="nodi">
+                <span class="scegli-nodo">
+                    <input class="campo bs-campo" type="text" data-nodo-cerca autocomplete="off"
+                           spellcheck="false" placeholder="Cerca un nodo da aggiungere…">
+                    <div class="trovati" data-nodo-trovati hidden></div>
+                </span>
+                <button class="bs-tasto principale" type="button" data-metti-nodo disabled>Aggiungi</button>
+                <button class="bs-tasto" type="button" data-togli-nodo disabled
+                        title="Riporta a «non ancora deciso», che non è «no»">Togli</button>
+                <span class="separatore"></span>
+                <button class="bs-tasto" type="button" data-copia-nodi
+                        title="Prende i nodi di uno scatto: selezionane uno solo">{{ icona('copia', 16) }}Copia nodi</button>
+                <button class="bs-tasto" type="button" data-incolla-nodi disabled
+                        title="Mette i nodi copiati sugli scatti selezionati">{{ icona('incolla', 16) }}Incolla nodi</button>
+                <span class="bs-appunti" data-appunti hidden></span>
+            </div>
+            <div class="bs-sotto" data-pannello="scatto" hidden>
+                <button class="bs-tasto" type="button" data-cuore
+                        title="Il cuore, come sul telefono">Fra i preferiti</button>
+                <button class="bs-tasto" type="button" data-scuore>Togli il cuore</button>
+                <span class="separatore"></span>
+                <button class="bs-tasto" type="button" data-stella
+                        title="Escono dalla coda dell'etichettatura">Metti da parte</button>
+                <button class="bs-tasto" type="button" data-sstella
+                        title="Tornano nella coda esattamente com'erano">Rimetti in coda</button>
+                <span class="separatore"></span>
+                <input class="campo bs-campo bs-data" type="date" data-giorno aria-label="Giorno">
+                <button class="bs-tasto" type="button" data-data>Dai questa data</button>
+            </div>
+            <div class="bs-sotto" data-pannello="lavoro" hidden>
+                <button class="bs-tasto" type="button" data-migliora
+                        title="Porta a FHD le foto e i video piccoli, qui sul computer">Migliora</button>
+                <span class="separatore"></span>
+                <button class="bs-tasto pericolo" type="button" data-fuori
+                        title="Sparisce da tutto, ma non viene mai cancellato">Metti fuori archivio</button>
+                <button class="bs-tasto" type="button" data-rimetti>Rimetti in archivio</button>
+            </div>
         </div>
 
         <div class="griglia" id="griglia"></div>

@@ -12,6 +12,7 @@ from PIL import Image
 from officina.errori import FileNonLeggibile
 from officina.immagini import lettura
 from officina.importazione import quicktime
+from officina.modello.luoghi import coordinate_valide
 
 
 MISURE_SCHERMO = {
@@ -115,25 +116,41 @@ def _luogo(gps: dict) -> tuple[float | None, float | None]:
         latitudine = -latitudine
     if longitudine is not None and str(gps.get(3, "E")).upper().startswith("W"):
         longitudine = -longitudine
-    return latitudine, longitudine
+    return coordinate_valide(latitudine, longitudine)
 
 
 CAMPI_XMP = ("exif:DateTimeOriginal", "photoshop:DateCreated", "xmp:CreateDate",
              "exif:DateTimeDigitized", "xap:CreateDate")
 
 
+LIMITE_XMP = 256 * 1024
+
+
+def _valore_xmp(testo: str, campo: str) -> str | None:
+    nome = re.escape(campo)
+    trovato = re.search(nome + r'\s{0,16}=\s{0,16}"([^"]{1,128})"', testo)
+    if trovato and trovato.group(1).strip():
+        return trovato.group(1).strip()
+    for trovato in re.finditer("<" + nome + r">([^<]*)</" + nome + ">", testo):
+        valore = trovato.group(1).strip()
+        if valore:
+            return valore
+    return None
+
+
 def _date_da_xmp(immagine) -> list[tuple[str, str]]:
     grezzo = immagine.info.get("xmp") or immagine.info.get("XML:com.adobe.xmp")
     if not grezzo:
         return []
-    testo = grezzo.decode("utf-8", "replace") if isinstance(grezzo, bytes) else str(grezzo)
+    if isinstance(grezzo, (bytes, bytearray)):
+        testo = bytes(grezzo[:LIMITE_XMP]).decode("utf-8", "replace")
+    else:
+        testo = str(grezzo)[:LIMITE_XMP]
     trovate = []
     for campo in CAMPI_XMP:
-        nome = re.escape(campo)
-        trovato = (re.search(nome + r'\s*=\s*"([^"]+)"', testo)
-                   or re.search("<" + nome + r">\s*([^<]+?)\s*</" + nome + ">", testo))
-        if trovato:
-            trovate.append((campo, trovato.group(1)))
+        valore = _valore_xmp(testo, campo)
+        if valore:
+            trovate.append((campo, valore))
     return trovate
 
 
@@ -168,14 +185,29 @@ def date_candidate(immagine, exif, esteso) -> list[tuple[str, str, str]]:
     return candidate
 
 
+def _exif_senza_caricare(immagine):
+    if lettura.senza_exif_pesante(immagine):
+        return {}
+    try:
+        return immagine.getexif()
+    except Exception:
+        return {}
+
+
 def da_immagine(percorso: Path) -> Metadati:
-    immagine = lettura.apri(percorso)
+    immagine = lettura.intestazione(percorso)
+    try:
+        dati = _leggi_immagine(immagine)
+        lettura.controlla_fino_in_fondo(immagine, percorso)
+        return dati
+    finally:
+        immagine.close()
+
+
+def _leggi_immagine(immagine) -> Metadati:
     dati = Metadati(genere="immagine", formato=(immagine.format or "").lower() or None)
 
-    try:
-        exif = immagine.getexif()
-    except Exception:
-        exif = {}
+    exif = _exif_senza_caricare(immagine)
 
     dati.orientamento = exif.get(ORIENTAMENTO) if exif else None
     dati.larghezza, dati.altezza = lettura.misure_raddrizzate(
@@ -217,7 +249,6 @@ def da_immagine(percorso: Path) -> Metadati:
         and (dati.larghezza, dati.altezza) in MISURE_SCHERMO
     )
 
-    immagine.close()
     return dati
 
 
@@ -314,7 +345,8 @@ def _leggi_dentro(percorso: Path) -> Metadati:
         return da_video(percorso)
 
     try:
-        Image.open(percorso).verify()
+        with Image.open(percorso, formats=lettura.formati_aperti()) as prova:
+            prova.verify()
         return da_immagine(percorso)
     except Exception as errore:
         raise FileNonLeggibile(
@@ -324,9 +356,8 @@ def _leggi_dentro(percorso: Path) -> Metadati:
 
 
 def _esteso_e_exif(immagine):
-    try:
-        exif = immagine.getexif()
-    except Exception:
+    exif = _exif_senza_caricare(immagine)
+    if not exif:
         return {}, {}
     try:
         esteso = exif.get_ifd(IFD_EXIF) or {}
@@ -357,12 +388,14 @@ def diagnosi(percorso: Path) -> list[tuple[str, str]]:
                 righe.append((campo, f"scritta in un modo che non capisco: «{valore[:40]}»"))
         return righe
     try:
-        immagine = lettura.apri(percorso)
+        immagine = lettura.intestazione(percorso)
     except FileNonLeggibile:
         return [("file", "non si apre")]
-    exif, esteso = _esteso_e_exif(immagine)
-    candidate = date_candidate(immagine, exif, esteso)
-    immagine.close()
+    try:
+        exif, esteso = _esteso_e_exif(immagine)
+        candidate = date_candidate(immagine, exif, esteso)
+    finally:
+        immagine.close()
     if not candidate:
         return [("campi di data", "nessuno: dentro il file non c'è nessuna data")]
     righe = []

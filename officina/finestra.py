@@ -46,6 +46,8 @@ def dove_sta_un_browser(
         if guarda(posto):
             return posto
 
+    if nel_percorso is None and sys.platform == "win32":
+        return None
     cerca = nel_percorso if nel_percorso is not None else shutil.which
     for nome in ("chrome", "google-chrome", "chromium", "chromium-browser",
                  "msedge", "microsoft-edge"):
@@ -127,7 +129,9 @@ def _in_sottofondo(comando: list[str]) -> None:
 
 def apri_quando_e_pronto(porta: int, indirizzo: str | None = None,
                          host: str = "127.0.0.1") -> str:
-    dove = indirizzo or f"http://localhost:{porta}"
+    from officina.web import origine
+
+    dove = indirizzo or origine.indirizzo_per_entrare(f"http://localhost:{porta}")
     if not aspetta_che_risponda(porta, host):
         return "niente"
     return apri(dove)
@@ -231,18 +235,22 @@ def a_mano(casa: Path, bersaglio: Path, perche: str = "") -> str:
         "senza." + coda)
 
 
-def dov_e_powershell(cerca: Callable[[str], str | None] | None = None,
-                     c_e: Callable[[Path], bool] | None = None) -> str | None:
-    dove = cerca if cerca is not None else shutil.which
+def cartella_di_sistema() -> Path:
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            spazio = ctypes.create_unicode_buffer(260)
+            if ctypes.windll.kernel32.GetSystemDirectoryW(spazio, 260):
+                return Path(spazio.value)
+        except (OSError, AttributeError):
+            pass
+    return Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32"
+
+
+def dov_e_powershell(c_e: Callable[[Path], bool] | None = None) -> str | None:
     guarda = c_e if c_e is not None else (lambda p: p.is_file())
-
-    for nome in ("powershell", "pwsh"):
-        trovato = dove(nome)
-        if trovato:
-            return trovato
-
-    fisso = (Path(os.environ.get("SystemRoot", r"C:\Windows"))
-             / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe")
+    fisso = cartella_di_sistema() / "WindowsPowerShell" / "v1.0" / "powershell.exe"
     return str(fisso) if guarda(fisso) else None
 
 

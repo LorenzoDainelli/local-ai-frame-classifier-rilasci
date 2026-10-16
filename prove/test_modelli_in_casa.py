@@ -39,6 +39,71 @@ def test_un_guasto_con_la_rete_accesa_si_dice_subito(tmp_path, monkeypatch):
                                         c_e_rete=lambda: True, dormi=lambda s: None)
 
 
+def test_se_un_modello_non_arriva_gli_altri_si_scaricano_lo_stesso(tmp_path, monkeypatch):
+    import pytest
+
+    portati = []
+
+    def porta(quale, dove, lavoro):
+        portati.append(quale)
+        if quale == "dinov3":
+            raise RuntimeError("il file è rovinato")
+
+    monkeypatch.setattr(modelli_in_casa, "porta_in_casa", porta)
+    monkeypatch.setattr(modelli_in_casa, "in_casa", lambda quale, dove=None: False)
+    fila = modelli_in_casa.Fila(quali=["dinov3", "volti", "seedvr2"])
+    with pytest.raises(RuntimeError, match="rovinato"):
+        modelli_in_casa.scarica_in_fila(fila, tmp_path, lavori.Lavoro("prova"),
+                                        c_e_rete=lambda: True, dormi=lambda s: None)
+    assert portati == ["dinov3", "volti", "seedvr2"]
+    assert fila.fatti == ["volti", "seedvr2"]
+    assert fila.adesso == ""
+
+
+def test_se_piu_modelli_non_arrivano_si_dicono_tutti_insieme(tmp_path, monkeypatch):
+    from officina.errori import ErroreOfficina
+
+    def porta(quale, dove, lavoro):
+        if quale in ("seedvr2", "codeformer"):
+            raise ErroreOfficina("Hugging Face non risponde.")
+        if quale == "faceme":
+            raise KeyError("pezzo_che_manca")
+
+    monkeypatch.setattr(modelli_in_casa, "porta_in_casa", porta)
+    monkeypatch.setattr(modelli_in_casa, "in_casa", lambda quale, dove=None: False)
+    lavoro = lavori.Lavoro("prova")
+    fila = modelli_in_casa.Fila(quali=["seedvr2", "volti", "codeformer", "faceme"])
+    lavoro.parti(lambda: modelli_in_casa.scarica_in_fila(fila, tmp_path, lavoro,
+                                                         c_e_rete=lambda: True,
+                                                         dormi=lambda s: None))
+    assert lavoro.aspetta_che_finisca(5)
+    assert fila.fatti == ["volti"]
+    nomi = [modelli_in_casa.nome(q) for q in ("seedvr2", "codeformer", "faceme")]
+    assert lavoro.guasto.startswith(modelli_in_casa.NON_ARRIVATI)
+    assert lavoro.guasto.count("Hugging Face non risponde.") == 1
+    assert f"{nomi[0]}, {nomi[1]}: Hugging Face non risponde." in lavoro.guasto
+    assert f"{nomi[2]}: {modelli_in_casa.DIFETTO}" in lavoro.guasto
+    assert nomi[2] in lavoro.dettaglio and "KeyError" in lavoro.dettaglio
+    assert "pezzo_che_manca" not in lavoro.guasto
+
+
+def test_se_si_ferma_mentre_un_modello_non_arriva_non_si_dice_niente(tmp_path, monkeypatch):
+    fila = modelli_in_casa.Fila(quali=["dinov3", "volti"])
+    portati = []
+
+    def porta(quale, dove, lavoro):
+        portati.append(quale)
+        fila.fermata = True
+        raise RuntimeError("fermato a metà")
+
+    monkeypatch.setattr(modelli_in_casa, "porta_in_casa", porta)
+    monkeypatch.setattr(modelli_in_casa, "in_casa", lambda quale, dove=None: False)
+    modelli_in_casa.scarica_in_fila(fila, tmp_path, lavori.Lavoro("prova"),
+                                    c_e_rete=lambda: True, dormi=lambda s: None)
+    assert portati == ["dinov3"]
+    assert fila.fatti == []
+
+
 def test_quelli_gia_in_casa_non_si_riscaricano(tmp_path, monkeypatch):
     portati = []
     monkeypatch.setattr(modelli_in_casa, "porta_in_casa",
@@ -78,3 +143,17 @@ def test_senza_i_modelli_obbligatori_il_programma_non_si_apre(tmp_path, monkeypa
 
     monkeypatch.setattr(modelli_in_casa, "mancano_gli_obbligatori", lambda dove=None: [])
     assert programma.passo() != "modelli"
+
+
+def test_il_peso_dei_modelli_viene_dai_file_che_si_scaricano_davvero():
+    from officina.corpi import scaricamento as scarica_corpi
+    from officina.miglioria import codeformer_pesi, lucidflux_pesi
+    from officina.miglioria import scaricamento as scarica_miglioria
+
+    assert modelli_in_casa.peso("corpi") == scarica_corpi.BYTE_IN_TUTTO
+    assert modelli_in_casa.peso("corpi") > sum(f.byte for f in scarica_corpi.FIGURE)
+    assert modelli_in_casa.peso("seedvr2") == scarica_miglioria.byte_circa("seedvr2")
+    assert modelli_in_casa.peso("codeformer") == codeformer_pesi.byte_da_scaricare()
+    assert modelli_in_casa.peso("lucidflux") == lucidflux_pesi.byte_circa()
+    assert all(modelli_in_casa.peso(q) > 0
+               for q in (*modelli_in_casa.OBBLIGATORI, *modelli_in_casa.FACOLTATIVI))

@@ -118,6 +118,27 @@ def test_di_un_video_si_manda_un_fotogramma_non_un_errore(archivio_misurabile):
     assert cliente.get(f"/fotogramma/{file_id}?numero=0&lato=200").status_code == 200
 
 
+@pytest.mark.parametrize("lato", [-5, -100000])
+def test_una_misura_negativa_non_fa_cadere_le_immagini(archivio_misurabile, lato):
+    from fastapi.testclient import TestClient
+
+    from officina.web.server import app
+
+    _, video_id, _ = _un_video(archivio_misurabile)
+    with archivio_misurabile.lettura() as connessione:
+        foto_id = connessione.execute(
+            "SELECT id FROM file_media WHERE genere = 'immagine' "
+            "AND ruolo = 'principale' ORDER BY id LIMIT 1").fetchone()["id"]
+    cliente = TestClient(app, client=("127.0.0.1", 51000),
+                         raise_server_exceptions=False)
+    for indirizzo in (f"/fotogramma/{video_id}?numero=0&lato={lato}",
+                      f"/immagine/{video_id}?lato={lato}",
+                      f"/immagine/{foto_id}?lato={lato}"):
+        risposta = cliente.get(indirizzo)
+        assert risposta.status_code == 200, indirizzo
+        assert len(risposta.content) > 200, indirizzo
+
+
 def test_la_striscia_mostra_i_momenti_calcolati(archivio_misurabile):
     from fastapi.testclient import TestClient
 

@@ -128,3 +128,15 @@ def test_dopo_un_file_rovinato_il_registro_dice_cos_era(tmp_path):
         "il registro dice che qualcosa si è rotto e non dice cosa")
     assert "dove=lettura" in scritto and "riga=" in scritto
     assert "nonna" not in scritto and "mare" not in scritto
+
+
+def test_un_giorno_pieno_si_ferma_e_lo_dice_una_volta(tmp_path):
+    from officina.registro import Registro
+
+    reg = Registro(tmp_path)
+    reg.BYTE_AL_GIORNO = 300
+    for _ in range(50):
+        reg.evento("web.errore")
+    testo = next(tmp_path.glob("*.registro")).read_text(encoding="utf-8")
+    assert testo.count("registro.pieno") == 1
+    assert len(testo.encode()) < 600

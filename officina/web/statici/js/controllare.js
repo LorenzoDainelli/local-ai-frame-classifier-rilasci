@@ -1,4 +1,4 @@
-import { manda } from "./comune.js";
+import { mandaInBlocco } from "./comune.js";
 document.querySelectorAll("[data-apre]").forEach((tasto) => {
     const dentro = document.getElementById(tasto.dataset.apre);
     if (!dentro) return;
@@ -103,7 +103,7 @@ document.querySelectorAll("[data-scegli]").forEach((zona) => {
         const numeri = scelte().map((voce) => Number(voce.dataset.scatto));
         azioni.forEach((altro) => { altro.disabled = true; });
         try {
-            await manda("/scatti/in-blocco", { azione: tasto.dataset.azione, scatti: numeri,
+            await mandaInBlocco({ azione: tasto.dataset.azione, scatti: numeri,
                                                giorno: giorno?.value || "" });
             location.reload();
         } catch (errore) {

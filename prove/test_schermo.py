@@ -3,10 +3,11 @@ from __future__ import annotations
 import http.client
 import json
 import time
+import urllib.parse
 
 import pytest
 
-from officina.schermo import collega, patto
+from officina.schermo import certificato, collega, patto
 from officina.schermo import porta as porta_mod
 
 
@@ -41,8 +42,16 @@ def porta(casa):
 
 
 def _abbina(porta) -> collega.Fisso:
-    codice, _ = porta.codice()
+    codice, _ = porta.mostra_il_codice()
     return collega.abbina("127.0.0.1", porta.porta_tcp, codice)
+
+
+def _vicino(ponte) -> tuple[http.client.HTTPConnection, dict]:
+    vicino = http.client.HTTPConnection("127.0.0.1", ponte.porta_locale, timeout=30)
+    vicino.request("GET", urllib.parse.urlsplit(ponte.indirizzo).path)
+    risposta = vicino.getresponse()
+    risposta.read()
+    return vicino, {"cookie": risposta.getheader("set-cookie").split(";")[0]}
 
 
 def test_il_portatile_si_abbina_con_il_codice_e_poi_entra_con_la_password(porta):
@@ -72,7 +81,7 @@ def test_senza_forziere_si_entra_senza_password(porta):
 
 
 def test_un_codice_sbagliato_non_abbina_e_dopo_cinque_il_codice_cambia(porta):
-    codice, _ = porta.codice()
+    codice, _ = porta.mostra_il_codice()
     sbagliato = f"{(int(codice) + 1) % 1_000_000:06d}"
     for _ in range(porta_mod.TENTATIVI_PER_CODICE):
         with pytest.raises(collega.NoDalFisso):
@@ -94,6 +103,30 @@ def test_un_fisso_con_un_altro_certificato_non_viene_creduto(porta, casa):
                               "0" * 64, fisso.pem)
     with pytest.raises(collega.NoDalFisso, match="non è quello abbinato"):
         collega.entra(impostore, "cavallo-batteria")
+
+
+def test_il_certificato_si_tiene_finche_e_sano(tmp_path):
+    primo = certificato.carica_o_crea(tmp_path)
+    assert certificato.carica_o_crea(tmp_path).impronta == primo.impronta
+    assert sorted(f.name for f in tmp_path.iterdir()) == ["fisso.chiave.pem", "fisso.pem"]
+
+
+@pytest.mark.parametrize("rovina", ["vuoto", "a_meta", "chiave_di_un_altro", "senza_chiave"])
+def test_un_certificato_rovinato_si_rifa_invece_di_fermare_il_collegamento(tmp_path, rovina):
+    primo = certificato.carica_o_crea(tmp_path)
+    if rovina == "vuoto":
+        primo.certificato.write_bytes(b"")
+    elif rovina == "a_meta":
+        primo.certificato.write_text(primo.pem[: len(primo.pem) // 2], encoding="ascii")
+    elif rovina == "chiave_di_un_altro":
+        altra = tmp_path / "altra"
+        primo.chiave.write_bytes(certificato.carica_o_crea(altra).chiave.read_bytes())
+    else:
+        primo.chiave.unlink()
+    rifatto = certificato.carica_o_crea(tmp_path)
+    assert rifatto.impronta != primo.impronta
+    assert certificato._leggi(rifatto.certificato, rifatto.chiave) is not None
+    assert not list(tmp_path.glob("*" + certificato.NUOVO))
 
 
 def test_chi_si_mette_in_mezzo_non_passa_la_prova():
@@ -129,9 +162,8 @@ def test_il_ponte_porta_le_pagine_del_fisso_e_non_lascia_niente_in_cache(porta, 
     ponte = collega.Ponte(fisso, sessione, quando_chiuso=lambda: chiuso.append(True))
     ponte.parti()
     try:
-        porta_locale = int(ponte.indirizzo.rsplit(":", 1)[1].strip("/"))
-        vicino = http.client.HTTPConnection("127.0.0.1", porta_locale, timeout=30)
-        vicino.request("GET", "/stato")
+        vicino, biscotto = _vicino(ponte)
+        vicino.request("GET", "/stato", headers=biscotto)
         risposta = vicino.getresponse()
         corpo = risposta.read()
         assert risposta.status == 200
@@ -140,7 +172,7 @@ def test_il_ponte_porta_le_pagine_del_fisso_e_non_lascia_niente_in_cache(porta, 
         assert dal_portatile() is False
 
         porta.stacca()
-        vicino.request("GET", "/stato")
+        vicino.request("GET", "/stato", headers=biscotto)
         risposta = vicino.getresponse()
         assert b"collegamento con il fisso" in risposta.read()
         assert chiuso == [True]
@@ -153,10 +185,10 @@ def test_il_ponte_rifiuta_i_comandi_che_arrivano_da_altre_pagine(porta, archivio
     ponte = collega.Ponte(fisso, collega.entra(fisso, "cavallo-batteria"))
     ponte.parti()
     try:
-        porta_locale = int(ponte.indirizzo.rsplit(":", 1)[1].strip("/"))
-        vicino = http.client.HTTPConnection("127.0.0.1", porta_locale, timeout=30)
+        vicino, biscotto = _vicino(ponte)
         vicino.request("POST", "/misura/esegui", body=b"",
-                       headers={"origin": "https://cattivo.example", "content-length": "0"})
+                       headers={"origin": "https://cattivo.example", "content-length": "0",
+                                **biscotto})
         risposta = vicino.getresponse()
         risposta.read()
         assert risposta.status == 403
@@ -167,6 +199,53 @@ def test_il_ponte_rifiuta_i_comandi_che_arrivano_da_altre_pagine(porta, archivio
 def test_il_fisso_si_trova_nella_rete_di_casa(porta):
     trovati = collega.cerca(secondi=1.0)
     assert any(voce["impronta"] == porta.certificato.impronta for voce in trovati)
+
+
+def test_appena_aperta_la_porta_risponde_anche_se_il_filo_parte_tardi(casa, monkeypatch):
+    import threading
+
+    vero = threading.Thread
+
+    class FiloLento(vero):
+        def run(self):
+            if self.name == "schermo-ascolto":
+                time.sleep(0.4)
+            super().run()
+
+    monkeypatch.setattr(porta_mod.threading, "Thread", FiloLento)
+    monkeypatch.setattr(collega, "_bussa_a_tutti", lambda mio: {})
+    nuova = porta_mod.Porta()
+    vecchia, porta_mod.porta = porta_mod.porta, nuova
+    try:
+        nuova.apri(_Password("cavallo-batteria"))
+        trovati = collega.cerca(secondi=1.2)
+    finally:
+        nuova.chiudi()
+        porta_mod.porta = vecchia
+    assert any(voce["impronta"] == nuova.certificato.impronta for voce in trovati)
+
+
+def test_se_la_porta_della_ricerca_e_presa_il_resto_si_apre_lo_stesso(casa, monkeypatch):
+    import socket
+
+    vero = socket.socket
+
+    class Occupata(vero):
+        def bind(self, dove):
+            if self.type == socket.SOCK_DGRAM and dove[1] == porta_mod.PORTA_UDP:
+                raise OSError(98, "Address already in use")
+            return super().bind(dove)
+
+    monkeypatch.setattr(porta_mod.socket, "socket", Occupata)
+    nuova = porta_mod.Porta()
+    vecchia, porta_mod.porta = porta_mod.porta, nuova
+    try:
+        nuova.apri(_Password("cavallo-batteria"))
+        assert nuova.aperta
+        assert nuova._ascolto is None
+    finally:
+        nuova.chiudi()
+        porta_mod.porta = vecchia
 
 
 @pytest.fixture
@@ -191,6 +270,7 @@ def test_dal_fisso_si_apre_la_porta_e_il_codice_occupa_la_finestra(porta_finta, 
     assert porta_finta.aperta
     pagina = fisso.get("/schermo/porta").text
     codice, _ = porta_finta.codice()
+    assert codice
     assert all(f"<span>{cifra}</span>" in pagina for cifra in codice)
     assert fisso.get("/api/schermo").json()["codice"] == codice
     assert "Il portatile" in fisso.get("/impostazioni").text
@@ -272,11 +352,11 @@ def test_quando_il_fisso_si_aggiorna_il_portatile_vede_i_passi_e_si_ricollega(po
                           quando_aggiorna=lambda: avvisato.append(True))
     ponte.parti()
     try:
-        porta_locale = int(ponte.indirizzo.rsplit(":", 1)[1].strip("/"))
-        vicino = http.client.HTTPConnection("127.0.0.1", porta_locale, timeout=30)
+        vicino, biscotto = _vicino(ponte)
 
         def chiedi(percorso, pagina=False):
-            vicino.request("GET", percorso, headers={"accept": "text/html"} if pagina else {})
+            vicino.request("GET", percorso,
+                           headers={"accept": "text/html", **biscotto} if pagina else biscotto)
             risposta = vicino.getresponse()
             return risposta.status, risposta.read()
 

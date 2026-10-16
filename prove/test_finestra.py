@@ -201,15 +201,18 @@ def test_niente_apici_da_proteggere_nella_riga_di_comando():
     assert not any("'" in pezzo for pezzo in comando)
 
 
-def test_powershell_si_cerca_anche_dove_sta_sempre():
-    trovato = finestra.dov_e_powershell(cerca=lambda n: None, c_e=lambda p: True)
+def test_powershell_si_cerca_solo_dove_sta_sempre(monkeypatch):
+    monkeypatch.setattr(finestra.shutil, "which", lambda nome: "/scaricati/powershell.exe")
+    monkeypatch.setenv("SystemRoot", "C:/Windows")
+    trovato = finestra.dov_e_powershell(c_e=lambda p: True)
     assert trovato is not None
-    assert "powershell" in trovato.lower()
+    assert "scaricati" not in trovato
+    assert Path(trovato).parts[-4:] == ("System32", "WindowsPowerShell", "v1.0",
+                                        "powershell.exe")
 
 
 def test_se_powershell_non_c_e_proprio_lo_dice():
-    assert finestra.dov_e_powershell(cerca=lambda n: None,
-                                     c_e=lambda p: False) is None
+    assert finestra.dov_e_powershell(c_e=lambda p: False) is None
 
 
 def test_su_linux_scrive_un_collegamento_secondo_lo_standard(tmp_path):

@@ -58,7 +58,8 @@ class Voto:
 
 
 def valuta(tabella, risposte: Sequence[int], gruppi: Sequence[int],
-           forza: float = FORZA, soglia: float = 0.5, fette: int = 5) -> Voto:
+           forza: float = FORZA, soglia: float = 0.5, fette: int = 5,
+           caselle: Sequence | None = None, come: str = "massimo") -> Voto:
     quanti_si = sum(1 for r in risposte if r)
     quanti_no = len(risposte) - quanti_si
     gruppi_si = len({g for g, r in zip(gruppi, risposte, strict=True) if r})
@@ -82,7 +83,11 @@ def valuta(tabella, risposte: Sequence[int], gruppi: Sequence[int],
             continue
 
         modello = addestra(tabella[per_imparare], risposte[per_imparare], forza=forza)
-        detti = modello.punteggi(tabella[da_verificare]) >= soglia
+        punteggi = modello.punteggi(tabella[da_verificare])
+        if caselle is not None:
+            punteggi = _con_le_caselle(modello, punteggi, numpy.nonzero(da_verificare)[0],
+                                       caselle, come)
+        detti = punteggi >= soglia
         veri = risposte[da_verificare] > 0.5
 
         voto.azzeccati_si += int((detti & veri).sum())
@@ -101,11 +106,17 @@ def valuta(tabella, risposte: Sequence[int], gruppi: Sequence[int],
     return voto
 
 
-def valuta_impronte(impronte: Sequence[bytes], risposte: Sequence[int],
-                    gruppi: Sequence[int], forza: float = FORZA,
-                    soglia: float = 0.5, fette: int = 5) -> Voto:
-    return valuta(vettori.matrice(list(impronte)), risposte, gruppi,
-                  forza=forza, soglia=soglia, fette=fette)
+def _con_le_caselle(modello, punteggi, dove, caselle, come: str):
+    from officina.descrittori import griglia
+
+    fuori = punteggi.copy()
+    for posto, riga in enumerate(dove):
+        sue = caselle[riga]
+        if sue is None or len(sue) == 0:
+            continue
+        fuori[posto] = griglia.combina(
+            [float(punteggi[posto])] + modello.punteggi(sue).tolist(), come)
+    return fuori
 
 
 @dataclass

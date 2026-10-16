@@ -4,7 +4,7 @@ import java.io.File
 import org.json.JSONException
 import org.json.JSONObject
 
-const val VERSIONE_FORMATO = 1
+const val VERSIONE_FORMATO = 2
 
 const val CARTA = "visore.json"
 const val DATI = "dati.db"
@@ -12,17 +12,23 @@ const val RITORNO = "ritorno.db"
 const val FOTO = "foto"
 const val MINI = "mini"
 const val VOLTI = "volti"
-const val SENZA_DATA = "senza-data"
 
 const val COMPLETO = "completo"
 const val INTERROTTO = "interrotto"
 
 fun dentro(cartella: File, posto: String): File {
-    var dove = cartella
+    val radice = cartella.canonicalFile
+    var dove = radice
     for (pezzo in posto.split("/")) {
         dove = File(dove, pezzo)
     }
-    return dove
+    val vero = dove.canonicalFile
+    if (vero != radice && !vero.path.startsWith(radice.path + File.separator)) {
+        throw ErroreVisore(
+            "Questo pacchetto contiene un percorso che esce dalla sua cartella. " +
+                "Non lo apro.", "percorso_sospetto")
+    }
+    return vero
 }
 
 class Carta(

@@ -68,6 +68,20 @@ def test_la_pagina_si_disegna_e_dice_come_si_chiama_questo_computer(cliente):
     assert "internet" in risposta.text.lower()
 
 
+def test_guardare_la_pagina_non_scrive_niente_nell_archivio(cliente, archivio):
+    from officina.modello import cambiamenti
+
+    with archivio.lettura() as connessione:
+        assert cambiamenti.questa_macchina_se_c_e(connessione) is None
+        prima = connessione.total_changes
+    risposta = cliente.get(DISPOSITIVI)
+    assert risposta.status_code == 200
+    assert cambiamenti.nome_del_computer() in risposta.text
+    with archivio.lettura() as connessione:
+        assert cambiamenti.questa_macchina_se_c_e(connessione) is None
+        assert connessione.total_changes == prima
+
+
 def test_la_pagina_non_chiede_niente_a_internet(cliente):
     testo = cliente.get(DISPOSITIVI).text
     fuori = re.findall(r'(?:src|href)="(https?://[^"]+)"', testo)
@@ -161,7 +175,10 @@ def test_un_pacchetto_di_un_altro_archivio_non_si_puo_applicare(cliente,
     assert "Applicalo" not in pagina
 
 
-def test_la_voce_c_e_nella_barra_di_ogni_pagina(cliente):
+def test_la_voce_c_e_nella_barra_di_ogni_pagina(cliente, monkeypatch):
+    from officina.web.strade import comune
+
+    monkeypatch.setattr(comune, "gia_ripreso", True)
     assert 'href="/fuori"' in cliente.get("/").text
     assert "Farne uno da portare di là" in cliente.get("/fuori?dove=computer").text
 

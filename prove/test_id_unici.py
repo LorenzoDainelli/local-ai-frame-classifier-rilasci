@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 PAGINE = ["/", "/scatto/1", "/officina", "/importazione", "/elenchi", "/sistemare",
           "/doppioni", "/albero", "/persone", "/persone/mazzo", "/persone/cassetto",
-          "/volti/raddrizzamento", "/luoghi", "/lavoro", "/novita", "/stato", "/misura/banco",
+          "/volti/raddrizzamento", "/luoghi", "/tempo", "/lavoro", "/novita", "/stato", "/misura/banco",
           "/impostazioni", "/persone/1", "/intelligenza", "/senza-data", "/fuori", "/telefono",
           "/miglioramento", "/miglioramento/rivedi", "/miglioramento/sfida",
           "/miglioramento/sfida/com-e-andata", "/sincronia", "/benvenuto", "/benvenuto/chiave",

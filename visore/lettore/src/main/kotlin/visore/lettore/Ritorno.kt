@@ -41,12 +41,14 @@ class Ritorno private constructor(
 
             val banco = if (dove.isFile) {
                 try {
-                    apre.apri(pacchetto.chiave.leggiTutto(dove))
-                } catch (rovinato: PacchettoRovinato) {
+                    apre.apri(pacchetto.chiave.leggiTutto(dove, RITORNO))
+                } catch (rovinato: ErroreVisore) {
+                    mettiDaParte(dove)
                     guaio = "Quello che avevi messo da parte su questo telefono " +
                         "non si rilegge piu'. Riparto da quello che il computer " +
-                        "sapeva all'ultimo travaso. Le foto non c'entrano e ci " +
-                        "sono tutte."
+                        "sapeva all'ultimo travaso, e il file che non si legge " +
+                        "l'ho spostato accanto senza cancellarlo. Le foto non " +
+                        "c'entrano e ci sono tutte."
                     daRifare = true
                     apre.apri(null)
                 }
@@ -71,6 +73,19 @@ class Ritorno private constructor(
                 ritorno.salva()
             }
             return ritorno
+        }
+
+        private fun mettiDaParte(dove: File) {
+            val via = File(dove.parentFile, dove.name + ".illeggibile-" + System.currentTimeMillis())
+            try {
+                Files.move(dove.toPath(), via.toPath())
+            } catch (guaio: java.io.IOException) {
+                throw ErroreVisore(
+                    "Quello che avevi messo da parte su questo telefono non si " +
+                        "rilegge, e non riesco nemmeno a spostarlo per non " +
+                        "rovinarlo: il telefono e' pieno, oppure la cartella e' " +
+                        "di sola lettura.", "ritorno_non_scritto")
+            }
         }
 
         fun adesso(): String = DateTimeFormatter
@@ -178,7 +193,7 @@ class Ritorno private constructor(
             "INSERT INTO informazioni (chiave, valore) VALUES ('scritto_il', ?) " +
                 "ON CONFLICT(chiave) DO UPDATE SET valore = excluded.valore",
             adesso())
-        val chiuso = chiave.cifraByte(banco.byte())
+        val chiuso = chiave.cifraByte(banco.byte(), RITORNO)
         val provvisorio = File(dove.parentFile, dove.name + ".parziale")
         try {
             dove.parentFile?.mkdirs()

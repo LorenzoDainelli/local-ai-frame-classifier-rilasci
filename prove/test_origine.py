@@ -37,9 +37,13 @@ def test_un_comando_da_un_altra_pagina_non_passa():
         "POST", {**casa, "sec-fetch-site": "same-origin"}) is None
 
 
-def test_leggere_da_un_altra_pagina_si_puo_lo_stesso():
+def test_da_un_altro_sito_si_apre_solo_la_pagina_intera():
     casa = {"host": "127.0.0.1:8080", "sec-fetch-site": "cross-site"}
-    assert origine.perche_no("GET", casa) is None
+    assert origine.perche_no("GET", {**casa, "sec-fetch-mode": "navigate",
+                                     "sec-fetch-dest": "document"}) is None
+    assert origine.perche_no("GET", casa) == origine.DENTRO_UN_ALTRO_SITO
+    assert origine.perche_no("GET", {**casa, "sec-fetch-mode": "navigate",
+                                     "sec-fetch-dest": "iframe"}) == origine.DENTRO_UN_ALTRO_SITO
 
 
 def test_senza_intestazioni_passa(archivio_pieno):

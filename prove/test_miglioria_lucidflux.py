@@ -7,6 +7,9 @@ import shutil
 import pytest
 
 from officina.miglioria import codeformer_pesi, lucidflux, lucidflux_pesi, motori, scaricamento
+from prove import impronte_vuote
+
+senza_impronte_vere = impronte_vuote.senza_impronte_vere
 
 
 def _sha(dati: bytes) -> str:
@@ -194,3 +197,38 @@ def test_timm_finto_basta_a_swinir():
     from timm.models.layers import to_2tuple
 
     assert to_2tuple(8) == (8, 8)
+
+
+def test_uno_scaricamento_interrotto_riparte_da_quello_che_era_arrivato(finto):
+    vero = finto["opzioni"]["prendi_hf"]
+
+    def si_interrompe(repo, nome, revisione, cartella, chiave):
+        if nome == "ae.safetensors":
+            mezzo = cartella / ".cache" / "huggingface" / "download" / "ae.incomplete"
+            mezzo.parent.mkdir(parents=True, exist_ok=True)
+            mezzo.write_bytes(b"pe")
+            raise OSError("la rete è caduta")
+        return vero(repo, nome, revisione, cartella, chiave)
+
+    with pytest.raises(scaricamento.ScaricamentoFallito):
+        lucidflux_pesi.scarica(finto["modelli"], **dict(finto["opzioni"], prendi_hf=si_interrompe))
+    nuova = lucidflux_pesi.dove(finto["modelli"]).with_name("lucidflux.nuova")
+    pesi = nuova / lucidflux_pesi.PESI
+    assert (pesi / "flux1-dev.safetensors").is_file()
+    assert (pesi / lucidflux_pesi.GREZZI / ".cache" / "huggingface" / "download" / "ae.incomplete").exists()
+    assert sorted(v.name for v in nuova.iterdir()) == [lucidflux_pesi.PESI]
+    assert not finto["rete"]["accesa"]
+    finto["chiesti"].clear()
+    lucidflux_pesi.scarica(finto["modelli"], **finto["opzioni"])
+    assert "flux1-dev.safetensors" not in finto["chiesti"] and "ae.safetensors" in finto["chiesti"]
+    assert lucidflux_pesi.e_in_casa(finto["modelli"])
+    assert not nuova.exists()
+
+
+def test_un_peso_storto_si_butta_e_non_resta_per_la_volta_dopo(finto):
+    finto["dichiarate"]["ae.safetensors"] = "0" * 64
+    with pytest.raises(scaricamento.ScaricamentoFallito):
+        lucidflux_pesi.scarica(finto["modelli"], **finto["opzioni"])
+    pesi = lucidflux_pesi.dove(finto["modelli"]).with_name("lucidflux.nuova") / lucidflux_pesi.PESI
+    assert not (pesi / "ae.safetensors").exists()
+    assert (pesi / "flux1-dev.safetensors").is_file()

@@ -107,3 +107,30 @@ def test_il_conto_torna_con_la_galleria_e_chi_manca_si_misura(cliente, archivio_
                                       (smisurato["id"],)).fetchone()
     assert (rimesso["larghezza"], rimesso["altezza"]) == (smisurato["larghezza"], smisurato["altezza"])
     assert "Controlla gli scatti" in cliente.get("/miglioramento").text
+
+
+def test_cambiare_filtro_non_rilegge_tutto_l_archivio(archivio_pieno, monkeypatch):
+    from officina.web import server
+
+    _pulisci_l_aspetto()
+    letture = []
+    vera = qualita.fonte
+
+    def contata(*argomenti, **chiavi):
+        letture.append(1)
+        return vera(*argomenti, **chiavi)
+
+    with monkeypatch.context() as m, TestClient(server.app, client=("127.0.0.1", 51000)) as cliente:
+        m.setattr(qualita, "fonte", contata)
+        primo = cliente.get("/api/miglioramento/qualita").json()
+        una_volta = len(letture)
+        filtrato = cliente.get("/api/miglioramento/qualita?voti=bassa&tipo=foto").json()
+        assert una_volta > 0 and len(letture) == una_volta
+        assert filtrato["tabella"]["totale"] <= primo["tabella"]["totale"]
+        with archivio_pieno.scrittura() as connessione:
+            connessione.execute(
+                "UPDATE scatti SET fuori_archivio = 1 WHERE id = (SELECT scatto_id FROM file_media "
+                "WHERE ruolo = 'principale' AND larghezza > 0 ORDER BY id LIMIT 1)")
+        dopo = cliente.get("/api/miglioramento/qualita").json()
+        assert len(letture) > una_volta
+        assert dopo["tabella"]["totale"] == primo["tabella"]["totale"] - 1

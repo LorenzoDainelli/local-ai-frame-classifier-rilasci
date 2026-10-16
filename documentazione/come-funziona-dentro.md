@@ -318,14 +318,14 @@ gradle -p visore test
 
 ---
 
-## Cosa manca, e dove andrà
+## Cosa c'era da fare, e dove è finito
 
-| Cosa | Tappa | Regole |
-|---|---|---|
-| etichettatura, proposte, riaddestramento | 3 | 337 |
-| mappa, pagella, galleria completa | 4 | 338 |
-| persone e volti | 5 | 339 |
-| cifratura del contenitore | quando nasce la prima cosa non ricostruibile | 340 |
+| Cosa | Tappa | Regole | Oggi |
+|---|---|---|---|
+| etichettatura, proposte, riaddestramento | 3 | 337 | fatto: pagina Etichetta, tasto «Riaddestra» |
+| mappa, pagella, galleria completa | 4 | 338 | fatto: Luoghi, Stato, Galleria |
+| persone e volti | 5 | 339 | fatto: Persone, SCRFD + AdaFace, corpo e vestiti |
+| cifratura del contenitore | quando nasce la prima cosa non ricostruibile | 340 | fatto: il forziere si accende dalle Impostazioni |
 
 ---
 

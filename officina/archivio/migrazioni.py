@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Callable
 
 from officina import VERSIONE_SCHEMA
@@ -1126,6 +1127,127 @@ def _versione_52(connessione: sqlite3.Connection) -> None:
     )
 
 
+def _parti_della_cartella(percorso: str, cartella: str) -> int | None:
+    tipo = PureWindowsPath if "\\" in cartella or cartella[1:2] == ":" else PurePosixPath
+    base = tipo(cartella)
+    return len(base.parts) if tipo(percorso).is_relative_to(base) else None
+
+
+def _versione_53(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "UPDATE scatti SET latitudine = NULL, longitudine = NULL "
+        "WHERE (latitudine IS NOT NULL AND (typeof(latitudine) NOT IN ('real', 'integer') "
+        "OR latitudine > 90 OR latitudine < -90)) "
+        "OR (longitudine IS NOT NULL AND (typeof(longitudine) NOT IN ('real', 'integer') "
+        "OR longitudine > 180 OR longitudine < -180))")
+    connessione.execute(
+        "UPDATE file_media SET latitudine = NULL, longitudine = NULL "
+        "WHERE (latitudine IS NOT NULL AND (typeof(latitudine) NOT IN ('real', 'integer') "
+        "OR latitudine > 90 OR latitudine < -90)) "
+        "OR (longitudine IS NOT NULL AND (typeof(longitudine) NOT IN ('real', 'integer') "
+        "OR longitudine > 180 OR longitudine < -180))")
+    connessione.execute(
+        "UPDATE luoghi SET "
+        "centro_lat = (SELECT avg(s.latitudine) FROM scatti s WHERE s.luogo_id = luoghi.id "
+        "AND s.latitudine IS NOT NULL AND s.longitudine IS NOT NULL), "
+        "centro_lon = (SELECT avg(s.longitudine) FROM scatti s WHERE s.luogo_id = luoghi.id "
+        "AND s.latitudine IS NOT NULL AND s.longitudine IS NOT NULL), "
+        "quanti = (SELECT count(*) FROM scatti s WHERE s.luogo_id = luoghi.id "
+        "AND s.latitudine IS NOT NULL AND s.longitudine IS NOT NULL), "
+        "raggio_metri = 0 "
+        "WHERE (typeof(centro_lat) NOT IN ('real', 'integer') OR centro_lat > 90 "
+        "OR centro_lat < -90 OR typeof(centro_lon) NOT IN ('real', 'integer') "
+        "OR centro_lon > 180 OR centro_lon < -180) "
+        "AND EXISTS (SELECT 1 FROM scatti s WHERE s.luogo_id = luoghi.id "
+        "AND s.latitudine IS NOT NULL AND s.longitudine IS NOT NULL)")
+    connessione.execute(
+        "UPDATE scatti SET luogo_id = NULL WHERE luogo_id IN (SELECT id FROM luoghi "
+        "WHERE typeof(centro_lat) NOT IN ('real', 'integer') OR centro_lat > 90 "
+        "OR centro_lat < -90 OR typeof(centro_lon) NOT IN ('real', 'integer') "
+        "OR centro_lon > 180 OR centro_lon < -180)")
+    connessione.execute(
+        "DELETE FROM luoghi WHERE typeof(centro_lat) NOT IN ('real', 'integer') "
+        "OR centro_lat > 90 OR centro_lat < -90 OR typeof(centro_lon) NOT IN ('real', 'integer') "
+        "OR centro_lon > 180 OR centro_lon < -180")
+
+    cartelle = [(riga[0], riga[1]) for riga in connessione.execute(
+        "SELECT id, percorso FROM cartelle_sorgente")]
+    ultimo = 0
+    while True:
+        righe = connessione.execute(
+            "SELECT id, percorso, cartella_id FROM percorsi "
+            "WHERE id > ? AND cartella_id IS NOT NULL ORDER BY id LIMIT 1000",
+            (ultimo,)).fetchall()
+        if not righe:
+            break
+        cambi = []
+        for riga in righe:
+            scelta, lunghezza = None, -1
+            for cartella_id, cartella in cartelle:
+                parti = _parti_della_cartella(riga[1], cartella)
+                if parti is not None and parti > lunghezza:
+                    scelta, lunghezza = cartella_id, parti
+            if scelta != riga[2]:
+                cambi.append((scelta, riga[0]))
+        connessione.executemany("UPDATE percorsi SET cartella_id = ? WHERE id = ?", cambi)
+        ultimo = righe[-1][0]
+
+
+def _versione_54(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS cambiamenti_per_scatto ON cambiamenti"
+        "(macchina_id, cosa, scatto_id, nodo_id, seriale)")
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS cambiamenti_per_nodo ON cambiamenti"
+        "(macchina_id, cosa, nodo_id, avvenuto_il)")
+
+
+def _versione_55(connessione: sqlite3.Connection) -> None:
+    connessione.execute("""
+        CREATE TABLE IF NOT EXISTS salute_file (
+            percorso_id    INTEGER PRIMARY KEY REFERENCES percorsi(id) ON DELETE CASCADE,
+            file_id        INTEGER NOT NULL REFERENCES file_media(id) ON DELETE CASCADE,
+            percorso       TEXT NOT NULL,
+            esito          TEXT NOT NULL CHECK (esito IN
+                               ('sano','rovinato','cambiato','illeggibile','assente')),
+            dimensione     INTEGER,
+            toccato_ns     INTEGER,
+            controllato_il TEXT NOT NULL,
+            dettaglio      TEXT,
+            riparato_il    TEXT
+        )""")
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS salute_per_esito ON salute_file(esito)")
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS salute_per_data ON salute_file(controllato_il)")
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS salute_per_file ON salute_file(file_id)")
+
+
+def _versione_56(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS migliorie_per_file ON migliorie(file_id, stato, id)")
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS migliorie_per_scatto ON migliorie(scatto_id, stato, id)")
+
+
+def _versione_57(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS volti_per_scatto_e_modello "
+        "ON volti(scatto_id, modello, versione)")
+    connessione.execute("DROP INDEX IF EXISTS volti_per_scatto")
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS persone_negli_scatti_per_persona "
+        "ON persone_negli_scatti(persona_id, scatto_id)")
+
+
+def _versione_58(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS percorsi_per_nome ON percorsi(nome COLLATE NOCASE)")
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS file_per_data_locale ON file_media(data_locale)")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1217,6 +1339,19 @@ MIGRAZIONI: list[Migrazione] = [
     Migrazione(52, "le stanze in 3D: la forma di ogni luogo con almeno 5 foto, da dove è stata "
                "fatta ciascuna e il corpo vero di ogni persona",
                _versione_52),
+    Migrazione(53, "via le coordinate che non stanno sul mondo, e ogni percorso torna alla "
+               "sua vera cartella di partenza",
+               _versione_53),
+    Migrazione(54, "la sincronia trova in fretta l'ultimo gesto fatto qui su una foto",
+               _versione_54),
+    Migrazione(55, "la salute dei file: ogni originale si ricontrolla ogni tanto per "
+               "scoprire se si è rovinato da solo", _versione_55),
+    Migrazione(56, "le foto migliorate si ritrovano in fretta anche quando sono decine di "
+               "migliaia", _versione_56),
+    Migrazione(57, "guardare i volti di una foto non rallenta più con i volti già trovati, e "
+               "le persone messe a mano si ritrovano subito", _versione_57),
+    Migrazione(58, "le foto live si ritrovano in fretta all'importazione, anche con "
+               "centinaia di migliaia di file", _versione_58),
 ]
 
 

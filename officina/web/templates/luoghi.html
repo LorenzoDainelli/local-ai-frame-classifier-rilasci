@@ -27,11 +27,11 @@
                 <a class="tasto-comando piccolo" href="/?luogo={{ voce.posto_id }}">{{ icona('foto', 14) }} Guardali</a>
                 <form method="post" action="/luoghi/nuovo" class="in-fila">
                     <input type="hidden" name="genitore_id" value="{{ voce.posto_id }}">
-                    <input class="campo" type="text" name="nome" placeholder="Nuovo luogo qui dentro" required aria-label="Nuovo luogo dentro {{ voce.nome }}">
+                    <input class="campo" type="text" name="nome" maxlength="120" placeholder="Nuovo luogo qui dentro" required aria-label="Nuovo luogo dentro {{ voce.nome }}">
                     <button class="tasto-comando nudo piccolo" type="submit">Aggiungi</button>
                 </form>
                 <form method="post" action="/luoghi/{{ voce.posto_id }}/nome" class="in-fila">
-                    <input class="campo" type="text" name="nome" value="{{ voce.nome }}" required aria-label="Nome del luogo">
+                    <input class="campo" type="text" name="nome" maxlength="120" value="{{ voce.nome }}" required aria-label="Nome del luogo">
                     <button class="tasto-comando nudo piccolo" type="submit">Rinomina</button>
                 </form>
                 <form method="post" action="/luoghi/{{ voce.posto_id }}/sposta" class="in-fila">
@@ -103,7 +103,7 @@
                 <button type="button" data-vista="albero" aria-pressed="false">Albero</button>
             </span>
             <form method="post" action="/luoghi/nuovo" class="in-fila">
-                <input class="campo" type="text" name="nome" placeholder="Nuovo luogo" required aria-label="Nome del nuovo luogo">
+                <input class="campo" type="text" name="nome" maxlength="120" placeholder="Nuovo luogo" required aria-label="Nome del nuovo luogo">
                 {{ scegli_padre('genitore_id') }}
                 <button class="tasto-comando principale piccolo" type="submit">Aggiungi</button>
             </form>

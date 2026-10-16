@@ -40,6 +40,15 @@ def costruisci(dove: Path, grosso: bool = False) -> Path:
     motore.esegui()
 
     with archivio.scrittura() as connessione:
+        senza_data = connessione.execute(
+            "SELECT f.id, f.scatto_id FROM file_media f JOIN percorsi p ON p.file_id = f.id "
+            "WHERE p.nome = 'IMG_2005.JPG'").fetchone()
+        for tabella, numero in (("file_media", senza_data[0]), ("scatti", senza_data[1])):
+            connessione.execute(
+                f"UPDATE {tabella} SET data_locale = NULL, istante_utc = NULL, "
+                "origine_data = 'assente' WHERE id = ?", (numero,))
+        connessione.execute("UPDATE scatti SET giorno = NULL WHERE id = ?", (senza_data[1],))
+
         cartoline = nodi.crea(connessione, "cartoline")
         francobolli = nodi.crea(connessione, "francobolli", cartoline)
         nodi.crea(connessione, "vecchi", francobolli)

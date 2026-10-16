@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from officina import registro
@@ -10,12 +10,16 @@ from officina.archivio import accesso
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina, perche_saltato
 from officina.doppioni import decisioni as doppioni_decisioni
-from officina.modello import file_media, scatti, segnalazioni
+from officina.modello import file_media, salute_file, scatti, segnalazioni
 from officina.modello.scatti import Filtro
 
 from officina.web.strade import base, comune, importazione
 
 strada = APIRouter()
+
+solo_qui = [Depends(base.solo_da_questo_computer)]
+
+_detto_della_salute: dict = {}
 
 
 def _cartella_di(percorso: str) -> str:
@@ -48,6 +52,8 @@ def da_sistemare(richiesta: Request):
             "SELECT * FROM segnalazioni WHERE tipo = 'coppia_incerta' AND risolta = 0 LIMIT 50"
         )
         spariti = file_media.non_trovati(connessione)
+        rovinati = salute_file.da_riparare(connessione)
+        salute_conti = salute_file.conti(connessione)
         messi_da_parte = [
             {"scatto_id": r["scatto_id"],
              "nome": r["nome"] or f"scatto {r['scatto_id']}",
@@ -96,6 +102,8 @@ def da_sistemare(richiesta: Request):
                                "SELECT percorso FROM percorsi WHERE file_id = ? ORDER BY id",
                                riga["file_id"])]
 
+    detto_salute = _detto_della_salute.copy()
+    _detto_della_salute.clear()
     pila_doppioni = [copia["file_id"] for gruppo in gruppi_doppioni
                      for copia in gruppo["copie"][:1]]
     return base.pagine.TemplateResponse(richiesta, "sistemare.html", {
@@ -114,6 +122,9 @@ def da_sistemare(richiesta: Request):
         "senza_data_voci": senza_data_voci,
         "indovinata_voci": indovinata_voci,
         "schermate_voci": schermate_voci,
+        "rovinati": rovinati,
+        "salute_conti": salute_conti,
+        "detto_salute": detto_salute,
     })
 
 
@@ -197,3 +208,64 @@ def riprova_i_messi_da_parte():
         quanti = segnalazioni.riprova(connessione, segnalazioni.NON_SI_APRE)
     registro.evento("archivio.rimessi_in_coda", quanti=quanti)
     return RedirectResponse("/sistemare", status_code=303)
+
+
+def _di_nuovo_alla_salute(testo: str, guasti: list[str] | None = None) -> RedirectResponse:
+    _detto_della_salute.clear()
+    _detto_della_salute.update({"testo": testo, "guasti": guasti or []})
+    return RedirectResponse("/sistemare#rovinati", status_code=303)
+
+
+@strada.post("/elenchi/salute/ripara/{percorso_id}", dependencies=solo_qui)
+def salute_ripara(percorso_id: int):
+    try:
+        detto = salute_file.ripara(accesso.aperto(), percorso_id)
+    except salute_file.RiparazioneFerma as guasto:
+        return _di_nuovo_alla_salute(guasto.messaggio)
+    registro.evento("salute.riparato", percorso_id=percorso_id)
+    return _di_nuovo_alla_salute(detto)
+
+
+@strada.post("/elenchi/salute/ripara-tutti", dependencies=solo_qui)
+def salute_ripara_tutti():
+    riparati, guasti = salute_file.ripara_tutti(accesso.aperto())
+    registro.evento("salute.riparati", quanti=riparati, non_riusciti=len(guasti))
+    testo = ("Nessun file rimesso a posto." if not riparati
+             else "Un file è di nuovo com'era." if riparati == 1
+             else f"{riparati} file sono di nuovo com'erano.")
+    return _di_nuovo_alla_salute(testo, guasti[:10])
+
+
+@strada.post("/elenchi/salute/va-bene/{percorso_id}", dependencies=solo_qui)
+def salute_va_bene(percorso_id: int):
+    try:
+        salute_file.accetta(accesso.aperto(), percorso_id)
+    except salute_file.RiparazioneFerma as guasto:
+        return _di_nuovo_alla_salute(guasto.messaggio)
+    return _di_nuovo_alla_salute(
+        "Va bene: alla prossima importazione il programma lo riprende così com'è adesso.")
+
+
+@strada.post("/elenchi/salute/controlla", dependencies=solo_qui)
+def salute_controlla():
+    archivio = accesso.aperto()
+    rivisti = salute_file.ricontrolla_quelli_da_riparare(archivio)
+    giro = salute_file.un_giro(archivio, secondi=5.0)
+    guardati = rivisti.guardati + giro.guardati
+    if not guardati:
+        return _di_nuovo_alla_salute("Non c'era niente da ricontrollare adesso: "
+                                     "ogni file si riguarda circa una volta al mese.")
+    rovinati = giro.rovinati + rivisti.rovinati
+    cambiati = giro.cambiati + rivisti.cambiati
+    testo = f"Ho ricontrollato {guardati} file"
+    if not rovinati and not cambiati:
+        testo += ": tutti sani."
+    else:
+        pezzi = []
+        if rovinati:
+            pezzi.append("uno si è rovinato" if rovinati == 1 else f"{rovinati} si sono rovinati")
+        if cambiati:
+            pezzi.append("uno è stato cambiato da un altro programma" if cambiati == 1
+                         else f"{cambiati} sono stati cambiati da un altro programma")
+        testo += ": " + " e ".join(pezzi) + "."
+    return _di_nuovo_alla_salute(testo)

@@ -1,5 +1,6 @@
-import { chiedi, comeSiScorre, manda, numeroAParole,
+import { chiedi, comeSiScorre, manda, mandaInBlocco, numeroAParole,
          scattiAParole } from "./comune.js";
+import { copiaDa, incolla, quandoCambiano, quantiCopiati } from "./appunti_nodi.js";
 import { avvia } from "./griglia.js";
 import { mettiInCoda, scriviEsito } from "./migliora.js";
 
@@ -16,7 +17,15 @@ function mostraSelezione(griglia, selezione, totaleRisultati) {
     zona.hidden = quanti === 0;
     if (quanti === 0) return;
 
-    zona.querySelector("[data-conto]").textContent = `${scattiAParole(quanti)} selezionati`;
+    zona.querySelector("[data-conto]").textContent =
+        `${scattiAParole(quanti)} ${quanti === 1 ? "selezionato" : "selezionati"}`;
+    const copia = zona.querySelector("[data-copia-nodi]");
+    if (copia) {
+        const unoSolo = quanti === 1 && zona.dataset.tuttiIRisultati !== "1";
+        copia.disabled = !unoSolo;
+        copia.title = unoSolo ? "Prende i nodi di questo scatto"
+            : "Per copiare i nodi seleziona un solo scatto";
+    }
 
     const tutti = zona.querySelector("[data-tutti]");
     const mancano = totaleRisultati > quanti;
@@ -28,7 +37,7 @@ function mostraSelezione(griglia, selezione, totaleRisultati) {
 async function agisci(azione, griglia, tuttiIRisultati, extra = {}, prima = null) {
     const filtro = Object.fromEntries(new URLSearchParams(window.location.search));
     try {
-        const esito = await manda("/scatti/in-blocco", {
+        const esito = await mandaInBlocco({
             azione,
             scatti: [...griglia.selezione],
             tutti_i_risultati: tuttiIRisultati,
@@ -47,6 +56,28 @@ async function agisci(azione, griglia, tuttiIRisultati, extra = {}, prima = null
         }
         return null;
     }
+}
+
+function scriviAvviso(testo) {
+    const avviso = document.getElementById("avviso-blocco");
+    if (!avviso) return;
+    avviso.textContent = testo;
+    avviso.hidden = !testo;
+}
+
+function schede(zona) {
+    const tutte = [...zona.querySelectorAll("[data-scheda]")];
+    const apri = (quale) => {
+        tutte.forEach((tasto) => tasto.setAttribute("aria-selected", String(tasto.dataset.scheda === quale)));
+        zona.querySelectorAll("[data-pannello]").forEach((pannello) => {
+            pannello.hidden = pannello.dataset.pannello !== quale;
+        });
+        try { localStorage.setItem("officina.scheda-selezione", quale); } catch (errore) {  }
+    };
+    tutte.forEach((tasto) => tasto.addEventListener("click", () => apri(tasto.dataset.scheda)));
+    let ricordata = null;
+    try { ricordata = localStorage.getItem("officina.scheda-selezione"); } catch (errore) {  }
+    if (tutte.some((tasto) => tasto.dataset.scheda === ricordata)) apri(ricordata);
 }
 
 function ricordaPosizione(griglia) {
@@ -144,6 +175,37 @@ export function avviaGalleria(totaleRisultati) {
 
     const zona = barra();
     if (zona) {
+        schede(zona);
+        const appunti = zona.querySelector("[data-appunti]");
+        const tastoIncolla = zona.querySelector("[data-incolla-nodi]");
+        quandoCambiano((copia) => {
+            appunti.hidden = !copia;
+            appunti.textContent = copia ? quantiCopiati(copia) : "";
+            appunti.title = copia ? copia.nodi.map((voce) => voce.nome).join(", ") : "";
+            tastoIncolla.disabled = !copia;
+        });
+        zona.querySelector("[data-copia-nodi]").addEventListener("click", async () => {
+            const [quale] = [...griglia.selezione];
+            if (griglia.selezione.size !== 1 || quale === undefined) return;
+            try {
+                await copiaDa(Number(quale));
+                scriviAvviso("");
+            } catch (errore) {
+                scriviAvviso(errore.message);
+            }
+        });
+        tastoIncolla.addEventListener("click", async () => {
+            try {
+                const fatto = await incolla({
+                    scatti: [...griglia.selezione],
+                    tutti_i_risultati: zona.dataset.tuttiIRisultati === "1",
+                    filtro: Object.fromEntries(new URLSearchParams(window.location.search)),
+                });
+                if (fatto) window.location.reload();
+            } catch (errore) {
+                scriviAvviso(errore.message);
+            }
+        });
         zona.querySelector("[data-tutti]").addEventListener("click", () => {
             griglia.selezionaTutti();
             zona.dataset.tuttiIRisultati = "1";
@@ -189,7 +251,7 @@ export function avviaGalleria(totaleRisultati) {
         const togli = zona.querySelector("[data-togli-nodo]");
         const quale = scegliNodo(zona, (voce) => {
             metti.disabled = togli.disabled = !voce;
-            metti.textContent = voce ? `Applica ${voce.nome}` : "Applica";
+            metti.textContent = voce ? `Aggiungi ${voce.nome}` : "Aggiungi";
         });
         metti.addEventListener("click", () => {
             const voce = quale();

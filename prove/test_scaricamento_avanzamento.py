@@ -133,3 +133,30 @@ def test_mentre_scarica_la_barra_si_muove_davvero(tmp_path, monkeypatch):
     assert passi, "il sorvegliante non è stato acceso"
     assert passi[-1][0] > 0
     assert passi[-1][1] == 4000
+
+
+def test_quanto_pesa_non_crolla_se_la_cartella_sparisce_mentre_conta(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    def sparita(self, schema):
+        yield tmp_path / "a"
+        raise FileNotFoundError("sparita")
+
+    (tmp_path / "a").write_bytes(b"12345")
+    monkeypatch.setattr(Path, "rglob", sparita)
+    assert scaricamento.quanto_pesa(tmp_path) == 5
+
+
+def test_lo_spazio_delle_miniature_non_crolla_se_una_cartella_sparisce(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from officina.archivio import spazio
+
+    def sparita(self, schema):
+        yield tmp_path / "a.webp"
+        raise FileNotFoundError("sparita")
+
+    (tmp_path / "a.webp").write_bytes(b"123")
+    monkeypatch.setattr(Path, "rglob", sparita)
+    contato = spazio.conta_adesso(tmp_path, tmp_path / "dati.db")
+    assert contato.quante == 1 and contato.byte_miniature == 3

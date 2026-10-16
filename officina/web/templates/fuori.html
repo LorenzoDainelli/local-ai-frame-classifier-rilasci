@@ -214,11 +214,12 @@
 {% for uno in pacchetti %}
 <div class="fu-arrivato">
     <div>
-        <b>da {{ uno.da }}</b> <span class="tenue piccolo">· {{ uno.fatto_il }}</span>
+        <b>da {{ uno.da }}</b> <span class="tenue piccolo">· {{ uno.fatto_il|ora_di_qui }}</span>
         <div class="minuscolo tenue">cambiamenti dal {{ uno.dal }} al {{ uno.al }} · {{ uno.quanti_file }} file · archivio «{{ uno.archivio }}»</div>
-        {% if not uno.intero %}<div class="minuscolo avviso">Incompleto: chi lo ha scritto non ha finito, oppure la copia si è interrotta. Va rifatto.</div>{% endif %}
+        {% if uno.vecchio %}<div class="minuscolo avviso">Fatto da una versione precedente del programma, che lasciava fuori dalla cassaforte alcune informazioni: va rifatto sull'altro computer, dopo averlo aggiornato.</div>
+        {% elif not uno.intero %}<div class="minuscolo avviso">Incompleto: chi lo ha scritto non ha finito, oppure la copia si è interrotta. Va rifatto.</div>{% endif %}
     </div>
-    {% if uno.intero and uno.archivio == archivio_nome and da_questo_computer %}
+    {% if uno.intero and not uno.vecchio and uno.archivio == archivio_nome and da_questo_computer %}
     <form method="post" action="/sincronia/applica" class="in-fila">
         <input type="hidden" name="quale" value="{{ uno.cartella }}">
         {% if serve_password %}<input class="campo" type="password" name="password" placeholder="password del pacchetto" autocomplete="off">{% endif %}

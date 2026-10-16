@@ -81,7 +81,7 @@ def tutti_i_file(archivio: Archivio, basta: Callable[[], bool] = lambda: False,
             try:
                 if uno(archivio, riga):
                     trovate += 1
-            except OSError:
+            except Exception:                           # noqa: BLE001
                 registro.avviso("rileggi_date.file_non_letto")
             da = riga["id"]
             archivio.salva_stato(DA, da)

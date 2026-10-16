@@ -39,7 +39,8 @@
         {% for L in LAVORI %}
         {% set k = L.chiave %}
         {% set manca = mancano[k] %}
-        {% set fatti = totale - manca %}
+        {% set manca_scatti = [manca, totale]|min %}
+        {% set fatti = totale - manca_scatti %}
         {% set vivo = fila.lavori[k] %}
         {% set adesso = corre and fila.adesso == k %}
         {% set in_fila = corre and k in fila.scelti and not adesso and loop.index0 > (ORDINE.index(fila.adesso) if fila.adesso else -1) %}
@@ -95,7 +96,7 @@
                 {% elif fatti == 0 %}
                 <span class="bollino">Mai {{ L.fatti }}</span>
                 {% else %}
-                <span class="bollino attenzione">Mancano {{ manca|numero }} {{ 'scatto' if manca == 1 else 'scatti' }}</span>
+                <span class="bollino attenzione">Mancano {{ manca_scatti|numero }} {{ 'scatto' if manca_scatti == 1 else 'scatti' }}</span>
                 {% endif %}
             </div>
             {% endif %}

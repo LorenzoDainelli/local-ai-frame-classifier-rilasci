@@ -194,12 +194,5 @@ def di_impronta_migliorata(connessione: sqlite3.Connection,
                            impronta: str) -> sqlite3.Row | None:
     return uno(connessione,
                "SELECT * FROM migliorie WHERE impronta_migliorata = ? "
-               "AND stato IN (?,?,?) ORDER BY id DESC LIMIT 1",
-               impronta, DA_RIVEDERE, IN_SCAMBIO, APPROVATA)
-
-
-def approvata_del_file(connessione: sqlite3.Connection,
-                       file_id: int) -> sqlite3.Row | None:
-    return uno(connessione,
-               "SELECT * FROM migliorie WHERE file_id = ? AND stato = ? "
-               "ORDER BY id DESC LIMIT 1", file_id, APPROVATA)
+               "AND stato IN ('da_rivedere','in_scambio','approvata') ORDER BY id DESC LIMIT 1",
+               impronta)

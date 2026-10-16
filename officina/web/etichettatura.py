@@ -7,7 +7,7 @@ from pathlib import PureWindowsPath
 from officina.corpi import chi_e
 from officina.modello import posti
 from officina.modello import etichette as magazzino
-from officina.modello import file_media, indizi_persone, nodi, scatti
+from officina.modello import file_media, indizi_persone, nodi, nomi, scatti
 from officina.archivio.database import tutti
 
 TASTI = "123456789 0".replace(" ", "")
@@ -231,7 +231,7 @@ def _percorso_del_genitore(connessione: sqlite3.Connection, nodo_id: int) -> str
 
 
 def punteggio(nome: str, cercato: str) -> int:
-    nome_basso, cercato_basso = nome.casefold(), cercato.casefold()
+    nome_basso, cercato_basso = nomi.pulito(nome).casefold(), nomi.pulito(cercato).casefold()
     if not cercato_basso:
         return 0
     if nome_basso.startswith(cercato_basso):
@@ -264,7 +264,7 @@ def cerca(connessione: sqlite3.Connection, cercato: str, quanti: int = 5,
     righe = [riga for riga in nodi.elenco(connessione)
              if riga["id"] not in vietati]
 
-    cercato = (cercato or "").strip()
+    cercato = nomi.pulito(cercato)
     if not cercato:
         righe.sort(key=lambda r: (-r["usi"], r["nome"].casefold()))
         scelti = [(0, riga) for riga in righe[:quanti]]
@@ -288,7 +288,7 @@ def cerca(connessione: sqlite3.Connection, cercato: str, quanti: int = 5,
 
 def come_si_comporta(connessione: sqlite3.Connection, cercato: str,
                      genitore_id: int | None) -> dict:
-    cercato = (cercato or "").strip()
+    cercato = nomi.pulito(cercato)
     trovati = cerca(connessione, cercato) if cercato else []
 
     avvisi = []

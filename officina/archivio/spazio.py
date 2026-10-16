@@ -32,18 +32,21 @@ def conta_adesso(miniature: Path, database: Path) -> Spazio:
     quante = 0
     byte_miniature = 0
     byte_video = 0
-    for percorso in miniature.rglob("*"):
-        try:
-            if not percorso.is_file():
+    try:
+        for percorso in miniature.rglob("*"):
+            try:
+                if not percorso.is_file():
+                    continue
+                peso = percorso.stat().st_size
+            except OSError:
                 continue
-            peso = percorso.stat().st_size
-        except OSError:
-            continue
-        if percorso.suffix.lower() == ".mp4":
-            byte_video += peso
-        else:
-            quante += 1
-            byte_miniature += peso
+            if percorso.suffix.lower() == ".mp4":
+                byte_video += peso
+            else:
+                quante += 1
+                byte_miniature += peso
+    except OSError:
+        pass
     byte_archivio = 0
     for accanto in (database, database.with_name(database.name + "-wal")):
         try:

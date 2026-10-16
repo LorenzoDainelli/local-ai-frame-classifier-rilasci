@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from officina.archivio import memoria
@@ -79,6 +80,74 @@ def togli(connessione: sqlite3.Connection, scatto_id: int, nodo_id: int) -> None
                        scatto_id=scatto_id, nodo_id=nodo_id, origine="utente")
 
 
+
+
+def metti_a_tanti(connessione: sqlite3.Connection, scatti_ids, nodo_id: int,
+                  stato: str = "si") -> int:
+    if stato not in ("si", "no"):
+        raise OperazioneNonPermessa(
+            "Un'etichetta può essere solo «si» o «no». «Non ancora deciso» si "
+            "ottiene togliendola (regola 55)."
+        )
+    numeri = list(dict.fromkeys(int(n) for n in scatti_ids))
+    if not numeri:
+        return 0
+    gia = {riga[0] for riga in connessione.execute(
+        "SELECT scatto_id FROM etichette WHERE nodo_id = ? "
+        "AND scatto_id IN (SELECT value FROM json_each(?))", (nodo_id, json.dumps(numeri)))}
+    quando = adesso()
+    connessione.executemany(
+        """
+        INSERT INTO etichette (scatto_id, nodo_id, stato, origine, sicurezza, creata_il)
+        VALUES (?, ?, ?, 'utente', NULL, ?)
+        ON CONFLICT(scatto_id, nodo_id) DO UPDATE SET
+            stato = excluded.stato, origine = excluded.origine,
+            sicurezza = excluded.sicurezza, creata_il = excluded.creata_il
+        """,
+        [(numero, nodo_id, stato, quando) for numero in numeri],
+    )
+    azioni = [(numero, "cambiata" if numero in gia else "messa") for numero in numeri]
+    connessione.executemany(
+        "INSERT INTO storico_etichette (scatto_id, nodo_id, azione, stato, origine, avvenuto_il) "
+        "VALUES (?, ?, ?, ?, 'utente', ?)",
+        [(numero, nodo_id, azione, stato, quando) for numero, azione in azioni],
+    )
+    connessione.execute(
+        "UPDATE nodi SET usi = usi + ? WHERE id = ? AND posizione_ferma = 0",
+        (len(numeri), nodo_id))
+    cambiamenti.annota_tanti(connessione, "etichetta", [
+        (azione, {"scatto_id": numero, "nodo_id": nodo_id, "stato": stato, "origine": "utente"})
+        for numero, azione in azioni])
+    return len(numeri)
+
+
+def togli_a_tanti(connessione: sqlite3.Connection, coppie) -> int:
+    coppie = list(dict.fromkeys((int(s), int(n)) for s, n in coppie))
+    if not coppie:
+        return 0
+    quando = adesso()
+    connessione.executemany(
+        "DELETE FROM etichette WHERE scatto_id = ? AND nodo_id = ?", coppie)
+    connessione.executemany(
+        "INSERT INTO storico_etichette (scatto_id, nodo_id, azione, avvenuto_il) "
+        "VALUES (?, ?, 'tolta', ?)",
+        [(s, n, quando) for s, n in coppie])
+    cambiamenti.annota_tanti(connessione, "etichetta", [
+        ("tolta", {"scatto_id": s, "nodo_id": n, "origine": "utente"}) for s, n in coppie])
+    return len(coppie)
+
+
+def tuoi_di_tanti(connessione: sqlite3.Connection, scatti_ids) -> dict[int, set[int]]:
+    numeri = list(dict.fromkeys(int(n) for n in scatti_ids))
+    fuori: dict[int, set[int]] = {}
+    for scatto_id, nodo_id in connessione.execute(
+            "SELECT e.scatto_id, e.nodo_id FROM etichette e JOIN nodi n ON n.id = e.nodo_id "
+            "WHERE e.scatto_id IN (SELECT value FROM json_each(?)) AND e.stato = 'si' "
+            "AND e.origine = 'utente' AND n.stato = 'attivo'", (json.dumps(numeri),)):
+        fuori.setdefault(scatto_id, set()).add(nodo_id)
+    return fuori
+
+
 def di_scatto(connessione: sqlite3.Connection, scatto_id: int,
               solo_si: bool = True) -> list[sqlite3.Row]:
     condizione = "AND e.stato = 'si'" if solo_si else ""
@@ -100,15 +169,6 @@ def con_antenati(connessione: sqlite3.Connection, scatto_id: int) -> set[int]:
     for nodo_id in diretti:
         tutti_i_nodi.update(nodi.antenati(connessione, nodo_id))
     return tutti_i_nodi
-
-
-def conta_per_nodo(connessione: sqlite3.Connection) -> dict[int, dict[str, int]]:
-    conti: dict[int, dict[str, int]] = {}
-    for riga in tutti(connessione,
-                      "SELECT nodo_id, stato, count(*) AS quanti FROM etichette "
-                      "GROUP BY nodo_id, stato"):
-        conti.setdefault(riga["nodo_id"], {"si": 0, "no": 0})[riga["stato"]] = riga["quanti"]
-    return conti
 
 
 _tenuto = memoria.Ricordo("quanti senza etichetta")

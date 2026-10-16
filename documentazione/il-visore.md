@@ -146,17 +146,24 @@ quanti ne sono tornati.
 
 ## Cosa c'è dentro il pacchetto
 
-Una cartella, non un file (regola 358). Si apre col cavo e si capisce cosa c'è:
+Una cartella, non un file (regola 358). Si apre col cavo e si vede com'è fatta,
+ma non cosa contiene:
 
 ```
 Visore-iPhone/
     visore.json         la carta d'identita', in chiaro
     dati.db             etichette, nodi, persone, luoghi, date  (cifrato)
-    foto/2019/07/...    gli originali, coi loro nomi veri       (cifrati)
-    mini/...            le miniature 640 px in JPEG             (cifrate)
-    volti/...           un ritaglio 320 px per persona          (cifrato)
+    foto/3f/3f9a...     gli originali, con un nome a caso      (cifrati)
+    mini/c2/c2e1...     le miniature 640 px in JPEG             (cifrate)
+    volti/8b04...       un ritaglio 320 px per persona          (cifrato)
     ritorno.db          cuori, raccolte e diario, scritti dal telefono
 ```
+
+I nomi veri delle foto e le loro date stanno solo dentro `dati.db`, cifrati:
+chi trova la cartella non sa né quando è stata scattata una foto né come si
+chiamava. Un nome a caso resta lo stesso da un travaso all'altro, così non si
+riscrive quello che è già lì. La carta d'identità, in chiaro, non contiene
+nomi: dice al massimo quanti file non sono entrati, e i dettagli restano sul PC.
 
 | Entra | Non entra |
 |---|---|
@@ -176,6 +183,14 @@ rifarle decodificherebbe trentamila HEIC al primo avvio (regola 362).
 **Tutto** il pacchetto è cifrato: foto, video, miniature, database, e anche
 quello che il telefono riscrive (regola 366). Stessa password del forziere,
 stesso schema — `scrypt` per la chiave, AES-256-GCM a blocchi da un mega.
+
+Ogni file è **legato al suo posto** nel pacchetto: il nome del file entra nel
+controllo della cifratura, e un file spostato o scambiato con un altro non si
+apre più. I conti della password sono più cari che nella prima versione
+(`scrypt` con N = 65 536 per i pacchetti nuovi), e il programma e l'app
+accettano solo i conti che conoscono: una carta d'identità ritoccata per far
+girare il telefono a vuoto si ferma subito. Un pacchetto fatto con una versione
+precedente si riscrive tutto, coi nomi a caso, al primo travaso.
 
 Si cifra **file per file**, non tutto insieme come il forziere sul PC: il
 forziere si apre tutto all'avvio, il telefono no — deve poter aprire la foto
@@ -206,9 +221,15 @@ pacchetti già in giro restano leggibili con la password vecchia — sono cifrat
 non collegati — e l'Officina lo scrive fra gli avvisi invece di lasciartelo
 scoprire.
 
-Il pacchetto è inoltre **escluso dal backup di iCloud e di Google**: altrimenti
-l'archivio finirebbe su un server altrui, cioè la cosa che il progetto esiste
-per evitare. Si rifà dal PC in un'ora: non ha bisogno di backup.
+Il pacchetto è inoltre **escluso dal backup di iCloud e di Google**, e dal
+passaggio dei dati quando si cambia telefono: altrimenti l'archivio finirebbe su
+un server altrui, cioè la cosa che il progetto esiste per evitare. Si rifà dal
+PC in un'ora: non ha bisogno di backup. Sul telefono l'app non si lascia
+fotografare: niente screenshot e niente anteprima nell'elenco delle app aperte.
+
+Se il file che il telefono riscrive (`ritorno.db`) un giorno non si legge più,
+l'app non lo sovrascrive: lo sposta accanto, intatto, e riparte da quello che
+il PC sapeva all'ultimo travaso.
 
 ## I sette giorni di iOS
 

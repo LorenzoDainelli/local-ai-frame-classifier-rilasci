@@ -50,6 +50,8 @@
 .dc-frasi li.nome-di-file { color: var(--ink); }
 .dc-altro { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .dc-altro form { margin: 0; }
+.dc-tasti { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.dc-tasti form { margin: 0; }
 
 .dc-indice .dc-pila { grid-column: 1 / -1; display: flex; padding-top: 2px; }
 .dc-indice .dc-pila img { width: 30px; height: 30px; object-fit: cover; border-radius: 6px; border: 1.5px solid var(--carta); margin-right: -8px; background: var(--pozzo); }

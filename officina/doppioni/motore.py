@@ -73,10 +73,12 @@ class Passata:
         if quante_al_massimo is not None:
             avanzamento.totale = min(avanzamento.totale, quante_al_massimo)
 
+        dopo = 0
         while not self.fermata() and avanzamento.resta > 0:
-            righe = self._prossime(min(QUANTE_ALLA_VOLTA, avanzamento.resta))
+            righe = self._prossime(min(QUANTE_ALLA_VOLTA, avanzamento.resta), dopo)
             if not righe:
                 break
+            dopo = righe[-1]["id"]
             for riga in righe:
                 if self.fermata():
                     break
@@ -85,15 +87,15 @@ class Passata:
                     al_passo(avanzamento)
         return avanzamento
 
-    def _prossime(self, quante: int) -> list[sqlite3.Row]:
+    def _prossime(self, quante: int, dopo: int = 0) -> list[sqlite3.Row]:
         with self.archivio.lettura() as connessione:
             return list(connessione.execute(
                 "SELECT f.id, f.impronta, MIN(p.percorso) AS percorso "
                 "FROM file_media AS f "
                 "JOIN percorsi AS p ON p.file_id = f.id AND p.presente = 1 "
-                "WHERE f.genere = 'immagine' AND f.impronta_occhio IS NULL "
-                "GROUP BY f.id LIMIT ?",
-                (quante,),
+                "WHERE f.genere = 'immagine' AND f.impronta_occhio IS NULL AND f.id > ? "
+                "GROUP BY f.id ORDER BY f.id LIMIT ?",
+                (dopo, quante),
             ))
 
     def _una(self, riga: sqlite3.Row, avanzamento: Avanzamento) -> None:

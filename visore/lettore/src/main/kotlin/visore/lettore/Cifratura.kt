@@ -13,18 +13,30 @@ import org.json.JSONObject
 val FIRMA = "VISORE-FILE".toByteArray(Charsets.US_ASCII) + byteArrayOf(0)
 
 const val VERSIONE = 1
+const val VERSIONE_COL_POSTO = 2
 
 const val BLOCCO = 1024 * 1024
 const val SIGILLO = 16
 const val PREFISSO = 8
 const val CONTATORE = 4
 
-const val COSTO = 32768
+const val COSTO = 65536
+val COSTI_AMMESSI = setOf(32768, 65536, 131072, 262144)
 const val BLOCCO_SCRYPT = 8
 const val PARALLELO = 1
 const val LUNGHEZZA_CHIAVE = 32
 
 val PROVA = "officina-visore-prova".toByteArray(Charsets.UTF_8)
+
+fun controllaIParametri(costo: Int, blocco: Int, parallelo: Int) {
+    if (costo !in COSTI_AMMESSI || blocco != BLOCCO_SCRYPT || parallelo != PARALLELO) {
+        throw ErroreVisore(
+            "Questo pacchetto chiede di calcolare la password in un modo che il " +
+                "programma non conosce: forse la sua carta d'identita' e' stata " +
+                "modificata. Per sicurezza non lo apro: rifallo dal computer.",
+            "parametri_sconosciuti")
+    }
+}
 
 fun quantiBlocchi(dimensione: Long): Int =
     if (dimensione <= 0L) 1 else ((dimensione + BLOCCO - 1L) / BLOCCO).toInt()
@@ -45,6 +57,7 @@ class Chiave(byte: ByteArray) {
         fun dallaPassword(password: String, sale: ByteArray, costo: Int = COSTO,
                           blocco: Int = BLOCCO_SCRYPT,
                           parallelo: Int = PARALLELO): Chiave {
+            controllaIParametri(costo, blocco, parallelo)
             if (password.length < 8) {
                 throw ErroreVisore(
                     "La password deve essere lunga almeno otto caratteri. E' " +
@@ -76,7 +89,7 @@ class Chiave(byte: ByteArray) {
         false
     }
 
-    fun cifraByte(dati: ByteArray): ByteArray {
+    fun cifraByte(dati: ByteArray, posto: String): ByteArray {
         val prefisso = ByteArray(PREFISSO)
         SORTE.nextBytes(prefisso)
 
@@ -89,7 +102,7 @@ class Chiave(byte: ByteArray) {
             val ultimo = inizio + BLOCCO >= dati.size
             fuori.write(cifra(nonce(prefisso, numero),
                 dati.copyOfRange(inizio, fine),
-                accompagnamento(numero, ultimo, dati.size.toLong())))
+                accompagnamento(numero, ultimo, dati.size.toLong(), VERSIONE_COL_POSTO, posto)))
             if (ultimo) {
                 break
             }
@@ -107,25 +120,25 @@ class Chiave(byte: ByteArray) {
         return cifratore.doFinal(aperto)
     }
 
-    fun scorri(sorgente: File, tocca: (ByteArray) -> Unit) {
+    fun scorri(sorgente: File, posto: String, tocca: (ByteArray) -> Unit) {
         RandomAccessFile(sorgente, "r").use { dentro ->
             val testa = leggiIntestazione(dentro)
             dentro.seek(testa.inizio.toLong())
             val quanti = quantiBlocchi(testa.dimensione)
             for (numero in 0 until quanti) {
                 tocca(apriUnBlocco(prendi(dentro, BLOCCO + SIGILLO), testa,
-                    numero, numero == quanti - 1))
+                    numero, numero == quanti - 1, posto))
             }
         }
     }
 
-    fun leggiTutto(sorgente: File): ByteArray {
+    fun leggiTutto(sorgente: File, posto: String): ByteArray {
         val fuori = ByteArrayOutputStream()
-        scorri(sorgente) { fuori.write(it) }
+        scorri(sorgente, posto) { fuori.write(it) }
         return fuori.toByteArray()
     }
 
-    fun leggiPezzo(sorgente: File, da: Long, quanti: Int): ByteArray {
+    fun leggiPezzo(sorgente: File, da: Long, quanti: Int, posto: String): ByteArray {
         RandomAccessFile(sorgente, "r").use { dentro ->
             val testa = leggiIntestazione(dentro)
             val dimensione = testa.dimensione
@@ -141,7 +154,7 @@ class Chiave(byte: ByteArray) {
             val fuori = ByteArrayOutputStream()
             for (numero in primo..ultimoUtile) {
                 fuori.write(apriUnBlocco(prendi(dentro, BLOCCO + SIGILLO), testa,
-                    numero, numero == totale - 1))
+                    numero, numero == totale - 1, posto))
             }
             val aperto = fuori.toByteArray()
             val scarto = (primoByte - primo.toLong() * BLOCCO).toInt()
@@ -149,11 +162,11 @@ class Chiave(byte: ByteArray) {
         }
     }
 
-    fun decifraFile(sorgente: File, destinazione: File): String {
+    fun decifraFile(sorgente: File, destinazione: File, posto: String): String {
         val impronta = Blake2b.Impronta()
         destinazione.parentFile?.mkdirs()
         destinazione.outputStream().buffered().use { fuori ->
-            scorri(sorgente) { pezzo ->
+            scorri(sorgente, posto) { pezzo ->
                 fuori.write(pezzo)
                 impronta.aggiungi(pezzo)
             }
@@ -165,7 +178,7 @@ class Chiave(byte: ByteArray) {
         RandomAccessFile(sorgente, "r").use { leggiIntestazione(it).dimensione }
 
     private fun apriUnBlocco(chiuso: ByteArray, testa: Intestazione, numero: Int,
-                             ultimo: Boolean): ByteArray {
+                             ultimo: Boolean, posto: String): ByteArray {
         if (chiuso.isEmpty()) {
             throw PacchettoRovinato(
                 "Questo file del pacchetto finisce prima di quanto dichiara. " +
@@ -174,7 +187,7 @@ class Chiave(byte: ByteArray) {
         }
         try {
             return decifra(nonce(testa.prefisso, numero), chiuso,
-                accompagnamento(numero, ultimo, testa.dimensione))
+                accompagnamento(numero, ultimo, testa.dimensione, testa.versione, posto))
         } catch (guaio: Exception) {
             throw PacchettoRovinato(
                 "Questo file del pacchetto non si apre: o la password non e' " +
@@ -195,14 +208,15 @@ class Chiave(byte: ByteArray) {
 
 private val SORTE = SecureRandom()
 
-class Intestazione(val prefisso: ByteArray, val dimensione: Long, val inizio: Int)
+class Intestazione(val prefisso: ByteArray, val dimensione: Long, val inizio: Int,
+                   val versione: Int)
 
 fun intestazione(prefisso: ByteArray, dimensione: Long): ByteArray {
     val testa = ("{\"blocco\": " + BLOCCO +
         ", \"cifra\": \"AES-256-GCM\"" +
         ", \"dimensione\": " + dimensione +
         ", \"prefisso\": \"" + Esadecimale.scritta(prefisso) + "\"" +
-        ", \"versione\": " + VERSIONE + "}").toByteArray(Charsets.UTF_8)
+        ", \"versione\": " + VERSIONE_COL_POSTO + "}").toByteArray(Charsets.UTF_8)
     val fuori = ByteArrayOutputStream()
     fuori.write(FIRMA)
     fuori.write((testa.size ushr 8) and 0xff)
@@ -211,10 +225,17 @@ fun intestazione(prefisso: ByteArray, dimensione: Long): ByteArray {
     return fuori.toByteArray()
 }
 
-fun accompagnamento(numero: Int, ultimo: Boolean, dimensione: Long): ByteArray {
+fun accompagnamento(numero: Int, ultimo: Boolean, dimensione: Long,
+                    versione: Int = VERSIONE, posto: String = ""): ByteArray {
     val fuori = ByteArrayOutputStream()
-    fuori.write("visore-$VERSIONE".toByteArray(Charsets.US_ASCII))
+    fuori.write("visore-$versione".toByteArray(Charsets.US_ASCII))
     fuori.write(0)
+    if (versione >= VERSIONE_COL_POSTO) {
+        val nome = posto.toByteArray(Charsets.UTF_8)
+        fuori.write((nome.size ushr 8) and 0xff)
+        fuori.write(nome.size and 0xff)
+        fuori.write(nome)
+    }
     fuori.write(byteArrayOf(
         (numero ushr 24).toByte(), (numero ushr 16).toByte(),
         (numero ushr 8).toByte(), numero.toByte(),
@@ -268,7 +289,14 @@ private fun leggiIntestazione(dentro: RandomAccessFile): Intestazione {
     } catch (guaio: JSONException) {
         throw PacchettoRovinato("Questo file del pacchetto ha l'intestazione rovinata.")
     }
-    if (testa.optInt("versione", -1) != VERSIONE) {
+    val versione = testa.optInt("versione", -1)
+    if (versione in 1 until VERSIONE_COL_POSTO) {
+        throw PacchettoRovinato(
+            "Questo file e' stato scritto da una versione precedente del programma, " +
+                "che non lo legava al suo posto nel pacchetto. Il pacchetto va " +
+                "rifatto dal computer.")
+    }
+    if (versione != VERSIONE_COL_POSTO) {
         throw ErroreVisore(
             "Questo pacchetto e' stato scritto da una versione piu' nuova del " +
                 "programma (regola 372). Si rifa' il pacchetto dal computer.",
@@ -277,9 +305,15 @@ private fun leggiIntestazione(dentro: RandomAccessFile): Intestazione {
     if (testa.optInt("blocco", -1) != BLOCCO) {
         throw PacchettoRovinato("Questo file del pacchetto usa blocchi di un'altra misura.")
     }
+    val prefisso = testa.optString("prefisso", "")
+    val dimensione = testa.optLong("dimensione", -1L)
+    if (dimensione < 0L || prefisso.length != PREFISSO * 2) {
+        throw PacchettoRovinato("Questo file del pacchetto ha l'intestazione rovinata.")
+    }
     return Intestazione(
-        prefisso = Esadecimale.byte(testa.optString("prefisso", "")),
-        dimensione = testa.optLong("dimensione", -1L),
+        prefisso = Esadecimale.byte(prefisso),
+        dimensione = dimensione,
         inizio = FIRMA.size + 2 + quanto,
+        versione = versione,
     )
 }

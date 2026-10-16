@@ -128,6 +128,16 @@ così (regola 403). Si porta sull'altra macchina e si legge.
 > fare è consegnare qualcosa che non si apre, mai qualcosa di sbagliato che si
 > apre.
 >
+> **Sulla chiavetta non passa niente in chiaro.** I file hanno nomi a caso, che
+> non sono né le impronte né i nomi delle foto, e ognuno è legato al suo posto:
+> uno spostato o scambiato non si apre. Il database del pacchetto si costruisce
+> in memoria e si cifra prima di toccare il disco. I campi della carta
+> d'identità che decidono qualcosa — chi l'ha mandato, da quale archivio, da che
+> punto a che punto del registro, quando — sono ripetuti dentro la parte
+> cifrata, e se fuori non coincidono il pacchetto non si apre: è manomesso. Un
+> pacchetto fatto da una versione precedente del programma va rifatto, e
+> l'elenco dei pacchetti lo dice.
+>
 > **La prima sincronizzazione è grossa, tutte le altre no.** Ogni pacchetto
 > porta in fondo l'elenco delle impronte che il mittente possiede; chi lo
 > legge se lo segna, e nel pacchetto di ritorno salta quei file. Le righe che

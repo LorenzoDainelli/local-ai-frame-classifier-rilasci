@@ -129,14 +129,7 @@ class Passata:
 
     def _gira(self, lettore, freno, al_passo, quanti_al_massimo) -> None:
         fatti = 0
-        while not self.fermata:
-            with self.archivio.lettura() as connessione:
-                righe = magazzino.da_leggere(
-                    connessione, SCHEDA.nome, SCHEDA.versione,
-                    quanti=QUANTI_ALLA_VOLTA, escludi=sorted(self._saltati_qui))
-            if not righe:
-                break
-
+        for righe in self._da_leggere(quanti_al_massimo):
             for riga in righe:
                 if self.fermata:
                     return
@@ -151,6 +144,23 @@ class Passata:
                     al_passo(self.avanzamento)
                 freno.riposa(durata)
 
+    def _da_leggere(self, quanti_al_massimo: int | None):
+        while not self.fermata:
+            with self.archivio.lettura() as connessione:
+                coda = [riga["id"] for riga in magazzino.da_leggere(
+                    connessione, SCHEDA.nome, SCHEDA.versione,
+                    quanti=quanti_al_massimo or -1, escludi=sorted(self._saltati_qui))]
+            if not coda:
+                return
+            for dove in range(0, len(coda), QUANTI_ALLA_VOLTA):
+                if self.fermata:
+                    return
+                with self.archivio.lettura() as connessione:
+                    righe = magazzino.da_leggere(
+                        connessione, SCHEDA.nome, SCHEDA.versione, quanti=QUANTI_ALLA_VOLTA,
+                        fra=coda[dove:dove + QUANTI_ALLA_VOLTA])
+                if righe:
+                    yield righe
 
     def _uno(self, lettore, scatto_id: int) -> bool:
         try:

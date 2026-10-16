@@ -78,6 +78,7 @@ const st = {
     persone: dati.persone || [],
     nonFiniti: dati.non_finiti ?? null,
     cursore: 0,
+    fuoco: null,
     colonne: 3,
     vista: { x: 20, y: 20, k: 1 },
     recenti: leggi("eti-recenti", []),
@@ -260,6 +261,12 @@ function larghezza(n) {
 }
 
 function finestra() {
+    const fuoco = st.fuoco !== null ? nodo(st.fuoco) : null;
+    if (st.fuoco !== null && !fuoco) st.fuoco = null;
+    if (fuoco) {
+        const limite = fuoco.prof + st.colonne - 1;
+        return { inizio: fuoco.prof, prime: [fuoco.id], aperto: (n) => !foglia(n) && n.prof < limite };
+    }
     const aperto = (n) => !foglia(n);
     let fondo = 0;
     const giro = (ids) => ids.forEach((id) => {
@@ -291,6 +298,7 @@ function disegnaAlbero() {
     misura.font = `14px ${getComputedStyle(document.documentElement).getPropertyValue("--sans") || "system-ui"}`;
 
     const { inizio, prime, aperto } = finestra();
+    apertoOra = aperto;
     const etichettate = new Set(mie());
     const dallIa = new Set(proposte().map((voce) => voce.nodo_id));
     const sopraMie = new Set();
@@ -388,6 +396,16 @@ function disegnaAlbero() {
 }
 
 let accesoSu = null;
+let apertoOra = (n) => !foglia(n);
+
+function vaiDa(id) {
+    st.fuoco = id;
+    st.cursore = 0;
+    st.vista.x = 20;
+    st.vista.y = 20;
+    disegnaAlbero();
+    accendiPercorso(null);
+}
 
 function accendiPercorso(id) {
     const mondo = $("mondo");
@@ -426,6 +444,7 @@ function mostraCursore() {
 function apriFinoA(id) {
     const n = nodo(id);
     if (!n) return;
+    if (st.fuoco !== null && !percorso(n).some((x) => x.id === st.fuoco)) st.fuoco = null;
     percorso(n).forEach((x) => { if (!foglia(x)) st.aperti.add(x.id); });
     ricorda(st.parte === 2 ? "eti-aperti-luoghi" : "eti-aperti", [...st.aperti]);
 }
@@ -574,6 +593,7 @@ function cambiaParte(parte) {
         st.recentiDi[st.parte] = st.recenti;
     }
     st.parte = parte;
+    st.fuoco = null;
     $("cerca").value = "";
     $("risultati").hidden = true;
     $("cerca").placeholder = ["Cerca un nodo…  (Ctrl+F o /)", "Cerca una persona…  (Ctrl+F o /)", "Cerca un luogo…  (Ctrl+F o /)"][parte];
@@ -1293,13 +1313,14 @@ document.addEventListener("click", (evento) => {
     if (d.nodo) {
         const n = nodo(Number(d.nodo));
         st.cursore = Math.max(0, ordine.indexOf(n.id));
+        const sulRamo = evento.target.closest(".ramo") !== null;
         if (foglia(n)) giraEtichetta(n.id);
-        else if (sceglibile(n) && evento.target.closest(".ramo") === null) giraEtichetta(n.id);
+        else if (!apertoOra(n) && (sulRamo || !sceglibile(n))) vaiDa(n.id);
+        else if (sceglibile(n) && !sulRamo) giraEtichetta(n.id);
         else aCursore(n.id);
     } else if (d.piu) nuovoNodo(Number(d.piu));
-    else if (d.chiudi) {
-        return;
-    } else if (d.recente) { const id = Number(d.recente); apriFinoA(id); metti(id); }
+    else if (d.chiudi) vaiDa(Number(d.chiudi));
+    else if (d.recente) { const id = Number(d.recente); apriFinoA(id); metti(id); }
     else if (d.pmio) togli(Number(d.pmio), d.di !== undefined ? Number(d.di) : st.parte);
     else if (d.pia) metti(Number(d.pia), d.di !== undefined ? Number(d.di) : st.parte);
     else if (d.parte !== undefined) cambiaParte(Number(d.parte));

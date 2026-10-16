@@ -48,7 +48,7 @@ def scegli(connessione: sqlite3.Connection, scelta: str, nome_nuovo: str = "") -
     scelta = str(scelta or "").strip()
     if scelta == "nuovo":
         return trova_o_crea(connessione, nome_nuovo)
-    if scelta.isdigit() and per_id(connessione, int(scelta)):
+    if scelta.isdecimal() and per_id(connessione, int(scelta)):
         return int(scelta)
     return None
 

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import re
 import threading
 import time
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
@@ -12,8 +13,9 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
 from officina import forziere, registro
+from officina.errori import ErroreOfficina
 from officina.archivio import accesso, memoria
-from officina.archivio.database import uno
+from officina.archivio.database import ora_a_parole, uno
 from officina.doppioni import decisioni as doppioni_decisioni
 from officina.modello import etichette, scatti, segnalazioni
 from officina.web import giro, sfoglia
@@ -28,6 +30,7 @@ CARTELLA = Path(__file__).parent.parent
 pagine = Jinja2Templates(directory=str(CARTELLA / "templates"))
 
 pagine.env.filters["numero"] = vista.numero_a_parole
+pagine.env.filters["ora_di_qui"] = ora_a_parole
 pagine.env.filters["senza_regole"] = vista.senza_regole
 pagine.env.filters["maiuscola"] = lambda testo: (testo[:1].upper() + testo[1:]) if testo else testo
 pagine.env.filters["righe_del_pannello"] = lambda dentro: Markup(
@@ -55,6 +58,7 @@ FOGLI_DELLE_SCHERMATE = (
     "senza_data",
     "intelligenza",
     "in3d",
+    "tempo",
 )
 pagine.env.globals["fogli_delle_schermate"] = FOGLI_DELLE_SCHERMATE
 pagine.env.globals["istruzioni_motori"] = istruzioni.motori_in_una_riga
@@ -114,6 +118,7 @@ _DOVE_STA = {
     "galleria": "foto",
     "persone": "foto",
     "luoghi": "foto",
+    "tempo": "foto",
     "scatto": "foto",
     "lavoro": "officina",
     "officina": "officina",
@@ -189,6 +194,7 @@ def barra_di_navigazione(qui: str, totale_scatti: int, conti: dict) -> list[dict
         stanza("/", "Galleria", "foto", totale_scatti),
         stanza("/persone", "Persone", "persone", conti["persone"]),
         stanza("/luoghi", "Luoghi", "luoghi", conti["luoghi"]),
+        stanza("/tempo", "Tempo e mappa", "calendario"),
     ]
     da_sistemare = conti["da_guardare"] + conti.get("doppioni", 0)
     lavoro_stanze = [
@@ -355,3 +361,26 @@ def ambito_della_pagina(archivio, zona: str) -> dict:
     with archivio.lettura() as connessione:
         return {"gruppi_ambito": [dict(g) for g in gruppi.elenco(connessione)],
                 "gruppo_ambito": gruppi.scelto(connessione, zona)}
+
+
+def coppie_da_rimettere(coppie: str) -> list[tuple[int, int | None]]:
+    elenco = json.loads(coppie)
+    if not isinstance(elenco, list):
+        raise ValueError(coppie)
+    fuori = []
+    for voce in elenco:
+        padre = voce.get("genitore_id")
+        fuori.append((int(voce["nodo_id"]), None if padre is None else int(padre)))
+    return fuori
+
+
+DA_DIRE_PER_INTERO = ("La cartella va scritta per intero, dalla lettera del disco in poi "
+                      "(per esempio D:\\Foto), oppure scelta con «Sfoglia».")
+
+
+def cartella_per_intero(scritto: str) -> str:
+    testo = (scritto or "").strip().strip('"')
+    if testo and not (Path(testo).expanduser().is_absolute()
+                      or PureWindowsPath(testo).is_absolute()):
+        raise ErroreOfficina(DA_DIRE_PER_INTERO)
+    return testo

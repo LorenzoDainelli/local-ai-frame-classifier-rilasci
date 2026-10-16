@@ -11,6 +11,7 @@ from officina import istruzioni, registro
 from officina.archivio.database import adesso, tutti, uno
 from officina.corpi import Interrotta, corpo3d, maschere, obiettivo
 from officina.corpi import rilevatore as rilevatore_mod
+from officina.descrittori import torcia
 from officina.errori import ErroreOfficina, FileNonLeggibile
 from officina.importazione import gruppi
 from officina.modello import file_media, segnalazioni
@@ -60,8 +61,10 @@ class Lente:
 def campo_dall_exif(percorso: Path, larga: int, alta: int) -> float | None:
     from PIL import Image
 
+    from officina.immagini import lettura
+
     try:
-        with Image.open(percorso) as aperta:
+        with Image.open(percorso, formats=lettura.formati_aperti()) as aperta:
             esteso = aperta.getexif().get_ifd(IFD_EXIF) or {}
     except Exception:
         return None
@@ -213,6 +216,7 @@ class Passata:
         self.avanzamento = Avanzamento()
         self._fermati = threading.Event()
         self._fuori = fermato
+        self._memoria = torcia.ContoDellaMemoria()
 
     def ferma(self) -> None:
         self._fermati.set()
@@ -233,6 +237,7 @@ class Passata:
         if quanti:
             da_fare = da_fare[:quanti]
         self.avanzamento.totale = len(da_fare)
+        self._memoria = torcia.ContoDellaMemoria()
         try:
             for inizio in range(0, len(da_fare), SCATTI_A_TURNO):
                 if self.fermata:
@@ -258,13 +263,15 @@ class Passata:
             except ErroreOfficina as errore:
                 self._segnala(scatto_id, errore)
                 continue
-            except Exception:                    # noqa: BLE001
-                self._segnala(scatto_id, ErroreOfficina("Questo scatto non si è lasciato guardare."))
+            except Exception as guasto:          # noqa: BLE001
+                if torcia.memoria_finita(guasto):
+                    self._memoria.finita(scatto_id, guasto)
+                else:
+                    self._segnala(scatto_id, ErroreOfficina("Questo scatto non si è lasciato guardare."))
                 continue
             if letto is not None:
                 letti.append(letto)
-        self._trova_le_lenti(letti)
-        self._fai_le_figure(letti)
+        self._fai_le_figure(self._trova_le_lenti(letti))
 
     def _leggi(self, scatto_id: int) -> Letto | None:
         from officina.immagini import lettura
@@ -313,7 +320,7 @@ class Passata:
                           gia["distorsione"])
         return Letto(scatto_id, Path(percorso), principale["genere"], larga, alta, quadri, lente)
 
-    def _trova_le_lenti(self, letti: list[Letto]) -> None:
+    def _trova_le_lenti(self, letti: list[Letto]) -> list[Letto]:
         senza = []
         for letto in letti:
             if letto.lente is not None:
@@ -327,12 +334,19 @@ class Passata:
             else:
                 senza.append(letto)
         if not senza:
-            return
-        self.figure.accendi_la_lente()
+            return letti
+        _accendi(self.figure.accendi_la_lente)
         for letto in senza:
             if self.fermata:
                 raise Interrotta()
-            stimata = self.figure.stima(letto.quadri[0].immagine)
+            try:
+                stimata = self.figure.stima(letto.quadri[0].immagine)
+            except Exception as guasto:          # noqa: BLE001
+                if torcia.memoria_finita(guasto):
+                    self._memoria.finita(letto.scatto_id, guasto)
+                    continue
+                registro.avviso("figure.lente_non_stimata", **registro.dove_si_e_rotto(guasto))
+                stimata = None
             if stimata is None:
                 larga, alta = letto.quadri[0].immagine.size
                 stimata = Lente(BASE, campo_di_base(larga, alta))
@@ -340,13 +354,14 @@ class Passata:
                 self.avanzamento.da_puffin += 1
             letto.lente = stimata
             self._salva_la_lente(letto)
+        return [letto for letto in letti if letto.lente is not None]
 
     def _fai_le_figure(self, letti: list[Letto]) -> None:
         import numpy
 
         if not letti:
             return
-        self.figure.accendi_il_corpo()
+        _accendi(self.figure.accendi_il_corpo)
         for letto in letti:
             fatte: list[tuple[int, list[float], list[bool]]] = []
             try:
@@ -374,13 +389,18 @@ class Passata:
             except ErroreOfficina as errore:
                 self._segnala(letto.scatto_id, errore)
                 continue
-            except Exception:                    # noqa: BLE001
-                self._segnala(letto.scatto_id, ErroreOfficina(
-                    "La figura in 3D di questo scatto non si è lasciata fare."))
+            except Exception as guasto:          # noqa: BLE001
+                if torcia.memoria_finita(guasto):
+                    self._memoria.finita(letto.scatto_id, guasto)
+                else:
+                    self._segnala(letto.scatto_id, ErroreOfficina(
+                        "La figura in 3D di questo scatto non si è lasciata fare."))
                 continue
             self._salva_le_figure(fatte)
             self.avanzamento.fatti += 1
             self.avanzamento.figure += len(fatte)
+            for pesante in self._memoria.riuscito():
+                self._segnala(pesante, ErroreOfficina(torcia.TROPPO_PER_LA_MEMORIA))
 
     def _salva_la_lente(self, letto: Letto) -> None:
         lente = letto.lente
@@ -412,6 +432,22 @@ class Passata:
             segnalazioni.segna(connessione, quale, scatto_id,
                                dettaglio=codice if quale == segnalazioni.NON_SI_APRE else errore.messaggio,
                                file_id=getattr(errore, "file_id", None))
+
+
+def _accendi(accendi) -> None:
+    try:
+        accendi()
+    except ErroreOfficina:
+        raise
+    except Exception as guasto:
+        if torcia.memoria_finita(guasto):
+            raise torcia.senza_memoria(guasto) from guasto
+        registro.errore("figure.non_si_accendono", **registro.dove_si_e_rotto(guasto))
+        errore = ErroreOfficina(
+            "I modelli delle figure in 3D non si sono accesi. Gli scatti restano da fare: "
+            "riprova dopo aver riavviato il programma.", codice="figure_non_si_accendono")
+        errore.dettaglio = registro.passi_del_guasto(guasto)
+        raise errore from guasto
 
 
 def _ridotta(immagine):

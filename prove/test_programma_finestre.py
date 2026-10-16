@@ -103,7 +103,7 @@ def casa(tmp_path, monkeypatch):
     from officina import modelli_in_casa
 
     monkeypatch.setattr(modelli_in_casa, "mancano_gli_obbligatori", lambda dove=None: [])
-    monkeypatch.setattr(modelli_in_casa, "controlla_la_chiave", lambda chiave: None)
+    monkeypatch.setattr(modelli_in_casa, "permessi_mancanti", lambda chiave, repo=None: [])
     from officina.programma import segreti as custode
 
     monkeypatch.setattr(custode, "si_puo_custodire", lambda: False)

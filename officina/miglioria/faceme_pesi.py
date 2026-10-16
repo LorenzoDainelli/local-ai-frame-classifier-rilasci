@@ -9,14 +9,16 @@ from typing import Callable
 from officina import registro
 from officina.descrittori import torcia
 from officina.descrittori.scaricamento import (ScaricamentoFallito, Sorvegliante,
-                                               _dettaglio_tecnico)
+                                               _dettaglio_tecnico, quanto_pesa)
 from officina.miglioria import codeformer_pesi, scaricamento
+from officina.programma import scheda
 
 NOME = "faceme"
 VERSIONE = 1
 PRONTO = "pronto.json"
 BASE = "base"
 APPUNTI = "appunti"
+GREZZI = "_da_hf"
 CONTROLNET = "controlnet"
 MIX = "mix.safetensors"
 OCCHIO = "occhio.safetensors"
@@ -33,6 +35,40 @@ PEZZI_DELLA_BASE = (("unet", "diffusion_pytorch_model", BASE),
                     ("vae", "diffusion_pytorch_model", BASE),
                     ("text_encoder", "model", APPUNTI),
                     ("text_encoder_2", "model", APPUNTI))
+
+
+REVISIONI: dict[str, str] = {
+    "SG161222/RealVisXL_V3.0": "5dd66d6fe796ff7b5a31595e5d0ac2f6a39e7ad9",
+    "thomas2modyu/FaceMe": "4c2426cf2617e934eda69135412fe8b6af5a868d",
+    "TencentARC/PhotoMaker": "f68f8e6309bf213d28d68230abff0ccc92de9f30",
+}
+
+IMPRONTE_NOTE: dict[tuple[str, str], str] = {
+    ("SG161222/RealVisXL_V3.0", "RealVisXL_V3.0.safetensors"):
+        "364cecf63090d881f0ed364ae99854575b06168e49d79262d604e7612b1e8ce1",
+    ("SG161222/RealVisXL_V3.0", "text_encoder/model.fp16.safetensors"):
+        "bc714abdcb90025f59d38bb9a58c620531971731e6a0e00fbc716f3ff2c2f361",
+    ("SG161222/RealVisXL_V3.0", "text_encoder/model.safetensors"):
+        "b90b452125fb24685a07c58b77a59eefd242a62894713c630b7ed9f0f74c864c",
+    ("SG161222/RealVisXL_V3.0", "text_encoder_2/model.fp16.safetensors"):
+        "0e174d33a77f16fce0d6f2ce3f1c9f05ba1f1774ef28fe591fcbc681854a8a8c",
+    ("SG161222/RealVisXL_V3.0", "text_encoder_2/model.safetensors"):
+        "b68dc8a0816d2a3e96a83b21baa1e08d4a4507c9d61b3f9bc4941a44938b0a7a",
+    ("SG161222/RealVisXL_V3.0", "unet/diffusion_pytorch_model.fp16.safetensors"):
+        "6e3ac14ff387832cb4ca309dc732dd71887e6bdbecae32388356d6f3d42c6798",
+    ("SG161222/RealVisXL_V3.0", "unet/diffusion_pytorch_model.safetensors"):
+        "beb87e880367684f63fca309bb6f9724dd1298274a9870ff9ac97488dbe9e50d",
+    ("SG161222/RealVisXL_V3.0", "vae/diffusion_pytorch_model.fp16.safetensors"):
+        "6353737672c94b96174cb590f711eac6edf2fcce5b6e91aa9d73c5adc589ee48",
+    ("SG161222/RealVisXL_V3.0", "vae/diffusion_pytorch_model.safetensors"):
+        "78f6189c8492013e3cac81637a1f657f790a237387f8a9dfd6bfa5fee28eb646",
+    ("thomas2modyu/FaceMe", "controlnet/diffusion_pytorch_model.safetensors"):
+        "a6af2ab1bb314886fd762ca99a3acb889115750962d0689e91f7588e25f8af6c",
+    ("thomas2modyu/FaceMe", "mix/mix.safetensors"):
+        "20901b84767a1338fd526fe933a05f683068bcae6d16ffb6c3892c0ea4e56652",
+    ("TencentARC/PhotoMaker", "photomaker-v1.bin"):
+        "529d503fa378bfb3a74e3384ab2064d7269d59f0638324555d22067c31e275bc",
+}
 
 
 class PreparazioneFallita(ScaricamentoFallito):
@@ -110,10 +146,12 @@ def scegli_di_faceme(file: dict) -> dict[str, str]:
             pesi_in(cartella): f"{CONTROLNET}/diffusion_pytorch_model.safetensors"}
 
 
-def _elenca(repo: str, chiave: str | None) -> tuple[str, dict]:
+def _elenca(repo: str, chiave: str | None, revisione: str = "") -> tuple[str, dict]:
     from huggingface_hub import HfApi
 
-    notizie = HfApi().model_info(repo, token=chiave or None, files_metadata=True)
+    fissata = revisione or REVISIONI.get(repo, "")
+    notizie = HfApi().model_info(repo, revision=fissata or None, token=chiave or None,
+                                 files_metadata=True)
     file = {}
     for voce in notizie.siblings or []:
         lfs = getattr(voce, "lfs", None)
@@ -137,6 +175,7 @@ def converti_occhio(sorgente: Path, arrivo: Path) -> None:
 
     from officina.miglioria import faceme_rete
 
+    scheda.controlla_che_torch_legga_in_sicurezza(torch)
     letto = torch.load(str(sorgente), map_location="cpu", weights_only=True)
     occhio = letto.get("id_encoder") if isinstance(letto, dict) else None
     if not isinstance(occhio, dict):
@@ -212,10 +251,11 @@ def scarica(cartella_modelli: Path, nome: str = NOME,
     testo = testo or calcola_testo
 
     nuova = arrivo.with_name(NOME + ".nuova")
-    shutil.rmtree(nuova, ignore_errors=True)
-    nuova.mkdir(parents=True)
+    (nuova / PRONTO).unlink(missing_ok=True)
+    nuova.mkdir(parents=True, exist_ok=True)
     prima = torcia.con_la_rete_accesa()
     tenuti: dict[str, str] = {}
+    tenere: set[str] | None = None
     try:
         try:
             di("guardo cosa c'è da scaricare")
@@ -227,8 +267,12 @@ def scarica(cartella_modelli: Path, nome: str = NOME,
             raise ScaricamentoFallito(
                 "Non riesco a leggere l'elenco dei file di FaceMe. Controlla la "
                 "connessione e riprova.\n" + _dettaglio_tecnico(errore, chiave)) from errore
+        tenere = {GREZZI} | {voce[2] for voce in piano}
+        scaricamento.tieni_solo(nuova, tenere)
+        nuova.mkdir(parents=True, exist_ok=True)
         totale = sum(voce[3] for voce in piano) + int(atteso["antelope"]["byte"])
-        _controlla_lo_spazio(cartella_modelli, int(totale * 1.3) + MARGINE)
+        manca = max(0, totale - quanto_pesa(nuova))
+        _controlla_lo_spazio(cartella_modelli, int(manca * 1.3) + MARGINE)
         guardia = Sorvegliante(nuova, totale, a_che_punto) if a_che_punto else None
         if guardia:
             guardia.__enter__()
@@ -257,7 +301,10 @@ def scarica(cartella_modelli: Path, nome: str = NOME,
     finally:
         if prima is not None:
             torcia.rimetti_la_rete_com_era(prima)
-        shutil.rmtree(nuova, ignore_errors=True)
+        if tenere is not None:
+            scaricamento.tieni_solo(nuova, tenere)
+        elif nuova.is_dir() and not any(nuova.iterdir()):
+            nuova.rmdir()
     registro.evento("miglioria.scaricato", modello=NOME)
     return arrivo
 
@@ -282,8 +329,15 @@ def _il_piano(atteso: dict, elenca, chiave) -> tuple[dict, list]:
 
 def _i_file_hf(piano: list, fonti: dict, nuova: Path, di, chiave, prendi_hf,
                tenuti: dict) -> None:
-    grezzi = nuova / "_da_hf"
+    grezzi = nuova / GREZZI
     for repo, remoto, locale, _byte, voluta in piano:
+        posto = nuova / locale
+        nota = IMPRONTE_NOTE.get((repo, remoto), "")
+        if scaricamento.gia_arrivato(posto, voluta, nota):
+            di(f"«{remoto}» era già arrivato")
+            tenuti[locale] = nota or voluta
+            continue
+        posto.unlink(missing_ok=True)
         di(f"scarico «{remoto}» da {repo}")
         try:
             preso = prendi_hf(repo, remoto, fonti[repo], grezzi, chiave)
@@ -292,14 +346,20 @@ def _i_file_hf(piano: list, fonti: dict, nuova: Path, di, chiave, prendi_hf,
             raise ScaricamentoFallito(
                 "Non sono riuscito a scaricare i pesi di FaceMe. Controlla la "
                 "connessione e riprova.\n" + _dettaglio_tecnico(errore, chiave)) from errore
-        posto = nuova / locale
         posto.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(preso), str(posto))
         impronta = scaricamento.impronta(posto)
         if voluta and impronta != voluta:
+            posto.unlink(missing_ok=True)
             raise ScaricamentoFallito(
                 f"«{remoto}» scaricato non corrisponde all'impronta che dichiara "
                 f"{repo}: non lo uso. Riprova più tardi.")
+        if nota and impronta != nota:
+            posto.unlink(missing_ok=True)
+            raise ScaricamentoFallito(
+                f"«{remoto}» scaricato da {repo} non è identico a quello provato: "
+                "per sicurezza non lo uso. Riprova più tardi; se succede ancora, il "
+                "file pubblicato è cambiato e va controllato in un aggiornamento.")
         tenuti[locale] = impronta
     shutil.rmtree(grezzi, ignore_errors=True)
 

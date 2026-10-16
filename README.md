@@ -83,6 +83,8 @@ spenta.
 - [La misura](documentazione/la-misura.md)
 - [I due computer](documentazione/la-sincronizzazione.md)
 - [Il Visore](documentazione/il-visore.md), cioè il telefono
+- [La protezione](documentazione/la-protezione.md): da cosa si difende e dove
+  la difesa finisce
 
 **Per chi ci lavora**
 

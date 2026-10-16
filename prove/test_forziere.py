@@ -133,6 +133,65 @@ def test_se_il_programma_si_chiude_male_il_chiaro_resta_e_vince(cassetto):
     assert (cassetto.cartella / "archivio.sqlite").read_bytes() == b"roba nuova"
 
 
+def test_se_si_spegne_mentre_si_richiude_il_lavoro_dell_ultima_volta_resta(
+        cassetto, monkeypatch):
+    cassetto.accendi(PAROLA)
+    cassetto.apri(PAROLA)
+    (cassetto.cartella / "archivio.sqlite").write_bytes(b"il lavoro di oggi")
+    vecchio = cassetto.file.read_bytes()
+
+    def si_spegne(flusso, *_):
+        flusso.write(b"x" * 100)
+        raise OSError("il computer si è spento")
+
+    with monkeypatch.context() as cambio:
+        cambio.setattr(forziere, "_impacchetta", lambda cartella, flusso: si_spegne(flusso))
+        with pytest.raises(OSError):
+            cassetto.chiudi(PAROLA)
+    assert cassetto.file.read_bytes() == vecchio
+    assert not cassetto.file.with_suffix(cassetto.file.suffix + ".nuovo").exists()
+
+    cassetto.apri(PAROLA)
+    assert (cassetto.cartella / "archivio.sqlite").read_bytes() == b"il lavoro di oggi"
+    cassetto.chiudi(PAROLA)
+    cassetto.apri(PAROLA)
+    assert (cassetto.cartella / "archivio.sqlite").read_bytes() == b"il lavoro di oggi"
+
+
+def test_un_forziere_nuovo_che_non_si_rilegge_non_prende_il_posto_del_vecchio(
+        cassetto, monkeypatch):
+    cassetto.accendi(PAROLA)
+    cassetto.apri(PAROLA)
+    vecchio = cassetto.file.read_bytes()
+
+    def rotto(file, password):
+        raise ErroreOfficina("Il forziere appena scritto finisce a metà.")
+
+    with monkeypatch.context() as cambio:
+        cambio.setattr(forziere, "_rileggi_per_controllo", rotto)
+        with pytest.raises(ErroreOfficina):
+            cassetto.chiudi(PAROLA)
+    assert cassetto.file.read_bytes() == vecchio
+    assert cassetto.aperto
+    assert (cassetto.cartella / "archivio.sqlite").exists()
+
+
+def test_chiudere_non_lascia_copie_in_chiaro_accanto(cassetto):
+    cassetto.accendi(PAROLA)
+    cassetto.apri(PAROLA)
+    cassetto.chiudi(PAROLA)
+    accanto = sorted(p.name for p in cassetto.cartella.parent.iterdir())
+    assert accanto == sorted([cassetto.cartella.name, cassetto.file.name])
+
+
+def test_il_blocco_finale_pieno_si_riconosce(cassetto, monkeypatch):
+    monkeypatch.setattr(forziere, "BLOCCO", 10240)
+    prima = contenuto(cassetto.cartella)
+    cassetto.accendi(PAROLA)
+    cassetto.apri(PAROLA)
+    assert contenuto(cassetto.cartella) == prima
+
+
 def test_accendere_due_volte_non_si_puo(cassetto):
     cassetto.accendi(PAROLA)
     with pytest.raises(ErroreOfficina) as scoppio:

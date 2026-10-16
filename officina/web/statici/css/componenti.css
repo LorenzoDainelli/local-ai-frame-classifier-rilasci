@@ -394,6 +394,7 @@ select.campo option { background: var(--superficie); color: var(--ink); }
 .titolo-pagina { font: 400 var(--testo-grosso)/1.15 var(--serif); letter-spacing: var(--tracciato-numero); }
 
 .bollino { display: inline-flex; align-items: center; gap: 6px; font-size: var(--testo-minore); color: var(--attenuato); }
+.bollino[hidden] { display: none; }
 .bollino::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--tenue); flex: none; }
 .bollino.bene::before { background: var(--bene); }
 .bollino.attenzione::before { background: var(--attenzione); }

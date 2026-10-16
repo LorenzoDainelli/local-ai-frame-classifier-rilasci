@@ -173,6 +173,20 @@ def test_se_l_impronta_non_torna_il_file_non_si_apre(tmp_path, monkeypatch):
     assert not list(kpr_pesi.dove_stanno(tmp_path).glob("arriva-*"))
 
 
+def test_i_resti_di_uno_scaricamento_di_kpr_ucciso_a_meta_si_tolgono(tmp_path, monkeypatch):
+    import dataclasses
+
+    casa = kpr_pesi.dove_stanno(tmp_path)
+    avanzo = casa / "arriva-r4nd0m"
+    avanzo.mkdir(parents=True)
+    (avanzo / "pesi.pth.tar").write_bytes(b"x" * 64)
+    monkeypatch.setattr(kpr_pesi, "PESI", tuple(dataclasses.replace(p, sha256="")
+                                               for p in kpr_pesi.PESI))
+    with pytest.raises(ErroreOfficina):
+        kpr_pesi.scarica(tmp_path)
+    assert not avanzo.exists()
+
+
 def test_la_scheda_prende_la_configurazione_salvata_e_il_resto_dai_valori_di_kpr():
     pacco = {"config": {"model": {"kpr": {"masks": {"parts_num": 8, "prompt_parts_num": 8},
                                           "keypoints": {"prompt_preprocess": "cck8"}},

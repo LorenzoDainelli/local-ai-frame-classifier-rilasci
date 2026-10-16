@@ -41,6 +41,9 @@ class PonteFinestrina:
     def ferma_i_motori(self) -> dict:
         return self._programma.fai(self._programma.ferma_i_motori)
 
+    def entra_col_torch_vecchio(self) -> dict:
+        return self._programma.fai(self._programma.entra_col_torch_vecchio)
+
     def salva_la_chiave(self, valore: str) -> dict:
         return self._programma.fai(lambda: self._programma.salva_la_chiave(valore))
 
@@ -53,8 +56,14 @@ class PonteFinestrina:
     def come_vanno_i_modelli(self) -> dict:
         return self._programma.come_vanno_i_modelli()
 
+    def entra_senza_i_corpi(self) -> dict:
+        return self._programma.fai(self._programma.entra_senza_i_corpi)
+
     def ferma_i_modelli(self) -> dict:
         return self._programma.fai(self._programma.ferma_i_modelli)
+
+    def apri_con_windows(self) -> dict:
+        return self._programma.fai(self._programma.apri_con_windows)
 
     def apri_il_forziere(self, password: str) -> dict:
         return self._programma.fai(lambda: self._programma.apri_il_forziere(password))
@@ -80,6 +89,9 @@ class PonteFinestrina:
     def abbina_il_fisso(self, indirizzo: str, porta, codice: str, password: str) -> dict:
         return self._programma.fai(lambda: self._programma.abbina_il_fisso(
             indirizzo, porta, codice, password))
+
+    def entra_nel_fisso_con_windows(self) -> dict:
+        return self._programma.fai(self._programma.entra_nel_fisso_con_windows)
 
     def entra_nel_fisso(self, password: str) -> dict:
         return self._programma.fai(lambda: self._programma.entra_nel_fisso(password))
@@ -116,6 +128,9 @@ class PontePrincipale:
 
     def togli_la_chiave(self) -> dict:
         return self._programma.fai(self._programma.togli_la_chiave)
+
+    def rientra_con_windows(self) -> dict:
+        return self._programma.fai(self._programma.rientra_con_windows)
 
     def rientra(self, password: str) -> dict:
         return self._programma.fai(lambda: self._programma.rientra(password))

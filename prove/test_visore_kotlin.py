@@ -161,9 +161,9 @@ def test_quello_che_scrive_il_kotlin_il_pc_lo_rilegge(comando, pacchetto,
     assert detto["guaio"] is None
     assert set(impronte[:2]) <= {c["impronta"] for c in detto["cuori"]}
 
+    arrivato = il_ritorno.apri(pacchetto, chiave)
     with archivio_del_pacchetto.scrittura() as connessione:
-        tornato = il_ritorno.leggi(connessione, telefono, pacchetto, chiave,
-                                   tmp_path / "lavoro")
+        tornato = il_ritorno.leggi(connessione, telefono, arrivato)
 
     assert tornato.c_era
     assert not tornato.guai
@@ -197,9 +197,9 @@ def test_il_giro_si_chiude(comando, pacchetto, archivio_del_pacchetto, tmp_path)
         "cuori": impronte[:2],
         "raccolte": [{"nome": "quelle da guardare", "impronte": impronte[:2]}],
     })
+    arrivato = il_ritorno.apri(pacchetto, chiave)
     with archivio_del_pacchetto.scrittura() as connessione:
-        il_ritorno.leggi(connessione, telefono, pacchetto, chiave,
-                         tmp_path / "lavoro")
+        il_ritorno.leggi(connessione, telefono, arrivato)
 
     costruzione.Travaso(archivio_del_pacchetto, telefono, pacchetto,
                         PAROLA).esegui()

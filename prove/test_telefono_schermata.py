@@ -66,6 +66,21 @@ def test_la_vecchia_pagina_porta_ai_dispositivi(cliente, telefono):
     assert risposta.headers["location"] == f"/fuori?quale={telefono}"
 
 
+def test_guardare_la_pagina_del_telefono_non_scrive_niente_nell_archivio(
+        cliente, telefono, archivio_pieno):
+    from officina.modello import cambiamenti
+
+    with archivio_pieno.lettura() as connessione:
+        assert telefoni.identificativo_se_c_e(connessione) is None
+        prima = connessione.total_changes
+    for pagina in ("/fuori", f"/fuori?quale={telefono}"):
+        assert cliente.get(pagina).status_code == 200
+    with archivio_pieno.lettura() as connessione:
+        assert telefoni.identificativo_se_c_e(connessione) is None
+        assert cambiamenti.questa_macchina_se_c_e(connessione) is None
+        assert connessione.total_changes == prima
+
+
 def test_senza_telefoni_dice_come_se_ne_aggiunge_uno(cliente):
     pagina = cliente.get("/fuori").text
     assert "Aggiungi un telefono" in pagina
@@ -207,9 +222,9 @@ def test_il_figlio_di_un_ramo_scelto_si_vede_come_ereditato(cliente, telefono,
     assert voci[figlio]["genitore"] == padre
 
 
-def test_se_non_ci_sta_lo_dice_e_non_blocca(cliente, telefono, archivio_pieno):
+def test_se_non_ci_sta_lo_dice_e_non_blocca(cliente, telefono, archivio_pieno, tmp_path):
     cliente.post(f"/telefono/{telefono}/dove",
-                 data={"cartella": "Visore-iPhone", "spazio": "0,000001"})
+                 data={"cartella": str(tmp_path / "Visore-iPhone"), "spazio": "0,000001"})
     detto = _salva(cliente, telefono, senza_data="1")
 
     quali = [a["testo"] for a in detto["avvisi"]]

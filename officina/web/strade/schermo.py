@@ -120,15 +120,22 @@ def la_porta_del_portatile(richiesta: Request):
     porta = base.la_porta()
     if not porta.aperta:
         return RedirectResponse("/fuori?dove=portatile", status_code=303)
-    codice, secondi = porta.codice()
+    codice, secondi = porta.mostra_il_codice()
     return base.pagine.TemplateResponse(richiesta, "schermo_porta.html", {
         **base.comune(richiesta, "impostazioni"),
         "codice": codice, "secondi": secondi,
+        "troppi_sbagli": porta.troppi_sbagli,
         "portatili": i_portatili(),
         "serve_password": porta.serve_la_password(),
         "nome_del_fisso": _nome_del_fisso(),
         "indirizzi": indirizzi_del_fisso(porta.porta_tcp),
     })
+
+
+@strada.post("/schermo/nuovo-codice", dependencies=solo_qui)
+def nuovo_codice_per_il_portatile():
+    base.la_porta().nuovo_codice()
+    return RedirectResponse("/schermo/porta", status_code=303)
 
 
 @strada.get("/schermo/coperta", response_class=HTMLResponse)
@@ -149,7 +156,7 @@ def api_schermo():
     porta = base.la_porta()
     codice, secondi = porta.codice()
     return {"aperta": porta.aperta, "codice": codice, "secondi": secondi,
-            "collegato": porta.collegato()}
+            "troppi_sbagli": porta.troppi_sbagli, "collegato": porta.collegato()}
 
 
 def indirizzi_del_fisso(numero: int) -> list[str]:

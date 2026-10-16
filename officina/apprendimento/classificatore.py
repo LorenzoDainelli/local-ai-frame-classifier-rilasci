@@ -66,8 +66,3 @@ def addestra(tabella, risposte, forza: float = FORZA, passi: int = PASSI) -> Mod
 
     return Modello(pesi=pesi, scarto=float(scarto), esempi_si=quanti_si,
                    esempi_no=quanti_no, forza=forza)
-
-
-def da_impronte(impronte: list[bytes], risposte: list[int],
-                forza: float = FORZA) -> Modello:
-    return addestra(vettori.matrice(impronte), risposte, forza=forza)

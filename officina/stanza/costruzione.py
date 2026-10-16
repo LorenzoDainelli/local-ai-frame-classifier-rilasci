@@ -9,6 +9,7 @@ from typing import Callable
 
 from officina import istruzioni, registro
 from officina.archivio.database import tutti
+from officina.descrittori import torcia
 from officina.errori import ErroreOfficina
 from officina.importazione import gruppi
 from officina.stanza import da3, vggt
@@ -23,6 +24,9 @@ AGGANCI = 16
 NUOVE_A_TURNO = 24
 DA3_A_TURNO = 24
 LATO_DI_LETTURA = 1024
+STANZE_DI_FILA_SENZA_MEMORIA = 3
+TROPPO_GRANDE = "La scheda video non ha abbastanza memoria per questa stanza."
+STANZA_SENZA_MEMORIA = "stanza_senza_memoria"
 VOXEL = 0.015
 PUNTI_MASSIMI = 1_500_000
 PERCENTILE_DI_FIDUCIA = 40.0
@@ -71,8 +75,6 @@ class Foto:
 class Modelli:
 
     def __init__(self, cartella_modelli: Path):
-        from officina.descrittori import torcia
-
         self.casa = dove_stanno(cartella_modelli)
         self.dispositivo = torcia.macchina().dispositivo
         self._vggt = None
@@ -101,15 +103,11 @@ class Modelli:
             return da3.stima(self._da3, immagini, estrinseci, intrinseci, in_mezza=self._mezza())
 
     def _via_vggt(self) -> None:
-        from officina.descrittori import torcia
-
         if self._vggt is not None:
             self._vggt = None
             torcia.libera()
 
     def _via_da3(self) -> None:
-        from officina.descrittori import torcia
-
         if self._da3 is not None:
             self._da3 = None
             torcia.libera()
@@ -289,6 +287,7 @@ class Passata:
             return self.avanzamento
         if self.modelli is None:
             self.modelli = Modelli(self.archivio.dove.modelli)
+        memoria = torcia.ContoDellaMemoria(di_fila=STANZE_DI_FILA_SENZA_MEMORIA)
         try:
             for posto_id, cosa in lavoro:
                 if self.fermata:
@@ -299,10 +298,19 @@ class Passata:
                     else:
                         self._metti_le_nuove(posto_id)
                 except ErroreOfficina as errore:
-                    self._non_riuscita(posto_id, errore.messaggio)
+                    if errore.codice == STANZA_SENZA_MEMORIA:
+                        memoria.finita(posto_id, errore)
+                    else:
+                        self._non_riuscita(posto_id, errore.messaggio)
                 except Exception as guasto:              # noqa: BLE001
-                    registro.avviso("stanza.non_riuscita", **registro.dove_si_e_rotto(guasto))
-                    self._non_riuscita(posto_id, "La stanza non si è lasciata costruire.")
+                    if torcia.memoria_finita(guasto):
+                        memoria.finita(posto_id, guasto)
+                    else:
+                        registro.avviso("stanza.non_riuscita", **registro.dove_si_e_rotto(guasto))
+                        self._non_riuscita(posto_id, "La stanza non si è lasciata costruire.")
+                else:
+                    for pesante in memoria.riuscito():
+                        self._non_riuscita(pesante, TROPPO_GRANDE)
                 self.avanzamento.fatti += 1
                 if al_passo:
                     al_passo(self.avanzamento)
@@ -417,23 +425,16 @@ class Passata:
         self._metti_le_nuove(posto_id)
 
     def _posizioni_robuste(self, foto: list[Foto]) -> dict:
-        senza_memoria: tuple[type[BaseException], ...] = (MemoryError,)
-        try:
-            import torch
-
-            senza_memoria += (torch.cuda.OutOfMemoryError,)
-        except ImportError:
-            pass
         quante = len(foto)
         while True:
             try:
                 return self.modelli.posizioni([f.immagine for f in foto[:quante]])
-            except senza_memoria:
-                from officina.descrittori import torcia
-
+            except Exception as guasto:
+                if not torcia.memoria_finita(guasto):
+                    raise
                 torcia.libera()
                 if quante <= FOTO_MINIME * 2:
-                    raise ErroreOfficina("La scheda video non ha abbastanza memoria per questa stanza.") from None
+                    raise ErroreOfficina(TROPPO_GRANDE, codice=STANZA_SENZA_MEMORIA) from None
                 quante = max(FOTO_MINIME * 2, quante * 2 // 3)
                 registro.avviso("stanza.meno_foto", foto=quante)
 

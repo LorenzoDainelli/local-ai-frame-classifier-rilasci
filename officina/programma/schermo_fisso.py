@@ -6,6 +6,9 @@ from officina import registro
 from officina.errori import ErroreOfficina
 from officina.programma import (carta)
 
+SIGILLO_DEL_FISSO = "fisso"
+
+
 class ColFisso:
 
     def scegli_lo_schermo(self) -> None:
@@ -41,8 +44,11 @@ class ColFisso:
             return {"trovato": False}
         try:
             fisso = collega.ritrova(fisso)
+            from officina.programma import sigillo
+
             return {"trovato": True, "nome": fisso.nome,
-                    "password": collega.serve_la_password(fisso)}
+                    "password": collega.serve_la_password(fisso),
+                    "sigillo": sigillo.modo(SIGILLO_DEL_FISSO)}
         except ErroreOfficina as errore:
             return {"trovato": False, "nome": fisso.nome, "perche": errore.messaggio}
 
@@ -53,7 +59,7 @@ class ColFisso:
             try:
                 numero = int(porta)
             except (TypeError, ValueError):
-                raise ErroreOfficina("Il fisso scelto non ha una porta valida.")
+                raise ErroreOfficina("Il fisso scelto non ha una porta valida.") from None
             indirizzo = str(indirizzo).strip()
         else:
             indirizzo, numero = collega.leggi_l_indirizzo(indirizzo)
@@ -68,10 +74,42 @@ class ColFisso:
             raise ErroreOfficina("Questo portatile non è ancora abbinato al fisso.")
         return self._collegati(collega.ritrova(fisso), password)
 
+    def entra_nel_fisso_con_windows(self) -> dict:
+        from officina.programma import sigillo
+
+        password = sigillo.apri(SIGILLO_DEL_FISSO)
+        self._entrato_con_windows = True
+        try:
+            return self.entra_nel_fisso(password)
+        except ErroreOfficina as errore:
+            from officina.schermo.porta import NON_TI_FA_ENTRARE
+
+            if errore.messaggio == NON_TI_FA_ENTRARE:
+                sigillo.togli(SIGILLO_DEL_FISSO)
+            raise
+        finally:
+            self._entrato_con_windows = False
+
+    def _lega_il_fisso_a_windows(self, password: str) -> None:
+        from officina.programma import sigillo
+
+        try:
+            if sigillo.come_si_puo() is None:
+                return
+            if getattr(self, "_entrato_con_windows", False):
+                return
+            sigillo.sigilla(SIGILLO_DEL_FISSO, password)
+        except ErroreOfficina as errore:
+            registro.avviso("schermo.sigillo_non_fatto", codice=registro.Parola(errore.codice))
+        except Exception as guasto:
+            registro.errore("schermo.sigillo_rotto", **registro.dove_si_e_rotto(guasto))
+
     def _collegati(self, fisso, password: str) -> dict:
         from officina.schermo import collega
 
         sessione = collega.entra(fisso, password or "")
+        if password:
+            self._lega_il_fisso_a_windows(password)
         if self.ponte is not None:
             self.ponte.ferma()
         self.ponte = collega.Ponte(fisso, sessione, password=password or "",

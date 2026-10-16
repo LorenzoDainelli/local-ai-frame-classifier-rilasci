@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Iterable, Iterator
 
 from PIL import Image
 
+from officina.descrittori import torcia
 from officina.errori import ErroreOfficina
 from officina.miglioria import scaricamento
 
@@ -60,17 +60,29 @@ class SeedVR2:
     def _carica(self):
         if self._s is not None:
             return self._s
-        codice = str(self.casa / scaricamento.CODICE)
-        if codice not in sys.path:
-            sys.path.insert(0, codice)
+        motivo = scaricamento.motivo_del_codice_diverso(
+            self.casa, scaricamento.manifesto(NOME), ricorda=False)
+        if motivo is not None:
+            raise MancaSeedVR2(scaricamento.spiega_il_codice_diverso(
+                motivo, "il modello che migliora foto e video"))
+        scaricamento.metti_il_codice_in_fondo(self.casa)
         import importlib
 
-        pezzo = importlib.import_module
+        with scaricamento.senza_scrivere_bytecode():
+            moduli = [importlib.import_module(nome) for nome in (
+                "src.core.generation_utils", "src.core.generation_phases",
+                "src.optimization.memory_manager", "src.utils.debug")]
+        if scaricamento.moduli_fuori_dal_codice(moduli, self.casa):
+            scaricamento.butta_i_moduli_di_un_altro_posto()
+            raise MancaSeedVR2(
+                "Nel computer c'è un'altra libreria che si chiama «src» e prende il "
+                "posto di quella del modello che migliora foto e video: per sicurezza "
+                "non lo uso.")
         self._s = {
-            "utili": pezzo("src.core.generation_utils"),
-            "fasi": pezzo("src.core.generation_phases"),
-            "memoria": pezzo("src.optimization.memory_manager"),
-            "debug": pezzo("src.utils.debug").Debug(enabled=False),
+            "utili": moduli[0],
+            "fasi": moduli[1],
+            "memoria": moduli[2],
+            "debug": moduli[3].Debug(enabled=False),
         }
         return self._s
 
@@ -119,7 +131,7 @@ class SeedVR2:
         try:
             return self._una_volta(quadri, larghezza, altezza)
         except Exception as errore:
-            if self.stretto or "out of memory" not in str(errore).lower():
+            if self.stretto or not torcia.memoria_finita(errore):
                 raise
         self.stretto = True
         self._ctx = None

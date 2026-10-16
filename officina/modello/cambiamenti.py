@@ -6,32 +6,37 @@ import uuid
 
 from officina.archivio.database import adesso, inserisci, tutti, uno
 from officina.errori import OperazioneNonPermessa
+from officina.modello import nomi
 
 COSE = ("etichetta", "nodo", "persona", "cuore")
 AZIONI = ("messa", "tolta", "cambiata", "creato", "rinominato", "spostato", "stato")
 
 
-def _nome_del_computer() -> str:
+def nome_del_computer() -> str:
     nome = (platform.node() or "").strip()
     return nome if nome else "questo PC"
 
 
+def questa_macchina_se_c_e(connessione: sqlite3.Connection) -> sqlite3.Row | None:
+    return uno(connessione, "SELECT * FROM macchine WHERE questa = 1")
+
+
 def questa_macchina(connessione: sqlite3.Connection) -> sqlite3.Row:
-    riga = uno(connessione, "SELECT * FROM macchine WHERE questa = 1")
+    riga = questa_macchina_se_c_e(connessione)
     if riga is not None:
         return riga
     inserisci(
         connessione,
         "INSERT OR IGNORE INTO macchine (codice, nome, questa, conosciuta_il) "
         "VALUES (?, ?, 1, ?)",
-        uuid.uuid4().hex, _nome_del_computer(), adesso(),
+        uuid.uuid4().hex, nome_del_computer(), adesso(),
     )
     return uno(connessione, "SELECT * FROM macchine WHERE questa = 1")
 
 
 def rinomina_macchina(connessione: sqlite3.Connection, macchina_id: int,
                       nome: str) -> None:
-    nome = nome.strip()
+    nome = nomi.da_salvare(nome)
     if not nome:
         raise OperazioneNonPermessa("Una macchina deve avere un nome.")
     connessione.execute("UPDATE macchine SET nome = ? WHERE id = ?", (nome, macchina_id))
@@ -65,6 +70,37 @@ def annota(connessione: sqlite3.Connection, cosa: str, azione: str, *,
         scatto_id, nodo_id, stato, origine, valore, valore_prima,
     )
     return seriale
+
+
+def annota_tanti(connessione: sqlite3.Connection, cosa: str,
+                 voci: list[tuple[str, dict]]) -> int:
+    if cosa not in COSE:
+        raise OperazioneNonPermessa(f"Non so annotare un cambiamento di «{cosa}».")
+    for azione, _ in voci:
+        if azione not in AZIONI:
+            raise OperazioneNonPermessa(f"Azione sconosciuta: {azione}")
+    if not voci:
+        return 0
+    macchina = questa_macchina(connessione)
+    riga = uno(
+        connessione,
+        "SELECT max(seriale) AS ultimo FROM cambiamenti WHERE macchina_id = ?",
+        macchina["id"],
+    )
+    primo = (riga["ultimo"] or 0) + 1
+    quando = adesso()
+    connessione.executemany(
+        """
+        INSERT INTO cambiamenti (macchina_id, seriale, avvenuto_il, cosa, azione,
+                                 scatto_id, nodo_id, stato, origine, valore,
+                                 valore_prima)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [(macchina["id"], primo + i, quando, cosa, azione, dati.get("scatto_id"),
+          dati.get("nodo_id"), dati.get("stato"), dati.get("origine"), dati.get("valore"),
+          dati.get("valore_prima")) for i, (azione, dati) in enumerate(voci)],
+    )
+    return primo + len(voci) - 1
 
 
 def recupera_larretrato(connessione: sqlite3.Connection) -> int:

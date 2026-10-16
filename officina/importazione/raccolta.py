@@ -6,13 +6,20 @@ import shutil
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Iterator
 
 from officina.archivio.database import tutti
-from officina.errori import ErroreOfficina
+from officina.errori import ErroreOfficina, FileNonLeggibile
+from officina.importazione import impronta as impronta_file
 
 MARGINE = 200 * 1024 * 1024
 
 VIETATI = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+RISERVATI = {"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in range(1, 10)),
+             *(f"LPT{n}" for n in range(1, 10))}
+
+LUNGHEZZA_MASSIMA = 180
 
 
 @dataclass
@@ -42,7 +49,7 @@ class Esito:
 
 
 def nome_cartella(importazione_id: int, come_si_chiama: str | None) -> str:
-    pulito = VIETATI.sub("", (come_si_chiama or "")).strip(" .")
+    pulito = VIETATI.sub("", (come_si_chiama or "")).strip(" .")[:80].strip(" .")
     base = f"Importazione {importazione_id}"
     return f"{base} - {pulito}" if pulito else base
 
@@ -96,17 +103,88 @@ def _file_della_mandata(connessione: sqlite3.Connection,
     )
 
 
-def _come_si_chiamera(riga: sqlite3.Row, presi: dict[str, str]) -> str:
-    nome = VIETATI.sub("_", riga["nome"]) or riga["impronta"][:16]
-    if presi.get(nome) in (None, riga["impronta"]):
-        presi[nome] = riga["impronta"]
-        return nome
+def _con_il_segno(nome: str, segno: str) -> str:
     radice, punto, coda = nome.rpartition(".")
     if not punto:
         radice, coda = nome, ""
-    diverso = f"{radice}-{riga['impronta'][:8]}{punto}{coda}"
+    return f"{radice}-{segno}{punto}{coda}"
+
+
+def _nome_sicuro(nome: str, impronta: str) -> str:
+    nome = VIETATI.sub("_", nome).rstrip(" .")
+    if not nome.strip("."):
+        return impronta[:16]
+    radice, punto, coda = nome.partition(".")
+    if radice.strip().upper() in RISERVATI:
+        nome = "_" + nome
+    if len(nome.encode()) > LUNGHEZZA_MASSIMA:
+        radice, punto, coda = nome.rpartition(".")
+        if not punto or len(coda) > 10:
+            radice, punto, coda = nome, "", ""
+        corta = radice.encode()[:LUNGHEZZA_MASSIMA - 30].decode(errors="ignore")
+        nome = f"{corta}-{impronta[:16]}{punto}{coda}"
+    return nome
+
+
+def _come_si_chiamera(riga: sqlite3.Row, presi: dict[str, str]) -> str:
+    nome = _nome_sicuro(riga["nome"], riga["impronta"])
+    if presi.get(nome) in (None, riga["impronta"]):
+        presi[nome] = riga["impronta"]
+        return nome
+    diverso = _con_il_segno(nome, riga["impronta"][:8])
     presi[diverso] = riga["impronta"]
     return diverso
+
+
+def _nomi_possibili(arrivo: Path, impronta: str) -> Iterator[Path]:
+    yield arrivo
+    for segno in (impronta[:8], impronta[:16], impronta[:32]):
+        yield arrivo.with_name(_con_il_segno(arrivo.name, segno))
+    for numero in range(2, 100):
+        yield arrivo.with_name(_con_il_segno(arrivo.name, f"{impronta[:8]}-{numero}"))
+
+
+def _misura_di(percorso: Path) -> int | None:
+    try:
+        return percorso.stat().st_size
+    except OSError:
+        return None
+
+
+def _segno_di(percorso: Path) -> str | None:
+    try:
+        return impronta_file.del_file(percorso)
+    except FileNonLeggibile:
+        return None
+
+
+def _stesso_contenuto(esistente: Path, partenza: Path, riga: sqlite3.Row) -> bool:
+    if not esistente.is_file():
+        return False
+    misura = _misura_di(esistente)
+    if misura is None or misura not in (riga["dimensione"] or 0, _misura_di(partenza)):
+        return False
+    segno = _segno_di(esistente)
+    if segno is None:
+        return False
+    return segno == riga["impronta"] or segno == _segno_di(partenza)
+
+
+def _dove_metterlo(arrivo: Path, partenza: Path, riga: sqlite3.Row) -> tuple[Path | None, bool]:
+    for candidato in _nomi_possibili(arrivo, riga["impronta"]):
+        if not candidato.exists() and not candidato.is_symlink():
+            return candidato, False
+        if _stesso_contenuto(candidato, partenza, riga):
+            return candidato, True
+    return None, False
+
+
+def _togli(percorso: Path) -> None:
+    try:
+        if percorso.is_symlink() or percorso.is_file():
+            percorso.unlink()
+    except OSError:
+        pass
 
 
 def prepara(connessione: sqlite3.Connection, importazione_id: int,
@@ -119,7 +197,7 @@ def prepara(connessione: sqlite3.Connection, importazione_id: int,
         piano.quanti += 1
         piano.byte += riga["dimensione"] or 0
         arrivo = cartella / _come_si_chiamera(riga, presi)
-        if arrivo.exists() and arrivo.stat().st_size == (riga["dimensione"] or 0):
+        if _dove_metterlo(arrivo, Path(riga["percorso"]), riga)[1]:
             piano.gia_fatti += 1
             piano.byte -= riga["dimensione"] or 0
     try:
@@ -149,20 +227,32 @@ def raccogli(connessione: sqlite3.Connection, importazione_id: int,
         arrivo = cartella / _come_si_chiamera(riga, presi)
         partenza = Path(riga["percorso"])
 
-        if arrivo.exists() and arrivo.stat().st_size == misura:
+        arrivo, gia_uguale = _dove_metterlo(arrivo, partenza, riga)
+
+        if gia_uguale:
             esito.saltati += 1
             esito.byte += misura
             if a_che_punto is not None:
                 a_che_punto(esito.byte, attesi)
             continue
 
+        if arrivo is None:
+            esito.guasti.append(riga["nome"])
+            if al_passo is not None:
+                al_passo(f"Non si è potuto copiare {riga['nome']}.")
+            if a_che_punto is not None:
+                a_che_punto(esito.byte, attesi)
+            continue
+
+        temporaneo = arrivo.with_name(arrivo.name + ".parziale")
         try:
-            temporaneo = arrivo.with_name(arrivo.name + ".parziale")
-            shutil.copy2(partenza, temporaneo)
+            _togli(temporaneo)
+            shutil.copy2(partenza, temporaneo, follow_symlinks=True)
             os.replace(temporaneo, arrivo)
             esito.copiati += 1
             esito.byte += misura
         except OSError:
+            _togli(temporaneo)
             esito.guasti.append(arrivo.name)
             if al_passo is not None:
                 al_passo(f"Non si è potuto copiare {arrivo.name}.")

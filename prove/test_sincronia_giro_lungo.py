@@ -413,6 +413,32 @@ def test_le_impostazioni_viaggiano_col_pacchetto(due_pc):
     assert zen.impostazione("quante_proposte") == 9
 
 
+def test_un_impostazione_rovinata_dall_altro_computer_non_entra(due_pc):
+    fisso, zen, tmp_path = due_pc
+    for chiave, valore in (("fotogrammi_per_video", '"tanti"'),
+                           ("miniatura_lato", "999999"),
+                           ("volti_prudenza", '"spericolato"')):
+        fisso.connessione.execute(
+            "INSERT INTO impostazioni (chiave, valore, cambiata_il) "
+            "VALUES (?, ?, '2026-06-01T00:00:00Z') ON CONFLICT(chiave) DO UPDATE "
+            "SET valore = excluded.valore, cambiata_il = excluded.cambiata_il",
+            (chiave, valore))
+    fisso.imposta("quante_proposte", 9)
+    prima = {chiave: uno(zen.connessione,
+                         "SELECT valore FROM impostazioni WHERE chiave = ?", chiave)
+             for chiave in ("fotogrammi_per_video", "miniatura_lato", "volti_prudenza")}
+
+    esito, _ = _manda(fisso, zen, tmp_path, "primo")
+
+    assert zen.impostazione("quante_proposte") == 9
+    for chiave, riga in prima.items():
+        dopo = uno(zen.connessione,
+                   "SELECT valore FROM impostazioni WHERE chiave = ?", chiave)
+        assert (dict(dopo) if dopo else None) == (dict(riga) if riga else None), chiave
+        assert any(chiave in nota for nota in esito.note), chiave
+    assert esito.impostazioni_arrivate == 1
+
+
 def test_quelle_di_questa_macchina_restano_di_questa_macchina(due_pc):
     fisso, zen, tmp_path = due_pc
     fisso.imposta("intensita_scheda", 40)

@@ -3,7 +3,7 @@
     "numero": 19,
     "versione": null,
     "data": "7 ottobre",
-    "titolo": "Etichetta nuova: l'albero sempre aperto accanto allo scatto",
+    "titolo": "Etichetta nuova accanto allo scatto, e un programma più protetto",
     "semplice": [
       [
         "etichetta",
@@ -240,6 +240,74 @@
       [
         "occhio",
         "Per la stanza si scaricano due modelli in più, VGGT-Omega e Depth Anything 3, sempre nella versione collaudata. VGGT-Omega chiede di accettare le sue condizioni su Hugging Face: la pagina della chiave ti dice dove"
+      ],
+      [
+        "scudo",
+        "Gli aggiornamenti si installano solo se sono firmati con la chiave del programma: un file diverso, anche con lo stesso nome, viene rifiutato."
+      ],
+      [
+        "computer",
+        "Il programma si apre solo dalla sua finestra: un browser aperto a mano o un altro utente del computer non entra. Le scelte delicate si fanno solo dal computer stesso."
+      ],
+      [
+        "collega",
+        "La rete di casa, quando la accendi, parla solo cifrato sulla porta 8443, e ogni dispositivo entra solo dopo che l'hai approvato con un codice di sei cifre."
+      ],
+      [
+        "portatile",
+        "Il codice per il portatile compare solo quando lo apri sul fisso. Dopo venti codici sbagliati la porta si chiude finché non premi «Nuovo codice»."
+      ],
+      [
+        "telefono",
+        "Nel pacchetto del telefono e in quello per l'altro computer i file hanno nomi a caso: chi trova la chiavetta non legge né date né nomi. Il primo travaso al telefono riscrive tutto."
+      ],
+      [
+        "cartella",
+        "I pacchetti per l'altro computer fatti con la versione di prima vanno rifatti: l'elenco lo dice accanto a ciascuno."
+      ],
+      [
+        "chiave",
+        "Una password nuova deve avere almeno dodici caratteri. Quelle scelte prima continuano ad aprire."
+      ],
+      [
+        "foto",
+        "Si aprono solo i formati d'immagine veri, e un XMP o un MOV rovinati non bloccano più l'importazione."
+      ],
+      [
+        "scarica",
+        "I modelli si scaricano da versioni fissate e si controllano con la loro impronta prima di usarli."
+      ],
+      [
+        "scarica",
+        "Se il motore delle reti neurali è più vecchio del 2.6, all'avvio si scarica da solo quello nuovo. Se non riesce, puoi entrare lo stesso: riprova al prossimo avvio."
+      ],
+      [
+        "etichetta",
+        "La barra della selezione in Galleria è nuova: sopra il conto e tre schede (Nodi, Scatto, Lavoro), sotto solo i tasti della scheda aperta"
+      ],
+      [
+        "etichetta",
+        "Copia nodi prende i nodi di uno scatto; Incolla nodi li mette sugli scatti selezionati e ti chiede se aggiungerli o sostituire quelli che c'erano"
+      ],
+      [
+        "foto",
+        "Nella foto aperta il tasto Nodi (o il tasto N) apre a destra i nodi dello scatto: li togli con la ×, ne aggiungi cercandoli, confermi quelli proposti e copi o incolli anche da lì"
+      ],
+      [
+        "foto",
+        "Le carte dell'Intelligenza artificiale non scrivono più numeri sotto zero come «-60 di 58»"
+      ],
+      [
+        "etichetta",
+        "Nell'albero di Etichetta i nomi arancio sopra i rami ti riportano a quel nodo, e il + dell'ultima colonna scende più in fondo"
+      ],
+      [
+        "scudo",
+        "Quando è fermo, il programma rilegge piano piano gli originali per scoprire se uno si è rovinato da solo. Se succede, in «Da sistemare» c'è «File rovinati»: «Rimetti com'era» lo ripara da un doppione sano, e la copia rovinata non si butta"
+      ],
+      [
+        "calendario",
+        "Sotto Foto c'è «Tempo e mappa»: in alto gli anni mese per mese, sotto una mappa del mondo con i tuoi scatti. Clicca un anno o trascina sui mesi per scegliere il periodo, clicca un punto per vedere le foto fatte lì. Funziona senza internet"
       ]
     ],
     "tecnico": [
@@ -339,6 +407,50 @@
       [
         "cubo",
         "Senza stanza la camera di base si gira con il rollio e il beccheggio di Puffin (regola di GeoCalib: il su nella camera è <code>[−sin r·cos p, −cos r·cos p, sin p]</code>). Con una foto finta storta di 20° in giù e 12° di lato la camera torna quella vera"
+      ],
+      [
+        "scudo",
+        "aggiornamenti firmati Ed25519; costruzione su GitHub in tre passi con approvazione, azioni fissate, librerie con impronte"
+      ],
+      [
+        "computer",
+        "cookie officina_finestra HttpOnly SameSite=Strict da /entra, 403 SOLO_DALLA_FINESTRA; CSP, X-Frame-Options, corpo massimo 1 MB; strade delicate solo da questo computer"
+      ],
+      [
+        "collega",
+        "rete: TLS sulla 8443 col certificato di casa, segreto per dispositivo (nel database solo lo SHA-256), abbinamento a sei cifre"
+      ],
+      [
+        "portatile",
+        "porta: TENTATIVI_IN_TUTTO=20, codice solo da mostra_il_codice, ponte con cookie officina_ponte, regola firewall profile=private,domain, netsh e cmd da System32"
+      ],
+      [
+        "telefono",
+        "cifratura v2: posto nell'AAD, in lettura solo v2; scrypt 2^16 (telefono) e 2^17 (sincronia) con parametri ammessi; telefono formato 2, sincronia formato 5 con campi garantiti nel database cifrato e database in memoria"
+      ],
+      [
+        "telefono",
+        "app: allowBackup=false, dataExtractionRules, FLAG_SECURE; ritorno.db illeggibile spostato accanto"
+      ],
+      [
+        "impronta",
+        "torch almeno 2.6 prima di ogni torch.load; Image.open solo coi formati ammessi; pip senza configurazioni esterne"
+      ],
+      [
+        "impronta",
+        "<code>cosa_manca</code> conta come mancante un torch sotto il 2.6: il passo «motori» lo rifà da solo una volta per avvio, e <code>entra_col_torch_vecchio</code> lascia entrare se lo scaricamento non va"
+      ],
+      [
+        "etichetta",
+        "/api/scatti/{id}/nodi, /api/scatti/altri-nodi e azione «incolla» (modo aggiungi o sostituisci) in /scatti/in-blocco; appunti dei nodi in localStorage condivisi fra Galleria e foto aperta"
+      ],
+      [
+        "impronta",
+        "Tabella <code>salute_file</code> (migrazione 55): impronta ricalcolata ogni 30 giorni a programma fermo, con freno; rovinato = impronta diversa con la stessa data di modifica, cambiato = data diversa. Riparazione da un altro percorso dello stesso file, verificata, con la copia rovinata in <code>rovinati/</code>; le scritture del controllo non fanno partire la copia in sottofondo"
+      ],
+      [
+        "luoghi",
+        "Pagina <code>/tempo</code>: conti per mese da <code>scatti.giorno</code>, punti GPS raggruppati sul server per 0,001° (o meno fini oltre 30.000 celle) e sullo schermo a celle di 56 px. Contorni Natural Earth ridotti in <code>statici/mappa/</code> (0,01° e 0,001°, il secondo caricato solo da vicino), Mercatore su canvas con Path2D. Nuovo filtro <code>zona=sud,ovest,nord,est</code> anche in Galleria, che passa l'antimeridiano"
       ]
     ]
   },

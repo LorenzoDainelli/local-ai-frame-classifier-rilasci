@@ -101,10 +101,12 @@ def _pulisci(valore: object) -> object:
 class Registro:
 
     GIORNI_CONSERVATI = 30
+    BYTE_AL_GIORNO = 20 * 1024 * 1024
 
     def __init__(self, cartella: Path | None):
         self.cartella = cartella
         self._lucchetto = threading.Lock()
+        self._pieno_il: str | None = None
         self._sul_terminale = os.environ.get("OFFICINA_REGISTRO_A_SCHERMO") == "1"
         if self.cartella:
             self.cartella.mkdir(parents=True, exist_ok=True)
@@ -138,7 +140,12 @@ class Registro:
         try:
             with self._lucchetto:
                 with open(percorso, "a", encoding="utf-8") as f:
-                    f.write(riga + "\n")
+                    pieno = f.tell() >= self.BYTE_AL_GIORNO
+                    if not pieno:
+                        f.write(riga + "\n")
+                    elif self._pieno_il != percorso.name:
+                        self._pieno_il = percorso.name
+                        f.write(f"{istante} AVVISO  registro.pieno\n")
         except OSError:
             pass
 

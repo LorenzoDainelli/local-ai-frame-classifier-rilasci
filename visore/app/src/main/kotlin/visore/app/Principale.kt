@@ -1,6 +1,7 @@
 package visore.app
 
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.WindowInsets
@@ -20,6 +21,8 @@ class Principale : ComponentActivity() {
 
     override fun onCreate(salvato: Bundle?) {
         super.onCreate(salvato)
+        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE)
         setContent {
             var dentro by remember { mutableStateOf(false) }
             val bordi = Modifier.windowInsetsPadding(WindowInsets.systemBars)

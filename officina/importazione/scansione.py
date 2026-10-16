@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -25,6 +27,9 @@ CARTELLE_DA_SALTARE = {
     ".in-revisione",
 }
 
+ATTRIBUTO_RIMANDO = 0x400
+RIMANDI_DA_NON_SEGUIRE = {0xA000000C, 0xA0000003}
+
 
 @dataclass
 class Trovati:
@@ -32,10 +37,63 @@ class Trovati:
     byte: int = 0
     saltati: int = 0
     dimensioni: dict[str, int] = field(default_factory=dict)
+    collegamenti: int = 0
 
     @property
     def quanti(self) -> int:
         return len(self.file)
+
+
+def e_un_rimando(stato: os.stat_result) -> bool:
+    if stat.S_ISLNK(stato.st_mode):
+        return True
+    if getattr(stato, "st_file_attributes", 0) & ATTRIBUTO_RIMANDO:
+        return getattr(stato, "st_reparse_tag", 0) in RIMANDI_DA_NON_SEGUIRE
+    return False
+
+
+def _sta_dentro(percorso: Path, radice: Path) -> bool:
+    try:
+        return Path(os.path.realpath(percorso)).is_relative_to(radice)
+    except (OSError, ValueError):
+        return False
+
+
+def _tutti_i_file(cartella: Path, trovati: Trovati) -> list[tuple[Path, os.stat_result]]:
+    radice = Path(os.path.realpath(cartella))
+    fuori = []
+    for dove, sottocartelle, nomi in os.walk(cartella, followlinks=False):
+        sottocartelle[:] = [
+            nome for nome in sottocartelle
+            if nome.casefold() not in CARTELLE_DA_SALTARE
+        ]
+        veri = []
+        for nome in sottocartelle:
+            try:
+                stato = os.lstat(os.path.join(dove, nome))
+            except OSError:
+                continue
+            if e_un_rimando(stato):
+                trovati.collegamenti += 1
+                continue
+            veri.append(nome)
+        sottocartelle[:] = veri
+        if not _sta_dentro(Path(dove), radice):
+            sottocartelle[:] = []
+            continue
+        for nome in nomi:
+            if nome.casefold() in CARTELLE_DA_SALTARE:
+                continue
+            percorso = Path(dove) / nome
+            try:
+                stato = os.lstat(percorso)
+            except OSError:
+                continue
+            if e_un_rimando(stato):
+                trovati.collegamenti += 1
+                continue
+            fuori.append((percorso, stato))
+    return fuori
 
 
 def elenca(cartelle: list[Path]) -> Trovati:
@@ -48,21 +106,16 @@ def elenca(cartelle: list[Path]) -> Trovati:
                 "collegalo: gli scatti che contiene restano nell'archivio con le "
                 "loro etichette (regola 96)."
             )
-        for percorso in sorted(cartella.rglob("*")):
-            if any(p.casefold() in CARTELLE_DA_SALTARE for p in percorso.parts):
-                continue
+        for percorso, stato in sorted(_tutti_i_file(cartella, trovati), key=lambda voce: voce[0]):
             if percorso.name.startswith("."):
                 continue
-            if not percorso.is_file():
+            if not stat.S_ISREG(stato.st_mode):
                 continue
             suffisso = percorso.suffix.casefold()
             if suffisso in DA_SALTARE:
                 trovati.saltati += 1
                 continue
-            try:
-                dimensione = percorso.stat().st_size
-            except OSError:
-                continue
+            dimensione = stato.st_size
             if dimensione == 0 and suffisso not in ESTENSIONI_NOTE:
                 continue
             trovati.file.append(percorso)
@@ -116,11 +169,13 @@ def togli_cartella(connessione: sqlite3.Connection, cartella_id: int) -> None:
 
 
 def cartella_di(connessione: sqlite3.Connection, percorso: Path) -> int | None:
-    testo = str(percorso)
+    percorso = Path(percorso)
+    scelta, lunghezza = None, -1
     for riga in cartelle(connessione):
-        if testo.startswith(riga["percorso"]):
-            return riga["id"]
-    return None
+        base = Path(riga["percorso"])
+        if percorso.is_relative_to(base) and len(base.parts) > lunghezza:
+            scelta, lunghezza = riga["id"], len(base.parts)
+    return scelta
 
 
 @dataclass

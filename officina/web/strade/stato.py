@@ -3,10 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from officina.archivio import accesso
+from officina.archivio import accesso, copie
 from officina.archivio.database import tutti, uno
 from officina.immagini import consegna
-from officina.modello import etichette, impronte as magazzino_impronte
+from officina.modello import etichette, salute_file
+from officina.modello import impronte as magazzino_impronte
 from officina.web import stato_a_parole, vista
 
 from officina.web.strade import base, comune, generale, misura, modelli
@@ -46,6 +47,7 @@ def stato(richiesta: Request):
     dati = {
         **insieme, **pagella, **misura.dati_della_misura(), **salute,
         "sistemare": sistemare,
+        "semaforo": stato_a_parole.semaforo(sistemare),
         "lavori_adesso": lavori_adesso,
         "stato_numeri": numeri,
         "scheda_video": scheda_video,
@@ -111,9 +113,25 @@ def api_spazio():
     return base.dati_dello_spazio(accesso.aperto())
 
 
+def _quanti_decisi(connessione) -> int:
+    from officina.apprendimento import esempi as raccolta
+
+    try:
+        return raccolta.quanti_decisi(connessione)
+    except Exception:
+        return 0
+
+
+def _permessi_in_attesa() -> list[str]:
+    from officina import modelli_in_casa
+
+    return modelli_in_casa.permessi_in_attesa()
+
+
 def _dati_della_salute() -> dict:
     archivio = accesso.aperto()
     spazio_usato = base.dati_dello_spazio(archivio)
+    copia_prenotata = copie.prenotata(archivio.dove)
     with archivio.lettura() as connessione:
         def conto(sql: str) -> int:
             riga = uno(connessione, sql)
@@ -125,6 +143,7 @@ def _dati_della_salute() -> dict:
             ("File", conto("SELECT count(*) AS q FROM file_media")),
             ("Percorsi", conto("SELECT count(*) AS q FROM percorsi")),
             ("File non trovati sul disco", conto("SELECT count(*) AS q FROM percorsi WHERE presente = 0")),
+            ("File rovinati", salute_file.quanti_rovinati(connessione)),
             ("Coppie live", conto("SELECT count(*) AS q FROM scatti WHERE genere = 'live'")),
             ("Video autonomi", conto("SELECT count(*) AS q FROM scatti WHERE genere = 'video'")),
             ("Senza data", conto("SELECT count(*) AS q FROM scatti WHERE data_locale IS NULL")),
@@ -146,6 +165,9 @@ def _dati_della_salute() -> dict:
                                   "JOIN scatti s ON s.id = i.scatto_id WHERE s.fuori_archivio = 0"),
         }
         modelli_usati = magazzino_impronte.avanzamento(connessione)
+        misura_vecchia = stato_a_parole.misura_da_rifare(
+            uno(connessione, "SELECT fatta_il, scatti FROM misure ORDER BY id DESC LIMIT 1"),
+            _quanti_decisi(connessione))
 
     capacita = consegna.capacita()
     tutti_gli_scatti = in_breve["foto"] + in_breve["video"]
@@ -160,6 +182,7 @@ def _dati_della_salute() -> dict:
         "modelli": modelli.come_stanno_i_modelli(archivio.dove.modelli),
         "dove_stanno_i_modelli": str(archivio.dove.modelli),
         "scaricamento": comune.lavoro_modelli.come_va(),
+        "permessi_in_attesa": _permessi_in_attesa(),
         "scritte": _quante_scritte(),
         "capacita": [
             ("Legge gli HEIC", capacita["heic"],
@@ -169,10 +192,13 @@ def _dati_della_salute() -> dict:
             ("Scrive i WebP", capacita["webp"], "alternativa di riserva"),
         ],
         "copie": [
-            {"quando": c.quando, "motivo": _PERCHE_LA_COPIA.get(c.motivo, c.motivo.replace("_", " ")),
+            {"nome": c.nome, "prenotata": c.nome == copia_prenotata,
+             "quando": c.quando, "motivo": _PERCHE_LA_COPIA.get(c.motivo, c.motivo.replace("_", " ")),
              "peso": vista.peso_a_parole(c.byte)}
             for c in archivio.copie_esistenti()[:12]
         ],
+        "copia_prenotata": copia_prenotata,
+        "misura_vecchia": misura_vecchia,
     }
 
 

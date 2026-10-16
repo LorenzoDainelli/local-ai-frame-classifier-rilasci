@@ -147,7 +147,7 @@ def api_etichette_incolla(scatto_id: int = Form(...), nodi: str = Form(""),
                           persone_: str = Form("", alias="persone"),
                           posti: str = Form(""), modo: str = Form("aggiungi")):
     def numeri(testo: str) -> list[int]:
-        return [int(x) for x in testo.split(",") if x.strip().isdigit()]
+        return [int(x) for x in testo.split(",") if x.strip().isdecimal()]
 
     scelti, gente, luoghi = numeri(nodi), numeri(persone_), numeri(posti)
     if not (scelti or gente or luoghi):
@@ -274,8 +274,8 @@ def api_ripasso_avanti(nodo_id: int = Form(...), scatto_id: int = Form(...)):
 
 @strada.get("/api/nodi")
 def api_nodi(cerca: str = "", genitore: str = "", sposta: str = ""):
-    genitore_id = int(genitore) if genitore.strip().isdigit() else None
-    non_dentro = int(sposta) if sposta.strip().isdigit() else None
+    genitore_id = int(genitore) if genitore.strip().isdecimal() else None
+    non_dentro = int(sposta) if sposta.strip().isdecimal() else None
     with accesso.aperto().lettura() as connessione:
         risposta = etichettatura.come_si_comporta(connessione, cerca, genitore_id)
         if non_dentro is not None:
@@ -286,7 +286,7 @@ def api_nodi(cerca: str = "", genitore: str = "", sposta: str = ""):
 
 @strada.post("/api/nodi")
 def api_crea_nodo(nome: str = Form(...), genitore_id: str = Form("")):
-    padre = int(genitore_id) if genitore_id.strip().isdigit() else None
+    padre = int(genitore_id) if genitore_id.strip().isdecimal() else None
     with accesso.aperto().scrittura() as connessione:
         nuovo = nodi.crea(connessione, nome, padre)
         percorso = nodi.percorso(connessione, nuovo)
@@ -394,7 +394,7 @@ def api_luoghi_cerca(cerca: str = ""):
 
 @strada.post("/api/luoghi")
 def api_crea_luogo(nome: str = Form(...), genitore_id: str = Form("")):
-    padre = int(genitore_id) if genitore_id.strip().isdigit() else None
+    padre = int(genitore_id) if genitore_id.strip().isdecimal() else None
     with accesso.aperto().scrittura() as connessione:
         nuovo = posti_mod.crea(connessione, nome, padre)
         return {"posto_id": nuovo, "nome": nome.strip(),

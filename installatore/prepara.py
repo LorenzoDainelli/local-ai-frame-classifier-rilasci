@@ -20,8 +20,10 @@ FTP_PYTHON = "https://www.python.org/ftp/python/"
 WEBVIEW2 = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 LIBRERIE_BLOCCATE = CASA / "installatore" / "librerie-del-programma.txt"
 
-PYTHON_INCORPORATA = ""
-IMPRONTE_DI_PYTHON: dict[str, str] = {}
+PYTHON_INCORPORATA = "3.13.16"
+IMPRONTE_DI_PYTHON: dict[str, str] = {
+    "3.13.16": "97dae5274cc54867065e8d5a3226e48c35017ed332a0fdb0e27d5b5821961297",
+}
 
 FIRMATARIO_DI_WEBVIEW2 = "O=Microsoft Corporation"
 

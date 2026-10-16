@@ -57,9 +57,9 @@
         <div class="avviso forte">Impostazioni riportate ai valori di partenza.
             Dati, albero ed etichette non si sono mossi.</div>
         {% endif %}
-        {% if request.query_params.get('rimesso') %}
+        {% if nodi_rimessi is not none %}
         <div class="avviso forte">Albero rimesso com'era:
-            {{ request.query_params.get('rimesso') }} nodi sono tornati al loro
+            {{ nodi_rimessi }} nodi sono tornati al loro
             posto. Le foto non si sono mosse.</div>
         {% endif %}
 
@@ -144,7 +144,7 @@
             </div>
         </section>
 
-        {{ sezione_aspetto(aspetto, aspetto_vero, voci_aspetto, versioni_pronte, sto_provando, request.query_params.get('tenuta')) }}
+        {{ sezione_aspetto(aspetto, aspetto_vero, voci_aspetto, versioni_pronte, sto_provando, versione_tenuta) }}
 
         <section id="c1">
             <h2>Questo computer</h2>
@@ -398,6 +398,26 @@
                         <button class="tasto-comando" type="submit">Falla adesso</button>
                     </form>
                 </div>
+
+                <div class="riga" data-copia-esterna>
+                    <div class="lato">
+                        <div class="nome">Copia di sicurezza su un altro disco
+                            <span class="tacca mac">questo computer</span></div>
+                        <p class="ds">Copia l'archivio e gli originali su un disco esterno,
+                            solo quello che è cambiato, e controlla che ogni file sia
+                            identico. Con la cassaforte accesa l'archivio resta cifrato.</p>
+                        <p class="ds numeri" data-ce-cartella>{{ copia_esterna.cartella or "Nessuna cartella scelta." }}</p>
+                        <p class="ds numeri" data-ce-esito></p>
+                        <progress data-ce-barra max="1" value="0" hidden></progress>
+                        <p class="ds errore" data-ce-errore hidden></p>
+                    </div>
+                    <div class="in-fila">
+                        <button class="tasto-comando" type="button" data-ce-scegli>Scegli il disco…</button>
+                        <button class="tasto-comando" type="button" data-ce-parti>Fai la copia</button>
+                        <button class="tasto-comando" type="button" data-ce-ricontrolla>Ricontrolla tutta la copia</button>
+                        <button class="tasto-comando" type="button" data-ce-ferma hidden>Ferma</button>
+                    </div>
+                </div>
             </div>
 
             {% if copie %}
@@ -511,25 +531,87 @@
             <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
             {% endif %}
 
+            {% set rete = rete_di_casa() %}
+            {% if da_questo_computer and rete.aperta %}
+            <div class="riquadro scheda-righe" id="rete-cifrata">
+                <div class="riga stretta">
+                    <div class="lato" style="display:grid;gap:var(--s2)">
+                        <span class="piccolo">Dagli altri dispositivi di casa apri
+                            {% for indirizzo in rete.indirizzi %}<b class="numeri">{{ indirizzo }}</b>{% if not loop.last %}
+                            oppure {% endif %}{% else %}l'indirizzo di rete di questo computer,
+                            con <b>https://</b> davanti e <b>:{{ rete.porta }}</b> in fondo{% endfor %}.</span>
+                        <span class="minuscolo tenue">La prima volta il browser avvisa che la
+                            connessione non è privata o che il certificato non è verificato:
+                            succede perché il certificato l'ha fatto questo computer, non
+                            un'azienda. Prima di proseguire apri i dettagli del certificato e
+                            controlla che l'impronta SHA-256 sia questa:</span>
+                        <span class="numeri minuscolo" id="impronta-della-rete"
+                              style="overflow-wrap:anywhere">{{ rete.impronta }}</span>
+                        <span class="minuscolo tenue">Se è diversa non proseguire: vuol dire
+                            che fra il dispositivo e questo computer c'è qualcun altro.</span>
+                    </div>
+                </div>
+            </div>
+            {% elif da_questo_computer and impostazioni.accesso_dalla_rete %}
+            <p class="piccolo tenue">L'accesso dalla rete di casa si apre quando
+                riavvii il programma.</p>
+            {% endif %}
+
             {% if dispositivi %}
             <p class="sd" style="margin:var(--s6) 0 var(--s3)">
                 Dispositivi che hanno bussato <span class="tenue"></span></p>
+            {% if da_questo_computer %}
+            <p class="piccolo tenue">Per approvarne uno, aprilo dal dispositivo: sullo
+                schermo vede un codice di sei cifre. Scrivilo qui, accanto al suo
+                indirizzo, e il dispositivo entra da solo.</p>
+            {% endif %}
             <div class="riquadro scheda-righe">
                 {% for dispositivo in dispositivi %}
+                {% set abbinato = dispositivo.stato == "approvato" and dispositivo.id in rete.abbinati %}
                 <div class="riga stretta">
                     <div class="lato">
-                        <span class="numeri piccolo">{{ dispositivo.indirizzo }}</span>
-                        <span class="minuscolo tenue">{{ dispositivo.stato }} ·
-                            {{ dispositivo.contatti }} volte</span>
+                        <span class="numeri piccolo">{{ dispositivo.indirizzo }}{% if dispositivo.nome %}
+                            <span class="tenue">— {{ dispositivo.nome }}</span>{% endif %}</span>
+                        <span class="minuscolo tenue">{% if dispositivo.stato == "rifiutato" %}rifiutato{%
+                            elif abbinato %}approvato{%
+                            elif dispositivo.id in rete.da_ritirare %}approvato: entra da solo
+                            appena il dispositivo se ne accorge, di solito in due secondi{%
+                            elif dispositivo.stato == "approvato" %}da riapprovare una volta: da
+                            questa versione ogni dispositivo riceve una chiave sua, e serve il
+                            codice che vede sullo schermo{%
+                            elif rete.attese.get(dispositivo.id) %}aspetta: scrivi il codice che
+                            vede sullo schermo{%
+                            else %}aspetta: aprilo dal dispositivo per vedere il codice{% endif %}
+                            · {{ dispositivo.contatti }} {{ "volta" if dispositivo.contatti == 1 else "volte" }}</span>
+                        {% if request.query_params.get("codice_sbagliato") == dispositivo.id|string %}
+                        <span class="minuscolo">Il codice non è quello che mostra il
+                            dispositivo, oppure è scaduto. Ricarica la pagina sul dispositivo
+                            e riprova con quello nuovo.</span>
+                        {% endif %}
                     </div>
                     {% if da_questo_computer %}
-                    <form method="post" class="in-fila"
-                          action="/impostazioni/dispositivo/{{ dispositivo.id }}">
-                        <button class="tasto-comando nudo" name="stato" value="approvato"
-                                type="submit">approva</button>
-                        <button class="tasto-comando nudo" name="stato" value="rifiutato"
-                                type="submit">rifiuta</button>
-                    </form>
+                    <div class="in-fila">
+                        {% if not abbinato and dispositivo.stato != "rifiutato"
+                              and dispositivo.id not in rete.da_ritirare %}
+                        <form method="post" class="in-fila"
+                              action="/impostazioni/dispositivo/{{ dispositivo.id }}/codice">
+                            <input class="campo numeri" style="width:96px" type="text"
+                                   name="codice" inputmode="numeric" autocomplete="off"
+                                   maxlength="7" placeholder="codice" required
+                                   aria-label="Il codice che vede {{ dispositivo.indirizzo }}">
+                            <button class="tasto-comando nudo" type="submit">approva</button>
+                        </form>
+                        {% endif %}
+                        <form method="post" class="in-fila"
+                              action="/impostazioni/dispositivo/{{ dispositivo.id }}">
+                            {% if dispositivo.stato != "rifiutato" %}
+                            <button class="tasto-comando nudo" name="stato" value="rifiutato"
+                                    type="submit">rifiuta</button>
+                            {% endif %}
+                            <button class="tasto-comando nudo" name="stato" value="dimentica"
+                                    type="submit">dimentica</button>
+                        </form>
+                    </div>
                     {% endif %}
                 </div>
                 {% endfor %}
@@ -764,5 +846,6 @@
 
 {% block coda %}
 <script type="module" src="/statici/js/impostazioni.js"></script>
+<script type="module" src="/statici/js/copia_esterna.js"></script>
 <script type="module" src="/statici/js/impostazioni_versioni.js"></script>
 {% endblock %}

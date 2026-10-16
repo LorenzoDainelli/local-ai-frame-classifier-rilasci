@@ -21,7 +21,7 @@ concurrency:
 jobs:
   foto:
     name: Le foto della gara
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,7 +55,7 @@ jobs:
   concorrente:
     name: ${{ matrix.chi }} ${{ matrix.parte }}
     needs: foto
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 340
     continue-on-error: true
     strategy:
@@ -144,7 +144,7 @@ jobs:
     name: Chi ha vinto
     needs: concorrente
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

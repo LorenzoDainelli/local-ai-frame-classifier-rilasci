@@ -198,8 +198,9 @@ def api_doppioni():
 @strada.get("/api/doppioni/gruppi")
 def api_doppioni_gruppi(da: int = 0, quanti: int = 60):
     with accesso.aperto().lettura() as connessione:
-        gruppi = doppioni_decisioni.da_decidere(connessione, da,
-                                                min(quanti, 200))
+        gruppi = doppioni_decisioni.da_decidere(connessione,
+                                                min(max(da, 0), 10 ** 9),
+                                                min(max(quanti, 1), 200))
         conto = doppioni_decisioni.il_conto(connessione)
     return JSONResponse({"gruppi": _gruppi_per_schermo(gruppi),
                          "conto": conto})

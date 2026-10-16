@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import threading
@@ -17,6 +18,34 @@ SCHEDA_SUL_DISCO = "scheda-officina.json"
 
 COSA_SERVE = ["*.json", "*.safetensors", "*.txt", "*.model", "*.tiktoken"]
 COSA_NON_SERVE = ["*.bin", "*.h5", "*.msgpack", "*.onnx", "*.onnx_data", "*.pth"]
+
+REVISIONI: dict[str, str] = {
+    "facebook/dinov3-vitl16-pretrain-lvd1689m": "ea8dc2863c51be0a264bab82070e3e8836b02d51",
+    "google/siglip2-so400m-patch14-384": "e8e487298228002f3d8a82e0cd5c8ea9c567f57f",
+    "facebook/PE-Core-G14-448": "a6046680086f67d1f24d4b465a240de0578dfc0b",
+    "Qwen/Qwen3.5-9B": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+}
+
+IMPRONTE_NOTE: dict[str, dict[str, str]] = {
+    "facebook/dinov3-vitl16-pretrain-lvd1689m": {
+        "model.safetensors": "dcb2e45127cccbf1601e5f42fef165eea275c8e5213197e8dcf3f48822718179",
+    },
+    "google/siglip2-so400m-patch14-384": {
+        "model.safetensors": "9f4f4a49f908ef0c979bce8ff5a5c0e88882dc6c5dc4304387cbbd152558e2c2",
+        "tokenizer.json": "cb9140fae3ac5122c972d37adf83e1248471a38147ad76f8215c8872c6fd8322",
+        "tokenizer.model": "61a7b147390c64585d6c3543dd6fc636906c9af3865a5548f27f31aee1d4c8e2",
+    },
+    "facebook/PE-Core-G14-448": {
+        "PE-Core-G14-448.pt": "516a20fb30394cc8080344c32d7e49e0e575cf2c6d141977207bf94b3bec192f",
+    },
+    "Qwen/Qwen3.5-9B": {
+        "model.safetensors-00001-of-00004.safetensors": "db6f444b43d318c92f360a13a25561a6a65b10c0631b8ed305a426dbaa6c380e",
+        "model.safetensors-00002-of-00004.safetensors": "31c7d7e2dd5d207840b31cc59083c8f4c4718959149e0358c0364052bb9a0330",
+        "model.safetensors-00003-of-00004.safetensors": "7ec36ba3a4176a44c3c0876ad80c56a2f70c84bf008d82e9501df642f17dadec",
+        "model.safetensors-00004-of-00004.safetensors": "b62b0c4cd7e44edee103ee8f4fe225f246d5e768e07bfd5f25b63a8aa1fdd0c6",
+        "tokenizer.json": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    },
+}
 
 
 class ScaricamentoFallito(ErroreOfficina):
@@ -37,12 +66,15 @@ OGNI_QUANTO = 2.0
 
 def quanto_pesa(cartella: Path) -> int:
     totale = 0
-    for pezzo in cartella.rglob("*"):
-        try:
-            if pezzo.is_file():
-                totale += pezzo.stat().st_size
-        except OSError:
-            continue
+    try:
+        for pezzo in cartella.rglob("*"):
+            try:
+                if pezzo.is_file():
+                    totale += pezzo.stat().st_size
+            except OSError:
+                continue
+    except OSError:
+        pass
     return totale
 
 
@@ -115,6 +147,8 @@ def scarica(carta: Scheda, cartella_modelli: Path,
     prima = torcia.con_la_rete_accesa()
     arriva.mkdir(parents=True, exist_ok=True)
 
+    fissata = REVISIONI.get(carta.identificatore, "")
+
     def scarica_davvero() -> None:
         snapshot_download(
             repo_id=carta.identificatore,
@@ -122,6 +156,7 @@ def scarica(carta: Scheda, cartella_modelli: Path,
             allow_patterns=list(carta.cosa_serve) or COSA_SERVE,
             ignore_patterns=COSA_NON_SERVE,
             token=chiave or None,
+            **({"revision": fissata} if fissata else {}),
         )
 
     try:
@@ -140,6 +175,8 @@ def scarica(carta: Scheda, cartella_modelli: Path,
         ) from errore
     finally:
         torcia.rimetti_la_rete_com_era(prima)
+
+    _controlla_le_impronte(carta, dove, arriva)
 
     _converti_se_serve(carta, dove, al_passo, arriva)
 
@@ -163,6 +200,33 @@ def scarica(carta: Scheda, cartella_modelli: Path,
         al_passo(f"{carta.titolo}: {rapporto.file} file, "
                  f"{rapporto.byte / 1e9:.1f} GB, impronte scritte")
     return rapporto
+
+
+def _sha256(percorso: Path) -> str:
+    calcolo = hashlib.sha256()
+    with open(percorso, "rb") as dentro:
+        for pezzo in iter(lambda: dentro.read(4 * 1024 * 1024), b""):
+            calcolo.update(pezzo)
+    return calcolo.hexdigest()
+
+
+def _controlla_le_impronte(carta: Scheda, dove: Path, arriva: Path) -> None:
+    note = IMPRONTE_NOTE.get(carta.identificatore) or {}
+    diversi = [nome for nome, impronta in note.items()
+               if impronta and (not (arriva / nome).is_file()
+                                or _sha256(arriva / nome) != impronta)]
+    if not diversi:
+        return
+    for nome in diversi:
+        (arriva / nome).unlink(missing_ok=True)
+    (dove / carta.prova_che_c_e).unlink(missing_ok=True)
+    registro.errore("modelli.file_diverso", quale=carta.nome, quanti=len(diversi))
+    raise ScaricamentoFallito(
+        f"«{carta.titolo}» è arrivato, ma il file «{diversi[0]}» non è identico a "
+        "quello provato: per sicurezza non lo tengo. Riprova più tardi; se succede "
+        "ancora, il file pubblicato è cambiato e va controllato in un "
+        "aggiornamento.\n  Il resto del programma funziona lo stesso senza questo "
+        "modello.")
 
 
 def _converti_se_serve(carta: Scheda, dove: Path,

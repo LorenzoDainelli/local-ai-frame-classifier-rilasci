@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import secrets
+import threading
+from datetime import date
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -8,6 +12,7 @@ from officina.archivio import accesso
 from officina.archivio.database import uno
 from officina.errori import ErroreOfficina
 from officina.importazione import miniature
+from officina.immagini import consegna
 from officina.modello import etichette, nodi, scatti
 from officina.web import conteggi
 from officina.web import vista
@@ -15,6 +20,10 @@ from officina.web import vista
 from officina.web.strade import base, comune, doppioni, importazione
 
 strada = APIRouter()
+
+BLOCCO = 2000
+_LAVORI: dict[str, dict] = {}
+_LUCCHETTO_LAVORI = threading.Lock()
 
 
 @strada.get("/", response_class=HTMLResponse)
@@ -164,7 +173,8 @@ def api_griglia(richiesta: Request, da: int = 0, quanti: int = 120):
         filtro = scatti.risolvi_simili(connessione, filtro)
         pezzo = doppioni.segna_i_doppioni(connessione, [
             vista.scatto_per_griglia(s)
-            for s in scatti.pagina(connessione, filtro, da, min(quanti, 300))])
+            for s in scatti.pagina(connessione, filtro, min(max(da, 0), 10 ** 9),
+                                   min(max(quanti, 1), 300))])
     _colora_quelle_senza(pezzo)
     return {"scatti": pezzo}
 
@@ -198,21 +208,128 @@ def api_cerca(frase: str = "", riformula: bool = False):
             **asdict(risposta)}
 
 
-@strada.post("/scatti/in-blocco")
-async def in_blocco(richiesta: Request):
-    dati = await richiesta.json()
-    azione = dati.get("azione")
-    numeri = [int(x) for x in dati.get("scatti", [])]
-
+def _quali_scatti(dati) -> list[int]:
+    try:
+        numeri = [int(x) for x in dati.get("scatti", [])]
+    except (ValueError, TypeError, AttributeError):
+        numeri = []
+    if not isinstance(dati.get("filtro") or {}, dict):
+        raise ErroreOfficina("Non hai selezionato niente.")
     if dati.get("tutti_i_risultati"):
         filtro = vista.filtro_da_parametri(dati.get("filtro") or {})
         with accesso.aperto().lettura() as connessione:
             filtro = scatti.risolvi_simili(connessione, filtro)
-            numeri = [s["id"] for s in scatti.pagina(connessione, filtro, 0, 100000)]
-
+            numeri = scatti.soli_numeri(connessione, filtro)
     if not numeri:
         raise ErroreOfficina("Non hai selezionato niente.")
+    return numeri
 
+
+def _quali_nodi(connessione, dati) -> list[int]:
+    try:
+        quali = [int(x) for x in dati.get("nodi") or []]
+    except (TypeError, ValueError):
+        raise ErroreOfficina("I nodi copiati non sono validi.") from None
+    quali = [n for n in dict.fromkeys(quali) if nodi.per_id(connessione, n) is not None]
+    if not quali:
+        raise ErroreOfficina("Non c'è niente da incollare: i nodi copiati non ci sono più.")
+    return quali
+
+
+def _voce_nodo(connessione, riga) -> dict:
+    via = nodi.percorso(connessione, riga["nodo_id"]).split(nodi.SEPARATORE)
+    return {"nodo_id": riga["nodo_id"], "nome": riga["nome"],
+            "percorso": nodi.SEPARATORE.join(via[:-1]), "origine": riga["origine"]}
+
+
+@strada.get("/api/scatti/{scatto_id}/nodi")
+def nodi_dello_scatto(scatto_id: int):
+    with accesso.aperto().lettura() as connessione:
+        if uno(connessione, "SELECT id FROM scatti WHERE id = ?", scatto_id) is None:
+            raise ErroreOfficina("Questo scatto non c'è più.")
+        return {"nodi": [_voce_nodo(connessione, riga)
+                         for riga in etichette.di_scatto(connessione, scatto_id)]}
+
+
+@strada.post("/api/scatti/altri-nodi")
+async def scatti_con_altri_nodi(richiesta: Request):
+    try:
+        dati = await richiesta.json()
+    except ValueError:
+        dati = {}
+    if not isinstance(dati, dict):
+        dati = {}
+    return await consegna.subito(_conta_con_altri_nodi, dati)
+
+
+def _conta_con_altri_nodi(dati: dict) -> dict:
+    numeri = _quali_scatti(dati)
+    with accesso.aperto().lettura() as connessione:
+        copiati = set(_quali_nodi(connessione, dati))
+        tuoi = etichette.tuoi_di_tanti(connessione, numeri)
+        quanti = sum(1 for numero in numeri if tuoi.get(numero, set()) - copiati)
+    return {"scatti": len(numeri), "con_altri": quanti}
+
+
+@strada.post("/scatti/in-blocco")
+async def in_blocco(richiesta: Request):
+    try:
+        dati = await richiesta.json()
+    except ValueError:
+        dati = {}
+    if not isinstance(dati, dict):
+        dati = {}
+    return await consegna.subito(_fai_in_blocco, dati)
+
+
+def _fai_in_blocco(dati: dict) -> dict:
+    azione = dati.get("azione")
+    numeri = _quali_scatti(dati)
+    pezzi = [numeri[inizio:inizio + BLOCCO] for inizio in range(0, len(numeri), BLOCCO)]
+    _un_pezzo(azione, pezzi[0], dati)
+    if len(pezzi) == 1:
+        registro.evento("web.blocco", quanti=len(numeri))
+        return {"fatti": len(numeri)}
+    lavoro = secrets.token_hex(8)
+    with _LUCCHETTO_LAVORI:
+        while len(_LAVORI) >= 20:
+            _LAVORI.pop(next(iter(_LAVORI)))
+        _LAVORI[lavoro] = {"fatti": len(pezzi[0]), "totale": len(numeri),
+                           "finito": False, "errore": None}
+    threading.Thread(target=_gli_altri_pezzi, args=(lavoro, azione, pezzi[1:], dati),
+                     name="in-blocco", daemon=True).start()
+    return {"lavoro": lavoro, "fatti": len(pezzi[0]), "totale": len(numeri)}
+
+
+def _gli_altri_pezzi(lavoro: str, azione, pezzi: list[list[int]], dati: dict) -> None:
+    stato = _LAVORI[lavoro]
+    try:
+        for pezzo in pezzi:
+            _un_pezzo(azione, pezzo, dati)
+            with _LUCCHETTO_LAVORI:
+                stato["fatti"] += len(pezzo)
+        registro.evento("web.blocco", quanti=stato["totale"])
+    except ErroreOfficina as errore:
+        stato["errore"] = errore.messaggio
+    except Exception as guasto:
+        registro.errore("web.blocco_rotto", **registro.dove_si_e_rotto(guasto))
+        stato["errore"] = "Qualcosa non ha funzionato: quelli già fatti restano fatti."
+    finally:
+        stato["finito"] = True
+
+
+@strada.get("/scatti/in-blocco/{lavoro}")
+def a_che_punto(lavoro: str):
+    with _LUCCHETTO_LAVORI:
+        stato = _LAVORI.get(lavoro)
+        if stato is None:
+            raise ErroreOfficina("Questo lavoro non c'è più.")
+        if stato["finito"]:
+            _LAVORI.pop(lavoro, None)
+        return dict(stato)
+
+
+def _un_pezzo(azione, numeri: list[int], dati: dict) -> None:
     with accesso.aperto().scrittura() as connessione:
         if azione == "fuori_archivio":
             for numero in numeri:
@@ -237,24 +354,38 @@ async def in_blocco(richiesta: Request):
                 scatti.marca_senza_data(connessione, numero)
         elif azione == "data":
             giorno = dati.get("giorno")
-            if not giorno:
-                raise ErroreOfficina("Serve una data.")
+            try:
+                giorno = date.fromisoformat(giorno).isoformat()
+            except (TypeError, ValueError):
+                raise ErroreOfficina("Serve una data.") from None
             for numero in numeri:
                 scatti.imposta_data(connessione, numero, f"{giorno}T12:00:00",
                                     fuso_minuti=None, origine="manuale")
                 scatti.marca_senza_data(connessione, numero)
         elif azione in ("nodo", "togli_nodo"):
             nodo_id = dati.get("nodo_id")
-            if not nodo_id:
-                raise ErroreOfficina("Serve un nodo.")
-            nodo_id = int(nodo_id)
+            try:
+                nodo_id = int(nodo_id)
+            except (TypeError, ValueError):
+                raise ErroreOfficina("Serve un nodo.") from None
             if nodi.per_id(connessione, nodo_id) is None:
                 raise ErroreOfficina("Quel nodo non c'è più.")
-            for numero in numeri:
-                if azione == "nodo":
-                    etichette.metti(connessione, numero, nodo_id, "si", "utente")
-                else:
-                    etichette.togli(connessione, numero, nodo_id)
+            if azione == "nodo":
+                etichette.metti_a_tanti(connessione, numeri, nodo_id)
+            else:
+                etichette.togli_a_tanti(connessione, ((numero, nodo_id) for numero in numeri))
+        elif azione == "incolla":
+            copiati = _quali_nodi(connessione, dati)
+            modo = dati.get("modo")
+            if modo not in ("aggiungi", "sostituisci"):
+                raise ErroreOfficina("Scegli se aggiungere o sostituire.")
+            if modo == "sostituisci":
+                tuoi = etichette.tuoi_di_tanti(connessione, numeri)
+                etichette.togli_a_tanti(connessione, (
+                    (numero, nodo_id) for numero in numeri
+                    for nodo_id in sorted(tuoi.get(numero, ())) if nodo_id not in copiati))
+            for nodo_id in copiati:
+                etichette.metti_a_tanti(connessione, numeri, nodo_id)
         elif azione in ("cuore", "togli_cuore"):
             for numero in numeri:
                 scatti.metti_cuore(connessione, numero, azione == "cuore")
@@ -263,6 +394,3 @@ async def in_blocco(richiesta: Request):
                 scatti.metti_stella(connessione, numero, azione == "stella")
         else:
             raise ErroreOfficina(f"Non so fare «{azione}».")
-
-    registro.evento("web.blocco", quanti=len(numeri))
-    return {"fatti": len(numeri)}

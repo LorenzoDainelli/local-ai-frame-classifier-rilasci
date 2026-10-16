@@ -91,7 +91,7 @@ def tutti_i_video(archivio: Archivio, basta: Callable[[], bool] = lambda: False,
             try:
                 if uno(archivio, riga):
                     raddrizzati += 1
-            except OSError:
+            except Exception:                           # noqa: BLE001
                 registro.avviso("raddrizza.video_non_letto")
             da = riga["id"]
             archivio.salva_stato(DA, da)

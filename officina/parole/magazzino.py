@@ -59,18 +59,27 @@ def quanti_da_leggere(connessione: sqlite3.Connection, modello: str,
 
 
 def da_leggere(connessione: sqlite3.Connection, modello: str, versione: str,
-               quanti: int = 32, escludi: Sequence[int] = ()) -> list[sqlite3.Row]:
+               quanti: int = 32, escludi: Sequence[int] = (),
+               fra: Sequence[int] | None = None) -> list[sqlite3.Row]:
+    parametri: list = []
+    if fra is None:
+        da_dove = "SELECT s.id, s.genere FROM scatti s WHERE s.fuori_archivio = 0"
+    elif not fra:
+        return []
+    else:
+        da_dove = ("SELECT s.id, s.genere FROM json_each(?) AS j "
+                   "CROSS JOIN scatti s ON s.id = j.value WHERE s.fuori_archivio = 0")
+        parametri.append(json.dumps(list(fra)))
     fuori = ""
-    parametri: list = [modello, versione]
+    parametri.extend([modello, versione])
     if escludi:
-        fuori = f" AND s.id NOT IN ({','.join('?' * len(escludi))})"
-        parametri.extend(escludi)
+        fuori = " AND s.id NOT IN (SELECT value FROM json_each(?))"
+        parametri.append(json.dumps(list(escludi)))
     parametri.append(quanti)
     return tutti(
         connessione,
         f"""
-        SELECT s.id, s.genere FROM scatti s
-        WHERE s.fuori_archivio = 0{CHIUSO}{gruppi.clausola(connessione, 'intelligenza')}
+        {da_dove}{CHIUSO}{gruppi.clausola(connessione, 'intelligenza')}
           AND NOT EXISTS (SELECT 1 FROM scritte_lette l
                           WHERE l.scatto_id = s.id AND l.modello = ?
                             AND l.versione = ?){fuori}

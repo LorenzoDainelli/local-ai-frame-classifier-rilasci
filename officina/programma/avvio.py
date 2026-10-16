@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import sys
@@ -16,11 +17,13 @@ from officina.programma.aggiornarsi import Aggiornarsi
 from officina.programma.finestre import ICONA, Finestre
 from officina.programma.ponti import PontePrincipale
 from officina.programma.schermo_fisso import ColFisso
-from officina.programma.servitore import PORTA_PREFERITA, Servitore, e_libera, porta_libera
+from officina.programma.servitore import (PORTA_DELLA_RETE, PORTA_PREFERITA, Servitore, e_libera,
+                                          per_la_rete, porta_libera)
 
 ATTESA_DELLO_SPEGNIMENTO = 60.0
 
 OGNI_QUANTO_LA_COPIA = 120.0
+OGNI_QUANTO_LA_SALUTE = 60.0
 ATTESA_DELLA_FINESTRA_VUOTA = 5.0
 
 GB = 2 ** 30
@@ -83,6 +86,11 @@ def quanto_si_scarica(esame: scheda.Esame, manca: list[str]) -> str:
     return f"circa {peso(totale)}" if totale else "niente"
 
 
+TORCH_VECCHIO = ("Il motore delle reti neurali che hai in casa (torch {versione}) è "
+                 "troppo vecchio: con lui un file di pesi costruito apposta può far "
+                 "eseguire codice sul computer. Scarico da solo quello nuovo. ")
+
+
 class Programma(ColFisso, Finestre, Aggiornarsi):
 
     def __init__(self, webview=None, esamina=None):
@@ -92,6 +100,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         self.installatore = librerie.Installatore(esamina=esamina)
         self.istanza = istanza.Istanza()
         self.servitore: Servitore | None = None
+        self.servitore_di_rete: Servitore | None = None
         self.finestrina = None
         self.principale = None
         self.scelto: carta.ArchivioTrovato | None = None
@@ -107,6 +116,8 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         self._spento = False
         self.guasto_dei_tasti = ""
         self._richieste_libere = False
+        self._torch_rifatto_da_solo = False
+        self._entra_col_torch_vecchio = False
         self._lucchetto = threading.RLock()
         self.ponte = None
         from officina import modelli_in_casa
@@ -178,6 +189,9 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
     def _servono_i_modelli(self) -> bool:
         from officina import modelli_in_casa
 
+        if carta.leggi().get("corpi_dopo") and modelli_in_casa.mancano_gli_obbligatori() == ["corpi"]:
+            self._riprova_i_corpi()
+            return False
         if self.scaricatore.lavoro.sta_lavorando:
             return True
         if self._obblighi_sospesi():
@@ -185,6 +199,30 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         if self.scaricatore.lavoro.guasto:
             return True
         return bool(modelli_in_casa.mancano_gli_obbligatori())
+
+    def si_entra_senza_i_corpi(self) -> bool:
+        from officina import modelli_in_casa
+
+        return (not self.scaricatore.lavoro.sta_lavorando
+                and modelli_in_casa.mancano_gli_obbligatori() == ["corpi"]
+                and bool(modelli_in_casa.permessi_in_attesa()))
+
+    def entra_senza_i_corpi(self) -> None:
+        if not self.si_entra_senza_i_corpi():
+            raise ErroreOfficina("Mancano altri modelli oltre ai corpi: scaricali prima di entrare.")
+        carta.aggiorna(corpi_dopo=True)
+        self._corpi_riprovati = True
+        self.scaricatore.lavoro.guasto = ""
+        registro.evento("programma.entra_senza_i_corpi")
+
+    def _riprova_i_corpi(self) -> None:
+        if getattr(self, "_corpi_riprovati", False):
+            return
+        self._corpi_riprovati = True
+        try:
+            self.scaricatore.parti(["corpi"])
+        except Exception as guasto:
+            registro.errore("programma.corpi_non_riprovati", **registro.dove_si_e_rotto(guasto))
 
     def _usa_l_archivio_della_versione_1(self) -> bool:
         dati = carta.cartella_dati()
@@ -207,7 +245,8 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         if (self.servitore is None and self._usa_l_archivio_della_versione_1()
                 and la_versione_vecchia_risponde()):
             return "vecchia-aperta"
-        if (self.installatore.sta_lavorando or self._servono_i_motori()
+        if not self._entra_col_torch_vecchio and (
+                self.installatore.sta_lavorando or self._servono_i_motori()
                 or self._scheda_da_rivedere()):
             return "motori"
         if self._serve_la_chiave():
@@ -234,8 +273,15 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             esame = self.installatore.esamina_la_scheda()
             parti = self._parti_da_preparare()
             cambiata = not librerie.cosa_manca() and librerie.scheda_cambiata(esame)
-            dati["scheda"] = (("La scheda video è cambiata dall'ultima volta. "
-                               if cambiata else "") + descrivi_la_scheda(esame))
+            vecchio = librerie.torch_vecchio()
+            if vecchio and not self._torch_rifatto_da_solo and not self.installatore.sta_lavorando:
+                self._torch_rifatto_da_solo = True
+                registro.evento("programma.torch_vecchio_rifatto", versione=vecchio)
+                self.installatore.parti(parti)
+            prima = (TORCH_VECCHIO.format(versione=vecchio) if vecchio else
+                     "La scheda video è cambiata dall'ultima volta. " if cambiata else "")
+            dati["scheda"] = prima + descrivi_la_scheda(esame)
+            dati["vecchio"] = bool(vecchio)
             dati["quanto"] = quanto_si_scarica(esame, parti)
             dati["motori"] = self.installatore.stato.come_dati()
         elif passo == "modelli":
@@ -244,6 +290,11 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             if scelti is not None and not lavoro.sta_lavorando and not lavoro.finito:
                 self.scarica_i_modelli(scelti)
             dati["modelli"] = self.i_modelli_per_la_finestrina()
+        elif passo == "password":
+            from officina.impostazioni import REALE
+            from officina.programma import sigillo
+
+            dati["sigillo"] = sigillo.modo(REALE)
         elif passo == "guasto":
             dati["guasto"] = self.guasto
         elif passo == "sparito":
@@ -281,12 +332,17 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
 
     def prepara_i_motori(self) -> dict:
         self.installatore.parti(self._parti_da_preparare())
-        return {"stato": {"passo": "motori", "versione": self.versione,
-                          "scheda": descrivi_la_scheda(self.installatore.esamina_la_scheda()),
-                          "motori": self.installatore.stato.come_dati()}}
+        return {"stato": self.stato_per_la_finestrina()}
 
     def ferma_i_motori(self) -> None:
         self.installatore.ferma()
+
+    def entra_col_torch_vecchio(self) -> None:
+        if not librerie.torch_vecchio():
+            raise ErroreOfficina("Il motore delle reti neurali è già a posto.")
+        self.installatore.ferma()
+        self._entra_col_torch_vecchio = True
+        registro.evento("programma.torch_vecchio_tenuto")
 
     def motori_piu_tardi(self) -> None:
         self.installatore.ferma()
@@ -302,8 +358,9 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             raise ErroreOfficina(
                 "Questa non sembra una chiave di Hugging Face: comincia con "
                 "«hf_» ed è lunga. Copiala di nuovo dalla pagina delle chiavi.")
-        modelli_in_casa.controlla_la_chiave(pulita)
+        mancano = modelli_in_casa.permessi_mancanti(pulita)
         segreti.custodisci(segreti.CHIAVE_HF, pulita)
+        modelli_in_casa.ricorda_i_permessi(mancano)
         carta.aggiorna(chiave_chiesta=True)
 
     def apri_il_sito(self, dove: str) -> None:
@@ -337,7 +394,8 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                        for q in modelli_in_casa.FACOLTATIVI]
         return {"obbligatori": obbligatori, "facoltativi": facoltativi,
                 "libero": libero, "disco": str(esistente.anchor or esistente),
-                "lavoro": self.scaricatore.come_va()}
+                "lavoro": self.scaricatore.come_va(),
+                "senza_corpi": self.si_entra_senza_i_corpi()}
 
     def scarica_i_modelli(self, facoltativi) -> None:
         from officina import modelli_in_casa
@@ -373,6 +431,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         if not cassa.la_password_e_giusta(password):
             registro.avviso("programma.password_sbagliata")
             raise ErroreOfficina("La password non è giusta.")
+        self._lega_a_windows(password)
         self.apertura = {"titolo": "Apro il forziere",
                          "detto": "Con un archivio grande ci vuole qualche secondo."}
         self.fase_apertura = 0
@@ -380,6 +439,33 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         threading.Thread(target=self._apri_e_mostra, args=(password,), name="apertura",
                          daemon=True).start()
         return {"stato": {"passo": "apertura", "versione": self.versione, **self.apertura}}
+
+    def apri_con_windows(self) -> dict:
+        from officina.impostazioni import REALE
+        from officina.programma import sigillo
+
+        try:
+            password = sigillo.apri(REALE)
+        except sigillo.SigilloRotto as errore:
+            self._sigillo_da_rifare = True
+            raise ErroreOfficina(errore.messaggio, codice=errore.codice) from errore
+        return self.apri_il_forziere(password)
+
+    def _lega_a_windows(self, password: str) -> None:
+        from officina.impostazioni import REALE
+        from officina.programma import sigillo
+
+        if sigillo.c_e(REALE) and not getattr(self, "_sigillo_da_rifare", False):
+            return
+        try:
+            if sigillo.come_si_puo() is None:
+                return
+            sigillo.sigilla(REALE, password)
+            self._sigillo_da_rifare = False
+        except ErroreOfficina as errore:
+            registro.avviso("programma.sigillo_non_fatto", codice=registro.Parola(errore.codice))
+        except Exception as guasto:
+            registro.errore("programma.sigillo_rotto", **registro.dove_si_e_rotto(guasto))
 
     def _apri_subito_la_principale(self) -> None:
         if self.principale is not None:
@@ -427,12 +513,13 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         self.fase_apertura = 1
         aperto_in = time.monotonic() - partenza
         in_rete = bool(archivio.impostazione("accesso_dalla_rete"))
-        host = "0.0.0.0" if in_rete else "127.0.0.1"
         caricamento.join()
         self.fase_apertura = 2
         if self.servitore is None:
-            self.servitore = Servitore(host=host, porta=porta_libera(PORTA_PREFERITA, host))
+            self.servitore = Servitore(porta=porta_libera(PORTA_PREFERITA))
             self.servitore.parti()
+        if in_rete:
+            self._apri_alla_rete()
         from officina.web.strade import schermo
 
         schermo.imposta_il_programma(PontePrincipale(self))
@@ -443,11 +530,28 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                 registro.errore("schermo.porta_non_riaperta", **registro.dove_si_e_rotto(guasto))
         self.fase_apertura = 3
         self._parti_le_copie_in_sottofondo()
+        self._parti_la_salute_in_sottofondo()
         threading.Thread(target=self._prepara_i_conti, name="preparazione", daemon=True).start()
         registro.evento("programma.acceso", in_rete=in_rete,
                         archivio_ms=round(aperto_in * 1000),
                         tutto_ms=round((time.monotonic() - partenza) * 1000))
-        return self.servitore.indirizzo
+        from officina.web import origine
+
+        return origine.indirizzo_per_entrare(self.servitore.indirizzo)
+
+    def _apri_alla_rete(self) -> None:
+        from officina.web import origine
+
+        if self.servitore_di_rete is not None:
+            return
+        try:
+            servitore, impronta = per_la_rete(carta.casa() / "rete", PORTA_DELLA_RETE)
+            servitore.parti()
+        except Exception as guasto:
+            registro.errore("programma.rete_non_aperta", **registro.dove_si_e_rotto(guasto))
+            return
+        self.servitore_di_rete = servitore
+        origine.segna_la_rete(servitore.porta, impronta)
 
     def _prepara_i_conti(self) -> None:
         from officina.web.strade import comune
@@ -503,6 +607,37 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         if not scelta:
             return None
         return scelta[0] if isinstance(scelta, (list, tuple)) else str(scelta)
+
+    def _parti_la_salute_in_sottofondo(self) -> None:
+        if getattr(self, "_salute", None) is not None:
+            return
+        self._salute = threading.Thread(target=self._salute_in_sottofondo, name="salute", daemon=True)
+        self._salute.start()
+
+    def _disco_occupato(self) -> bool:
+        if self._sta_chiudendo or self._spento:
+            return True
+        generale = sys.modules.get("officina.web.strade.generale")
+        if generale is None:
+            return True
+        try:
+            return generale.disco_occupato()
+        except Exception:
+            return True
+
+    def _salute_in_sottofondo(self) -> None:
+        from officina.archivio import accesso
+        from officina.modello import salute_file
+        while not self._sta_chiudendo and not self._spento:
+            time.sleep(OGNI_QUANTO_LA_SALUTE)
+            if self._disco_occupato():
+                continue
+            try:
+                salute_file.un_giro(accesso.aperto(), freno=self._disco_occupato)
+            except ErroreOfficina:
+                continue
+            except Exception as guasto:
+                registro.errore("salute.in_sottofondo_fallita", **registro.dove_si_e_rotto(guasto))
 
     def lavori_in_corso(self) -> list[str]:
         generale = sys.modules.get("officina.web.strade.generale")
@@ -658,6 +793,11 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                 generale.ferma_tutto()
             except Exception as guasto:
                 registro.errore("programma.lavori_non_fermati", **registro.dove_si_e_rotto(guasto))
+        if self.servitore_di_rete is not None:
+            from officina.web import origine
+
+            origine.smetti_la_rete()
+            self.servitore_di_rete.ferma()
         if self.servitore is not None:
             self.servitore.ferma()
         avanza(1)
@@ -691,6 +831,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                 if manca else "",
                 "lavora": self.installatore.sta_lavorando,
                 "riavvio": bool(manca) and bool(scritto) and self._torch_gia_caricato(),
+                "vecchio": librerie.torch_vecchio(),
             },
             "chiave": segreti.c_e_la_chiave_hf(),
             "chiave_dall_ambiente": bool((os.environ.get("HF_TOKEN") or "").strip()),
@@ -722,6 +863,23 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
 
         if not blocco.guardia.sblocca("qui", accesso.aperto().dove, password or ""):
             raise ErroreOfficina("La password non è giusta.")
+        self._lega_a_windows(password or "")
+        return {"vai": "/"}
+
+    def rientra_con_windows(self) -> dict:
+        from officina.archivio import accesso
+        from officina.impostazioni import REALE
+        from officina.programma import sigillo
+        from officina.web import blocco
+
+        try:
+            password = sigillo.apri(REALE)
+        except sigillo.SigilloRotto as errore:
+            self._sigillo_da_rifare = True
+            raise ErroreOfficina(errore.messaggio, codice=errore.codice) from errore
+        if not blocco.guardia.sblocca("qui", accesso.aperto().dove, password):
+            sigillo.togli(REALE)
+            raise ErroreOfficina(sigillo.ROTTO, codice="sigillo_rotto")
         return {"vai": "/"}
 
     def spegni_il_forziere(self, password: str) -> dict:
@@ -736,6 +894,9 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             raise ErroreOfficina("La password non è giusta.")
         cassa.spegni(password)
         archivio._parola = None
+        from officina.programma import sigillo
+
+        sigillo.togli(archivio.dove.nome)
         registro.evento("programma.forziere_spento")
         return {"vai": "/impostazioni#c6"}
 
@@ -807,7 +968,7 @@ SENZA_FINESTRA = (
 
 def _carica_il_server() -> None:
     try:
-        import officina.web.server
+        importlib.import_module("officina.web.server")
     except Exception as guasto:
         registro.errore("programma.server_non_caricato", **registro.dove_si_e_rotto(guasto))
 

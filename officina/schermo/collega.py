@@ -37,6 +37,11 @@ NON_E_LUI = ("Il fisso che risponde non è quello abbinato: per sicurezza non mi
 SPIATO = ("Il codice non torna, oppure qualcuno nella rete si è messo in mezzo. "
           "Controlla le sei cifre sul fisso e riprova.")
 
+BISCOTTO = "officina_ponte"
+INGRESSO = "/__schermo/chiave/"
+NON_DALLA_FINESTRA = ("Questa pagina si apre solo dalla finestra del programma "
+                      "su questo portatile.")
+
 INTESTAZIONI_DI_PASSAGGIO = {"connection", "keep-alive", "proxy-authenticate",
                              "proxy-authorization", "te", "trailers",
                              "transfer-encoding", "upgrade", "host",
@@ -211,7 +216,7 @@ def id_di_questo_portatile() -> str:
 def abbina(indirizzo: str, porta: int, codice: str) -> Fisso:
     from spake2 import SPAKE2_A
 
-    codice = "".join(cifra for cifra in str(codice) if cifra.isdigit())
+    codice = "".join(cifra for cifra in str(codice) if cifra.isdecimal())
     if len(codice) != 6:
         raise NoDalFisso("Il codice è fatto di sei cifre.")
     connessione = _connessione(indirizzo, porta, None, None)
@@ -390,10 +395,44 @@ class Ponte:
         self.chiuso = False
         self._fermo = threading.Event()
         self._guardo = False
+        self._chiave = secrets.token_urlsafe(32)
+
+    @property
+    def porta_locale(self) -> int:
+        return self._server.server_address[1]
 
     @property
     def indirizzo(self) -> str:
-        return f"http://127.0.0.1:{self._server.server_address[1]}/"
+        return f"http://127.0.0.1:{self.porta_locale}{INGRESSO}{self._chiave}/"
+
+    def _biscotti(self, gestore: BaseHTTPRequestHandler) -> list[tuple[str, str]]:
+        letti = []
+        for riga in gestore.headers.get_all("cookie") or []:
+            for pezzo in riga.split(";"):
+                nome, uguale, valore = pezzo.strip().partition("=")
+                if uguale and nome:
+                    letti.append((nome, valore))
+        return letti
+
+    def _e_la_finestra(self, gestore: BaseHTTPRequestHandler) -> bool:
+        return any(nome == BISCOTTO and patto.uguali(valore, self._chiave)
+                   for nome, valore in self._biscotti(gestore))
+
+    def _entrata(self, gestore: BaseHTTPRequestHandler) -> bool:
+        if not gestore.path.startswith(INGRESSO):
+            return False
+        chiave, _, resto = gestore.path[len(INGRESSO):].partition("/")
+        if not patto.uguali(chiave, self._chiave):
+            gestore.send_error(403, NON_DALLA_FINESTRA)
+            return True
+        gestore.send_response(303)
+        gestore.send_header("location", "/" + resto.lstrip("/\\"))
+        gestore.send_header("set-cookie", f"{BISCOTTO}={self._chiave}; Path=/; HttpOnly; "
+                                          "SameSite=Strict")
+        gestore.send_header("cache-control", "no-store")
+        gestore.send_header("content-length", "0")
+        gestore.end_headers()
+        return True
 
     def _verso_il_fisso(self) -> http.client.HTTPSConnection:
         connessione = getattr(self._locale, "connessione", None)
@@ -562,6 +601,11 @@ class Ponte:
         if no is not None:
             gestore.send_error(403, no)
             return
+        if self._entrata(gestore):
+            return
+        if not self._e_la_finestra(gestore):
+            gestore.send_error(403, NON_DALLA_FINESTRA)
+            return
         if self._del_ponte(gestore):
             return
         pagina = gestore.command == "GET" and "text/html" in (gestore.headers.get("accept") or "")
@@ -575,13 +619,18 @@ class Ponte:
         lunghezza = int(gestore.headers.get("content-length") or 0)
         corpo = gestore.rfile.read(lunghezza) if lunghezza else None
         intestazioni = {chiave: valore for chiave, valore in gestore.headers.items()
-                        if chiave.lower() not in INTESTAZIONI_DI_PASSAGGIO}
+                        if chiave.lower() not in INTESTAZIONI_DI_PASSAGGIO
+                        and chiave.lower() != "cookie"}
+        altri = "; ".join(f"{nome}={valore}" for nome, valore in self._biscotti(gestore)
+                          if nome != BISCOTTO)
+        if altri:
+            intestazioni["cookie"] = altri
         intestazioni["host"] = gestore.headers.get("host") or "127.0.0.1"
         intestazioni[INTESTAZIONE] = self.sessione
         if corpo is not None:
             intestazioni["content-length"] = str(len(corpo))
         risposta = None
-        for prova in range(2):
+        for _prova in range(2):
             try:
                 connessione = self._verso_il_fisso()
                 connessione.request(gestore.command, gestore.path, body=corpo,

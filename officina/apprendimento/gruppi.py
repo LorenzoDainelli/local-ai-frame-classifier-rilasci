@@ -7,6 +7,8 @@ from officina.archivio.database import tutti
 
 SECONDI_DI_RAFFICA = 4
 
+PEZZO = 900
+
 
 def quando_sono_stati_fatti(connessione: sqlite3.Connection,
                             scatti: Sequence[int] | None = None
@@ -16,10 +18,15 @@ def quando_sono_stati_fatti(connessione: sqlite3.Connection,
     elif not scatti:
         return {}
     else:
-        segnaposti = ",".join("?" * len(scatti))
-        righe = tutti(connessione,
-                      f"SELECT id, istante_utc FROM scatti WHERE id IN ({segnaposti})",
-                      *scatti)
+        scatti = list(dict.fromkeys(scatti))
+        righe = []
+        for inizio in range(0, len(scatti), PEZZO):
+            pezzo = scatti[inizio:inizio + PEZZO]
+            segnaposti = ",".join("?" * len(pezzo))
+            righe.extend(tutti(
+                connessione,
+                f"SELECT id, istante_utc FROM scatti WHERE id IN ({segnaposti})",
+                *pezzo))
     return {riga["id"]: _in_secondi(riga["istante_utc"]) for riga in righe}
 
 

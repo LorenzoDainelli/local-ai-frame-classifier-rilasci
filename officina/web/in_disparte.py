@@ -104,10 +104,16 @@ def manda(*comando, a: str = FILA) -> None:
 
 
 def ferma(a: str = FILA) -> None:
+    from officina.web import lavori
+
+    lavori.turno.rinuncia(a)
     manda("ferma", a=a)
 
 
 def ferma_tutti() -> None:
+    from officina.web import lavori
+
+    lavori.turno.rinunciano_tutti()
     for a in list(_processi):
         ferma(a)
 

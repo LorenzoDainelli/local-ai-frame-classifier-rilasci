@@ -178,6 +178,12 @@ def test_nessun_filo_puo_morire_in_silenzio():
     from pathlib import Path
 
     SAPUTI = {
+        "officina/archivio/riserva.py":
+            "`_fai` prende dentro qualunque errore, lo scrive nel registro e lo "
+            "tiene per la pagina: quello già copiato resta copiato",
+        "officina/web/strade/galleria.py":
+            "`_gli_altri_pezzi` prende dentro qualunque errore, lo scrive nel "
+            "registro e lo mostra sotto la barra",
         "officina/schermo/porta.py":
             "`Porta._ascolta` prende dentro qualunque errore e lo scrive nel "
             "registro: se non si risponde alla ricerca, il portatile lo dice",
@@ -234,6 +240,9 @@ def test_nessun_filo_puo_morire_in_silenzio():
         "officina/miglioria/preparazione.py":
             "il filo che racconta le librerie prende dentro qualunque errore: "
             "chi racconta non deve poter fermare chi installa",
+        "officina/programma/sigillo.py":
+            "il filo di Windows Hello prende dentro anche i BaseException e chi "
+            "lo aspetta li rilancia: il guasto arriva a chi ha chiesto il sigillo",
         "officina/apprendimento/rendiconto.py":
             "il filo che rifà la pagella prende dentro qualunque errore e lo "
             "scrive nel registro: la pagella vecchia resta, e la prossima "

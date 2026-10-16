@@ -109,3 +109,38 @@ def test_anche_i_numeri_si_controllano(archivio_misurabile, tmp_path):
         assert (tmp_path / "misura.json").exists()
         assert resoconto.controlla(
             (tmp_path / "misura.json").read_text(encoding="utf-8"), connessione) == []
+
+
+def _metti_le_caselle(archivio):
+    import random
+
+    from officina.archivio.database import tutti
+    from officina.descrittori import vettori
+    from officina.modello import impronte
+
+    caso = random.Random(7)
+    with archivio.scrittura() as connessione:
+        righe = tutti(connessione, "SELECT scatto_id, file_id, descrittore, versione, "
+                                   "valori FROM impronte WHERE inquadratura = 'intera'")
+        for riga in righe:
+            base = vettori.matrice([riga["valori"]])[0].tolist()
+            for casella in ("griglia_r00c00", "griglia_r00c01"):
+                rumore = [v + caso.gauss(0, 0.05) for v in base]
+                impronte.scrivi(connessione, riga["scatto_id"], riga["file_id"],
+                                riga["descrittore"], riga["versione"], casella,
+                                "griglia", None, rumore)
+
+
+def test_massimo_e_media_delle_caselle_si_misurano(archivio_misurabile):
+    _metti_le_caselle(archivio_misurabile)
+    misurato = banco.misura(archivio_misurabile)
+    inquadrature = {riga.inquadratura for riga in misurato.righe}
+    assert {"caselle · massimo", "caselle · media"} <= inquadrature
+    testo = " ".join(resoconto.conclusioni(misurato))
+    assert "caselle" in testo
+
+
+def test_senza_caselle_non_compaiono(archivio_misurabile):
+    misurato = banco.misura(archivio_misurabile)
+    assert not any(riga.inquadratura.startswith("caselle")
+                   for riga in misurato.righe)

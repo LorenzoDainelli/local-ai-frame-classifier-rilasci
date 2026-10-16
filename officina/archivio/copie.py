@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import sqlite3
@@ -8,11 +9,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from officina import registro
+from officina.archivio.database import ora_a_parole
 from officina.errori import DatabaseIncoerente
 from officina.impostazioni import Posizione
 
 QUANTE_SE_NE_TENGONO = 30
 MOTIVO_AMMESSO = re.compile(r"^[a-z_]{1,24}$")
+IN_ARRIVO = ".in-arrivo"
+COMPAGNI = ("", "-wal", "-shm", "-journal")
 
 
 @dataclass(frozen=True)
@@ -29,14 +33,7 @@ class Copia:
 
     @property
     def quando(self) -> str:
-        try:
-            momento = datetime.strptime(self.istante, "%Y%m%d-%H%M%S")
-        except ValueError:
-            return self.istante
-        mesi = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
-                "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre")
-        return (f"{momento.day} {mesi[momento.month - 1]} {momento.year}, "
-                f"{momento.hour:02d}:{momento.minute:02d}")
+        return ora_a_parole(self.istante)
 
 
 def _nome_copia(motivo: str, dentro: Path | None = None) -> str:
@@ -78,18 +75,48 @@ def verifica(percorso: Path) -> None:
         prova.close()
 
 
+def _togli_con_i_compagni(percorso: Path) -> None:
+    for resto in COMPAGNI:
+        Path(str(percorso) + resto).unlink(missing_ok=True)
+
+
+def _copia_verificata(da: sqlite3.Connection, destinazione: Path) -> None:
+    provvisoria = Path(str(destinazione) + IN_ARRIVO)
+    try:
+        dentro = sqlite3.connect(provvisoria)
+        try:
+            da.backup(dentro)
+        finally:
+            dentro.close()
+        verifica(provvisoria)
+        os.replace(provvisoria, destinazione)
+    finally:
+        _togli_con_i_compagni(provvisoria)
+
+
+def pulisci_i_resti(posizione: Posizione) -> int:
+    resti = list(posizione.copie.glob("*" + IN_ARRIVO + "*"))
+    resti += [Path(str(posizione.database) + IN_ARRIVO + compagno) for compagno in COMPAGNI]
+    tolti = 0
+    for resto in resti:
+        try:
+            resto.unlink()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            registro.errore("copie.resto_non_tolto")
+            continue
+        tolti += 1
+    if tolti:
+        registro.evento("copie.resti_tolti", quanti=tolti)
+    return tolti
+
+
 def fai_copia(connessione: sqlite3.Connection, posizione: Posizione,
               motivo: str = "chiusura") -> Copia:
     posizione.copie.mkdir(parents=True, exist_ok=True)
     destinazione = posizione.copie / _nome_copia(motivo, posizione.copie)
-
-    copia_connessione = sqlite3.connect(destinazione)
-    try:
-        connessione.backup(copia_connessione)
-    finally:
-        copia_connessione.close()
-
-    verifica(destinazione)
+    _copia_verificata(connessione, destinazione)
     peso = destinazione.stat().st_size
     nato_il = destinazione.stat().st_mtime
     registro.evento("copie.fatta", byte=peso)
@@ -116,8 +143,11 @@ def elenco(posizione: Posizione) -> list[Copia]:
 
 def pota(posizione: Posizione) -> int:
     tutte = elenco(posizione)
+    tenuta = prenotata(posizione)
     tolte = 0
     for vecchia in tutte[QUANTE_SE_NE_TENGONO:]:
+        if vecchia.nome == tenuta:
+            continue
         vecchia.percorso.unlink(missing_ok=True)
         tolte += 1
     if tolte:
@@ -132,20 +162,59 @@ def ripristina(posizione: Posizione, nome: str) -> Copia:
     if posizione.database.exists():
         rete = posizione.copie / _nome_copia("prima_del_ripristino", posizione.copie)
         vecchia = sqlite3.connect(posizione.database)
-        nuova = sqlite3.connect(rete)
         try:
-            vecchia.backup(nuova)
+            _copia_verificata(vecchia, rete)
         finally:
-            nuova.close()
             vecchia.close()
-        verifica(rete)
 
-    for compagno in ("-wal", "-shm"):
-        Path(str(posizione.database) + compagno).unlink(missing_ok=True)
-    shutil.copy2(sorgente, posizione.database)
+    arrivo = Path(str(posizione.database) + IN_ARRIVO)
+    try:
+        shutil.copy2(sorgente, arrivo)
+        verifica(arrivo)
+        for compagno in ("-wal", "-shm"):
+            Path(str(posizione.database) + compagno).unlink(missing_ok=True)
+        os.replace(arrivo, posizione.database)
+    finally:
+        _togli_con_i_compagni(arrivo)
     verifica(posizione.database)
 
     registro.evento("copie.ripristinata")
     pezzi = sorgente.name.split(".")
     informazioni = sorgente.stat()
     return Copia(sorgente, pezzi[0], pezzi[1], informazioni.st_size, informazioni.st_mtime)
+
+
+PRENOTAZIONE = "da_rimettere.txt"
+
+
+def prenotata(posizione: Posizione) -> str | None:
+    try:
+        nome = (posizione.copie / PRENOTAZIONE).read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return nome or None
+
+
+def prenota(posizione: Posizione, nome: str) -> Copia:
+    scelta = next((copia for copia in elenco(posizione) if copia.nome == nome), None)
+    if scelta is None:
+        raise DatabaseIncoerente("Quella copia non c'è più: ricarica la pagina.")
+    verifica(scelta.percorso)
+    (posizione.copie / PRENOTAZIONE).write_text(scelta.nome, encoding="utf-8")
+    registro.evento("copie.prenotata")
+    return scelta
+
+
+def disdici(posizione: Posizione) -> None:
+    (posizione.copie / PRENOTAZIONE).unlink(missing_ok=True)
+
+
+def rimetti_se_prenotata(posizione: Posizione) -> Copia | None:
+    nome = prenotata(posizione)
+    if nome is None:
+        return None
+    disdici(posizione)
+    if nome not in {copia.nome for copia in elenco(posizione)}:
+        registro.errore("copie.prenotata_sparita")
+        return None
+    return ripristina(posizione, nome)

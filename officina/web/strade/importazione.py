@@ -98,6 +98,7 @@ def aggiungi_cartella(percorso: str = Form(...), dove_torno: str = Form(""),
                       gruppo: str | None = Form(None), gruppo_nuovo: str = Form("")):
     from officina.importazione import gruppi, scansione
 
+    base.cartella_per_intero(percorso)
     with accesso.aperto().scrittura() as connessione:
         gruppo_id = gruppi.scegli(connessione, gruppo, gruppo_nuovo) if gruppo is not None else None
         scansione.aggiungi_cartella(connessione, Path(percorso), gruppo_id,
@@ -159,7 +160,7 @@ def sfoglia_cartella(richiesta: Request, da_dove: str = Form("")):
     except sfoglia.GiaAperta:
         raise ErroreOfficina(
             "La finestra per scegliere la cartella è già aperta. Se non la "
-            "vedi, è finita dietro a questa.")
+            "vedi, è finita dietro a questa.") from None
     if scelto:
         base.ricorda_la_scelta_del_selettore(scelto)
     return JSONResponse({"percorso": scelto})

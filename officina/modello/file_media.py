@@ -5,6 +5,7 @@ from pathlib import Path
 
 from officina.archivio.database import adesso, inserisci, tutti, uno
 from officina.modello import segnalazioni
+from officina.modello.luoghi import coordinate_valide
 
 
 def per_impronta(connessione: sqlite3.Connection, impronta: str) -> sqlite3.Row | None:
@@ -25,6 +26,7 @@ def di_scatto(connessione: sqlite3.Connection, scatto_id: int) -> list[sqlite3.R
 
 def crea(connessione: sqlite3.Connection, impronta: str, dimensione: int,
          genere: str, dati) -> int:
+    latitudine, longitudine = coordinate_valide(dati.latitudine, dati.longitudine)
     return inserisci(
         connessione,
         """
@@ -37,8 +39,8 @@ def crea(connessione: sqlite3.Connection, impronta: str, dimensione: int,
         """,
         impronta, dimensione, genere, dati.formato, dati.larghezza, dati.altezza,
         dati.orientamento, dati.durata_ms, dati.identificatore_ios, dati.data_locale,
-        dati.fuso_minuti, dati.istante_utc, dati.origine_data, dati.latitudine,
-        dati.longitudine, int(dati.sembra_schermata), dati.marca, dati.modello, adesso(),
+        dati.fuso_minuti, dati.istante_utc, dati.origine_data, latitudine,
+        longitudine, int(dati.sembra_schermata), dati.marca, dati.modello, adesso(),
     )
 
 
@@ -93,10 +95,6 @@ def da_mostrare(connessione: sqlite3.Connection,
 
 def percorso_da_mostrare(connessione: sqlite3.Connection, file_id: int) -> Path | None:
     return da_mostrare(connessione, file_id)[0]
-
-
-def segna_assente(connessione: sqlite3.Connection, percorso_id: int) -> None:
-    connessione.execute("UPDATE percorsi SET presente = 0 WHERE id = ?", (percorso_id,))
 
 
 def collega_a_scatto(connessione: sqlite3.Connection, file_id: int, scatto_id: int,

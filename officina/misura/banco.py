@@ -10,7 +10,7 @@ from officina.apprendimento import gruppi as divisione
 from officina.apprendimento import pagella
 from officina.archivio.accesso import Archivio
 from officina.archivio.database import adesso
-from officina.descrittori import preparazione, vettori
+from officina.descrittori import griglia, preparazione, vettori
 from officina.errori import ErroreOfficina
 from officina.modello import impronte as magazzino
 
@@ -196,6 +196,51 @@ def _da_quali(presenti, descrittore: str, inquadratura: str):
     return quali, inquadrature
 
 
+def inquadratura_delle_caselle(come: str) -> str:
+    return f"caselle · {come}"
+
+
+def _misura_le_caselle(archivio: Archivio, campione: Campione, nome: str,
+                       versione: str, come: str) -> Riga | None:
+    riga = Riga(nome, inquadratura_delle_caselle(come), 1.0)
+    cominciato = time.perf_counter()
+    voti_utili = []
+    con_caselle = False
+    numpy = vettori.numpy_o_spiega()
+
+    for nodo_id, esempi in campione.nodi:
+        with archivio.lettura() as connessione:
+            tenuti, tabella = _tabella_di(connessione, nome, versione, "intera",
+                                          esempi.scatti)
+            if tabella is None:
+                continue
+            ids, valori = magazzino.della_griglia(connessione, nome, versione,
+                                                  solo_scatti=tenuti)
+        per_scatto: dict[int, list[bytes]] = {}
+        for scatto, valore in zip(ids, valori, strict=True):
+            per_scatto.setdefault(scatto, []).append(valore)
+        if not per_scatto:
+            continue
+        con_caselle = True
+        caselle = [vettori.matrice(per_scatto[s]) if s in per_scatto
+                   else numpy.zeros((0, tabella.shape[1]), dtype=tabella.dtype)
+                   for s in tenuti]
+        risposte_di = dict(zip(esempi.scatti, esempi.risposte, strict=True))
+        risposte = [risposte_di[scatto] for scatto in tenuti]
+        gruppi = [campione.gruppo_di.get(scatto, scatto) for scatto in tenuti]
+        voto = pagella.valuta(tabella, risposte, gruppi, caselle=caselle, come=come)
+        riga.voti[nodo_id] = voto
+        if voto.azzecca is not None:
+            voti_utili.append(voto.azzecca)
+
+    if not con_caselle:
+        return None
+    riga.nodi_giudicati = len(voti_utili)
+    riga.azzecca = sum(voti_utili) / len(voti_utili) if voti_utili else None
+    riga.secondi = time.perf_counter() - cominciato
+    return riga if riga.azzecca is not None else None
+
+
 def misura(archivio: Archivio, forze: Sequence[float] = FORZE,
            al_passo: Callable[[str], None] | None = None) -> Rapporto:
     cominciato = time.perf_counter()
@@ -282,6 +327,14 @@ def misura(archivio: Archivio, forze: Sequence[float] = FORZE,
             riga = _misura_una(campione, da_tabella(quali, inquadrature),
                                migliore.descrittore, migliore.inquadratura, forza)
             if riga.azzecca is not None:
+                rapporto.righe.append(riga)
+
+    for nome, versione in presenti:
+        for come in griglia.MODI:
+            if al_passo:
+                al_passo(f"{nome} · caselle sommate col {come}")
+            riga = _misura_le_caselle(archivio, campione, nome, versione, come)
+            if riga is not None:
                 rapporto.righe.append(riga)
 
     rapporto.secondi = time.perf_counter() - cominciato

@@ -35,7 +35,8 @@
 {% set n_spariti = spariti|length %}
 {% set n_coppie = coppie_incerte|length %}
 {% set n_gruppi = conto_doppioni.restano %}
-{% set conti_righe = [n_gruppi, n_non_importati, n_messi, conti.senza_data, conti.data_indovinata, conti.schermate, n_doppioni, n_coppie, n_spariti] %}
+{% set n_rovinati = rovinati|length %}
+{% set conti_righe = [n_gruppi, n_non_importati, n_messi, conti.senza_data, conti.data_indovinata, conti.schermate, n_doppioni, n_coppie, n_spariti, n_rovinati] %}
 {% set da_fare = conti_righe|select|list|length %}
 <div class="corpo">
 <main class="zona-principale">
@@ -298,6 +299,65 @@
                 <summary>Mostra i file {{ icona('giu', 14) }}</summary>
                 <ul class="dc-file dc-frasi">
                     {% for riga in spariti %}<li class="nome-di-file">{{ riga.nome }}</li>{% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </section>
+
+        <section class="dc-riga {{ 'zero' if not n_rovinati }}" id="rovinati">
+            <span class="dc-quanti numeri">{{ n_rovinati|numero }}</span>
+            <div class="dc-cosa">
+                <h2>File rovinati{% call spiega("Come se ne accorge") %}
+                    <p>Quando il programma non ha niente da fare, rilegge piano
+                    piano i tuoi originali e ne ricalcola l'impronta. Ogni file
+                    viene ricontrollato circa una volta al mese.</p>
+                    <p>Se l'impronta non è più quella di quando l'hai importato, ma
+                    la data di modifica è la stessa, nessun programma l'ha toccato:
+                    il file si è rovinato da solo, come succede ai dischi vecchi.
+                    Se invece la data è cambiata, l'ha modificato un altro
+                    programma.</p>
+                    <p><b>Rimetti com'era</b> prende un doppione sano dello stesso
+                    file, controlla che sia identico all'originale e lo rimette al
+                    suo posto. La copia rovinata non si butta: finisce nella
+                    cartella «rovinati» dell'archivio.</p>
+                {% endcall %}</h2>
+                <p>{% if n_rovinati %}il contenuto non è più quello di quando li hai importati{% elif salute_conti.sano %}{{ salute_conti.sano|numero }} file controllati su {{ salute_conti.presenti|numero }}, tutti sani{% else %}il primo controllo parte quando il programma è libero{% endif %}</p>
+            </div>
+            <div class="dc-altro">
+                {% if rovinati|selectattr('ha_un_doppione')|list %}
+                <form method="post" action="/elenchi/salute/ripara-tutti">
+                    <button class="tasto-comando piccolo" type="submit">{{ icona('riprova', 14) }} Ripara tutti</button>
+                </form>
+                {% endif %}
+                <form method="post" action="/elenchi/salute/controlla">
+                    <button class="tasto-comando piccolo {{ 'nudo' if not n_rovinati }}" type="submit">{{ icona('cerca', 14) }} Controlla adesso</button>
+                </form>
+            </div>
+            {% if detto_salute %}
+            <p class="piccolo dc-dentro" role="status">{{ detto_salute.testo }}{% for guasto in detto_salute.guasti %}<br>{{ guasto }}{% endfor %}</p>
+            {% endif %}
+            {% if n_rovinati %}
+            <details class="dc-dentro">
+                <summary>Mostra i file {{ icona('giu', 14) }}</summary>
+                <ul class="dc-file">
+                    {% for riga in rovinati %}
+                    <li>
+                        <span class="nome-di-file" title="{{ riga.percorso }}">{{ riga.nome }}</span>
+                        <span class="dc-perche">{% if riga.esito == 'rovinato' %}si è rovinato da solo{% else %}cambiato da un altro programma{% endif %}{% if not riga.ha_un_doppione %} · nessun doppione sano: rimettilo da una copia di sicurezza{% endif %}</span>
+                        <span class="dc-tasti">
+                            {% if riga.ha_un_doppione %}
+                            <form method="post" action="/elenchi/salute/ripara/{{ riga.percorso_id }}">
+                                <button class="tasto-comando piccolo" type="submit">Rimetti com'era</button>
+                            </form>
+                            {% endif %}
+                            {% if riga.esito == 'cambiato' %}
+                            <form method="post" action="/elenchi/salute/va-bene/{{ riga.percorso_id }}">
+                                <button class="tasto-comando nudo piccolo" type="submit">Va bene così</button>
+                            </form>
+                            {% endif %}
+                        </span>
+                    </li>
+                    {% endfor %}
                 </ul>
             </details>
             {% endif %}

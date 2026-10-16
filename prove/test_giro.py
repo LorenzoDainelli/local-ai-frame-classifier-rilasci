@@ -110,6 +110,17 @@ def test_uscire_riporta_al_tuo_archivio_e_butta_il_finto(cliente):
     assert not foto.exists(), "le foto finte sono rimaste sul disco"
 
 
+def test_la_fine_del_giro_dice_cosa_ha_buttato_senza_prenderlo_dall_indirizzo(cliente):
+    cliente.post("/giro/parti", follow_redirects=False)
+    risposta = cliente.post("/giro/esci", follow_redirects=False)
+    assert risposta.headers["location"] == "/benvenuto/pronto?giro=finito"
+    pagina = cliente.get(risposta.headers["location"]).text
+    assert "Ho buttato le fotografie finte" in pagina
+
+    falsa = cliente.get("/benvenuto/pronto?giro=finito&detto=Chiama+il+numero+verde").text
+    assert "Chiama il numero verde" not in falsa
+
+
 def test_un_archivio_finto_gia_tuo_non_viene_buttato(cliente, tmp_path):
     from officina.archivio import accesso
     from officina.impostazioni import posizione

@@ -201,3 +201,10 @@ a.st-carta:hover { text-decoration: none; border-color: var(--linea-forte); tran
 .ar-tutti summary { cursor: pointer; }
 .ar-tutti[open] summary { margin-bottom: 12px; }
 .mm-corso[hidden] { display: none; }
+
+.st-semaforo { display: flex; align-items: center; gap: .7rem; padding: .7rem 1rem; margin-block: .2rem .9rem; border-radius: var(--raggio-scheda); background: var(--superficie, transparent); border: 1px solid color-mix(in srgb, var(--semaforo) 45%, transparent); }
+.st-semaforo-verde { --semaforo: var(--bene); }
+.st-semaforo-giallo { --semaforo: var(--attenzione); }
+.st-semaforo-rosso { --semaforo: var(--male); }
+.st-semaforo-luce { flex: none; width: .85rem; height: .85rem; border-radius: 50%; background: var(--semaforo); box-shadow: 0 0 0 4px color-mix(in srgb, var(--semaforo) 22%, transparent); }
+.st-semaforo-detto { min-width: 0; }

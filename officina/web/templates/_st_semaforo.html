@@ -1,0 +1,6 @@
+{% if semaforo %}
+<div class="st-semaforo st-semaforo-{{ semaforo.colore }}" role="status">
+    <span class="st-semaforo-luce" aria-hidden="true"></span>
+    <span class="st-semaforo-detto"><b>{{ semaforo.parola }}</b> <span class="piccolo">{{ semaforo.testo }}</span></span>
+</div>
+{% endif %}

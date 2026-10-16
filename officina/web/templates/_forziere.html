@@ -61,8 +61,8 @@
 
         <label class="in-colonna" style="gap:var(--s1)">
             <span class="maiuscoletto">La password</span>
-            <input class="campo" type="password" name="password" required
-                   minlength="8" autocomplete="new-password" style="max-width:340px" data-misura-forza>
+            <input class="campo" type="password" name="password"
+                   minlength="12" autocomplete="new-password" style="max-width:340px" data-misura-forza>
             <span class="forza-password" data-forza hidden>
                 <span class="forza-barra" aria-hidden="true"><i data-forza-riempie></i></span>
                 <span class="minuscolo" data-forza-parola aria-live="polite"></span>
@@ -71,20 +71,22 @@
 
         <label class="in-colonna" style="gap:var(--s1)">
             <span class="maiuscoletto">Scrivila di nuovo</span>
-            <input class="campo" type="password" name="ancora" required
-                   minlength="8" autocomplete="new-password" style="max-width:340px">
+            <input class="campo" type="password" name="ancora"
+                   minlength="12" autocomplete="new-password" style="max-width:340px">
         </label>
 
         <p class="minuscolo tenue" style="margin:0;max-width:62ch">
+            <b>Se le lasci vuote, ne creo io una lunga a caso.</b>{% call spiega("Come sceglierla") %}
             Lunga meglio che complicata: tre parole che ricordi valgono più di
-            otto caratteri strani. Almeno otto caratteri.
+            otto caratteri strani. Almeno dodici caratteri. Quella creata a caso
+            la lego a Windows e te la mostro una volta sola.{% endcall %}
         </p>
 
         <label style="display:flex;align-items:flex-start;gap:var(--s3);max-width:62ch">
             <input type="checkbox" name="su_carta" value="1" required
                    style="margin-top:3px;flex:0 0 auto">
             <span class="piccolo">
-                Ho scritto la password da qualche parte che non è questo
+                Scriverò la password da qualche parte che non è questo
                 computer, e ho capito che senza di lei l'archivio non si apre
                 più.
             </span>

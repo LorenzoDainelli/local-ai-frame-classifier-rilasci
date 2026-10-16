@@ -14,7 +14,7 @@ FOGLIO = (Path(__file__).resolve().parent.parent
 CON_COLONNA = ["/elenchi", "/doppioni", "/impostazioni", "/stato", "/senza-data",
                "/scatto/1", "/telefono", "/fuori", "/importazione", "/miglioramento",
                "/persone", "/persone/mazzo", "/persone/cassetto", "/luoghi",
-               "/benvenuto", "/benvenuto/cartella", "/benvenuto/lavoro",
+               "/tempo", "/benvenuto", "/benvenuto/cartella", "/benvenuto/lavoro",
                "/benvenuto/pronto"]
 
 

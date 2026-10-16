@@ -86,3 +86,49 @@ export function siStaScrivendo(dove) {
 
     return CI_SI_SCRIVE.includes((dove.type || "text").toLowerCase());
 }
+
+function barraDelBlocco() {
+    let barra = document.getElementById("barra-in-blocco");
+    if (barra) return barra;
+    barra = document.createElement("div");
+    barra.id = "barra-in-blocco";
+    barra.setAttribute("role", "progressbar");
+    barra.setAttribute("aria-valuemin", "0");
+    barra.style.cssText = "position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom, 0px));"
+        + "transform:translateX(-50%);z-index:60;display:grid;gap:6px;min-width:min(360px,90vw);"
+        + "padding:12px 16px;border-radius:12px;background:var(--superficie-alta);color:var(--ink);"
+        + "box-shadow:var(--ombra);font:inherit";
+    barra.innerHTML = '<span data-parole></span><span style="height:6px;border-radius:3px;'
+        + 'background:color-mix(in srgb, currentColor 15%, transparent);overflow:hidden">'
+        + '<i data-riempie style="display:block;height:100%;width:0;background:var(--accento);'
+        + 'transition:width .3s"></i></span>';
+    document.body.append(barra);
+    return barra;
+}
+
+function mostraIlBlocco(fatti, totale) {
+    const barra = barraDelBlocco();
+    barra.setAttribute("aria-valuemax", String(totale));
+    barra.setAttribute("aria-valuenow", String(fatti));
+    barra.querySelector("[data-parole]").textContent =
+        `Fatti ${numeroAParole(fatti)} scatti su ${numeroAParole(totale)}`;
+    barra.querySelector("[data-riempie]").style.width = `${Math.round((100 * fatti) / Math.max(totale, 1))}%`;
+}
+
+export async function mandaInBlocco(corpo) {
+    const esito = await manda("/scatti/in-blocco", corpo);
+    if (!esito || !esito.lavoro) return esito;
+    try {
+        let stato = esito;
+        mostraIlBlocco(stato.fatti, stato.totale);
+        while (!stato.finito) {
+            await new Promise((pronto) => setTimeout(pronto, 400));
+            stato = await chiedi(`/scatti/in-blocco/${encodeURIComponent(esito.lavoro)}`);
+            mostraIlBlocco(stato.fatti, stato.totale);
+        }
+        if (stato.errore) throw new Error(stato.errore);
+        return { fatti: stato.fatti };
+    } finally {
+        document.getElementById("barra-in-blocco")?.remove();
+    }
+}

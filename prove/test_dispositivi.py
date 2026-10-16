@@ -62,7 +62,8 @@ def test_un_dispositivo_rifiutato_resta_fuori(archivio_pieno):
     assert _cliente("192.168.1.55").get("/").status_code == 403
 
 
-def test_i_contatti_si_contano(archivio_pieno):
+def test_i_contatti_si_contano(archivio_pieno, monkeypatch):
+    monkeypatch.setattr(dispositivi, "OGNI_QUANTO_SI_SCRIVE", 0.0)
     archivio_pieno.imposta("accesso_dalla_rete", True)
     for _ in range(3):
         _cliente("192.168.1.77").get("/")

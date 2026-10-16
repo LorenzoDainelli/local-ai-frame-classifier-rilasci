@@ -251,6 +251,7 @@
                 {{ la_striscia() }}
                 <div class="ft-tasti" role="toolbar" aria-label="Cosa fare con questa foto">
                     <button class="tasto-comando piccolo" type="button" data-apri-info aria-expanded="false" aria-controls="ft-info">{{ icona('info', 14) }} Informazioni</button>
+                    <button class="tasto-comando nudo piccolo" type="button" data-apri-nodi aria-expanded="false" aria-controls="ft-nodi" title="Vedi e cambia i nodi di questo scatto (N)">{{ icona('albero', 14) }} Nodi<span data-quanti-nodi></span></button>
                     <button class="tasto-comando nudo piccolo" type="button" data-apri-nota aria-controls="ft-info">{{ icona('nota', 14) }} Nota{% if scatto.nota %} ·{% endif %}</button>
                     {% if corpi_visti %}<button class="tasto-comando nudo piccolo" type="button" data-mostra-corpi aria-pressed="false" title="Mostra il contorno e i punti del corpo di ogni persona">{{ icona('persona', 14) }} Corpi · {{ corpi_visti|length }}</button>{% endif %}
                     {% if in3d %}<button class="tasto-comando nudo piccolo" type="button" data-apri-3d aria-haspopup="dialog" aria-controls="in3d" title="Guarda le persone e il luogo di questa foto in 3D">{{ icona('cubo', 14) }} In 3D</button>{% endif %}
@@ -269,6 +270,24 @@
                 {{ i_dati() }}
                 {{ la_nota(True) }}
             </aside>
+            <aside class="carta ft-scheda ft-nodi" id="ft-nodi" data-scatto="{{ scatto.id }}" aria-label="Nodi di questo scatto" hidden>
+                <div class="ft-scheda-testa">
+                    <h2 class="ft-quando">Nodi di questo scatto</h2>
+                    <button class="tasto-comando nudo piccolo" type="button" data-chiudi-nodi aria-label="Chiudi i nodi">{{ icona('x', 14) }}</button>
+                </div>
+                <span class="scegli-nodo">
+                    <input class="campo bs-campo fn-cerca" type="text" data-nodo-cerca autocomplete="off"
+                           spellcheck="false" placeholder="Aggiungi un nodo…" aria-label="Aggiungi un nodo">
+                    <div class="trovati" data-nodo-trovati hidden></div>
+                </span>
+                <div class="fn-elenco" data-elenco-nodi aria-live="polite"></div>
+                <p class="piccolo fn-avviso" data-avviso-nodi hidden></p>
+                <div class="fn-piede">
+                    <button class="bs-tasto" type="button" data-copia-nodi>{{ icona('copia', 16) }}Copia nodi</button>
+                    <button class="bs-tasto" type="button" data-incolla-nodi disabled>{{ icona('incolla', 16) }}Incolla</button>
+                    <span class="bs-appunti" data-appunti hidden></span>
+                </div>
+            </aside>
         </div>
     </div>
     {% if in3d %}{{ la_finestra_3d() }}{% endif %}
@@ -282,6 +301,7 @@
     import { mettiInCoda, scriviEsito } from "/statici/js/migliora.js";
 
     preparaCorpi();
+    import("/statici/js/nodi_foto.js").then(({ preparaNodi }) => preparaNodi());
     if (document.querySelector("[data-apri-3d]")) {
         import("/statici/js/in3d.js").then(({ preparaIn3d }) => preparaIn3d());
     }
@@ -340,6 +360,7 @@
     const apri = document.querySelector("[data-apri-info]");
     if (!pagina || !info || !apri) return;
     const segna = (aperta) => {
+        if (aperta) document.dispatchEvent(new CustomEvent("ft-apre", { detail: "info" }));
         info.hidden = !aperta;
         pagina.classList.toggle("con-info", aperta);
         apri.setAttribute("aria-expanded", aperta ? "true" : "false");
@@ -348,6 +369,7 @@
     let aperta = false;
     try { aperta = localStorage.getItem("ft.info") === "1"; } catch (errore) { }
     segna(aperta);
+    document.addEventListener("ft-apre", (evento) => { if (evento.detail !== "info" && !info.hidden) segna(false); });
     apri.addEventListener("click", () => segna(info.hidden));
     document.querySelector("[data-chiudi-info]").addEventListener("click", () => { segna(false); apri.focus(); });
     document.querySelector("[data-apri-nota]").addEventListener("click", () => {

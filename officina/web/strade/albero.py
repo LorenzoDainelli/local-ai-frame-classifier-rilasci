@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -127,7 +126,7 @@ def _pagella_di(connessione, nodo_id: int) -> dict:
 @strada.post("/api/albero/sposta")
 def api_sposta(nodo_id: int = Form(...), come: str = Form("figlio"),
                destinazione: str = Form(""), con_figli: str = Form("1")):
-    dove = int(destinazione) if destinazione.strip().isdigit() else None
+    dove = int(destinazione) if destinazione.strip().isdecimal() else None
     porta_i_figli = con_figli not in ("0", "", "no")
 
     with accesso.aperto().scrittura() as connessione:
@@ -156,17 +155,14 @@ def api_sposta(nodo_id: int = Form(...), come: str = Form("figlio"),
 @strada.post("/api/albero/rimetti")
 def api_rimetti(coppie: str = Form(...)):
     try:
-        elenco = json.loads(coppie)
-    except (TypeError, ValueError) as errore:
+        elenco = base.coppie_da_rimettere(coppie)
+    except (TypeError, ValueError, KeyError, AttributeError) as errore:
         raise ErroreOfficina("Non ho capito cosa rimettere a posto.") from errore
 
     with accesso.aperto().scrittura() as connessione:
         fotografie.scatta(connessione, "prima di annullare uno spostamento")
-        for voce in elenco:
-            nodo_id = int(voce["nodo_id"])
-            padre = voce.get("genitore_id")
-            nodi.sposta(connessione, nodo_id,
-                        int(padre) if padre is not None else None)
+        for nodo_id, padre in elenco:
+            nodi.sposta(connessione, nodo_id, padre)
     return {"fatto": True, "quanti": len(elenco)}
 
 
@@ -200,7 +196,7 @@ def api_da_solo(nodo_id: int = Form(...), acceso: str = Form("1")):
 
 @strada.post("/api/albero/copia")
 def api_copia(nodo_id: int = Form(...), dentro: str = Form(...)):
-    mete = [int(x) for x in dentro.split(",") if x.strip().isdigit()]
+    mete = [int(x) for x in dentro.split(",") if x.strip().isdecimal()]
     if not mete:
         raise ErroreOfficina("Scegli almeno un nodo in cui copiarlo.")
     fatti, saltati = [], []
@@ -271,7 +267,8 @@ def api_unisci(nodo_id: int = Form(...), dentro: int = Form(...)):
 @strada.post("/albero/crea")
 def crea_nodo(nome: str = Form(...), genitore_id: str = Form("")):
     with accesso.aperto().scrittura() as connessione:
-        nodi.crea(connessione, nome, int(genitore_id) if genitore_id else None)
+        nodi.crea(connessione, nome,
+                  int(genitore_id) if genitore_id.strip().isdecimal() else None)
     return RedirectResponse("/albero", status_code=303)
 
 

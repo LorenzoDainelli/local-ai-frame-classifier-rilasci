@@ -9,6 +9,7 @@ from officina import registro
 from officina.programma import carta
 
 NOME_DELLA_REGOLA = "Local AI Frame Classifier - portatile"
+RETI_AMMESSE = "private,domain"
 SENZA_FINESTRA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -49,41 +50,56 @@ def reti_di_casa() -> list[ipaddress.IPv4Network]:
     return reti
 
 
-def _la_regola_c_e(programma: str) -> bool:
+def _di_sistema(nome: str) -> str:
+    from officina.finestra import cartella_di_sistema
+
+    return str(cartella_di_sistema() / nome)
+
+
+def _mostra_la_regola(*altro: str) -> subprocess.CompletedProcess | None:
     try:
-        fatto = subprocess.run(
-            ["netsh", "advfirewall", "firewall", "show", "rule", f"name={NOME_DELLA_REGOLA}",
-             "verbose"], capture_output=True, text=True, timeout=10,
+        return subprocess.run(
+            [_di_sistema("netsh.exe"), "advfirewall", "firewall", "show", "rule",
+             f"name={NOME_DELLA_REGOLA}",
+             *altro], capture_output=True, text=True, timeout=10,
             creationflags=SENZA_FINESTRA)
     except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _la_regola_c_e(programma: str) -> bool:
+    fatto = _mostra_la_regola("verbose")
+    if fatto is None or fatto.returncode != 0 or programma.lower() not in fatto.stdout.lower():
         return False
-    return fatto.returncode == 0 and programma.lower() in fatto.stdout.lower()
+    pubblica = _mostra_la_regola("profile=public")
+    return pubblica is not None and pubblica.returncode != 0
 
 
 def lascia_passare_il_portatile() -> bool:
     if sys.platform != "win32":
         return True
     programma = sys.executable
-    if carta.leggi().get("muro_aperto_per") == programma and _la_regola_c_e(programma):
-        return True
+    segno = f"{programma}|{RETI_AMMESSE}"
     if _la_regola_c_e(programma):
-        carta.aggiorna(muro_aperto_per=programma)
+        if carta.leggi().get("muro_aperto_per") != segno:
+            carta.aggiorna(muro_aperto_per=segno)
         return True
+    netsh = _di_sistema("netsh.exe")
     comandi = (
-        f'netsh advfirewall firewall delete rule name=all dir=in program="{programma}" & '
-        f'netsh advfirewall firewall add rule name="{NOME_DELLA_REGOLA}" dir=in action=allow '
-        f'program="{programma}" enable=yes profile=any remoteip=localsubnet')
+        f'"{netsh}" advfirewall firewall delete rule name="{NOME_DELLA_REGOLA}" & '
+        f'"{netsh}" advfirewall firewall add rule name="{NOME_DELLA_REGOLA}" dir=in action=allow '
+        f'program="{programma}" enable=yes profile={RETI_AMMESSE} remoteip=localsubnet')
     try:
         import ctypes
 
-        esito = ctypes.windll.shell32.ShellExecuteW(None, "runas", "cmd.exe",
-                                                   f'/c {comandi}', None, 0)
+        esito = ctypes.windll.shell32.ShellExecuteW(None, "runas", _di_sistema("cmd.exe"),
+                                                   f'/s /c "{comandi}"', None, 0)
     except Exception as guasto:
         registro.avviso("schermo.muro_non_aperto", **registro.dove_si_e_rotto(guasto))
         return False
     if esito <= 32:
         registro.avviso("schermo.muro_rifiutato", esito=int(esito))
         return False
-    carta.aggiorna(muro_aperto_per=programma)
+    carta.aggiorna(muro_aperto_per=segno)
     registro.evento("schermo.muro_aperto")
     return True

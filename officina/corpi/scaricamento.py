@@ -122,6 +122,7 @@ FIGURE = (
 )
 BYTE_FIGURE = sum(f.byte for f in FIGURE) + 20_000_000
 BYTE_IN_TUTTO = SAM3.byte_attesi + POSE_BYTE + BYTE_KPR + BYTE_FIGURE
+MARGINE_SUL_DISCO = 2_000_000_000
 
 
 @dataclass
@@ -144,21 +145,32 @@ def scarica(cartella_modelli: Path, al_passo: Callable[[str], None] | None = Non
     casa = rilevatore_mod.dove_stanno(cartella_modelli)
     if gia_in_casa(cartella_modelli) and not rifai:
         return _conta(casa, gia_c_erano=True)
+    _controlla_lo_spazio(casa, quanto_manca(cartella_modelli, rifai))
     casa.mkdir(parents=True, exist_ok=True)
+    _via_gli_avanzi(casa)
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
+    cartella_sam3 = casa / rilevatore_mod.CARTELLA_SAM3
+    file_pose = casa / rilevatore_mod.FILE_POSE
+    parti = []
+    if rifai or not (cartella_sam3 / rilevatore_mod.PROVA_SAM3).exists():
+        parti.append(lambda: _scarica_sam3(cartella_sam3, chiave, al_passo, a_che_punto))
+    if rifai or not file_pose.exists():
+        parti.append(lambda: _scarica_la_pose(file_pose, chiave, al_passo, a_che_punto))
+    parti.append(lambda: _scarica_kpr(cartella_modelli, rifai, al_passo, a_che_punto))
+    parti.append(lambda: _scarica_le_figure(casa, chiave, rifai, al_passo, a_che_punto))
+    guasti: list[ScaricamentoFallito] = []
     prima = torcia.con_la_rete_accesa()
     try:
-        cartella_sam3 = casa / rilevatore_mod.CARTELLA_SAM3
-        if rifai or not (cartella_sam3 / rilevatore_mod.PROVA_SAM3).exists():
-            _scarica_sam3(cartella_sam3, chiave, al_passo, a_che_punto)
-        file_pose = casa / rilevatore_mod.FILE_POSE
-        if rifai or not file_pose.exists():
-            _scarica_la_pose(file_pose, chiave, al_passo, a_che_punto)
-        _scarica_kpr(cartella_modelli, rifai, al_passo, a_che_punto)
-        _scarica_le_figure(casa, chiave, rifai, al_passo, a_che_punto)
+        for parte in parti:
+            try:
+                parte()
+            except ScaricamentoFallito as guasto:
+                guasti.append(guasto)
     finally:
         torcia.rimetti_la_rete_com_era(prima)
+    if guasti:
+        raise _tutti_insieme(guasti)
 
     _annota(casa)
     rapporto = _conta(casa)
@@ -166,6 +178,54 @@ def scarica(cartella_modelli: Path, al_passo: Callable[[str], None] | None = Non
     if al_passo:
         al_passo(f"corpi: {rapporto.file} file, {rapporto.byte / 1e9:.1f} GB")
     return rapporto
+
+
+def _tutti_insieme(guasti: list[ScaricamentoFallito]) -> ScaricamentoFallito:
+    messaggi = list(dict.fromkeys(g.messaggio for g in guasti))
+    if len(messaggi) == 1:
+        return guasti[0]
+    return ScaricamentoFallito(
+        "Alcuni modelli del corpo non sono arrivati. Quelli arrivati restano e "
+        "non si riscaricano.\n\n" + "\n\n".join(messaggi))
+
+
+def quanto_manca(cartella_modelli: Path, rifai: bool = False) -> int:
+    from officina.corpi import kpr_pesi
+
+    casa = rilevatore_mod.dove_stanno(cartella_modelli)
+    manca = sum(f.byte if rifai else max(0, f.byte - quanto_pesa(_arrivo(casa, f)))
+                for f in FIGURE if rifai or not (casa / f.dove).exists())
+    if rifai or not (casa / rilevatore_mod.CARTELLA_SAM3 / rilevatore_mod.PROVA_SAM3).exists():
+        manca += SAM3.byte_attesi
+    if rifai or not (casa / rilevatore_mod.FILE_POSE).exists():
+        manca += POSE_BYTE
+    if rifai or not kpr_pesi.tutti_in_casa(cartella_modelli):
+        manca += BYTE_KPR
+    return manca
+
+
+def repo_da_scaricare(cartella_modelli: Path, rifai: bool = False) -> set[str]:
+    casa = rilevatore_mod.dove_stanno(cartella_modelli)
+    repo = {f.repo for f in FIGURE if rifai or not (casa / f.dove).exists()}
+    if rifai or not (casa / rilevatore_mod.CARTELLA_SAM3 / rilevatore_mod.PROVA_SAM3).exists():
+        repo.add(SAM3.identificatore)
+    return repo
+
+
+def _controlla_lo_spazio(casa: Path, manca: int) -> None:
+    posto = casa
+    while not posto.exists() and posto.parent != posto:
+        posto = posto.parent
+    try:
+        libero = shutil.disk_usage(posto).free
+    except OSError:
+        return
+    serve = manca + MARGINE_SUL_DISCO
+    if libero < serve:
+        raise ScaricamentoFallito(
+            f"Per i modelli del corpo servono circa {serve / 1e9:.0f} GB liberi sul "
+            f"disco dei modelli, e ce ne sono {libero / 1e9:.0f}. Libera un po' di "
+            "spazio e riprova: quello che è già arrivato resta e non si riscarica.")
 
 
 def _scarica_sam3(dove: Path, chiave: str | None,
@@ -306,8 +366,8 @@ def _scarica_le_figure(casa: Path, chiave: str | None, rifai: bool,
             byte = sum(f.byte for f in da_fare if f.titolo == pezzo.titolo)
             al_passo(f"scarico {pezzo.titolo} — circa {byte / 1e9:.1f} GB")
         finale = casa / pezzo.dove
-        finale.parent.mkdir(parents=True, exist_ok=True)
-        arrivo = Path(tempfile.mkdtemp(prefix="arriva-", dir=finale.parent))
+        arrivo = _arrivo(casa, pezzo)
+        arrivo.mkdir(parents=True, exist_ok=True)
         try:
             if a_che_punto is None:
                 preso = _prendi(pezzo, arrivo, chiave)
@@ -315,12 +375,14 @@ def _scarica_le_figure(casa: Path, chiave: str | None, rifai: bool,
                 with Sorvegliante(casa, BYTE_IN_TUTTO, a_che_punto):
                     preso = _prendi(pezzo, arrivo, chiave)
             if _sha256(preso) != pezzo.sha256:
+                shutil.rmtree(arrivo, ignore_errors=True)
                 raise ScaricamentoFallito(
                     f"{pezzo.titolo} è arrivato, ma il file «{pezzo.file}» non è identico a "
                     "quello provato: per sicurezza non lo tengo. Riprova più tardi; se "
                     "succede ancora, il file pubblicato è cambiato e va controllato in un "
                     "aggiornamento.")
             os.replace(preso, finale)
+            shutil.rmtree(arrivo, ignore_errors=True)
         except ScaricamentoFallito:
             raise
         except ImportError as errore:
@@ -335,8 +397,24 @@ def _scarica_le_figure(casa: Path, chiave: str | None, rifai: bool,
                 f"Non sono riuscito a scaricare {pezzo.titolo}, {pezzo.serve}.\n"
                 + _perche_figure(errore, pezzo, chiave)
                 + "\n  Il resto del programma funziona lo stesso.") from errore
-        finally:
-            shutil.rmtree(arrivo, ignore_errors=True)
+
+
+def _arrivo(casa: Path, pezzo: DaHuggingFace) -> Path:
+    finale = casa / pezzo.dove
+    return finale.parent / f"arriva-{finale.name}"
+
+
+def _via_gli_avanzi(casa: Path) -> None:
+    da_tenere = {_arrivo(casa, f) for f in FIGURE}
+    for cartella in {casa, *((casa / f.dove).parent for f in FIGURE)}:
+        if not cartella.is_dir():
+            continue
+        for avanzo in cartella.glob("arriva-*"):
+            if avanzo.is_dir() and avanzo not in da_tenere:
+                shutil.rmtree(avanzo, ignore_errors=True)
+    for avanzo in casa.glob("*.preso"):
+        if avanzo.is_file():
+            avanzo.unlink(missing_ok=True)
 
 
 def _prendi(pezzo: DaHuggingFace, arrivo: Path, chiave: str | None) -> Path:

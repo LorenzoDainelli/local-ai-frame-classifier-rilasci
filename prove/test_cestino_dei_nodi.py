@@ -68,3 +68,28 @@ def test_dal_programma_si_cestina_e_si_rimette(archivio):
 
     assert cliente.post("/api/albero/dal-cestino", data={"nodo_id": padre}).json()["quanti"] == 2
     assert any(n["id"] == padre for n in cliente.get("/api/albero").json()["nodi"])
+
+
+def test_non_si_rimette_un_ramo_se_c_e_gia_un_nodo_con_lo_stesso_nome(connessione):
+    padre = nodi.crea(connessione, "padre_doppio")
+    figlio = nodi.crea(connessione, "figlio_doppio", padre)
+    nipote = nodi.crea(connessione, "nipote_doppio", figlio)
+    nodi.cestina_ramo(connessione, figlio)
+    nodi.crea(connessione, "figlio_doppio", padre)
+
+    with pytest.raises(OperazioneNonPermessa, match="stesso nome"):
+        nodi.rimetti_ramo(connessione, figlio)
+
+    assert nodi.per_id(connessione, figlio)["stato"] == "cestino"
+    assert nodi.per_id(connessione, nipote)["stato"] == "cestino"
+
+
+def test_un_congelato_non_si_riattiva_sopra_un_gemello(connessione):
+    vecchio = nodi.crea(connessione, "mare_doppio")
+    nodi.cambia_stato(connessione, vecchio, "congelato")
+    nodi.crea(connessione, "mare_doppio")
+
+    with pytest.raises(OperazioneNonPermessa, match="stesso nome"):
+        nodi.cambia_stato(connessione, vecchio, "attivo")
+    nodi.cambia_stato(connessione, vecchio, "cestino")
+    assert nodi.per_id(connessione, vecchio)["stato"] == "cestino"

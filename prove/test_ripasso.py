@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from officina.archivio.database import tutti
+from officina.errori import OperazioneNonPermessa
 from officina.modello import etichette, nodi, ripassi
 
 
@@ -218,3 +219,13 @@ def test_il_conto_in_blocco_dice_gli_stessi_numeri_di_quello_a_uno_a_uno(archivi
     assert max(a_uno_a_uno.values()) > 0
     assert min(a_uno_a_uno.values()) < max(a_uno_a_uno.values()), (
         "tutti i nodi hanno lo stesso numero: la prova non distingue niente")
+
+
+def test_un_nodo_che_non_esiste_non_fa_crollare_il_ripasso(cliente, archivio_pieno):
+    for strada in ("/api/ripasso/accetta", "/api/ripasso/rifiuta"):
+        risposta = cliente.post(strada, data={"nodo_id": "-1"},
+                                headers={"accept": "application/json"})
+        assert risposta.status_code == 400
+        assert "non c'è più" in risposta.json()["messaggio"]
+    with pytest.raises(OperazioneNonPermessa):
+        ripassi.apri(archivio_pieno.connessione, 987654)

@@ -71,6 +71,9 @@ function motoriAParole(m) {
     if (m.mancano.length && m.riavvio) {
         return "C'è una versione nuova dei motori: si prepara la prossima volta che apri il programma.";
     }
+    if (m.mancano.length && m.vecchio) {
+        return `Quello che hai (torch ${m.vecchio}) è troppo vecchio per aprire i pesi in sicurezza: va scaricato quello nuovo, ${m.quanto}.`;
+    }
     if (m.mancano.length) {
         return `Non ci sono ancora: senza, il programma lavora senza i modelli grandi. Da scaricare: ${m.quanto}.`;
     }
@@ -207,6 +210,29 @@ function passwordDalPonte() {
             window.location.href = (esito && esito.vai) || "/impostazioni#c6";
         });
     }
+    const conWindows = document.querySelector("[data-rientra-windows]");
+    if (conWindows) {
+        const prova = async () => {
+            if (!api() || !api().rientra_con_windows) return;
+            conWindows.disabled = true;
+            const esito = await api().rientra_con_windows();
+            conWindows.disabled = false;
+            if (esito && esito.errore) {
+                let avviso = document.querySelector(".avviso-blocco");
+                if (!avviso) {
+                    avviso = document.createElement("p");
+                    avviso.className = "avviso-blocco";
+                    avviso.setAttribute("role", "alert");
+                    conWindows.parentElement.append(avviso);
+                }
+                avviso.textContent = esito.errore;
+                return;
+            }
+            if (window.movimenti) await window.movimenti.apriArchivio();
+            window.location.href = (esito && esito.vai) || "/";
+        };
+        conWindows.addEventListener("click", prova);
+    }
     const blocco = document.querySelector("form.modulo-blocco");
     if (blocco) {
         blocco.addEventListener("submit", async (evento) => {
@@ -248,7 +274,7 @@ export function forzaDellaPassword(password) {
     punti += (tipi - 1) * 0.75;
     if (/(.)\1\1/.test(password)) punti -= 1;
     if (/^(password|12345678|qwerty|abcdefgh)/i.test(password)) punti = 1;
-    if (password.length < 8) punti = Math.min(punti, 1);
+    if (password.length < 12) punti = Math.min(punti, 1);
     return Math.max(1, Math.min(8, Math.round(punti)));
 }
 

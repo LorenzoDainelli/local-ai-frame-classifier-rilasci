@@ -92,6 +92,31 @@ def conclusioni(rapporto: Rapporto) -> list[str]:
                    "calcolarle tutte e tre va rimessa in discussione "
                    "(regole 37, 343)."))
 
+    for descrittore in sorted({riga.descrittore for riga in semplici}):
+        suoi = {riga.inquadratura: riga for riga in semplici
+                if riga.descrittore == descrittore}
+        col_massimo = suoi.get("caselle · massimo")
+        con_la_media = suoi.get("caselle · media")
+        if col_massimo is None or con_la_media is None:
+            continue
+        meglio = max((col_massimo, con_la_media), key=lambda riga: riga.azzecca)
+        peggio = con_la_media if meglio is col_massimo else col_massimo
+        differenza = meglio.azzecca - peggio.azzecca
+        modo = meglio.inquadratura.rsplit(" ", 1)[1]
+        intera = suoi.get("intera")
+        frase = (
+            f"Su {descrittore}, le caselle sommate col {modo} vanno meglio "
+            f"({_quota(meglio.azzecca)} contro {_quota(peggio.azzecca)})"
+            if differenza > 0.01 else
+            f"Su {descrittore}, massimo e media delle caselle pareggiano "
+            f"({_quota(col_massimo.azzecca)} e {_quota(con_la_media.azzecca)})")
+        if intera is not None and intera.azzecca is not None:
+            frase += (f"; la foto intera da sola fa {_quota(intera.azzecca)}"
+                      + (", quindi le caselle valgono le notti in più"
+                         if meglio.azzecca - intera.azzecca > 0.02 else
+                         ", quindi le caselle non valgono le notti in più"))
+        frasi.append(frase + " — regola 105.")
+
     insieme = [riga for riga in semplici if riga.descrittore == "insieme"]
     da_soli = [riga for riga in semplici if riga.descrittore not in ("insieme",)]
     if insieme and da_soli:
@@ -312,6 +337,23 @@ def scrivi(rapporto: Rapporto, connessione: sqlite3.Connection,
     dove.write_text(testo, encoding="utf-8")
     dove.with_suffix(".json").write_text(numeri, encoding="utf-8")
     return dove
+
+
+def modo_vincente(dati: dict) -> str | None:
+    punti: dict[str, float] = {}
+    for riga in dati.get("righe") or []:
+        inquadratura = str(riga.get("inquadratura") or "")
+        azzecca = riga.get("azzecca")
+        if not inquadratura.startswith("caselle · ") or azzecca is None:
+            continue
+        modo = inquadratura.rsplit(" ", 1)[1]
+        punti[modo] = max(punti.get(modo, 0.0), float(azzecca))
+    if len(punti) < 2:
+        return None
+    ordinati = sorted(punti.items(), key=lambda voce: -voce[1])
+    if ordinati[0][1] - ordinati[1][1] <= 0.01:
+        return None
+    return ordinati[0][0]
 
 
 def come_json(rapporto: Rapporto) -> str:

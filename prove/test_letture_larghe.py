@@ -28,8 +28,8 @@ PERDONATE = {
         "cento del posto per guadagnarne trentacinque. Prezzo sbagliato "
         "accanto a quello della migrazione 22, che per otto MB e mezzo ne ha "
         "guadagnati quattrocentosettanta. La scelta è di non pagarlo."),
-    "scatti": (3,
-        "Tre domande. La terza è larga davvero: quanti scatti non sono "
+    "scatti": (5,
+        "Cinque domande. La terza è larga davvero: quanti scatti non sono "
         "finiti, cioè senza tipologia, senza persone o senza luogo. Per "
         "saperlo bisogna guardarli tutti, e il numero sta in alto in "
         "Etichetta e in Luoghi. Si tiene in memoria finché l'archivio non "
@@ -43,7 +43,17 @@ PERDONATE = {
         "si legge una volta e poi si risponde per ogni nodo con una ricerca "
         "binaria, invece di rifare la domanda per ognuno. È la stessa scelta "
         "già fatta per le etichette, e per lo stesso motivo. Gira solo "
-        "quando c'è almeno un ripasso aperto."),
+        "quando c'è almeno un ripasso aperto.\n"
+        "Le ultime due sono di «Tempo e mappa», e sono larghe davvero: le "
+        "barrette dei mesi contano tutti gli scatti con la data, e i punti "
+        "della mappa leggono tutte le posizioni per raggrupparle. Su "
+        "duecentomila scatti finti, sparsi apposta perché nessuno cada vicino "
+        "a un altro, fanno 137 e 500 millesimi di secondo la prima volta, e 0,1 "
+        "le volte dopo: si tengono in memoria finché l'archivio non cambia, "
+        "come il conto degli scatti non finiti. Due indici parziali apposta "
+        "le portavano a 75 e 390 solo dopo un ANALYZE, e senza ANALYZE SQLite "
+        "non li sceglieva nemmeno: troppo poco per tre megabyte in più e una "
+        "scrittura in più a ogni scatto."),
     "file_media": (2,
         "«Le ultime ventiquattro con la miniatura», mentre l'importazione "
         "va. Il piano dice SCAN, ma è un `ORDER BY id DESC LIMIT 24` e `id` "
@@ -103,13 +113,16 @@ def test_ogni_pagina_e_ogni_comando_risponde_davvero(archivio_pieno):
 
 
 RACCOLTE = {
-    "SELECT f.*, (SELECT nome FROM percorsi p WHERE p.file_id = f.id ORDER BY p.id LIMIT 1) AS nome, (SELECT percorso FROM percorsi p WHERE p.file_id = f.id ORDER BY p.id LIMIT 1) AS percorso FROM file_media f JOIN scatti s ON s.id = f.scatto_id WHERE f.genere = 'video' AND f.ruolo = 'principale' AND s.genere <> 'live' AND (f.durata_ms IS NULL OR f.durata_ms <= ?) AND (f.identificatore_ios = ? OR f.istante_utc BETWEEN ? AND ? OR f.data_locale BETWEEN ? AND ? OR EXISTS (SELECT 1 FROM percorsi q WHERE q.file_id = f.id AND q.nome LIKE ? ESCAPE '\\'))":
-        "una volta sola, nella migrazione 32: ripara le foto live e le copertine dei video già nell'archivio.",
+    "SELECT p.percorso, f.impronta FROM percorsi AS p JOIN file_media AS f ON f.id = p.file_id "
+    "WHERE p.presente = 1 ORDER BY p.id":
+        "la copia di sicurezza su un altro disco: deve passare ogni originale, una volta per copia.",
     "UPDATE file_media SET miniatura = NULL WHERE genere = 'video'":
         "una volta sola, nella migrazione 32: ripara le foto live e le copertine dei video già nell'archivio.",
     "SELECT * FROM scatti": "il pacchetto per il telefono: è l'archivio.",
     "SELECT * FROM impronte": "idem, le impronte dentro il pacchetto.",
-    "SELECT * FROM file_media ORDER BY id": "idem, i file dentro il pacchetto.",
+    "SELECT impronta FROM file_media WHERE miniatura IS NOT NULL":
+        "la fusione di un pacchetto di sincronia, una volta prima di copiare: "
+        "sapere quali miniature ci sono già evita di scriverne di inutili.",
     "SELECT scatto_id, impronta, ruolo FROM file_media WHERE scatto_id IS NOT "
     "NULL ORDER BY id": "idem, l'elenco di cosa sta con cosa.",
     "SELECT * FROM etichette ORDER BY id":
@@ -203,9 +216,27 @@ RACCOLTE = {
     "WHERE genere = 'video')":
         "una migrazione che gira una volta sola, per togliere i video da "
         "«Da sistemare».",
+    "UPDATE file_media SET latitudine = NULL, longitudine = NULL WHERE "
+    "(latitudine IS NOT NULL AND (typeof(latitudine) NOT IN ('real', "
+    "'integer') OR latitudine > 90 OR latitudine < -90)) OR (longitudine IS "
+    "NOT NULL AND (typeof(longitudine) NOT IN ('real', 'integer') OR "
+    "longitudine > 180 OR longitudine < -180))":
+        "la migrazione 53, che gira una volta sola nella vita dell'archivio: "
+        "toglie da file_media le coordinate che non stanno sul mondo (infinito, "
+        "oltre 90 o 180 gradi). Non c'è nessuna riga da saltare, e un indice "
+        "sulle coordinate costerebbe a ogni scrittura da lì in avanti.",
+    "UPDATE scatti SET latitudine = NULL, longitudine = NULL WHERE "
+    "(latitudine IS NOT NULL AND (typeof(latitudine) NOT IN ('real', "
+    "'integer') OR latitudine > 90 OR latitudine < -90)) OR (longitudine IS "
+    "NOT NULL AND (typeof(longitudine) NOT IN ('real', 'integer') OR "
+    "longitudine > 180 OR longitudine < -180))":
+        "la migrazione 53, che gira una volta sola nella vita dell'archivio: "
+        "toglie da scatti le coordinate che non stanno sul mondo (infinito, "
+        "oltre 90 o 180 gradi). Non c'è nessuna riga da saltare, e un indice "
+        "sulle coordinate costerebbe a ogni scrittura da lì in avanti.",
 }
 
-QUANTE_NON_SI_LEGGONO = 62
+QUANTE_NON_SI_LEGGONO = 64
 
 
 def test_nessuna_lettura_larga_nuova_nei_sorgenti():

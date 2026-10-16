@@ -10,6 +10,9 @@ from officina.descrittori import base
 from officina.descrittori import grandi
 from officina.descrittori.grandi import Dinov3, Siglip2
 from officina.descrittori import torcia
+from prove import impronte_vuote
+
+senza_impronte_vere = impronte_vuote.senza_impronte_vere
 
 
 class _Tensore:

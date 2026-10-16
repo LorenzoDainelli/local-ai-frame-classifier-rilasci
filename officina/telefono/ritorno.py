@@ -78,40 +78,75 @@ class Tornato:
         return ", ".join(pezzi) if pezzi else "niente di nuovo"
 
 
-def leggi(connessione: sqlite3.Connection, telefono_id: int, cartella: Path,
-          chiave: cifratura.Chiave, lavoro: Path) -> Tornato:
-    esito = Tornato()
+@dataclass
+class Arrivato:
+    esito: Tornato
+    dentro: sqlite3.Connection | None = None
+
+
+def apri(cartella: Path, chiave: cifratura.Chiave) -> Arrivato:
+    arrivato = Arrivato(Tornato())
     dove = formato.dentro(cartella, formato.RITORNO)
     if not dove.is_file():
-        return esito
-    esito.c_era = True
+        return arrivato
+    arrivato.esito.c_era = True
 
-    lavoro.mkdir(parents=True, exist_ok=True)
-    appoggio = lavoro / "ritorno-in-lettura.sqlite"
-    appoggio.unlink(missing_ok=True)
     try:
-        chiave.decifra_file(dove, appoggio)
-        dentro = sqlite3.connect(appoggio)
-        dentro.row_factory = sqlite3.Row
-        try:
-            _cuori(connessione, telefono_id, dentro, esito)
-            _raccolte(connessione, telefono_id, dentro, esito)
-            _diario(connessione, telefono_id, dentro, esito)
-        finally:
-            dentro.close()
+        grezzo = chiave.leggi_tutto(dove, formato.RITORNO)
     except cifratura.PacchettoRovinato as guaio:
         registro.errore("visore.ritorno_illeggibile")
-        esito.guai.append(guaio.messaggio)
+        arrivato.esito.guai.append(guaio.messaggio)
+        return arrivato
+    dentro = sqlite3.connect(":memory:")
+    dentro.row_factory = sqlite3.Row
+    try:
+        dentro.deserialize(grezzo)
     except sqlite3.DatabaseError:
-        registro.errore("visore.ritorno_non_e_un_database")
-        esito.guai.append(
-            "Il file che il telefono ha scritto non è leggibile. I preferiti "
-            "e le raccolte di questo giro sono persi; le foto no.")
-    finally:
-        appoggio.unlink(missing_ok=True)
+        dentro.close()
+        _non_e_un_database(arrivato.esito)
+        return arrivato
+    arrivato.dentro = dentro
+    return arrivato
+
+
+def leggi(connessione: sqlite3.Connection, telefono_id: int,
+          arrivato: Arrivato) -> Tornato:
+    esito = arrivato.esito
+    if not esito.c_era:
+        return esito
+    if arrivato.dentro is not None:
+        try:
+            esito = _tutto_o_niente(connessione, telefono_id, arrivato.dentro)
+        except sqlite3.DatabaseError:
+            _non_e_un_database(esito)
+        finally:
+            arrivato.dentro.close()
+            arrivato.dentro = None
 
     registro.evento("visore.ritorno_letto", cuori=esito.cuori_nuovi,
                     raccolte=esito.raccolte, diario=esito.giornate_di_diario)
+    return esito
+
+
+def _non_e_un_database(esito: Tornato) -> None:
+    registro.errore("visore.ritorno_non_e_un_database")
+    esito.guai.append(
+        "Il file che il telefono ha scritto non è leggibile. I preferiti "
+        "e le raccolte di questo giro sono persi; le foto no.")
+
+
+def _tutto_o_niente(connessione, telefono_id: int, dentro) -> Tornato:
+    esito = Tornato(c_era=True)
+    connessione.execute("SAVEPOINT ritorno_dal_telefono")
+    try:
+        _cuori(connessione, telefono_id, dentro, esito)
+        _raccolte(connessione, telefono_id, dentro, esito)
+        _diario(connessione, telefono_id, dentro, esito)
+    except Exception:
+        connessione.execute("ROLLBACK TO ritorno_dal_telefono")
+        connessione.execute("RELEASE ritorno_dal_telefono")
+        raise
+    connessione.execute("RELEASE ritorno_dal_telefono")
     return esito
 
 

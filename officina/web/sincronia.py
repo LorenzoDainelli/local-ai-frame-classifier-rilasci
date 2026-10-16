@@ -30,7 +30,7 @@ def pacchetti_nella_cartella(cartella: str) -> list[dict]:
             continue
         try:
             carta = lettore.sbircia(figlia)
-        except ErroreOfficina:
+        except (ErroreOfficina, OSError, TypeError, ValueError):
             continue
         trovati.append({
             "cartella": str(figlia),
@@ -42,6 +42,7 @@ def pacchetti_nella_cartella(cartella: str) -> list[dict]:
             "al": carta.al_seriale,
             "fatto_il": carta.fatto_il,
             "intero": carta.completa,
+            "vecchio": carta.vecchio,
             "archivio": carta.archivio,
         })
     trovati.sort(key=lambda voce: voce["fatto_il"], reverse=True)
@@ -49,19 +50,22 @@ def pacchetti_nella_cartella(cartella: str) -> list[dict]:
 
 
 def stato_dei_computer(connessione) -> dict:
-    mia = cambiamenti.questa_macchina(connessione)
+    mia = cambiamenti.questa_macchina_se_c_e(connessione)
+
+    def da_mandare(dopo: int = 0) -> int:
+        return cambiamenti.quanti_da_mandare(connessione, dopo) if mia else 0
+
     altre = []
     for riga in cambiamenti.altre_macchine(connessione):
         altre.append({
             "id": riga["id"],
             "nome": riga["nome"],
-            "da_mandarle": cambiamenti.quanti_da_mandare(
-                connessione, riga["mi_ha_vista_fino_a"]),
+            "da_mandarle": da_mandare(riga["mi_ha_vista_fino_a"]),
             "vista_il": riga["vista_il"],
         })
     return {
-        "io": mia["nome"],
-        "scritti": cambiamenti.quanti_da_mandare(connessione),
+        "io": mia["nome"] if mia else cambiamenti.nome_del_computer(),
+        "scritti": da_mandare(),
         "altre": altre,
     }
 

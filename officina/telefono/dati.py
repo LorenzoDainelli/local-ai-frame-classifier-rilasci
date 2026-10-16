@@ -34,9 +34,9 @@ CREATE TABLE scatti (
     longitudine     REAL,
     luogo_id        INTEGER,
     nota            TEXT,                   -- quello che hai scritto tu (regola 120)
-    posto           TEXT NOT NULL,          -- foto/2019/07/IMG_1234.HEIC
+    posto           TEXT NOT NULL,          -- foto/a3/<nome a caso>
     posto_movimento TEXT,                   -- il .MOV della live photo (regola 361)
-    mini            TEXT,                   -- mini/a3/....jpg
+    mini            TEXT,                   -- mini/5c/<nome a caso>
     dimensione      INTEGER NOT NULL        -- dell'originale, in chiaro
 );
 
@@ -167,14 +167,10 @@ class Posto:
 def costruisci(connessione: sqlite3.Connection, posti: list[Posto],
                volti: dict[int, str], informazioni: dict, lavoro: Path,
                scorta: dict | None = None) -> bytes:
-    lavoro.mkdir(parents=True, exist_ok=True)
-    percorso = lavoro / "dati-in-costruzione.sqlite"
-    percorso.unlink(missing_ok=True)
-
     scelti = [p.scatto_id for p in posti]
     _prepara_i_scelti(connessione, scelti)
     try:
-        fuori = sqlite3.connect(percorso)
+        fuori = sqlite3.connect(":memory:")
         fuori.row_factory = sqlite3.Row
         try:
             fuori.executescript(SCHEMA)
@@ -186,11 +182,10 @@ def costruisci(connessione: sqlite3.Connection, posti: list[Posto],
             _scrivi_informazioni(fuori, informazioni, len(posti), usati)
             fuori.commit()
             fuori.execute("VACUUM")
+            return fuori.serialize()
         finally:
             fuori.close()
-        return percorso.read_bytes()
     finally:
-        percorso.unlink(missing_ok=True)
         connessione.execute("DROP TABLE IF EXISTS temp.scelti")
 
 

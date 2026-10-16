@@ -16,11 +16,13 @@
 <main class="schermo-coperto sp-porta" id="sp-porta" data-secondi="{{ secondi }}">
     <div class="sp-dentro">
         <span class="bollino attenzione">La porta per il portatile è aperta</span>
-        <h1>Scrivi questo codice sul portatile</h1>
-        <div class="sp-cifre numeri" data-codice aria-label="Il codice: {{ codice }}">
+        <h1 data-titolo data-di-solito="Scrivi questo codice sul portatile" data-se-fermo="Il fisso non accetta più codici">{% if troppi_sbagli %}Il fisso non accetta più codici{% else %}Scrivi questo codice sul portatile{% endif %}</h1>
+        <div class="sp-cifre numeri" data-codice aria-label="Il codice: {{ codice }}"{% if troppi_sbagli %} hidden{% endif %}>
             {% for cifra in codice %}<span>{{ cifra }}</span>{% endfor %}
         </div>
-        <p class="piccolo tenue" data-scade>Cambia fra {{ secondi // 60 }}:{{ '%02d'|format(secondi % 60) }} · vale una volta sola</p>
+        <p class="piccolo tenue" data-scade{% if troppi_sbagli %} hidden{% endif %}>Cambia fra {{ secondi // 60 }}:{{ '%02d'|format(secondi % 60) }} · vale una volta sola</p>
+        <p class="bollino attenzione" data-troppi role="alert"{% if not troppi_sbagli %} hidden{% endif %}>Troppi tentativi sbagliati: premi «Nuovo codice».</p>
+        <form method="post" action="/schermo/nuovo-codice"><button class="tasto-comando" type="submit">Nuovo codice</button></form>
         <div class="carta sp-come">
             <p class="piccolo">Sul portatile apri il programma e scegli <b>«Usalo come schermo del fisso»</b>: troverà da solo
                 <b>{{ nome_del_fisso }}</b>. Poi scrivi il codice{% if serve_password %} e la password del forziere{% endif %}.</p>
@@ -52,6 +54,8 @@
     const zona = document.getElementById("sp-porta");
     const cifre = zona.querySelector("[data-codice]");
     const scade = zona.querySelector("[data-scade]");
+    const troppi = zona.querySelector("[data-troppi]");
+    const titolo = zona.querySelector("[data-titolo]");
     const fermo = document.body.classList.contains("senza-movimento")
         || matchMedia("(prefers-reduced-motion: reduce)").matches;
     const versione = document.documentElement.getAttribute("data-mv-codice") || "A";
@@ -95,6 +99,11 @@
     const scrivi = (dati) => {
         if (dati.collegato) { window.location.href = "/schermo/coperta"; return; }
         if (!dati.aperta) { window.location.href = "/fuori?dove=portatile"; return; }
+        troppi.hidden = !dati.troppi_sbagli;
+        titolo.textContent = dati.troppi_sbagli ? titolo.dataset.seFermo : titolo.dataset.diSolito;
+        cifre.hidden = scade.hidden = Boolean(dati.troppi_sbagli);
+        if (dati.troppi_sbagli) return;
+        if (!dati.codice) { window.location.reload(); return; }
         cambiaIlCodice(dati.codice);
         cifre.setAttribute("aria-label", "Il codice: " + dati.codice);
         const minuti = Math.floor(dati.secondi / 60);

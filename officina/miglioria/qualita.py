@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from officina.archivio import memoria
 from officina.importazione import gruppi
 
 BASSA = "bassa"
@@ -114,7 +115,7 @@ def _misura(percorso: Path, genere: str) -> tuple[int | None, int | None]:
 
     from officina.immagini import lettura
     try:
-        with Image.open(percorso) as immagine:
+        with Image.open(percorso, formats=lettura.formati_aperti()) as immagine:
             larga, alta = immagine.size
             try:
                 girata = immagine.getexif().get(0x0112)
@@ -161,21 +162,32 @@ def misura_chi_manca(archivio, secondi: float = 2.0) -> int:
     return len(misurati)
 
 
-def tutte(connessione: sqlite3.Connection) -> list[Voce]:
+_voci = memoria.Ricordi("voci della qualità", 4)
+
+
+def tutte(connessione: sqlite3.Connection) -> tuple[Voce, ...]:
+    gruppo = gruppi.clausola(connessione, "miglioramento")
+    return _voci.prendi(connessione, gruppo, lambda: _leggi_tutte(connessione, gruppo))
+
+
+def _leggi_tutte(connessione: sqlite3.Connection, gruppo: str) -> tuple[Voce, ...]:
+    cursore = connessione.cursor()
+    cursore.row_factory = None
     fuori = []
-    for riga in connessione.execute(_TUTTI.format(gruppo=gruppi.clausola(connessione, "miglioramento"))):
-        larghezza = riga["larghezza_dopo"] or riga["larghezza"]
-        altezza = riga["altezza_dopo"] or riga["altezza"]
+    for (file_id, scatto_id, genere, formato, larghezza, altezza, identificatore_ios,
+         sembra_schermata, percorso, larghezza_dopo, altezza_dopo) in cursore.execute(
+            _TUTTI.format(gruppo=gruppo)):
+        larghezza = larghezza_dopo or larghezza
+        altezza = altezza_dopo or altezza
         suo = voto(larghezza, altezza)
         if suo is None:
             continue
         fuori.append(Voce(
-            scatto_id=riga["scatto_id"], file_id=riga["file_id"],
-            fonte=fonte(riga["percorso"], riga["formato"], riga["identificatore_ios"],
-                        bool(riga["sembra_schermata"])),
+            scatto_id=scatto_id, file_id=file_id,
+            fonte=fonte(percorso, formato, identificatore_ios, bool(sembra_schermata)),
             voto=suo, lato=min(int(larghezza), int(altezza)),
-            video=riga["genere"] == "video"))
-    return fuori
+            video=genere == "video"))
+    return tuple(fuori)
 
 
 def _del_tipo(voce: Voce, tipo: str | None) -> bool:
@@ -186,7 +198,7 @@ def _del_tipo(voce: Voce, tipo: str | None) -> bool:
     return True
 
 
-def tabella(voci: list[Voce], tipo: str | None = None) -> dict:
+def tabella(voci: tuple[Voce, ...] | list[Voce], tipo: str | None = None) -> dict:
     conti = {f: {v: 0 for v in VOTI} for f in FONTI}
     for voce in voci:
         if _del_tipo(voce, tipo):
@@ -202,7 +214,7 @@ def tabella(voci: list[Voce], tipo: str | None = None) -> dict:
     }
 
 
-def filtra(voci: list[Voce], fonti, voti, tipo: str | None = None) -> list[Voce]:
+def filtra(voci: tuple[Voce, ...] | list[Voce], fonti, voti, tipo: str | None = None) -> list[Voce]:
     fonti = {f for f in fonti if f in FONTI} or set(FONTI)
     voti = {v for v in voti if v in VOTI} or set(VOTI)
     return [v for v in voci

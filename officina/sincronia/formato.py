@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+import secrets
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from officina.errori import ErroreOfficina
 from officina.telefono import cifratura
 
-VERSIONE_FORMATO = 4
+VERSIONE_FORMATO = 5
+COSTO = 2 ** 17
 
 CARTA = "officina.json"
 DATI = "dati.db"
@@ -16,6 +18,9 @@ MINI = "mini"
 
 COMPLETO = "completo"
 INTERROTTO = "interrotto"
+
+GARANTITI = ("versione_formato", "mittente_codice", "mittente_nome", "archivio",
+             "fatto_il", "dal_seriale", "al_seriale", "visto_di_te")
 
 
 @dataclass
@@ -39,7 +44,7 @@ class Carta:
     quante_miniature: int = 0
     peso: int = 0
     kdf: str = "scrypt"
-    n: int = cifratura.COSTO
+    n: int = COSTO
     r: int = cifratura.BLOCCO_SCRYPT
     p: int = cifratura.PARALLELO
     blocco: int = cifratura.BLOCCO
@@ -73,8 +78,26 @@ class Carta:
                 "La carta d'identita' del pacchetto è rovinata: il pacchetto "
                 "va rifatto sull'altro computer.",
                 codice="carta_rovinata") from errore
+        if not isinstance(dati, dict):
+            raise ErroreOfficina(
+                "La carta d'identità del pacchetto è rovinata: il pacchetto "
+                "va rifatto sull'altro computer.",
+                codice="carta_rovinata")
         conosciuti = set(cls.__dataclass_fields__)
-        return cls(**{c: v for c, v in dati.items() if c in conosciuti})
+        scelti = {c: v for c, v in dati.items() if c in conosciuti}
+        for nome, valore in scelti.items():
+            if not _del_tipo_giusto(cls.__dataclass_fields__[nome].type, valore):
+                raise ErroreOfficina(
+                    "La carta d'identità del pacchetto è rovinata: il pacchetto "
+                    "va rifatto sull'altro computer.",
+                    codice="carta_rovinata")
+        try:
+            return cls(**scelti)
+        except TypeError as errore:
+            raise ErroreOfficina(
+                "La carta d'identità del pacchetto è incompleta: il pacchetto "
+                "va rifatto sull'altro computer.",
+                codice="carta_rovinata") from errore
 
 
     @property
@@ -88,10 +111,45 @@ class Carta:
                 "del programma. Aggiorna il programma su questo computer, "
                 "oppure rifai il pacchetto con la versione che hai.",
                 codice="formato_troppo_nuovo")
+        if self.versione_formato < VERSIONE_FORMATO:
+            raise ErroreOfficina(
+                VECCHIO, codice="formato_vecchio")
+
+    @property
+    def vecchio(self) -> bool:
+        return self.versione_formato < VERSIONE_FORMATO
 
     def chiave(self, password: str) -> cifratura.Chiave:
+        try:
+            sale = bytes.fromhex(self.sale)
+        except ValueError as errore:
+            raise ErroreOfficina(
+                "La carta d'identità del pacchetto è rovinata: il pacchetto "
+                "va rifatto sull'altro computer.",
+                codice="carta_rovinata") from errore
         return cifratura.controlla_la_password(
-            password, bytes.fromhex(self.sale), self.prova, self.n, self.r, self.p)
+            password, sale, self.prova, self.n, self.r, self.p)
+
+
+VECCHIO = ("Questo pacchetto l'ha fatto una versione precedente del programma, "
+           "che lasciava fuori dalla cassaforte alcune informazioni. Per "
+           "sicurezza non lo apro: rifallo sull'altro computer, dopo averlo "
+           "aggiornato.")
+
+TIPI = {"str": str, "int": int, "list": list}
+
+
+def _del_tipo_giusto(tipo, valore) -> bool:
+    atteso = TIPI.get(tipo if isinstance(tipo, str) else getattr(tipo, "__name__", ""))
+    if atteso is None:
+        return True
+    if atteso is int:
+        return type(valore) is int
+    return isinstance(valore, atteso)
+
+
+def nome_a_caso() -> str:
+    return secrets.token_hex(16)
 
 
 def nome_cartella(mittente_nome: str, al_seriale: int) -> str:
@@ -99,13 +157,14 @@ def nome_cartella(mittente_nome: str, al_seriale: int) -> str:
     return f"Officina-da-{pulito}-{al_seriale:06d}"
 
 
-def posto_dell_originale(impronta: str, formato: str | None) -> str:
-    estensione = (formato or "dat").lower().strip(". ")
-    return f"{FOTO}/{impronta[:2]}/{impronta}.{estensione}"
+def posto_dell_originale() -> str:
+    nome = nome_a_caso()
+    return f"{FOTO}/{nome[:2]}/{nome}"
 
 
-def posto_della_miniatura(impronta: str, estensione: str = "jpg") -> str:
-    return f"{MINI}/{impronta[:2]}/{impronta}.{estensione.lower().strip('. ') or 'jpg'}"
+def posto_della_miniatura() -> str:
+    nome = nome_a_caso()
+    return f"{MINI}/{nome[:2]}/{nome}"
 
 
 def dentro(cartella: Path, posto: str) -> Path:

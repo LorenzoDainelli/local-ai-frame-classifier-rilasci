@@ -97,3 +97,30 @@ def test_prepara_installa_solo_con_le_impronte():
     testo = (RADICE / "installatore" / "prepara.py").read_text(encoding="utf-8")
     assert '"--require-hashes"' in testo and '"--only-binary", ":all:"' in testo
     assert "LIBRERIE_BLOCCATE" in testo
+
+
+def test_python_incorporata_e_fissata_con_l_impronta():
+    import importlib.util
+
+    specifica = importlib.util.spec_from_file_location(
+        "prepara_in_prova", RADICE / "installatore" / "prepara.py")
+    prepara = importlib.util.module_from_spec(specifica)
+    specifica.loader.exec_module(prepara)
+    assert re.fullmatch(r"3\.13\.\d+", prepara.PYTHON_INCORPORATA)
+    assert re.fullmatch(r"[0-9a-f]{64}", prepara.IMPRONTE_DI_PYTHON[prepara.PYTHON_INCORPORATA])
+
+
+def test_i_modelli_sono_fissati_a_una_revisione_e_a_un_impronta():
+    from officina.descrittori import scaricamento as descrittori
+    from officina.miglioria import faceme_pesi, lucidflux_pesi
+    from officina.volti import scaricamento as volti
+
+    for modulo in (descrittori, faceme_pesi, lucidflux_pesi):
+        for repo, revisione in modulo.REVISIONI.items():
+            assert re.fullmatch(r"[0-9a-f]{40}", revisione), (modulo.__name__, repo)
+    for fonte in volti.DA_DOVE.values():
+        assert re.fullmatch(r"[0-9a-f]{64}", fonte.sha256), fonte.nome_sul_sito
+        assert any(re.fullmatch(r"[0-9a-f]{40}", volti.revisione_di(repo))
+                   for repo in (fonte.repo, *fonte.riserve)), fonte.nome_sul_sito
+    for repo, note in descrittori.IMPRONTE_NOTE.items():
+        assert note and all(re.fullmatch(r"[0-9a-f]{64}", v) for v in note.values()), repo

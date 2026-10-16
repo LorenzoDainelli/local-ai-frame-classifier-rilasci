@@ -139,6 +139,22 @@ def test_la_foto_migliorata_aspetta_nascosta_e_l_originale_non_si_tocca(
     assert not list((cartella / attesa.NOME).glob("*" + attesa.PARZIALE))
 
 
+def test_l_impronta_della_migliorata_si_calcola_con_l_archivio_libero(
+        importato, monkeypatch):
+    vera = impronta.del_file
+    con_l_archivio_chiuso = []
+
+    def guarda(percorso, *altro, **nominati):
+        con_l_archivio_chiuso.append(importato._lucchetto._is_owned())
+        return vera(percorso, *altro, **nominati)
+
+    monkeypatch.setattr(impronta, "del_file", guarda)
+    _metti(importato, "piccola.jpg")
+    _gira(importato)
+    assert _riga(importato, coda.DA_RIVEDERE)
+    assert con_l_archivio_chiuso and not any(con_l_archivio_chiuso)
+
+
 def test_approvare_scambia_e_verifica_bit_per_bit(importato, cartella):
     originale = cartella / "2016" / "piccola.jpg"
     prima = impronta.del_file(originale)
@@ -482,3 +498,90 @@ def test_senza_scelte_foto_e_video_li_fa_seedvr2(importato):
     scelti = lavoro.Miglioratore(importato)._scelti()
     assert scelti["foto"] == "seedvr2"
     assert scelti["video"] == "seedvr2"
+
+
+@pytest.fixture
+def quattro_piccole(archivio, tmp_path):
+    dove = tmp_path / "quattro"
+    for numero in range(4):
+        _jpeg(dove / f"piccola-{numero}.jpg", (640 + 32 * numero, 480), f"2016:02:03 04:05:1{numero}")
+    motore = Motore(archivio)
+    motore.prepara([dove])
+    motore.esegui()
+    with archivio.scrittura() as connessione:
+        esito = coda.metti(connessione, [r["id"] for r in tutti(connessione, "SELECT id FROM scatti")])
+    assert esito.messi == 4
+    return archivio
+
+
+def test_se_la_scheda_e_piena_di_fila_si_ferma_e_rimette_in_coda(quattro_piccole):
+    chiamate = []
+
+    def lancia(lavoro_da_fare, al_passo, ricorda):
+        chiamate.append(lavoro_da_fare["originale"])
+        return {"guasto": lavoro.SCHEDA_FINITA}
+
+    miglioratore = lavoro.Miglioratore(quattro_piccole, lancia=lancia, motori_scelti=SCELTI)
+    miglioratore.parti()
+    assert miglioratore.lavoro.aspetta_che_finisca(30)
+    assert len(chiamate) == lavoro.DI_FILA_SENZA_MEMORIA
+    assert miglioratore.lavoro.guasto == lavoro.SCHEDA_OCCUPATA
+    assert len(_riga(quattro_piccole, coda.IN_CODA)) == 4
+    assert not _riga(quattro_piccole, coda.FALLITA)
+    assert all(r["guasto"] is None and r["finita_il"] is None for r in _riga(quattro_piccole))
+
+
+def test_un_file_solo_troppo_pesante_resta_tra_i_non_riusciti(quattro_piccole):
+    chiamate = []
+
+    def lancia(lavoro_da_fare, al_passo, ricorda):
+        chiamate.append(lavoro_da_fare["originale"])
+        if len(chiamate) == 1:
+            return {"guasto": lavoro.SCHEDA_FINITA}
+        return lavoro.lancia_la_stanza(lavoro_da_fare, al_passo, ricorda)
+
+    miglioratore = lavoro.Miglioratore(quattro_piccole, lancia=lancia, motori_scelti=SCELTI)
+    miglioratore.parti()
+    assert miglioratore.lavoro.aspetta_che_finisca(120)
+    assert not miglioratore.lavoro.guasto, miglioratore.lavoro.guasto
+    [fallita] = _riga(quattro_piccole, coda.FALLITA)
+    assert fallita["guasto"] == lavoro.SCHEDA_FINITA
+    assert len(_riga(quattro_piccole, coda.DA_RIVEDERE)) == 3
+
+
+def test_altri_guasti_in_mezzo_non_azzerano_il_conto_della_scheda(quattro_piccole):
+    esiti = iter([lavoro.SCHEDA_FINITA, "stanza_caduta", lavoro.SCHEDA_FINITA,
+                  lavoro.SCHEDA_FINITA])
+
+    def lancia(lavoro_da_fare, al_passo, ricorda):
+        return {"guasto": next(esiti)}
+
+    miglioratore = lavoro.Miglioratore(quattro_piccole, lancia=lancia, motori_scelti=SCELTI)
+    miglioratore.parti()
+    assert miglioratore.lavoro.aspetta_che_finisca(30)
+    assert miglioratore.lavoro.guasto == lavoro.SCHEDA_OCCUPATA
+    [rotta] = _riga(quattro_piccole, coda.FALLITA)
+    assert rotta["guasto"] == "stanza_caduta"
+    assert len(_riga(quattro_piccole, coda.IN_CODA)) == 3
+
+
+def test_la_stanza_riconosce_anche_la_memoria_finita_di_onnx(tmp_path, monkeypatch):
+    from officina.miglioria import catena, rete, stanza
+
+    def esegui(*_):
+        raise RuntimeError("[ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Failed to allocate memory")
+
+    monkeypatch.setattr(catena, "esegui", esegui)
+    monkeypatch.setattr(rete, "chiudi", lambda: None)
+    mandati = []
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"percorsi": []})))
+    vero = io.StringIO.write
+
+    class Canale(io.StringIO):
+        def write(self, testo):
+            mandati.append(testo)
+            return vero(self, testo)
+
+    monkeypatch.setattr(stanza, "_canale", Canale)
+    assert stanza.main() == 1
+    assert json.loads(mandati[-1])["guasto"] == lavoro.SCHEDA_FINITA

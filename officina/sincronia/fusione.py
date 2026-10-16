@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -9,7 +10,7 @@ from typing import Callable
 
 from officina.archivio.database import adesso, inserisci, tutti, uno
 from officina.errori import ErroreOfficina
-from officina.impostazioni import PREDEFINITE, VIAGGIANO
+from officina.impostazioni import PREDEFINITE, VIAGGIANO, valore_ammesso
 from officina.modello import cambiamenti, persone as modello_persone, telefoni
 from officina.modello.nodi import SEPARATORE
 from officina.sincronia import formato, lettore
@@ -276,11 +277,73 @@ def _chiave_di_riga(riga: sqlite3.Row, nome: str):
         return None
 
 
+IMPRONTA_VALIDA = re.compile(r"[0-9a-f]{64}")
+FORMATO_VALIDO = re.compile(r"[a-z0-9]{1,8}")
+
+
+def _impronta_valida(impronta) -> bool:
+    return isinstance(impronta, str) and IMPRONTA_VALIDA.fullmatch(impronta) is not None
+
+
+def _formato_valido(formato) -> bool:
+    return formato is None or (isinstance(formato, str)
+                               and FORMATO_VALIDO.fullmatch(formato) is not None)
+
+
+def _dove_va(archivio, impronta: str, formato_file) -> Path:
+    coda = formato_file if _formato_valido(formato_file) else "dat"
+    return archivio.dove.ricevute / impronta[:2] / f"{impronta}.{coda}"
+
+
+def _metti_la_miniatura(archivio, pacchetto: lettore.Aperto, riga) -> str:
+    coda = riga["mini_formato"] if _formato_valido(riga["mini_formato"]) else "jpg"
+    nome = archivio.nome_miniatura(riga["impronta"], MISURA_MINIATURA, coda)
+    archivio.scrivi_miniatura(nome, pacchetto.contenuto(riga["mini_posto"]))
+    return nome
+
+
+def _tira_fuori_l_originale(archivio, pacchetto: lettore.Aperto, riga,
+                            esito: Esito) -> bool:
+    impronta = riga["impronta"]
+    dove = _dove_va(archivio, impronta, riga["formato"])
+    if dove.is_file() and (not riga["dimensione"]
+                           or dove.stat().st_size == riga["dimensione"]):
+        return True
+    if pacchetto.tira_fuori(riga["posto"], dove, atteso=impronta) != impronta:
+        esito.note.append(
+            f"un file del pacchetto non corrisponde alla sua "
+            f"impronta e non l'ho tenuto: {impronta[:12]}")
+        return False
+    esito.originali_copiati += 1
+    return True
+
+
+def _metti_al_sicuro_i_file(archivio, pacchetto: lettore.Aperto, esito: Esito,
+                            avanzamento: Callable[[int, int], None] | None
+                            ) -> tuple[set[str], dict[str, str]]:
+    with archivio.lettura() as connessione:
+        con_miniatura = {r["impronta"] for r in connessione.execute(
+            "SELECT impronta FROM file_media WHERE miniatura IS NOT NULL")}
+    pronti: set[str] = set()
+    miniature: dict[str, str] = {}
+    quanti = pacchetto.quanti_file()
+    for numero, riga in enumerate(pacchetto.ogni_file(), start=1):
+        impronta = riga["impronta"]
+        if _impronta_valida(impronta):
+            if riga["posto"] and _tira_fuori_l_originale(archivio, pacchetto,
+                                                         riga, esito):
+                pronti.add(impronta)
+            if riga["mini_posto"] and impronta not in con_miniatura:
+                miniature[impronta] = _metti_la_miniatura(archivio, pacchetto, riga)
+        if avanzamento is not None:
+            avanzamento(numero, quanti)
+    return pronti, miniature
+
+
 def _porta_dentro_le_cose(archivio, pacchetto: lettore.Aperto,
-                          esito: Esito,
-                          avanzamento: Callable[[int, int], None] | None) -> dict:
+                          esito: Esito, pronti: set[str],
+                          miniature: dict[str, str]) -> dict:
     connessione = archivio.connessione
-    scatti_del_pacchetto = {r["capo"]: r for r in pacchetto.scatti()}
     capi: dict[str, int] = {}
 
     def scatto_per(capo: str) -> int | None:
@@ -291,7 +354,7 @@ def _porta_dentro_le_cose(archivio, pacchetto: lettore.Aperto,
         if riga is not None and riga["scatto_id"]:
             capi[capo] = riga["scatto_id"]
             return capi[capo]
-        descrizione = scatti_del_pacchetto.get(capo)
+        descrizione = pacchetto.scatto(capo)
         if descrizione is None:
             return None
         capi[capo] = inserisci(
@@ -310,9 +373,14 @@ def _porta_dentro_le_cose(archivio, pacchetto: lettore.Aperto,
         esito.scatti_nuovi += 1
         return capi[capo]
 
-    elenco = pacchetto.file()
-    for numero, riga in enumerate(elenco, start=1):
+    for riga in pacchetto.ogni_file():
         impronta = riga["impronta"]
+        if not _impronta_valida(impronta):
+            esito.note.append("un file del pacchetto ha un'impronta che non torna e "
+                              "non l'ho preso")
+            continue
+        if not _formato_valido(riga["formato"]):
+            riga = {**dict(riga), "formato": None}
         scatto_id = scatto_per(riga["capo"]) if riga["capo"] else None
         gia = uno(connessione, "SELECT * FROM file_media WHERE impronta = ?", impronta)
 
@@ -335,31 +403,15 @@ def _porta_dentro_le_cose(archivio, pacchetto: lettore.Aperto,
         else:
             file_id = gia["id"]
 
-        if riga["posto"]:
-            dove = archivio.dove.ricevute / impronta[:2] / (
-                impronta + "." + (riga["formato"] or "dat"))
-            if not dove.is_file():
-                uscita = pacchetto.tira_fuori(riga["posto"], dove)
-                if uscita != impronta:
-                    dove.unlink(missing_ok=True)
-                    esito.note.append(
-                        f"un file del pacchetto non corrisponde alla sua "
-                        f"impronta e non l'ho tenuto: {impronta[:12]}")
-                else:
-                    esito.originali_copiati += 1
-            _registra_percorso(connessione, file_id, dove,
-                               riga["nome"] or dove.name)
+        if riga["posto"] and impronta in pronti:
+            dove = _dove_va(archivio, impronta, riga["formato"])
+            _registra_percorso(connessione, file_id, dove, riga["nome"] or dove.name)
 
         if riga["mini_posto"] and not (gia and gia["miniatura"]):
-            coda = Path(riga["mini_posto"]).suffix.lstrip(".") or "jpg"
-            nome = archivio.nome_miniatura(impronta, MISURA_MINIATURA, coda)
-            archivio.scrivi_miniatura(nome, pacchetto.contenuto(riga["mini_posto"]))
+            nome = miniature.get(impronta) or _metti_la_miniatura(archivio, pacchetto, riga)
             connessione.execute("UPDATE file_media SET miniatura = ? WHERE id = ?",
                                 (nome, file_id))
             esito.miniature_copiate += 1
-
-        if avanzamento is not None:
-            avanzamento(numero, len(elenco))
 
     for riga in pacchetto.impronte():
         scatto_id = capi.get(riga["capo"])
@@ -506,6 +558,14 @@ def _porta_dentro_i_cuori(connessione: sqlite3.Connection,
         esito.cuori_arrivati += 1
 
 
+def _si_puo_tenere(chiave: str, scritto) -> bool:
+    try:
+        letto = json.loads(scritto)
+        return valore_ammesso(chiave, letto) == letto
+    except (TypeError, ValueError):
+        return False
+
+
 def _porta_dentro_le_impostazioni(connessione: sqlite3.Connection,
                                   pacchetto: lettore.Aperto,
                                   esito: Esito) -> None:
@@ -514,6 +574,11 @@ def _porta_dentro_le_impostazioni(connessione: sqlite3.Connection,
         if chiave not in VIAGGIANO:
             continue
         loro, loro_quando = riga["valore"], riga["cambiata_il"] or ""
+        if not _si_puo_tenere(chiave, loro):
+            esito.note.append(
+                f"l'impostazione «{chiave}» arrivata dall'altro computer ha un "
+                "valore che questo programma non conosce: ho tenuto quella di qui")
+            continue
         mia = uno(connessione,
                   "SELECT valore, cambiata_il FROM impostazioni WHERE chiave = ?",
                   chiave)
@@ -550,13 +615,20 @@ def _porta_dentro_le_impostazioni(connessione: sqlite3.Connection,
 def fondi(archivio, cartella: Path, password: str,
           avanzamento: Callable[[int, int], None] | None = None) -> Esito:
     esito = Esito()
-    with lettore.apri(cartella, password,
-                      archivio_atteso=archivio.dove.nome) as pacchetto:
+    with lettore.apri(cartella, password, archivio_atteso=archivio.dove.nome,
+                      lavoro=Path(archivio.dove.radice) / "lavoro") as pacchetto:
         controlla_gli_orologi(pacchetto.carta)
         carta = pacchetto.carta
         esito.mittente = carta.mittente_nome
         esito.dal_seriale = carta.dal_seriale
         esito.al_seriale = carta.al_seriale
+
+        with archivio.lettura() as connessione:
+            noto = uno(connessione, "SELECT visto_fino_a FROM macchine WHERE codice = ?",
+                       carta.mittente_codice)
+        controlla_che_non_manchi_niente(carta, noto["visto_fino_a"] if noto else 0)
+        pronti, miniature = _metti_al_sicuro_i_file(archivio, pacchetto, esito,
+                                                    avanzamento)
 
         with archivio.scrittura() as connessione:
             mittente_id = cambiamenti.impara_dal_pacchetto(
@@ -569,7 +641,7 @@ def fondi(archivio, cartella: Path, password: str,
             controlla_che_non_manchi_niente(carta, gia_visto)
             io = cambiamenti.questa_macchina(connessione)
 
-            capi = _porta_dentro_le_cose(archivio, pacchetto, esito, avanzamento)
+            capi = _porta_dentro_le_cose(archivio, pacchetto, esito, pronti, miniature)
 
             for gesto in pacchetto.cambiamenti():
                 if gesto["seriale"] <= gia_visto:

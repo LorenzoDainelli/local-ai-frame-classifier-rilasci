@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from officina.archivio import accesso, memoria
@@ -28,7 +28,8 @@ def _quanto_manca_per_un_voto(connessione, con_esempi=None) -> list[dict]:
     come_si_chiama = {riga["id"]: riga["nome"] for riga in tutti(
         connessione, "SELECT id, nome FROM nodi")}
 
-    quando = divisione.quando_sono_stati_fatti(connessione)
+    quando = divisione.quando_sono_stati_fatti(
+        connessione, sorted({s for _, suoi in con_esempi for s in suoi.scatti}))
 
     fuori = []
     for nodo_id, suoi in con_esempi:
@@ -49,6 +50,19 @@ def _quanto_manca_per_un_voto(connessione, con_esempi=None) -> list[dict]:
 _misura_tenuta = memoria.Ricordo("i conti della misura")
 
 
+def _vincente_di(ultima: dict | None) -> str | None:
+    import json
+
+    from officina.misura import rapporto as resoconto
+
+    if not ultima or not ultima.get("rapporto"):
+        return None
+    try:
+        return resoconto.modo_vincente(json.loads(ultima["rapporto"]))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 def _stato_della_misura() -> dict:
     archivio = accesso.aperto()
     from officina.descrittori import SCHEDE, pronti
@@ -62,15 +76,20 @@ def _stato_della_misura() -> dict:
     con_esempi = letti["con_esempi"]
     decisi = letti["decisi"]
     quanto_manca = letti["quanto_manca"]
-    ultima = letti["ultima"]
+    ultima = dict(letti["ultima"]) if letti["ultima"] else None
+    vincente = _vincente_di(ultima)
+    if ultima:
+        ultima.pop("rapporto", None)
     return {
+        "modo_vincente": vincente,
+        "modo_in_uso": archivio.impostazione("griglia_come_si_somma"),
         "avanzamento": avanzamento,
         "peso_impronte": vista.peso_a_parole(peso),
         "nodi_con_esempi": len(con_esempi),
         "scatti_decisi": decisi,
         "descrittori_pronti": pronti(archivio.dove.modelli),
         "schede": SCHEDE,
-        "ultima_misura": dict(ultima) if ultima else None,
+        "ultima_misura": ultima,
         "sta_calcolando": comune.lavoro_impronte_passata.sta_lavorando,
         "quanto_manca": quanto_manca,
         "nodi_pronti": sum(1 for voce in quanto_manca if voce["pronto"]),
@@ -139,7 +158,7 @@ def _leggi_la_misura(connessione) -> dict:
         "decisi": raccolta.quanti_decisi(connessione),
         "quanto_manca": _quanto_manca_per_un_voto(connessione, con_esempi),
         "ultima": uno(connessione,
-                      "SELECT fatta_il, scatti, gruppi, nodi FROM misure "
+                      "SELECT fatta_il, scatti, gruppi, nodi, rapporto FROM misure "
                       "ORDER BY id DESC LIMIT 1"),
     }
 
@@ -178,7 +197,7 @@ def dati_della_misura() -> dict:
 @strada.post("/misura/nodo")
 def crea_nodo_di_prova(nome: str = Form(...), ramo_id: str = Form("")):
     with accesso.aperto().scrittura() as connessione:
-        genitore = int(ramo_id) if ramo_id.strip().isdigit() else None
+        genitore = int(ramo_id) if ramo_id.strip().isdecimal() else None
         nodi.crea(connessione, nome.strip(), genitore)
     return RedirectResponse("/stato#misura", status_code=303)
 
@@ -370,6 +389,19 @@ def api_impronte():
         "adesso_impronte": di_adesso.impronte if di_adesso else 0,
         "adesso_quanto_manca": di_adesso.quanto_manca() if di_adesso else "",
     })
+
+
+@strada.post("/misura/usa-il-migliore", dependencies=[Depends(base.solo_da_questo_computer)])
+def usa_il_migliore():
+    from officina.descrittori import griglia
+
+    archivio = accesso.aperto()
+    with archivio.lettura() as connessione:
+        ultima = uno(connessione, "SELECT rapporto FROM misure ORDER BY id DESC LIMIT 1")
+    vincente = _vincente_di(dict(ultima) if ultima else None)
+    if vincente in griglia.MODI:
+        archivio.imposta("griglia_come_si_somma", vincente)
+    return RedirectResponse("/stato#misura", status_code=303)
 
 
 @strada.post("/misura/esegui")

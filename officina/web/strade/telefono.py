@@ -52,7 +52,8 @@ def pagina_fuori(richiesta: Request, quale: int | None = None, dove: str = ""):
         "cartella_pacchetti": cartella,
         "pacchetti": pacchetti,
         "da_aprire": [uno for uno in pacchetti
-                      if uno["intero"] and uno["archivio"] == archivio.dove.nome],
+                      if uno["intero"] and not uno["vecchio"]
+                      and uno["archivio"] == archivio.dove.nome],
         "archivio_nome": archivio.dove.nome,
         "serve_password": not archivio.parola_del_forziere,
         "in_corso": telefono_web.in_corso.come_va(),
@@ -158,6 +159,7 @@ def telefono_dove(richiesta: Request, telefono_id: int, cartella: str = Form("")
                   spazio: str = Form("")):
     if base.e_di_rete_e_non_scelto(cartella):
         raise ErroreOfficina(base.NO_AL_PERCORSO_DI_RETE)
+    base.cartella_per_intero(cartella)
     archivio = accesso.aperto()
     with archivio.lettura() as connessione:
         riga = telefoni.per_id(connessione, telefono_id)

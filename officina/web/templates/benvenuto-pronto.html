@@ -14,8 +14,8 @@
     {% if request.query_params.get('giro') == 'finito' %}
     <div class="avviso forte">
         Tutorial finito, e sei tornato al tuo archivio.
-        {% if request.query_params.get('detto') %}
-        {{ request.query_params.get('detto') }}
+        {% if detto_alla_fine %}
+        {{ detto_alla_fine }}
         {% endif %}
     </div>
     {% endif %}

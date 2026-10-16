@@ -57,23 +57,29 @@ def comando_avvia(argomenti) -> int:
     _controlla_che_ci_sia_tutto()
     import uvicorn
 
+    from officina.web import origine
+
     archivio = _apri(argomenti)
+    di_rete = None
     if argomenti.rete:
         archivio.imposta("accesso_dalla_rete", True)
+        di_rete = _apri_alla_rete(origine)
 
-    indirizzo = "0.0.0.0" if argomenti.rete else "127.0.0.1"
     print()
     print(f"  Officina {VERSIONE} — archivio «{archivio.dove.nome}»")
     print(f"  {archivio.dove.radice}")
     print()
-    if argomenti.rete:
-        print("  Aperto agli altri computer di casa (regola 190).")
+    if di_rete is not None:
+        print("  Aperto agli altri computer di casa (regola 190), solo cifrato:")
+        print(f"  https://<indirizzo di questo computer>:{di_rete.porta}")
         print("  Passano solo gli indirizzi della rete locale (regola 189).")
+    elif argomenti.rete:
+        print("  Non sono riuscito ad aprirlo alla rete di casa.")
     else:
         print("  Raggiungibile solo da questo computer.")
         print("  Per aprirlo allo ZenBook: --rete")
     print()
-    print(f"  http://localhost:{argomenti.porta}")
+    print(f"  {origine.indirizzo_per_entrare(f'http://localhost:{argomenti.porta}')}")
     print()
 
     if argomenti.apri:
@@ -82,11 +88,28 @@ def comando_avvia(argomenti) -> int:
                          name="finestra", daemon=True).start()
 
     try:
-        uvicorn.run("officina.web.server:app", host=indirizzo, port=argomenti.porta,
+        uvicorn.run("officina.web.server:app", host="127.0.0.1", port=argomenti.porta,
                     log_level="warning", access_log=False)
     finally:
+        if di_rete is not None:
+            origine.smetti_la_rete()
+            di_rete.ferma()
         accesso.chiudi()
     return 0
+
+
+def _apri_alla_rete(origine):
+    from officina.programma import carta
+    from officina.programma.servitore import PORTA_DELLA_RETE, per_la_rete
+
+    try:
+        servitore, impronta = per_la_rete(carta.casa() / "rete", PORTA_DELLA_RETE)
+        servitore.parti()
+    except Exception as guasto:
+        registro.errore("riga_di_comando.rete_non_aperta", **registro.dove_si_e_rotto(guasto))
+        return None
+    origine.segna_la_rete(servitore.porta, impronta)
+    return servitore
 
 
 def _apri_la_finestra(finestra, porta: int) -> None:
@@ -387,7 +410,7 @@ def comando_modelli(argomenti) -> int:
 
     if argomenti.verifica:
         print("\n  Rileggo ogni file e ricalcolo la sua impronta (regola 74).\n")
-        for nome, carta in SCHEDE.items():
+        for carta in SCHEDE.values():
             if not carta.va_scaricato:
                 continue
             esito = scaricamento.verifica(carta, dove)
@@ -474,7 +497,7 @@ def comando_modelli(argomenti) -> int:
 
     print("\n  I modelli (regole 74, 101, 177)\n")
     _dillo_dei_volti(dove)
-    for nome, carta in SCHEDE.items():
+    for carta in SCHEDE.values():
         esito = scaricamento.stato(carta, dove)
         segno = "c'è" if esito["in_casa"] else "da scaricare"
         peso = (f"{esito['byte'] / 1e9:.1f} GB" if esito["in_casa"] and esito["byte"]
@@ -562,7 +585,7 @@ def comando_dottore(argomenti) -> int:
     print()
 
     print("  In più, per i modelli (si installano a parte, regola 74):")
-    for modulo, a_cosa_serve, dove in IN_PIU:
+    for modulo, a_cosa_serve, _dove in IN_PIU:
         c_e = importlib.util.find_spec(modulo) is not None
         print(f"  {(modulo + ' ').ljust(17, '.')} {'si' if c_e else 'no'}"
               f"   {a_cosa_serve}")
@@ -684,7 +707,7 @@ def comando_forziere(argomenti) -> int:
         print("  lavoro di catalogazione, mai le foto.")
         print()
         print("  Lunga meglio che complicata: tre parole che ricordi valgono")
-        print("  più di otto caratteri strani.")
+        print("  più di otto caratteri strani. Almeno dodici caratteri.")
         print()
         parola = getpass.getpass("  Scegli la password: ")
         ancora = getpass.getpass("  Scrivila di nuovo:  ")

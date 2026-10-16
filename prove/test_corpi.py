@@ -536,5 +536,33 @@ def test_la_chiave_si_controlla_anche_per_sam3(monkeypatch):
     with pytest.raises(ErroreOfficina) as preso:
         modelli_in_casa.controlla_la_chiave("hf_finta")
     assert "SAM 3" in preso.value.messaggio
-    assert chiesti[-1] == "facebook/sam3"
+    assert "facebook/sam3" in chiesti
     assert any("dinov3" in repo for repo in chiesti)
+
+
+def test_senza_spazio_sul_disco_i_corpi_non_partono_e_lo_dicono(tmp_path, monkeypatch):
+    import shutil
+    from collections import namedtuple
+
+    from officina.corpi import scaricamento
+
+    Uso = namedtuple("Uso", "total used free")
+    monkeypatch.setattr(shutil, "disk_usage", lambda posto: Uso(10 ** 12, 0, 5 * 10 ** 9))
+    partiti = []
+    monkeypatch.setattr(scaricamento, "_scarica_sam3", lambda *a: partiti.append("sam3"))
+    with pytest.raises(scaricamento.ScaricamentoFallito, match="GB liberi"):
+        scaricamento.scarica(tmp_path)
+    assert partiti == []
+    assert scaricamento.quanto_manca(tmp_path) == scaricamento.BYTE_IN_TUTTO - 20_000_000
+
+
+def test_quello_che_c_e_gia_non_conta_nello_spazio_che_serve(tmp_path):
+    from officina.corpi import rilevatore, scaricamento
+
+    casa = rilevatore.dove_stanno(tmp_path)
+    tutto = scaricamento.quanto_manca(tmp_path)
+    pezzo = scaricamento.FIGURE[0]
+    (casa / pezzo.dove).parent.mkdir(parents=True, exist_ok=True)
+    (casa / pezzo.dove).write_bytes(b"finto")
+    assert scaricamento.quanto_manca(tmp_path) == tutto - pezzo.byte
+    assert scaricamento.quanto_manca(tmp_path, rifai=True) == tutto

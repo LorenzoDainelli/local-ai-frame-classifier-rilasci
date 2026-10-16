@@ -335,7 +335,9 @@ def test_la_macchina_va_e_torna_dai_byte():
     assert centro == [1, 2, 3] and rotazione == np.eye(3).tolist()
 
 
-def test_senza_memoria_si_riprova_con_meno_foto_e_poi_si_dice(archivio):
+@pytest.mark.parametrize("guasto", [MemoryError(), RuntimeError("CUDA error: out of memory"),
+                                    type("OutOfMemoryError", (RuntimeError,), {})("piena")])
+def test_senza_memoria_si_riprova_con_meno_foto_e_poi_si_dice(archivio, guasto):
     from PIL import Image
 
     class Piena:
@@ -344,10 +346,100 @@ def test_senza_memoria_si_riprova_con_meno_foto_e_poi_si_dice(archivio):
 
         def posizioni(self, immagini):
             self.quante.append(len(immagini))
-            raise MemoryError
+            raise guasto
 
     piena = Piena()
     passata = costruzione.Passata(archivio, modelli=piena)
-    with pytest.raises(ErroreOfficina, match="memoria"):
+    with pytest.raises(ErroreOfficina, match="memoria") as preso:
         passata._posizioni_robuste([costruzione.Foto(i, Image.new("RGB", (8, 6))) for i in range(30)])
     assert piena.quante == [30, 20, 13, 10]
+    assert preso.value.codice == costruzione.STANZA_SENZA_MEMORIA
+
+
+def test_un_guasto_che_non_e_memoria_non_fa_riprovare_con_meno_foto(archivio):
+    from PIL import Image
+
+    finti = ModelliFinti(rotti=True)
+    passata = costruzione.Passata(archivio, modelli=finti)
+    with pytest.raises(RuntimeError, match="rotta"):
+        passata._posizioni_robuste([costruzione.Foto(i, Image.new("RGB", (8, 6))) for i in range(30)])
+    assert finti.chiamate["posizioni"] == 1
+
+
+class ModelliPieni(ModelliFinti):
+
+    def __init__(self, piene: int | None = None, dove: str = "posizioni"):
+        super().__init__()
+        self.piene = piene
+        self.dove = dove
+        self.guasti = 0
+
+    def _forse_piena(self, cosa: str) -> None:
+        if cosa != self.dove or (self.piene is not None and self.guasti >= self.piene):
+            return
+        self.guasti += 1
+        raise RuntimeError("CUDA out of memory. Tried to allocate 2.00 GiB")
+
+    def posizioni(self, immagini) -> dict:
+        self._forse_piena("posizioni")
+        return super().posizioni(immagini)
+
+    def forma(self, immagini, estrinseci, intrinseci) -> dict:
+        self._forse_piena("forma")
+        return super().forma(immagini, estrinseci, intrinseci)
+
+
+def _tre_posti(archivio) -> list[int]:
+    foto = _foto_dell_archivio(archivio)
+    assert len(foto) >= 15
+    return [_un_posto_con(archivio, foto[5 * i:5 * i + 5], nome=f"Stanza {i}") for i in range(3)]
+
+
+@pytest.mark.parametrize("dove", ["posizioni", "forma"])
+def test_tre_stanze_di_fila_senza_memoria_fermano_tutto_e_nessuna_si_segna(archivio_pieno, dove):
+    from officina.modello import stanze
+
+    posti = _tre_posti(archivio_pieno)
+    finti = ModelliPieni(dove=dove)
+    with pytest.raises(ErroreOfficina) as preso:
+        costruzione.Passata(archivio_pieno, modelli=finti).esegui()
+    assert preso.value.codice == "memoria_scheda_finita"
+    assert finti.spenti == 1
+    with archivio_pieno.lettura() as connessione:
+        assert all(stanze.di_posto(connessione, p) is None for p in posti)
+        assert costruzione.da_fare(connessione) == [(p, "costruisci") for p in posti]
+
+
+def test_una_stanza_sola_troppo_grande_si_segna_dopo_una_riuscita(archivio_pieno):
+    from officina.modello import stanze
+
+    primo, secondo, terzo = _tre_posti(archivio_pieno)
+    fatto = costruzione.Passata(archivio_pieno, modelli=ModelliPieni(piene=1)).esegui()
+    assert fatto.stanze == 2 and fatto.non_riuscite == 1
+    with archivio_pieno.lettura() as connessione:
+        assert stanze.di_posto(connessione, primo)["stato"] == stanze.NON_RIUSCITA
+        assert stanze.di_posto(connessione, primo)["perche"] == costruzione.TROPPO_GRANDE
+        assert stanze.di_posto(connessione, secondo)["stato"] == stanze.FATTA
+        assert stanze.di_posto(connessione, terzo)["stato"] == stanze.FATTA
+
+
+def test_le_ultime_stanze_senza_memoria_restano_da_fare(archivio_pieno):
+    from officina.modello import stanze
+
+    foto = _foto_dell_archivio(archivio_pieno)
+    primo = _un_posto_con(archivio_pieno, foto[:5], nome="Prima")
+    secondo = _un_posto_con(archivio_pieno, foto[5:10], nome="Seconda")
+
+    class PienaAllaSeconda(ModelliFinti):
+        def posizioni(self, immagini):
+            if self.chiamate["posizioni"] >= 1:
+                self.chiamate["posizioni"] += 1
+                raise MemoryError
+            return super().posizioni(immagini)
+
+    fatto = costruzione.Passata(archivio_pieno, modelli=PienaAllaSeconda()).esegui()
+    assert fatto.stanze == 1 and fatto.non_riuscite == 0
+    with archivio_pieno.lettura() as connessione:
+        assert stanze.di_posto(connessione, primo)["stato"] == stanze.FATTA
+        assert stanze.di_posto(connessione, secondo) is None
+        assert costruzione.da_fare(connessione) == [(secondo, "costruisci")]

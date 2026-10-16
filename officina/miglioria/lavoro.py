@@ -10,6 +10,7 @@ from typing import Callable
 
 from officina import registro
 from officina.archivio.database import adesso
+from officina.errori import ErroreOfficina
 from officina.importazione import impronta
 from officina.miglioria import (attesa, catena, coda, da_guardare, fedelta, motori, persone,
                                 scambio, sfida, video)
@@ -18,6 +19,12 @@ from officina.web.lavori import Lavoro
 
 MARGINE_DI_SPAZIO = 512 * 1024 * 1024
 QUANTO_PUO_CRESCERE = 12
+SCHEDA_FINITA = "memoria_scheda_finita"
+DI_FILA_SENZA_MEMORIA = 3
+SCHEDA_OCCUPATA = ("La scheda video ha finito la memoria su tre file di fila: di solito vuol dire "
+                   "che la sta usando qualcos'altro, per esempio l'intelligenza artificiale. "
+                   "Il miglioramento si è fermato e quei file sono tornati in coda: fallo "
+                   "ripartire quando la scheda è libera.")
 
 MESSAGGI = {
     "originale_assente": "l'originale non è più dov'era",
@@ -32,6 +39,8 @@ MESSAGGI = {
     "solo_foto": "questo modello migliora solo le foto",
     "lavoro_illeggibile": "difetto del programma nel preparare il lavoro",
     "rotto": "difetto imprevisto: il dettaglio tecnico è nel registro",
+    "torch_troppo_vecchio": ("il motore delle reti neurali è troppo vecchio per aprire "
+                             "i pesi in sicurezza: aggiorna i motori"),
 }
 
 
@@ -103,7 +112,7 @@ class Miglioratore:
         self._lancia = lancia or lancia_la_stanza
         self.motori_scelti = motori_scelti
         self._sfidanti_pronti = sfidanti_pronti or self._ci_sono_tutti_e_due
-        self.lavoro = Lavoro("miglioramento")
+        self.lavoro = Lavoro("miglioramento", scheda=True)
         self._fermati = threading.Event()
         self._processo: subprocess.Popen | None = None
         self.adesso: dict = {}
@@ -177,17 +186,39 @@ class Miglioratore:
         if riparato["riprese"]:
             self.lavoro.di(f"riprendo {riparato['riprese']} file lasciati a metà")
         fatti = 0
-        while not self._fermati.is_set():
-            with self.archivio.scrittura() as connessione:
-                riga = coda.prossima(connessione)
-                if riga is None:
-                    break
-                coda.segna(connessione, riga["id"], coda.IN_LAVORO, guasto=None)
-            self._uno(riga)
-            fatti += 1
-        self.adesso = {}
-        registro.evento("miglioria.giro", fatti=fatti,
-                        fermato=self._fermati.is_set())
+        senza_memoria: list[int] = []
+        try:
+            while not self._fermati.is_set():
+                with self.archivio.scrittura() as connessione:
+                    riga = coda.prossima(connessione)
+                    if riga is None:
+                        break
+                    coda.segna(connessione, riga["id"], coda.IN_LAVORO, guasto=None)
+                self._uno(riga)
+                fatti += 1
+                senza_memoria = self._conta_la_memoria(riga["id"], senza_memoria)
+        finally:
+            self.adesso = {}
+            registro.evento("miglioria.giro", fatti=fatti,
+                            fermato=self._fermati.is_set())
+
+    def _conta_la_memoria(self, miglioria_id: int, senza_memoria: list[int]) -> list[int]:
+        with self.archivio.lettura() as connessione:
+            dopo = coda.per_id(connessione, miglioria_id)
+        if dopo is None:
+            return senza_memoria
+        if dopo["stato"] != coda.FALLITA:
+            return []
+        if dopo["guasto"] != SCHEDA_FINITA:
+            return senza_memoria
+        senza_memoria = [*senza_memoria, miglioria_id]
+        if len(senza_memoria) < DI_FILA_SENZA_MEMORIA:
+            return senza_memoria
+        with self.archivio.scrittura() as connessione:
+            for chi in senza_memoria:
+                coda.segna(connessione, chi, coda.IN_CODA, guasto=None, finita_il=None)
+        self.lavoro.di(f"rimessi in coda {len(senza_memoria)} file: la scheda video era piena")
+        raise ErroreOfficina(SCHEDA_OCCUPATA, codice=SCHEDA_FINITA)
 
     def _uno(self, riga) -> None:
         miglioria_id = riga["id"]
@@ -254,10 +285,11 @@ class Miglioratore:
             self._copie_da_guardare(miglioria_id, originale, finale)
         fatto = esito["fatto"]
         fedele = self._fedelta(genere, originale, finale)
+        sua_impronta = impronta.del_file(finale)
         with self.archivio.scrittura() as connessione:
             coda.segna(connessione, miglioria_id, coda.DA_RIVEDERE,
                        in_revisione=str(finale), fedelta=json.dumps(fedele),
-                       impronta_migliorata=impronta.del_file(finale),
+                       impronta_migliorata=sua_impronta,
                        larghezza_dopo=int(fatto.get("larghezza") or 0) or None,
                        altezza_dopo=int(fatto.get("altezza") or 0) or None,
                        motori=json.dumps(fatto.get("motori") or []),
@@ -277,7 +309,8 @@ class Miglioratore:
         if "guasto" in esito or not parziale.is_file():
             parziale.unlink(missing_ok=True)
             return {"guasto": str(esito.get("guasto") or "stanza_muta"),
-                    "dove": esito.get("dove", ""), "riga": esito.get("riga", "")}
+                    "dove": esito.get("dove", ""), "riga": esito.get("riga", ""),
+                    "tipo": esito.get("tipo", "")}
         return esito
 
     def _fedelta(self, genere: str, originale: Path, finale: Path) -> dict:
@@ -306,6 +339,7 @@ class Miglioratore:
         codice = esito["guasto"]
         if codice != catena.GIA_GRANDE:
             registro.errore("miglioria.fallita", motivo=registro.Parola(codice),
+                            tipo=registro.Parola(str(esito.get("tipo", ""))),
                             dove=registro.Parola(str(esito.get("dove", ""))),
                             riga=str(esito.get("riga", "")))
         self._fallita(miglioria_id, codice)

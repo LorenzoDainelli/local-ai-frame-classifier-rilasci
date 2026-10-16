@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Mapping
+
+from officina.errori import ErroreOfficina
 
 INDICE_PYTORCH = "https://download.pytorch.org/whl"
+
+TORCH_MINIMO = (2, 6)
+PRIMA_CUDA_RECENTE = (12, 4)
 
 SENZA_FINESTRA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
@@ -115,20 +119,25 @@ def con_nvml(libreria=None) -> Esame | None:
             pass
 
 
-def dov_e_nvidia_smi(cerca: Callable[[str], str | None] | None = None,
-                     c_e: Callable[[Path], bool] | None = None) -> str | None:
-    trova = cerca if cerca is not None else shutil.which
+def i_posti_di_nvidia_smi(sistema: str | None = None,
+                          ambiente: Mapping[str, str] | None = None) -> list[Path]:
+    quale = sistema if sistema is not None else sys.platform
+    variabili = ambiente if ambiente is not None else os.environ
+    if quale == "win32":
+        sistema_windows = variabili.get("SystemRoot") or r"C:\Windows"
+        programmi = variabili.get("ProgramFiles") or r"C:\Program Files"
+        return [Path(sistema_windows) / "System32" / "nvidia-smi.exe",
+                Path(programmi) / "NVIDIA Corporation" / "NVSMI" / "nvidia-smi.exe"]
+    return [Path("/usr/bin/nvidia-smi"), Path("/usr/local/bin/nvidia-smi"),
+            Path("/usr/local/nvidia/bin/nvidia-smi"), Path("/usr/lib/wsl/lib/nvidia-smi")]
+
+
+def dov_e_nvidia_smi(c_e: Callable[[Path], bool] | None = None,
+                     sistema: str | None = None,
+                     ambiente: Mapping[str, str] | None = None) -> str | None:
     guarda = c_e if c_e is not None else (lambda p: p.is_file())
-    trovato = trova("nvidia-smi")
-    if trovato:
-        return trovato
-    if sys.platform != "win32":
-        return None
-    for posto in (
-            Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "nvidia-smi.exe",
-            Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
-            / "NVIDIA Corporation" / "NVSMI" / "nvidia-smi.exe"):
-        if guarda(posto):
+    for posto in i_posti_di_nvidia_smi(sistema, ambiente):
+        if os.path.isabs(posto) and guarda(posto):
             return str(posto)
     return None
 
@@ -159,7 +168,7 @@ def leggi_nvidia_smi(elenco: str, intestazione: str) -> Esame | None:
         if not preso:
             continue
         capacita = None
-        if preso["capacita"] and preso["capacita"][0].isdigit():
+        if preso["capacita"] and preso["capacita"][0].isdecimal():
             grande, piccola = preso["capacita"].split(".")
             capacita = (int(grande), int(piccola))
         schede.append(Scheda(nome=preso["nome"].strip(),
@@ -302,6 +311,9 @@ UN_PACCHETTO = re.compile(
     r"-(?P<py>cp\d+)-(?P<abi>cp\d+t?)-(?P<dove>[a-z0-9_]+)\.whl")
 
 
+UNA_VERSIONE_DI_TORCH = re.compile(r"^\s*(\d+)\.(\d+)")
+
+
 def _versione(testo: str) -> tuple[int, ...]:
     return tuple(int(p) for p in testo.split("."))
 
@@ -329,6 +341,30 @@ def versioni_nell_indice(pagina: str, nome: str, variante: str,
             continue
         trovate.add(preso["versione"])
     return sorted(trovate, key=_versione, reverse=True)
+
+
+def torch_legge_in_sicurezza(versione: str | None) -> bool:
+    preso = UNA_VERSIONE_DI_TORCH.match(str(versione or ""))
+    if not preso:
+        return False
+    return (int(preso[1]), int(preso[2])) >= TORCH_MINIMO
+
+
+class TorchTroppoVecchio(ErroreOfficina):
+    codice = "torch_troppo_vecchio"
+
+
+def controlla_che_torch_legga_in_sicurezza(torch) -> None:
+    versione = str(getattr(torch, "__version__", "") or "")
+    if torch_legge_in_sicurezza(versione):
+        return
+    minima = ".".join(str(n) for n in TORCH_MINIMO)
+    raise TorchTroppoVecchio(
+        f"Il motore delle reti neurali che hai in casa (torch {versione or 'sconosciuto'}) "
+        f"è troppo vecchio per aprire questo file in sicurezza: prima della versione "
+        f"{minima} un file di pesi costruito apposta può far eseguire codice sul "
+        "computer. Per questo non lo apro. Aggiorna i motori all'ultima versione "
+        "e riprova; il resto del programma funziona lo stesso.")
 
 
 def torchvision_per(torch: str, disponibili: list[str]) -> str | None:
@@ -362,11 +398,19 @@ def perche_a_parole(esame: Esame, variante: Variante) -> str:
                 "programma lavorerà con il processore. Funziona tutto, solo "
                 "più lentamente quando calcola le impronte.")
     if variante.etichetta == "cpu":
-        motivo = ("il driver NVIDIA è troppo vecchio per le versioni di oggi"
-                  if esame.cuda_del_driver and esame.cuda_del_driver < (11, 8)
-                  else "nessuna versione con CUDA va bene per questa scheda")
+        driver = esame.cuda_del_driver
+        if driver and driver < (11, 8):
+            motivo = "il driver NVIDIA è troppo vecchio per le versioni di oggi"
+        elif driver and driver < PRIMA_CUDA_RECENTE:
+            motivo = ("il driver NVIDIA è troppo vecchio per una versione "
+                      "abbastanza recente da essere sicura")
+        else:
+            motivo = "nessuna versione con CUDA va bene per questa scheda"
+        consiglio = (" Aggiornando il driver NVIDIA dal sito di NVIDIA potrai "
+                     "usare anche la scheda." if driver and driver < PRIMA_CUDA_RECENTE
+                     else "")
         return (f"Ho trovato una {scheda.nome} ({scheda.memoria_a_parole}), ma "
-                f"{motivo}: per sicurezza lavorerò con il processore.")
+                f"{motivo}: per sicurezza lavorerò con il processore.{consiglio}")
     cuda = ".".join(str(n) for n in variante.cuda)
     return (f"Ho trovato una {scheda.nome} ({scheda.memoria_a_parole}). "
             f"Prendo la versione per CUDA {cuda}, che il suo driver regge.")
@@ -380,8 +424,10 @@ def prepara_il_piano(esame: Esame,
     avvisi = []
     for variante in candidate(esame):
         indice = f"{INDICE_PYTORCH}/{variante.etichetta}"
-        torce = versioni_nell_indice(guarda(f"{indice}/torch/") or "", "torch",
-                                     variante.etichetta, python, dove)
+        torce = [v for v in versioni_nell_indice(
+                     guarda(f"{indice}/torch/") or "", "torch",
+                     variante.etichetta, python, dove)
+                 if _versione(v)[:2] >= TORCH_MINIMO]
         if not torce:
             continue
         visioni = versioni_nell_indice(guarda(f"{indice}/torchvision/") or "",

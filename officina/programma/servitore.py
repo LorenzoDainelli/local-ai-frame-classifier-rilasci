@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import socket
+import sys
 import threading
 import time
+from pathlib import Path
 
+from officina import registro
 from officina.errori import ErroreOfficina
 
 PORTA_PREFERITA = 8080
+PORTA_DELLA_RETE = 8443
 
 
 def e_libera(porta: int, host: str = "127.0.0.1") -> bool:
@@ -26,6 +30,26 @@ def porta_libera(preferita: int = PORTA_PREFERITA, host: str = "127.0.0.1") -> i
         return prova.getsockname()[1]
 
 
+def solo_per_chi_lo_usa(cartella: Path, chiave: Path) -> None:
+    if sys.platform == "win32":
+        return
+    try:
+        cartella.chmod(0o700)
+        chiave.chmod(0o600)
+    except OSError as guasto:
+        registro.avviso("programma.chiave_della_rete_aperta", **registro.dove_si_e_rotto(guasto))
+
+
+def per_la_rete(cartella: Path, preferita: int = PORTA_DELLA_RETE) -> tuple[Servitore, str]:
+    from officina.schermo import certificato
+
+    suo = certificato.carica_o_crea(cartella)
+    solo_per_chi_lo_usa(cartella, suo.chiave)
+    servitore = Servitore(host="0.0.0.0", porta=porta_libera(preferita, "0.0.0.0"),
+                          certificato=suo.certificato, chiave=suo.chiave)
+    return servitore, suo.impronta
+
+
 class Servitore:
 
     def __init__(self, app="officina.web.server:app", host: str = "127.0.0.1",
@@ -41,7 +65,8 @@ class Servitore:
 
     @property
     def indirizzo(self) -> str:
-        return f"http://127.0.0.1:{self.porta}/"
+        schema = "https" if self.certificato else "http"
+        return f"{schema}://127.0.0.1:{self.porta}/"
 
     @property
     def gira(self) -> bool:

@@ -5,6 +5,9 @@ from pathlib import Path
 import pytest
 
 from officina.volti import scaricamento
+from prove import impronte_vuote
+
+senza_impronte_vere = impronte_vuote.senza_impronte_vere
 
 
 def _fonte(**cambia):
@@ -64,22 +67,21 @@ def test_non_si_accontenta_di_un_onnx_che_sembra_quello(tmp_path, monkeypatch):
     scarica, chiesti = _finto_hub(
         monkeypatch, {"altri/x": ["models/quello_grande.onnx", "altro.onnx"]},
         tmp_path)
-    monkeypatch.setattr(scaricamento, "_posti_che_somigliano", lambda *a: [])
 
     with pytest.raises(RuntimeError):
         scaricamento._prendi(scarica, _fonte(riserve=("altri/x",)), None, None)
     assert chiesti == []
 
 
-def test_se_le_riserve_non_bastano_cerca_e_prova_quelli_trovati(tmp_path, monkeypatch):
+def test_se_le_riserve_non_bastano_non_cerca_in_giro(tmp_path, monkeypatch):
     scarica, chiesti = _finto_hub(
         monkeypatch, {"trovato/insightface": ["models/quello.onnx"]}, tmp_path)
-    monkeypatch.setattr(scaricamento, "_posti_che_somigliano",
-                        lambda fonte, chiave: ["trovato/insightface"])
 
-    _, fonte = scaricamento._prendi(scarica, _fonte(), None, None)
+    with pytest.raises(RuntimeError):
+        scaricamento._prendi(scarica, _fonte(), None, None)
 
-    assert fonte.repo == "trovato/insightface"
+    assert chiesti == []
+    assert not hasattr(scaricamento, "_posti_che_somigliano")
 
 
 def test_se_il_posto_dichiarato_c_e_non_va_a_cercare_altrove(tmp_path, monkeypatch):

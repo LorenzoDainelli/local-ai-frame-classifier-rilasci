@@ -53,12 +53,14 @@ def main() -> int:
         return 1
     except Exception as errore:
         codice = "rotto"
-        if "out of memory" in str(errore).lower():
-            codice = "memoria_scheda_finita"
+        if torcia.memoria_finita(errore):
+            codice = ("memoria_finita" if "can't allocate memory" in str(errore).lower()
+                      else "memoria_scheda_finita")
         from officina import registro
 
-        manda({"guasto": codice, **{chiave: str(valore) for chiave, valore
-                                     in registro.dove_si_e_rotto(errore).items()}})
+        dove = registro.dove_si_e_rotto(errore)
+        manda({**{chiave: str(valore) for chiave, valore in dove.items()},
+               "tipo": str(dove.get("guasto", "")), "guasto": codice})
         return 1
     manda({"fatto": esito})
     return 0

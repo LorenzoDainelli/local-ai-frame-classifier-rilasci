@@ -308,10 +308,15 @@ def _dove_stanno(connessione: sqlite3.Connection, gli_esempi: esempi_mod.Esempi
     if not gli_esempi.scatti:
         return {}
     segni = dict(zip(gli_esempi.scatti, gli_esempi.risposte, strict=True))
-    segnaposto = ",".join("?" * len(gli_esempi.scatti))
-    for riga in tutti(connessione,
-                      f"SELECT id, luogo_id FROM scatti WHERE id IN ({segnaposto}) "
-                      "AND luogo_id IS NOT NULL", *gli_esempi.scatti):
+    righe = []
+    scatti = list(dict.fromkeys(gli_esempi.scatti))
+    for inizio in range(0, len(scatti), 900):
+        pezzo = scatti[inizio:inizio + 900]
+        segnaposto = ",".join("?" * len(pezzo))
+        righe.extend(tutti(connessione,
+                           f"SELECT id, luogo_id FROM scatti WHERE id IN ({segnaposto}) "
+                           "AND luogo_id IS NOT NULL", *pezzo))
+    for riga in righe:
         casella = conto.setdefault(int(riga["luogo_id"]), [0, 0])
         casella[1] += 1
         if segni.get(riga["id"]):

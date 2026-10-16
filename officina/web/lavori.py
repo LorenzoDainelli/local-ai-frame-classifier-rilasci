@@ -18,10 +18,77 @@ GUASTO_IMPREVISTO = (
     "previsto. È un difetto del programma.")
 
 
+NOMI_NEL_TURNO = {"miglioramento": "il miglioramento"}
+
+
+class TurnoDellaScheda:
+
+    def __init__(self):
+        self._cambiato = threading.Condition()
+        self._chi: Lavoro | None = None
+        self._rinunce: set[str] = set()
+        self._in_attesa: set[str] = set()
+
+    @property
+    def chi(self) -> Lavoro | None:
+        return self._chi
+
+    def prendi(self, lavoro: Lavoro, nome: str) -> bool:
+        with self._cambiato:
+            self._rinunce.discard(nome)
+            if self._chi is not None and lavoro in self._chi.figli:
+                return True
+            self._in_attesa.add(nome)
+            try:
+                return self._aspetta(lavoro, nome)
+            finally:
+                self._in_attesa.discard(nome)
+
+    def _aspetta(self, lavoro: Lavoro, nome: str) -> bool:
+        avvisato = False
+        while self._chi is not None and self._chi is not lavoro:
+            if nome in self._rinunce:
+                self._rinunce.discard(nome)
+                lavoro.numeri.pop("in_attesa_della_scheda", None)
+                return False
+            if not avvisato:
+                lavoro.numeri["in_attesa_della_scheda"] = self._chi.cosa
+                lavoro.di("in attesa della scheda: la sta usando "
+                          + NOMI_NEL_TURNO.get(self._chi.cosa, self._chi.cosa))
+                avvisato = True
+            self._cambiato.wait(0.5)
+        self._chi = lavoro
+        lavoro.numeri.pop("in_attesa_della_scheda", None)
+        if avvisato:
+            lavoro.di("la scheda è libera: parto")
+        return True
+
+    def lascia(self, lavoro: Lavoro) -> None:
+        with self._cambiato:
+            if self._chi is lavoro:
+                self._chi = None
+            self._cambiato.notify_all()
+
+    def rinuncia(self, nome: str) -> None:
+        with self._cambiato:
+            self._rinunce.add(nome)
+            self._cambiato.notify_all()
+
+    def rinunciano_tutti(self) -> None:
+        with self._cambiato:
+            self._rinunce.update(self._in_attesa)
+            self._cambiato.notify_all()
+
+
+turno = TurnoDellaScheda()
+
+
 class Lavoro:
 
-    def __init__(self, cosa: str, quante_righe: int = QUANTE_RIGHE):
+    def __init__(self, cosa: str, quante_righe: int = QUANTE_RIGHE, scheda: bool = False):
         self.cosa = cosa
+        self.scheda = scheda
+        self.figli: tuple[Lavoro, ...] = ()
         self.righe: deque[str] = deque(maxlen=quante_righe)
         self.numeri: dict = {}
         self.guasto = ""
@@ -89,13 +156,19 @@ class Lavoro:
             self.guasto = ""
             self.dettaglio = ""
             self.finito = False
-            self._filo = threading.Thread(target=self._dentro, args=(funzione,),
+            self._filo = threading.Thread(target=self._dentro, args=(funzione, nome),
                                           name=nome, daemon=True)
             self._filo.start()
         return True
 
-    def _dentro(self, funzione: Callable[[], None]) -> None:
+    def _dentro(self, funzione: Callable[[], None], nome: str = "lavoro") -> None:
+        preso = False
         try:
+            if self.scheda:
+                preso = turno.prendi(self, nome)
+                if not preso:
+                    self.di("fermato prima di partire: la scheda era occupata")
+                    return
             funzione()
         except ErroreOfficina as errore:
             self.guasto = errore.messaggio
@@ -106,6 +179,8 @@ class Lavoro:
             self.dettaglio = registro.passi_del_guasto(errore)
             registro.errore("lavoro.rotto", **registro.dove_si_e_rotto(errore))
         finally:
+            if preso:
+                turno.lascia(self)
             self.finito = True
 
     def aspetta_che_finisca(self, secondi: float = ATTESA_DOPO_FERMA) -> bool:

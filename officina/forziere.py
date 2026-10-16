@@ -21,6 +21,7 @@ BLOCCO_SCRYPT = 8
 PARALLELO = 1
 LUNGHEZZA_CHIAVE = 32
 SALE = 16
+MINIMO_NUOVA = 12
 
 BLOCCO = 4 * 1024 * 1024
 
@@ -99,12 +100,11 @@ class Forziere:
             raise ErroreOfficina(
                 "Questo archivio ha già un forziere. Per cambiare la password "
                 "si apre e si richiude con quella nuova.")
-        _password_utile(password)
+        _password_nuova(password)
         if not self.cartella.is_dir():
             raise ErroreOfficina("Questo archivio non esiste ancora.")
 
         _scrivi(self.file, self.cartella, password)
-        _rileggi_per_controllo(self.file, password)
         _svuota(self.cartella)
         self.cartella.mkdir(parents=True, exist_ok=True)
         registro.evento("forziere.acceso")
@@ -129,9 +129,8 @@ class Forziere:
         if not self.acceso or not self.aperto:
             return
         _password_utile(password)
-        (self.cartella / MARCATORE_APERTO).unlink(missing_ok=True)
         _scrivi(self.file, self.cartella, password)
-        _rileggi_per_controllo(self.file, password)
+        (self.cartella / MARCATORE_APERTO).unlink(missing_ok=True)
         _svuota(self.cartella)
         self.cartella.mkdir(parents=True, exist_ok=True)
         registro.evento("forziere.chiuso")
@@ -169,6 +168,14 @@ def _password_utile(password: str) -> None:
         raise ErroreOfficina(
             "La password deve essere lunga almeno otto caratteri. Lunga meglio "
             "che complicata: tre parole che ricordi valgono più di otto "
+            "caratteri strani.")
+
+
+def _password_nuova(password: str) -> None:
+    if not password or len(password) < MINIMO_NUOVA:
+        raise ErroreOfficina(
+            "La password nuova deve essere lunga almeno dodici caratteri. Lunga "
+            "meglio che complicata: tre parole che ricordi valgono più di otto "
             "caratteri strani.")
 
 
@@ -215,6 +222,78 @@ def _accompagnamento(numero: int, ultimo: bool) -> bytes:
             + numero.to_bytes(8, "big") + (b"\x01" if ultimo else b"\x00"))
 
 
+class _Cifrante:
+
+    def __init__(self, fuori, cifratore, prefisso: bytes):
+        self.fuori = fuori
+        self.cifratore = cifratore
+        self.prefisso = prefisso
+        self.numero = 1
+        self.attesa = bytearray()
+
+    def write(self, dati) -> int:
+        self.attesa += dati
+        while len(self.attesa) > BLOCCO:
+            self._manda(bytes(self.attesa[:BLOCCO]), ultimo=False)
+            del self.attesa[:BLOCCO]
+        return len(dati)
+
+    def finisci(self) -> None:
+        self._manda(bytes(self.attesa), ultimo=True)
+        self.attesa.clear()
+
+    def _manda(self, pezzo: bytes, ultimo: bool) -> None:
+        _scrivi_un_blocco(self.fuori, self.cifratore.encrypt(
+            _nonce(self.prefisso, self.numero), pezzo,
+            _accompagnamento(self.numero, ultimo)))
+        self.numero += 1
+
+
+class _Decifrante:
+
+    def __init__(self, dentro, cifratore, prefisso: bytes):
+        self.dentro = dentro
+        self.cifratore = cifratore
+        self.prefisso = prefisso
+        self.numero = 1
+        self.pronto = b""
+        self.posizione = 0
+        self.finito = False
+
+    def read(self, quanti: int = -1) -> bytes:
+        pezzi = []
+        while quanti != 0:
+            if self.posizione >= len(self.pronto):
+                if self.finito:
+                    break
+                self._prossimo()
+                continue
+            fine = len(self.pronto) if quanti < 0 else min(
+                len(self.pronto), self.posizione + quanti)
+            pezzi.append(self.pronto[self.posizione:fine])
+            if quanti > 0:
+                quanti -= fine - self.posizione
+            self.posizione = fine
+        return b"".join(pezzi)
+
+    def fino_in_fondo(self) -> None:
+        while not self.finito:
+            self._prossimo()
+        self.pronto = b""
+
+    def _prossimo(self) -> None:
+        chiuso = _leggi_un_blocco(self.dentro)
+        if not chiuso:
+            raise ErroreOfficina(
+                "Il forziere finisce a metà: manca l'ultimo blocco. "
+                "Il file è rovinato, o è stato copiato mentre il "
+                "programma stava ancora scrivendo.")
+        self.pronto, self.finito = _apri_un_blocco(self.cifratore, self.prefisso,
+                                                   self.numero, chiuso)
+        self.posizione = 0
+        self.numero += 1
+
+
 def _scrivi(destinazione: Path, cartella: Path, password: str) -> None:
     AESGCM = _aead()
     sale = secrets.token_bytes(SALE)
@@ -222,30 +301,20 @@ def _scrivi(destinazione: Path, cartella: Path, password: str) -> None:
     cifratore = AESGCM(_chiave(password, sale, COSTO, BLOCCO_SCRYPT, PARALLELO))
 
     provvisorio = destinazione.with_suffix(destinazione.suffix + ".nuovo")
-    pacco = _impacchetta(cartella)
     try:
-        with open(pacco, "rb") as dentro, open(provvisorio, "wb") as fuori:
+        with open(provvisorio, "wb") as fuori:
             fuori.write(_intestazione(sale, prefisso))
             _scrivi_un_blocco(fuori, cifratore.encrypt(
                 _nonce(prefisso, 0), PROVA, _accompagnamento(0, False)))
-            numero = 1
-            pezzo = dentro.read(BLOCCO)
-            while True:
-                prossimo = dentro.read(BLOCCO)
-                ultimo = not prossimo
-                _scrivi_un_blocco(fuori, cifratore.encrypt(
-                    _nonce(prefisso, numero), pezzo,
-                    _accompagnamento(numero, ultimo)))
-                if ultimo:
-                    break
-                pezzo = prossimo
-                numero += 1
+            flusso = _Cifrante(fuori, cifratore, prefisso)
+            _impacchetta(cartella, flusso)
+            flusso.finisci()
             fuori.flush()
             os.fsync(fuori.fileno())
+        _rileggi_per_controllo(provvisorio, password)
+        provvisorio.replace(destinazione)
     finally:
-        pacco.unlink(missing_ok=True)
-
-    provvisorio.replace(destinazione)
+        provvisorio.unlink(missing_ok=True)
 
 
 def _scrivi_un_blocco(fuori, chiuso: bytes) -> None:
@@ -288,21 +357,17 @@ def _controlla_la_password(cifratore, prefisso: bytes, chiuso: bytes) -> None:
         raise ErroreOfficina("Questo forziere è rovinato all'inizio.")
 
 
-def _impacchetta(cartella: Path) -> Path:
-    provvisorio = cartella.parent / f".{cartella.name}.tar.provvisorio"
-    with tarfile.open(provvisorio, "w") as pacco:
+def _impacchetta(cartella: Path, flusso: _Cifrante) -> None:
+    with tarfile.open(fileobj=flusso, mode="w|") as pacco:
         for roba in sorted(cartella.rglob("*")):
             if roba.name == MARCATORE_APERTO:
                 continue
             pacco.add(roba, arcname=str(roba.relative_to(cartella)),
                       recursive=False)
-    return provvisorio
 
 
 def _leggi(sorgente_file: Path, cartella: Path, password: str) -> None:
     AESGCM = _aead()
-    provvisorio = cartella.parent / f".{cartella.name}.tar.aperto"
-
     with open(sorgente_file, "rb") as dentro:
         testa = _leggi_intestazione(dentro)
         sale = bytes.fromhex(testa["sale"])
@@ -310,29 +375,13 @@ def _leggi(sorgente_file: Path, cartella: Path, password: str) -> None:
         cifratore = AESGCM(_chiave(password, sale, testa["n"], testa["r"],
                                    testa["p"]))
         _controlla_la_password(cifratore, prefisso, _leggi_un_blocco(dentro))
-        with open(provvisorio, "wb") as fuori:
-            numero = 1
-            finito = False
-            while not finito:
-                chiuso = _leggi_un_blocco(dentro)
-                if not chiuso:
-                    raise ErroreOfficina(
-                        "Il forziere finisce a metà: manca l'ultimo blocco. "
-                        "Il file è rovinato, o è stato copiato mentre il "
-                        "programma stava ancora scrivendo.")
-                pezzo, finito = _apri_un_blocco(cifratore, prefisso, numero,
-                                                chiuso)
-                fuori.write(pezzo)
-                numero += 1
-
-    if cartella.is_dir():
-        shutil.rmtree(cartella)
-    cartella.mkdir(parents=True, exist_ok=True)
-    try:
-        with tarfile.open(provvisorio, "r") as pacco:
+        if cartella.is_dir():
+            shutil.rmtree(cartella)
+        cartella.mkdir(parents=True, exist_ok=True)
+        flusso = _Decifrante(dentro, cifratore, prefisso)
+        with tarfile.open(fileobj=flusso, mode="r|") as pacco:
             _estrai_senza_uscire(pacco, cartella)
-    finally:
-        provvisorio.unlink(missing_ok=True)
+        flusso.fino_in_fondo()
 
 
 def _apri_un_blocco(cifratore, prefisso: bytes, numero: int,
@@ -352,16 +401,16 @@ def _apri_un_blocco(cifratore, prefisso: bytes, numero: int,
 
 def _estrai_senza_uscire(pacco: tarfile.TarFile, dove: Path) -> None:
     radice = dove.resolve()
-    for voce in pacco.getmembers():
+    for voce in pacco:
         arrivo = (radice / voce.name).resolve()
         if arrivo != radice and radice not in arrivo.parents:
             raise ErroreOfficina(
                 "Dentro il forziere c'è un percorso che punta fuori "
                 "dall'archivio. Non lo apro.")
-    try:
-        pacco.extractall(radice, filter="data")
-    except TypeError:
-        pacco.extractall(radice)
+        try:
+            pacco.extract(voce, radice, filter="data")
+        except TypeError:
+            pacco.extract(voce, radice)
 
 
 def _rileggi_per_controllo(file: Path, password: str) -> None:

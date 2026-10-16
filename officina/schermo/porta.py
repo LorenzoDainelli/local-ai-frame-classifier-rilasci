@@ -16,6 +16,7 @@ from officina.schermo import (AGGIORNA, CHIUSO, DOMANDA, INTESTAZIONE, PORTA_TCP
 
 DURATA_DEL_CODICE = 300.0
 TENTATIVI_PER_CODICE = 5
+TENTATIVI_IN_TUTTO = 20
 DURATA_DI_UN_ABBINAMENTO = 60.0
 MASSIMO_ABBINAMENTI_APERTI = 8
 CHI_PORTATILE_ID = b"portatile"
@@ -25,9 +26,14 @@ PORTA_CHIUSA = ("La porta del fisso è chiusa. Aprila dal fisso, in Impostazioni
                 "alla voce «Il portatile».")
 CODICE_SBAGLIATO = ("Il codice non è quello che si vede sul fisso. Controlla le "
                     "sei cifre e riprova.")
-NON_TI_CONOSCO = ("Il fisso non riconosce più questo portatile: abbinalo di nuovo "
-                  "con il codice.")
-PASSWORD_SBAGLIATA = "La password non è quella del forziere del fisso."
+NON_TI_FA_ENTRARE = ("Il fisso non ti fa entrare: la password non è quella del "
+                     "forziere del fisso, oppure il fisso non riconosce più questo "
+                     "portatile. In quel caso abbinalo di nuovo con il codice.")
+NESSUN_CODICE = ("Sul fisso adesso non c'è nessun codice valido. Apri sul fisso la "
+                 "pagina «Il portatile» e scrivi il codice che vedi.")
+TROPPI_SBAGLI = ("Troppi tentativi sbagliati con il codice: il fisso non ne accetta "
+                 "altri finché sul fisso non premi «Nuovo codice».")
+TROPPI_SBAGLI_SUL_FISSO = "Troppi tentativi sbagliati: premi «Nuovo codice»."
 
 
 class NoDallaPorta(ErroreOfficina):
@@ -73,6 +79,7 @@ class Porta:
         self._codice = ""
         self._codice_nato = 0.0
         self._sbagli = 0
+        self._sbagli_in_tutto = 0
         self._abbinamenti: dict[str, _Abbinamento] = {}
         self._sessioni: dict[str, _Sessione] = {}
         self._servitore = None
@@ -92,7 +99,8 @@ class Porta:
             if self.aperta:
                 return
             self.certificato = certificato.carica_o_crea(self._cartella())
-            self._nuovo_codice()
+            self._togli_il_codice()
+            self._sbagli_in_tutto = 0
             self.aperta = True
             if con_servitore:
                 try:
@@ -107,6 +115,7 @@ class Porta:
         with self._lucchetto:
             self.aperta = False
             self.chiusura = None
+            self._togli_il_codice()
             self._abbinamenti.clear()
             self._sessioni.clear()
             servitore, self._servitore = self._servitore, None
@@ -131,16 +140,23 @@ class Porta:
 
     def _accendi_l_ascolto(self) -> None:
         self._basta_ascoltare = threading.Event()
-        self._ascolto = threading.Thread(target=self._ascolta, args=(self._basta_ascoltare,),
+        orecchio = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            orecchio.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            orecchio.bind(("0.0.0.0", PORTA_UDP))
+            orecchio.settimeout(0.5)
+        except OSError as guasto:
+            orecchio.close()
+            registro.errore("schermo.ascolto_rotto", **registro.dove_si_e_rotto(guasto))
+            return
+        self._ascolto = threading.Thread(target=self._ascolta,
+                                         args=(orecchio, self._basta_ascoltare),
                                          name="schermo-ascolto", daemon=True)
         self._ascolto.start()
 
-    def _ascolta(self, basta: threading.Event) -> None:
+    def _ascolta(self, orecchio: socket.socket, basta: threading.Event) -> None:
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as orecchio:
-                orecchio.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                orecchio.bind(("0.0.0.0", PORTA_UDP))
-                orecchio.settimeout(0.5)
+            with orecchio:
                 while not basta.is_set():
                     try:
                         arrivato, da_chi = orecchio.recvfrom(256)
@@ -160,15 +176,46 @@ class Porta:
         self._codice_nato = time.monotonic()
         self._sbagli = 0
 
+    def _togli_il_codice(self) -> None:
+        self._codice = ""
+        self._codice_nato = 0.0
+        self._sbagli = 0
+
+    def _codice_valido(self) -> tuple[str, int]:
+        if not self.aperta or not self._codice or self.troppi_sbagli:
+            return "", 0
+        restano = DURATA_DEL_CODICE - (time.monotonic() - self._codice_nato)
+        if restano <= 0:
+            self._togli_il_codice()
+            return "", 0
+        return self._codice, int(restano)
+
+    @property
+    def troppi_sbagli(self) -> bool:
+        return self._sbagli_in_tutto >= TENTATIVI_IN_TUTTO
+
     def codice(self) -> tuple[str, int]:
+        with self._lucchetto:
+            return self._codice_valido()
+
+    def mostra_il_codice(self) -> tuple[str, int]:
+        with self._lucchetto:
+            if not self.aperta or self.troppi_sbagli:
+                return "", 0
+            codice, secondi = self._codice_valido()
+            if codice:
+                return codice, secondi
+            self._nuovo_codice()
+            return self._codice_valido()
+
+    def nuovo_codice(self) -> tuple[str, int]:
         with self._lucchetto:
             if not self.aperta:
                 return "", 0
-            passati = time.monotonic() - self._codice_nato
-            if passati >= DURATA_DEL_CODICE:
-                self._nuovo_codice()
-                passati = 0.0
-            return self._codice, int(DURATA_DEL_CODICE - passati)
+            self._sbagli_in_tutto = 0
+            self._abbinamenti.clear()
+            self._nuovo_codice()
+            return self._codice_valido()
 
     def _pulisci(self) -> None:
         adesso = time.monotonic()
@@ -179,10 +226,14 @@ class Porta:
     def abbina_uno(self, id_portatile: str, nome_portatile: str) -> dict:
         from spake2 import SPAKE2_B
 
-        codice, _ = self.codice()
         with self._lucchetto:
             if not self.aperta:
                 raise NoDallaPorta(PORTA_CHIUSA)
+            if self.troppi_sbagli:
+                raise NoDallaPorta(TROPPI_SBAGLI)
+            codice, _ = self._codice_valido()
+            if not codice:
+                raise NoDallaPorta(NESSUN_CODICE)
             self._pulisci()
             if len(self._abbinamenti) >= MASSIMO_ABBINAMENTI_APERTI:
                 raise NoDallaPorta("Troppi tentativi insieme. Aspetta un minuto e riprova.")
@@ -198,6 +249,10 @@ class Porta:
             fatto = self._abbinamenti.pop(abbinamento, None)
             if fatto is None or not self.aperta:
                 raise NoDallaPorta(PORTA_CHIUSA if not self.aperta else CODICE_SBAGLIATO)
+            if self.troppi_sbagli:
+                raise NoDallaPorta(TROPPI_SBAGLI)
+            if fatto.codice != self._codice_valido()[0]:
+                raise NoDallaPorta(NESSUN_CODICE)
             try:
                 chiave = fatto.spake.finish(patto.da_base64(arrivato))
             except Exception:
@@ -207,9 +262,13 @@ class Porta:
                 prova_portatile, patto.prova(chiave, patto.CHI_PORTATILE, impronta))
             if not giusta:
                 self._sbagli += 1
-                if self._sbagli >= TENTATIVI_PER_CODICE:
-                    self._nuovo_codice()
+                self._sbagli_in_tutto += 1
+                if self._sbagli >= TENTATIVI_PER_CODICE or self.troppi_sbagli:
+                    self._togli_il_codice()
                 registro.avviso("schermo.codice_sbagliato")
+                if self.troppi_sbagli:
+                    self._abbinamenti.clear()
+                    raise NoDallaPorta(TROPPI_SBAGLI)
                 raise NoDallaPorta(CODICE_SBAGLIATO)
             gettone = secrets.token_urlsafe(32)
             tutti = portatili()
@@ -220,7 +279,9 @@ class Porta:
                 "ultima_volta": None,
             }
             carta.aggiorna(portatili=tutti)
-            self._nuovo_codice()
+            self._togli_il_codice()
+            self._sbagli_in_tutto = 0
+            self._abbinamenti.clear()
         registro.evento("schermo.abbinato")
         return {"prova": patto.prova(chiave, patto.CHI_FISSO, impronta),
                 "gettone": patto.chiudi_il_gettone(chiave, gettone)}
@@ -235,10 +296,11 @@ class Porta:
         suo = portatili().get(id_portatile)
         if suo is None or not patto.uguali(patto.impronta_del_gettone(gettone),
                                            suo.get("gettone") or ""):
-            raise NoDallaPorta(NON_TI_CONOSCO)
+            registro.avviso("schermo.portatile_sconosciuto")
+            raise NoDallaPorta(NON_TI_FA_ENTRARE)
         if self.serve_la_password() and not self.chi_password.e_giusta(password):
             registro.avviso("schermo.password_sbagliata")
-            raise NoDallaPorta(PASSWORD_SBAGLIATA)
+            raise NoDallaPorta(NON_TI_FA_ENTRARE)
         sessione = secrets.token_urlsafe(32)
         with self._lucchetto:
             self._sessioni = {sessione: _Sessione(id_portatile)}

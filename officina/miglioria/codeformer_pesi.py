@@ -63,6 +63,9 @@ def converti(sorgente: Path, dentro: str | None, arrivo: Path) -> None:
     import torch
     from safetensors.torch import save_file
 
+    from officina.programma import scheda
+
+    scheda.controlla_che_torch_legga_in_sicurezza(torch)
     letto = torch.load(str(sorgente), map_location="cpu", weights_only=True)
     if dentro:
         letto = letto.get(dentro) if isinstance(letto, dict) else None

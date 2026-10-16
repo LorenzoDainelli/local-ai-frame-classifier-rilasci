@@ -19,6 +19,7 @@
     <div class="st-c-testa">
         <div>
             <h1>Stato</h1>
+            {% include "_st_semaforo.html" %}
             <p class="sottotitolo">Tutto in una schermata: ogni riquadro si apre per intero.</p>
         </div>
         {% if sistemare %}<span class="bollino attenzione">{{ sistemare|length }} {{ 'cosa' if sistemare|length == 1 else 'cose' }} da sistemare</span>

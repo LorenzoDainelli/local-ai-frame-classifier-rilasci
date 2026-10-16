@@ -344,6 +344,9 @@ class ConversioneFallita(Exception):
 
 
 def _lettura_ristretta(percorso):
+    from officina.programma import scheda
+
+    scheda.controlla_che_torch_legga_in_sicurezza(torch)
     return torch.load(str(percorso), map_location="cpu", weights_only=True)
 
 

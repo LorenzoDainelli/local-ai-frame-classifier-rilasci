@@ -8,12 +8,30 @@
             controllata subito dopo: una copia mai provata è solo un file che si
             spera funzioni.
         </p>
+        {% if copia_prenotata %}
+        <div class="riga-fra piccolo">
+            <span>Prenotata: alla prossima apertura il programma rimette la copia scelta. Prima salva quella di adesso. Chiudi e riapri il programma.</span>
+            <form method="post" action="/impostazioni/copia/disdici"><button class="tasto-comando nudo piccolo" type="submit">Lascia stare</button></form>
+        </div>
+        {% endif %}
         {% if copie %}
         <div class="mm-elenco">
             {% for copia in copie %}
             <div class="mm-riga">
                 <span class="mm-dice"><span>{{ copia.quando }}</span><span class="minuscolo tenue">{{ copia.motivo }}</span></span>
                 <span class="minuscolo tenue numeri">{{ copia.peso }}</span>
+                {% if copia.prenotata %}
+                <span class="minuscolo">alla prossima apertura</span>
+                {% else %}
+                <details class="st-rimetti">
+                    <summary class="minuscolo">Rimetti questa</summary>
+                    <form method="post" action="/impostazioni/copia/rimetti">
+                        <input type="hidden" name="nome" value="{{ copia.nome }}">
+                        <p class="minuscolo tenue">Il lavoro fatto dopo il {{ copia.quando }} si perde, ma resta salvato in una copia a parte.</p>
+                        <button class="tasto-comando piccolo" type="submit">Sì, rimettila</button>
+                    </form>
+                </details>
+                {% endif %}
             </div>
             {% endfor %}
         </div>

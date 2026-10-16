@@ -18,7 +18,7 @@ PAGINE = [
     "/", "/?da_fare=1", "/?senza_data=1", "/?schermate=1",
     "/officina", "/albero", "/importazione", "/elenchi", "/impostazioni",
     "/stato", "/senza-data", "/persone", "/persone/mazzo", "/persone/cassetto",
-    "/luoghi", "/doppioni", "/telefono", "/misura/banco",
+    "/luoghi", "/tempo", "/api/tempo/punti", "/doppioni", "/telefono", "/misura/banco",
     "/api/griglia", "/api/nodi", "/api/albero", "/api/cerca?frase=cat_1",
     "/api/doppioni", "/scatto/1",
     "/casa", "/lavoro", "/intelligenza", "/api/intelligenza", "/sistemare", "/miglioramento",
@@ -124,7 +124,7 @@ def costruisci(dove: Path, quante: int = QUANTE, seme: int = 7):
         c.executemany(
             "INSERT INTO luoghi (nome, centro_lat, centro_lon, raggio_metri,"
             " quanti, nato_il) VALUES (?, 43.7, 11.2, 500, 10, ?)",
-            [(f"luogo_{l}", quando) for l in range(80)])
+            [(f"luogo_{n}", quando) for n in range(80)])
 
         c.executemany(
             "INSERT INTO impronte (scatto_id, file_id, descrittore, versione,"

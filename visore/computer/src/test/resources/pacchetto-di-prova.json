@@ -1,5 +1,5 @@
 {
-  "archivio": "29921967e88876bb",
+  "archivio": "49d1b8209ad36ea8",
   "cerca": {
     "date": [],
     "luoghi": [],
@@ -28,7 +28,7 @@
   "completo": true,
   "dettagli": {
     "id": 4,
-    "luogo": "il molo",
+    "luogo": null,
     "nodi": [
       [
         "francobolli",
@@ -41,16 +41,12 @@
   "giorni": [
     {
       "giorno": "2021-04-02",
-      "luoghi": [
-        "il molo"
-      ],
+      "luoghi": [],
       "quanti": 2
     },
     {
       "giorno": "2021-03-14",
-      "luoghi": [
-        "il molo"
-      ],
+      "luoghi": [],
       "quanti": 2
     },
     {
@@ -60,14 +56,14 @@
     }
   ],
   "informazioni": {
-    "archivio": "29921967e88876bb",
-    "fatto_il": "2026-09-01T21:40:08Z",
+    "archivio": "49d1b8209ad36ea8",
+    "fatto_il": "2026-10-13T19:45:21Z",
     "nuove_ultimo_travaso": "5",
     "quanti_nodi": "4",
     "quanti_scatti": "5",
     "stato": "completo",
     "telefono": "iPhone",
-    "versione_formato": "1",
+    "versione_formato": "2",
     "versione_officina": "0.5.0"
   },
   "nodi": [
@@ -111,7 +107,7 @@
       "giorno": "2021-04-02",
       "id": 4,
       "impronta": "0560613a477b5f16144a54899886f7ffd347be3671557ed1f6eaeab846846cf1",
-      "posto": "foto/2021/04/IMG_2004.JPG"
+      "posto": "foto/fd/fd7e1b9619f50f27450edc6bf49d4373"
     },
     {
       "dimensione": 4335,
@@ -119,7 +115,7 @@
       "giorno": "2021-04-02",
       "id": 3,
       "impronta": "be091f95db2bada3291248c747c793ef4ecafb7f927f178762c61576fa48bce8",
-      "posto": "foto/2021/04/IMG_2003.JPG"
+      "posto": "foto/d4/d43f37e93693682f0f280e37e790b9b7"
     },
     {
       "dimensione": 5070,
@@ -127,7 +123,7 @@
       "giorno": "2021-03-14",
       "id": 2,
       "impronta": "3a2a44bd6f1c5afb523b7e7133758a5492964f4b0fb8ca98cc8e59b9b2fe9804",
-      "posto": "foto/2021/03/IMG_2002.JPG"
+      "posto": "foto/9a/9a3cf16fd2cf10139c397c70513d4508"
     },
     {
       "dimensione": 4654,
@@ -135,7 +131,7 @@
       "giorno": "2021-03-14",
       "id": 1,
       "impronta": "45821895edd04065402a633a0c79cf6f51faf145e56dfdc6e6e09a97f7b55ac4",
-      "posto": "foto/2021/03/IMG_2001.JPG"
+      "posto": "foto/d6/d69bca7cfecf42098dd0f410c241b849"
     },
     {
       "dimensione": 4726,
@@ -143,7 +139,7 @@
       "giorno": null,
       "id": 5,
       "impronta": "1cf9a9d4791cb37716b8566c71a1572401250d9350bb5eb8d01aeae43caa3c06",
-      "posto": "foto/senza-data/IMG_2005.JPG"
+      "posto": "foto/f1/f101c31f708054b2ec29619c9a50cc57"
     }
   ],
   "scorta": {
@@ -171,7 +167,7 @@
     "tolti": [
       {
         "impronta": "3a2a44bd6f1c5afb523b7e7133758a5492964f4b0fb8ca98cc8e59b9b2fe9804",
-        "tolto_il": "2026-09-01T21:40:08Z"
+        "tolto_il": "2026-10-13T19:45:21Z"
       }
     ]
   },
@@ -182,5 +178,5 @@
     "peso": 59518,
     "tutto_a_posto": true
   },
-  "versione_formato": 1
+  "versione_formato": 2
 }

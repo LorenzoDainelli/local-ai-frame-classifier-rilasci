@@ -21,6 +21,8 @@ from officina.modello import file_media, impronte as magazzino, segnalazioni
 
 IMMAGINI_PER_GRUPPO = 24
 
+QUANTI_ALLA_VOLTA = 64
+
 PRIMA_DI_STIMARE = 12
 
 QUANTI_SALTATI_SI_RICORDANO = 100
@@ -182,15 +184,7 @@ class Passata:
         fatti_in_tutto = 0
         with ThreadPoolExecutor(max_workers=1,
                                 thread_name_prefix="impronte-prepara") as cucina:
-            while not self.fermata:
-                with self.archivio.lettura() as connessione:
-                    righe = magazzino.scatti_da_fare(
-                        connessione, self.carta.nome, self.carta.versione, quanti=64,
-                        escludi=sorted(self._saltati_in_questa_passata),
-                    )
-                if not righe:
-                    break
-
+            for righe in self._da_fare(quanti_al_massimo):
                 gruppi = self._a_gruppi(righe)
                 in_arrivo = cucina.submit(self._prepara_gruppo, gruppi[0])
                 for indice, gruppo in enumerate(gruppi):
@@ -215,6 +209,25 @@ class Passata:
                         al_passo(self.avanzamento)
                     freno.cambia(self._intensita_ora())
                     freno.riposa(durata)
+
+    def _da_fare(self, quanti_al_massimo: int | None):
+        while not self.fermata:
+            with self.archivio.lettura() as connessione:
+                coda = [riga["id"] for riga in magazzino.scatti_da_fare(
+                    connessione, self.carta.nome, self.carta.versione,
+                    quanti=quanti_al_massimo or -1,
+                    escludi=sorted(self._saltati_in_questa_passata))]
+            if not coda:
+                return
+            for dove in range(0, len(coda), QUANTI_ALLA_VOLTA):
+                if self.fermata:
+                    return
+                with self.archivio.lettura() as connessione:
+                    righe = magazzino.scatti_da_fare(
+                        connessione, self.carta.nome, self.carta.versione,
+                        quanti=QUANTI_ALLA_VOLTA, fra=coda[dove:dove + QUANTI_ALLA_VOLTA])
+                if righe:
+                    yield righe
 
     def _a_gruppi(self, righe) -> list[list]:
         gruppi, corrente, quante = [], [], 0

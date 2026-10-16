@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import socket
 import threading
 import time
@@ -15,11 +16,6 @@ CONSIGLIATI = ("seedvr2", "codeformer")
 
 PESI = {
     "volti": 266_000_000,
-    "corpi": 10_510_000_000,
-    "seedvr2": 9_000_000_000,
-    "codeformer": 460_000_000,
-    "faceme": 12_000_000_000,
-    "lucidflux": 31_800_000_000,
 }
 
 NOMI = {
@@ -56,7 +52,34 @@ def peso(quale: str) -> int:
     carta = tutte_le_carte().get(quale)
     if carta is not None and carta.va_scaricato:
         return int(carta.byte_attesi or 0)
-    return PESI.get(quale, 0)
+    if quale in PESI:
+        return PESI[quale]
+    return _peso_dai_pezzi(quale)
+
+
+@functools.lru_cache(maxsize=None)
+def _peso_dai_pezzi(quale: str) -> int:
+    if quale == "corpi":
+        from officina.corpi import scaricamento as scarica_corpi
+
+        return scarica_corpi.BYTE_IN_TUTTO
+    if quale == "seedvr2":
+        from officina.miglioria import scaricamento as scarica_miglioria
+
+        return scarica_miglioria.byte_circa("seedvr2")
+    if quale == "codeformer":
+        from officina.miglioria import codeformer_pesi
+
+        return codeformer_pesi.byte_da_scaricare()
+    if quale == "faceme":
+        from officina.miglioria import faceme_pesi
+
+        return faceme_pesi.byte_circa()
+    if quale == "lucidflux":
+        from officina.miglioria import lucidflux_pesi
+
+        return lucidflux_pesi.byte_circa()
+    return 0
 
 
 def in_casa(quale: str, dove: Path | None = None) -> bool:
@@ -114,25 +137,71 @@ PAGINA_DINOV3 = "https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m
 PAGINA_SAM3 = "https://huggingface.co/facebook/sam3"
 
 
-def _con_le_condizioni() -> tuple[tuple[str, str], ...]:
+def _con_le_condizioni() -> tuple[tuple[str, str, str], ...]:
     from officina.corpi import scaricamento as scarica_corpi
 
-    return ((tutte_le_carte()["dinov3"].identificatore, "DINOv3"),
-            (scarica_corpi.SAM3.identificatore, "SAM 3"),
-            (scarica_corpi.REPO_CORPO3D, "SAM 3D Body"),
-            (scarica_corpi.vggt.REPO, "VGGT-Omega"))
+    return ((tutte_le_carte()["dinov3"].identificatore, "DINOv3", PAGINA_DINOV3),
+            (scarica_corpi.SAM3.identificatore, "SAM 3", PAGINA_SAM3),
+            (scarica_corpi.REPO_CORPO3D, "SAM 3D Body", scarica_corpi.PAGINA_CORPO3D),
+            (scarica_corpi.vggt.REPO, "VGGT-Omega", scarica_corpi.vggt.PAGINA))
 
 
-def controlla_la_chiave(chiave: str) -> None:
+def permessi_mancanti(chiave: str, repo: set[str] | None = None) -> list[tuple[str, str]]:
     try:
         import huggingface_hub
     except ImportError:
-        return
-    for repo, nome in _con_le_condizioni():
-        _controlla_un_cancello(huggingface_hub, chiave, repo, nome)
+        return []
+    return [(nome, pagina) for quale, nome, pagina in _con_le_condizioni()
+            if (repo is None or quale in repo)
+            and not _ha_il_permesso(huggingface_hub, chiave, quale)]
 
 
-def _controlla_un_cancello(huggingface_hub, chiave: str, repo: str, nome: str) -> None:
+def _in_fila(voci: list[str]) -> str:
+    return voci[0] if len(voci) == 1 else ", ".join(voci[:-1]) + " e " + voci[-1]
+
+
+def manca_il_permesso(mancano: list[tuple[str, str]]) -> str:
+    voci = [f"{nome} ({pagina.removeprefix('https://')})" for nome, pagina in mancano]
+    return (f"La chiave funziona, ma Hugging Face dice che non hai ancora il permesso per "
+            f"{_in_fila(voci)}. Apri {'la sua pagina' if len(voci) == 1 else 'le loro pagine'}, "
+            f"accetta le condizioni, aspetta la conferma e poi riprova.")
+
+
+def _foglio_dei_permessi() -> Path:
+    return cartella() / "permessi_in_attesa.json"
+
+
+def permessi_in_attesa() -> list[str]:
+    import json
+
+    try:
+        nomi = json.loads(_foglio_dei_permessi().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [str(n) for n in nomi] if isinstance(nomi, list) else []
+
+
+def ricorda_i_permessi(mancano: list[tuple[str, str]]) -> None:
+    import json
+
+    foglio = _foglio_dei_permessi()
+    try:
+        if not mancano:
+            foglio.unlink(missing_ok=True)
+            return
+        foglio.parent.mkdir(parents=True, exist_ok=True)
+        foglio.write_text(json.dumps([nome for nome, _ in mancano]), encoding="utf-8")
+    except OSError as guasto:
+        registro.errore("modelli.permessi_non_ricordati", **registro.dove_si_e_rotto(guasto))
+
+
+def controlla_la_chiave(chiave: str) -> None:
+    mancano = permessi_mancanti(chiave)
+    if mancano:
+        raise ErroreOfficina(manca_il_permesso(mancano))
+
+
+def _ha_il_permesso(huggingface_hub, chiave: str, repo: str) -> bool:
     try:
         controlla = getattr(huggingface_hub, "auth_check", None)
         if controlla is not None:
@@ -142,25 +211,38 @@ def _controlla_un_cancello(huggingface_hub, chiave: str, repo: str, nome: str) -
     except Exception as errore:
         from officina.descrittori.scaricamento import _classi_note, _che_genere
 
-        genere = _che_genere(errore)
-        if genere == "niente_rete":
-            return
         chiuso = _classi_note().get("GatedRepoError")
         if chiuso is not None and isinstance(errore, chiuso):
-            raise ErroreOfficina(
-                f"La chiave funziona, ma Hugging Face dice che non hai ancora il "
-                f"permesso per {nome}. Apri la sua pagina, accetta le condizioni, "
-                f"aspetta la conferma e poi riprova.")
-        codice = getattr(getattr(errore, "response", None), "status_code", None)
-        if codice == 401:
+            return False
+        if getattr(getattr(errore, "response", None), "status_code", None) == 401:
             raise ErroreOfficina(
                 "Hugging Face non riconosce questa chiave. Copiala di nuovo dalla "
-                "pagina delle chiavi: deve essere di tipo «Read».")
+                "pagina delle chiavi: deve essere di tipo «Read».") from errore
+        genere = _che_genere(errore)
         if genere == "permesso":
-            raise ErroreOfficina(
-                f"Hugging Face dice che questa chiave non ha il permesso per {nome}. "
-                f"Apri la sua pagina, accetta le condizioni e poi riprova.")
-        registro.errore("modelli.chiave_non_controllata", genere=registro.Parola(genere))
+            return False
+        if genere != "niente_rete":
+            registro.errore("modelli.chiave_non_controllata", genere=registro.Parola(genere))
+    return True
+
+
+def _prima_dei_corpi(dove: Path, chiave: str | None) -> None:
+    from officina.corpi import scaricamento as scarica_corpi
+
+    servono = scarica_corpi.repo_da_scaricare(dove) & {quale for quale, _, _ in _con_le_condizioni()}
+    if not servono:
+        return
+    if not chiave:
+        nomi = [nome for quale, nome, _ in _con_le_condizioni() if quale in servono]
+        raise ErroreOfficina(
+            f"Per scaricare {_in_fila(nomi)} serve la chiave di Hugging Face. Mettila dalle "
+            "Impostazioni e poi riprova: il resto dei modelli del corpo aspetta.")
+    mancano = permessi_mancanti(chiave, servono)
+    ricorda_i_permessi(mancano)
+    if mancano:
+        raise ErroreOfficina(manca_il_permesso(mancano)
+                             + " Mi sono fermato prima di scaricare, così non aspetti per niente.",
+                             codice="permesso_corpi")
 
 
 def porta_in_casa(quale: str, dove: Path, lavoro) -> None:
@@ -185,6 +267,7 @@ def porta_in_casa(quale: str, dove: Path, lavoro) -> None:
     if quale == "corpi":
         from officina.corpi import scaricamento as scarica_corpi
 
+        _prima_dei_corpi(dove, chiave)
         lavoro.numeri = {}
         scarica_corpi.scarica(dove, al_passo=lavoro.di, chiave=chiave,
                               a_che_punto=lavoro.a_che_punto)
@@ -283,8 +366,36 @@ class Fila:
         return fatti
 
 
+NON_ARRIVATI = "Alcuni modelli non sono arrivati. Quelli arrivati restano e non si riscaricano."
+
+DIFETTO = "qualcosa si è rotto per un difetto del programma."
+
+
+def _tutti_i_guasti(guasti: list[tuple[str, Exception]]) -> Exception:
+    if len(guasti) == 1:
+        return guasti[0][1]
+    per_motivo: dict[str, list[str]] = {}
+    dettagli = []
+    for quale, guasto in guasti:
+        if isinstance(guasto, ErroreOfficina):
+            motivo = guasto.messaggio
+            passi = getattr(guasto, "dettaglio", "") or ""
+        else:
+            motivo = DIFETTO
+            passi = registro.passi_del_guasto(guasto)
+        per_motivo.setdefault(motivo, []).append(nome(quale))
+        if passi:
+            dettagli.append(f"{nome(quale)}\n{passi}")
+    righe = [f"{', '.join(nomi)}: {motivo}" for motivo, nomi in per_motivo.items()]
+    insieme = ErroreOfficina(NON_ARRIVATI + "\n\n" + "\n\n".join(righe),
+                             codice="modelli_non_arrivati")
+    insieme.dettaglio = "\n\n".join(dettagli)
+    return insieme
+
+
 def scarica_in_fila(fila: Fila, dove: Path, lavoro,
                     c_e_rete=c_e_la_rete, dormi=time.sleep) -> None:
+    guasti: list[tuple[str, Exception]] = []
     for quale in list(fila.quali):
         if fila.fermata:
             return
@@ -292,26 +403,41 @@ def scarica_in_fila(fila: Fila, dove: Path, lavoro,
             fila.fatti.append(quale)
             continue
         fila.adesso = quale
-        while True:
-            try:
-                porta_in_casa(quale, dove, lavoro)
-                break
-            except Exception:
-                if fila.fermata:
-                    return
-                if c_e_rete():
-                    raise
-                registro.evento("modelli.aspetta_la_rete", quale=quale)
-                fila.aspetta_la_rete = True
-                lavoro.di("La rete se n'è andata: aspetto che torni, poi riprendo da dove ero.")
-                while not c_e_rete():
-                    if fila.fermata:
-                        return
-                    dormi(ATTESA_RETE)
-                fila.aspetta_la_rete = False
-                lavoro.di("La rete è tornata: riprendo.")
-        fila.fatti.append(quale)
+        if _portato(quale, dove, lavoro, fila, guasti, c_e_rete, dormi):
+            fila.fatti.append(quale)
+        elif fila.fermata:
+            return
         fila.adesso = ""
+    if guasti:
+        raise _tutti_i_guasti(guasti)
+
+
+def _portato(quale: str, dove: Path, lavoro, fila: Fila,
+             guasti: list[tuple[str, Exception]], c_e_rete, dormi) -> bool:
+    while True:
+        try:
+            porta_in_casa(quale, dove, lavoro)
+            return True
+        except Exception as guasto:
+            if fila.fermata:
+                return False
+            if c_e_rete():
+                guasti.append((quale, guasto))
+                registro.avviso("modelli.non_arrivato", quale=quale)
+                if not isinstance(guasto, ErroreOfficina):
+                    registro.errore("modelli.rotto", **registro.dove_si_e_rotto(guasto))
+                lavoro.di(f"Con {nome(quale)} qualcosa è andato storto: passo al prossimo.")
+                return False
+            registro.evento("modelli.aspetta_la_rete", quale=quale)
+            fila.aspetta_la_rete = True
+            lavoro.di("La rete se n'è andata: aspetto che torni, poi riprendo da dove ero.")
+            while not c_e_rete():
+                if fila.fermata:
+                    fila.aspetta_la_rete = False
+                    return False
+                dormi(ATTESA_RETE)
+            fila.aspetta_la_rete = False
+            lavoro.di("La rete è tornata: riprendo.")
 
 
 class Scaricatore:

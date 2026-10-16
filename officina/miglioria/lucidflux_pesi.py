@@ -9,8 +9,9 @@ from typing import Callable
 from officina import registro
 from officina.descrittori import torcia
 from officina.descrittori.scaricamento import (ScaricamentoFallito, Sorvegliante,
-                                               _dettaglio_tecnico)
+                                               _dettaglio_tecnico, quanto_pesa)
 from officina.miglioria import codeformer_pesi, scaricamento
+from officina.programma import scheda
 
 NOME = "lucidflux"
 VERSIONE = 1
@@ -31,6 +32,30 @@ NECESSARI = (FLUSSO, AE, RAMI, FRASE, SWINIR, f"{SIGLIP}/config.json",
              f"{SIGLIP}/model.safetensors")
 CONVERSIONI = {"lucidflux.pth": RAMI, "prompt_embeddings.pt": FRASE,
                "swinir.ckpt": SWINIR}
+
+
+REVISIONI: dict[str, str] = {
+    "black-forest-labs/FLUX.1-dev": "3de623fc3c33e44ffbe2bad470d0f45bccf2eb21",
+    "W2GenAI/LucidFlux": "aa046b08bf995a5ed3f69b26fabd562ad1702ec0",
+    "lxq007/DiffBIR": "072829acc62ad378afa55e6005c634788c83ee6c",
+    "google/siglip2-so400m-patch16-512": "ceea1cba8130d8271436da4828633198c176a775",
+}
+
+IMPRONTE_NOTE: dict[tuple[str, str], str] = {
+    ("black-forest-labs/FLUX.1-dev", "flux1-dev.safetensors"):
+        "4610115bb0c89560703c892c59ac2742fa821e60ef5871b33493ba544683abd7",
+    ("black-forest-labs/FLUX.1-dev", "ae.safetensors"):
+        "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38",
+    ("W2GenAI/LucidFlux", "lucidflux.pth"):
+        "e7fa63d6ac1a5ff4e215f53376391d2df3174be59f6be1c19adbcd2504555e10",
+    ("W2GenAI/LucidFlux", "prompt_embeddings.pt"):
+        "a66cde60b23aacb539748367cf0e04ddc9658ccf010eb9f2569ebfc1e3cec5e6",
+    ("lxq007/DiffBIR", "general_swinir_v1.ckpt"):
+        "577b8f84815d324e5ee17ef3c85d8bc9b7ebd05b20a6d61a5452b66e7e24dcaf",
+    ("google/siglip2-so400m-patch16-512", "config.json"): "",
+    ("google/siglip2-so400m-patch16-512", "model.safetensors"):
+        "a621bd212e1b3329b428595f9693217e19587afe826adf3e5c241a16392e8973",
+}
 
 
 class ServeIlCancello(ScaricamentoFallito):
@@ -58,17 +83,20 @@ def e_in_casa(cartella_modelli: Path) -> bool:
     atteso = manifesto()
     if scritto.get("versione") != VERSIONE or scritto.get("commit") != atteso["commit"]:
         return False
-    if any(not (casa / CODICE / file).is_file() for file in atteso["file"]):
+    if scaricamento.motivo_del_codice_diverso(casa, atteso) is not None:
         return False
     tenuti = scritto.get("file") or {}
+    grandi = scritto.get("byte") or {}
     return (all(nome in tenuti for nome in NECESSARI)
-            and all((casa / PESI / nome).is_file() for nome in tenuti))
+            and all((casa / PESI / nome).is_file()
+                    and scaricamento._pesa_come_prima(casa / PESI / nome, grandi.get(nome))
+                    for nome in tenuti))
 
 
 def _elenca(repo: str, chiave: str | None) -> tuple[str, dict]:
     from officina.miglioria import faceme_pesi
 
-    return faceme_pesi._elenca(repo, chiave)
+    return faceme_pesi._elenca(repo, chiave, REVISIONI.get(repo, ""))
 
 
 def _prendi_hf(repo: str, nome: str, revisione: str, cartella: Path,
@@ -126,6 +154,7 @@ def converti(sorgente: Path, arrivo: Path) -> None:
     import torch
     from safetensors.torch import save_file
 
+    scheda.controlla_che_torch_legga_in_sicurezza(torch)
     dati = torch.load(str(sorgente), map_location="cpu", weights_only=True)
     if arrivo.name == SWINIR and isinstance(dati, dict) and "state_dict" in dati:
         dati = dati["state_dict"]
@@ -156,21 +185,25 @@ def scarica(cartella_modelli: Path, nome: str = NOME,
     converti_uno = converti_uno or converti
 
     nuova = arrivo.with_name(NOME + ".nuova")
-    shutil.rmtree(nuova, ignore_errors=True)
-    (nuova / PESI).mkdir(parents=True)
+    tenere = ({f"{PESI}/{p['locale']}" for p in atteso["pesi"]}
+              | {f"{PESI}/{tenuto}" for tenuto in CONVERSIONI.values()} | {f"{PESI}/{GREZZI}"})
+    scaricamento.tieni_solo(nuova, tenere)
+    (nuova / PESI).mkdir(parents=True, exist_ok=True)
     prima = torcia.con_la_rete_accesa()
     tenuti: dict[str, str] = {}
+    spostati: list[tuple[Path, Path]] = []
     try:
         _il_codice(atteso, nuova, di, prendi_testo, chiave)
         di("guardo cosa c'è da scaricare")
         fonti, piano = _il_piano(atteso, elenca, chiave)
         totale = sum(voce["byte"] for voce in piano)
-        codeformer_pesi._controlla_lo_spazio(cartella_modelli, int(totale * 1.15) + MARGINE)
+        manca = max(0, totale - quanto_pesa(nuova / PESI))
+        codeformer_pesi._controlla_lo_spazio(cartella_modelli, int(manca * 1.15) + MARGINE)
         guardia = Sorvegliante(nuova / PESI, totale, a_che_punto) if a_che_punto else None
         if guardia:
             guardia.__enter__()
         try:
-            _i_pesi(piano, fonti, arrivo, nuova, di, chiave, prendi_hf, tenuti)
+            _i_pesi(piano, fonti, arrivo, nuova, di, chiave, prendi_hf, tenuti, spostati)
         finally:
             if guardia:
                 guardia.__exit__(None, None, None)
@@ -184,14 +217,17 @@ def scarica(cartella_modelli: Path, nome: str = NOME,
             tenuti.pop(grezzo, None)
             tenuti[tenuto] = scaricamento.impronta(nuova / PESI / tenuto)
         shutil.rmtree(nuova / PESI / GREZZI, ignore_errors=True)
+        grandezze = {locale: (nuova / PESI / locale).stat().st_size for locale in tenuti}
         (nuova / PRONTO).write_text(json.dumps(
             {"versione": VERSIONE, "commit": atteso["commit"], "fonti": fonti,
-             "file": tenuti}, indent=1), encoding="utf-8")
+             "file": tenuti, "byte": grandezze}, indent=1), encoding="utf-8")
         scaricamento._metti_al_posto(nuova, arrivo)
     finally:
         if prima is not None:
             torcia.rimetti_la_rete_com_era(prima)
-        shutil.rmtree(nuova, ignore_errors=True)
+        if nuova.exists():
+            scaricamento.rimetti_i_vecchi(spostati)
+            scaricamento.tieni_solo(nuova, tenere)
     registro.evento("miglioria.scaricato", modello=NOME)
     return arrivo
 
@@ -244,19 +280,28 @@ def _il_piano(atteso: dict, elenca, chiave) -> tuple[dict, list]:
 
 
 def _i_pesi(piano: list, fonti: dict, arrivo: Path, nuova: Path, di, chiave,
-            prendi_hf, tenuti: dict) -> None:
+            prendi_hf, tenuti: dict, spostati: list | None = None) -> None:
+    spostati = [] if spostati is None else spostati
     grezzi = nuova / PESI / GREZZI
     for voce in piano:
         locale = voce["locale"]
         posto = nuova / PESI / locale
         posto.parent.mkdir(parents=True, exist_ok=True)
         vecchio = arrivo / PESI / locale
-        if voce["impronta"] and vecchio.is_file() \
-                and scaricamento.impronta(vecchio) == voce["impronta"]:
+        nota = IMPRONTE_NOTE.get((voce["repo"], voce["remoto"]), "")
+        voluta = nota or voce["impronta"]
+        if voluta and vecchio.is_file() and scaricamento.impronta(vecchio) == voluta:
             di(f"«{voce['remoto']}» c'era già")
+            posto.unlink(missing_ok=True)
             shutil.move(str(vecchio), str(posto))
-            tenuti[locale] = voce["impronta"]
+            spostati.append((vecchio, posto))
+            tenuti[locale] = voluta
             continue
+        if scaricamento.gia_arrivato(posto, voce["impronta"], nota):
+            di(f"«{voce['remoto']}» era già arrivato")
+            tenuti[locale] = voluta
+            continue
+        posto.unlink(missing_ok=True)
         di(f"scarico «{voce['remoto']}» da {voce['repo']}")
         try:
             preso = prendi_hf(voce["repo"], voce["remoto"], fonti[voce["repo"]],
@@ -272,8 +317,16 @@ def _i_pesi(piano: list, fonti: dict, arrivo: Path, nuova: Path, di, chiave,
         di(f"controllo «{voce['remoto']}»")
         impronta = scaricamento.impronta(posto)
         if voce["impronta"] and impronta != voce["impronta"]:
+            posto.unlink(missing_ok=True)
             raise ScaricamentoFallito(
                 f"«{voce['remoto']}» scaricato non corrisponde all'impronta che "
                 f"dichiara {voce['repo']}: non lo uso. Riprova più tardi.")
+        if nota and impronta != nota:
+            posto.unlink(missing_ok=True)
+            raise ScaricamentoFallito(
+                f"«{voce['remoto']}» scaricato da {voce['repo']} non è identico a "
+                "quello provato: per sicurezza non lo uso. Riprova più tardi; se "
+                "succede ancora, il file pubblicato è cambiato e va controllato in "
+                "un aggiornamento.")
         tenuti[locale] = impronta
     shutil.rmtree(grezzi, ignore_errors=True)

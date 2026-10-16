@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -48,7 +47,7 @@ def pagina_luoghi(richiesta: Request):
 
 @strada.post("/luoghi/nuovo")
 def nuovo_luogo(nome: str = Form(...), genitore_id: str = Form("")):
-    padre = int(genitore_id) if genitore_id.strip().isdigit() else None
+    padre = int(genitore_id) if genitore_id.strip().isdecimal() else None
     with accesso.aperto().scrittura() as connessione:
         posti.crea(connessione, nome, padre)
     return RedirectResponse("/luoghi", status_code=303)
@@ -71,7 +70,7 @@ def rinomina_luogo(posto_id: int, nome: str = Form("")):
 
 @strada.post("/luoghi/{posto_id}/sposta")
 def sposta_luogo(posto_id: int, genitore_id: str = Form("")):
-    padre = int(genitore_id) if genitore_id.strip().isdigit() else None
+    padre = int(genitore_id) if genitore_id.strip().isdecimal() else None
     with accesso.aperto().scrittura() as connessione:
         posti.sposta(connessione, posto_id, padre)
     return RedirectResponse("/luoghi", status_code=303)
@@ -187,7 +186,7 @@ def api_luogo(posto_id: int):
 @strada.post("/api/luoghi/sposta")
 def api_sposta_luogo(nodo_id: int = Form(...), come: str = Form("figlio"),
                      destinazione: str = Form(""), con_figli: str = Form("1")):
-    dove = int(destinazione) if destinazione.strip().isdigit() else None
+    dove = int(destinazione) if destinazione.strip().isdecimal() else None
     with accesso.aperto().scrittura() as connessione:
         prima = _vivo(connessione, nodo_id)
         if con_figli in ("0", "", "no"):
@@ -213,14 +212,12 @@ def api_sposta_luogo(nodo_id: int = Form(...), come: str = Form("figlio"),
 @strada.post("/api/luoghi/rimetti")
 def api_rimetti_luoghi(coppie: str = Form(...)):
     try:
-        elenco = json.loads(coppie)
-    except (TypeError, ValueError) as errore:
+        elenco = base.coppie_da_rimettere(coppie)
+    except (TypeError, ValueError, KeyError, AttributeError) as errore:
         raise ErroreOfficina("Non ho capito cosa rimettere a posto.") from errore
     with accesso.aperto().scrittura() as connessione:
-        for voce in elenco:
-            padre = voce.get("genitore_id")
-            posti.sposta(connessione, int(voce["nodo_id"]),
-                         int(padre) if padre is not None else None)
+        for nodo_id, padre in elenco:
+            posti.sposta(connessione, nodo_id, padre)
     return {"fatto": True, "quanti": len(elenco)}
 
 
@@ -235,7 +232,7 @@ def api_rinomina_luogo(nodo_id: int = Form(...), nome: str = Form(...)):
 
 @strada.post("/api/luoghi/crea")
 def api_crea_luogo(nome: str = Form(...), genitore_id: str = Form("")):
-    padre = int(genitore_id) if genitore_id.strip().isdigit() else None
+    padre = int(genitore_id) if genitore_id.strip().isdecimal() else None
     with accesso.aperto().scrittura() as connessione:
         if padre is not None:
             _vivo(connessione, padre)

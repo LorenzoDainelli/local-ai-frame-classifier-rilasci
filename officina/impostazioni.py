@@ -68,6 +68,10 @@ class Posizione:
     def superfici(self) -> Path:
         return self.radice / "superfici"
 
+    @property
+    def rovinati(self) -> Path:
+        return self.radice / "rovinati"
+
     def prepara(self) -> None:
         for cartella in (self.radice, self.miniature, self.copie,
                          self.modelli, self.imparato, self.registro,
@@ -144,6 +148,47 @@ SOLO_QUESTA_MACCHINA = {
 
 
 VIAGGIANO: frozenset[str] = frozenset(PREDEFINITE) - SOLO_QUESTA_MACCHINA
+
+
+NUMERI_AMMESSI: dict[str, tuple[int, int]] = {
+    "griglia_altezza_riga": (60, 600),
+    "durata_gesto_ms": (0, 2000),
+    "durata_scena_ms": (0, 4000),
+    "quante_proposte": (1, 12),
+    "intensita_scheda": (5, 100),
+    "miniatura_lato": (128, 2048),
+    "fotogrammi_per_video": (1, 240),
+    "blocco_dopo_minuti": (0, 24 * 60),
+}
+
+PAROLE_AMMESSE: dict[str, frozenset[str]] = {
+    "filtri_forma": frozenset({"pillole", "frase"}),
+    "griglia_come_si_somma": frozenset({"massimo", "media"}),
+    "volti_prudenza": frozenset({"prudente", "equilibrato", "generoso"}),
+    "miglioria_volti": frozenset({"da_soli", "codeformer", "nessuno"}),
+}
+
+TESTO_PIU_LUNGO = 1024
+
+
+def valore_ammesso(chiave: str, valore):
+    if chiave not in PREDEFINITE:
+        return valore
+    partenza = PREDEFINITE[chiave]
+    if isinstance(partenza, bool):
+        if isinstance(valore, int) and valore in (0, 1):
+            return bool(valore)
+        raise ValueError(chiave)
+    if isinstance(partenza, int):
+        if isinstance(valore, bool) or not isinstance(valore, int):
+            raise ValueError(chiave)
+        minimo, massimo = NUMERI_AMMESSI[chiave]
+        return min(max(valore, minimo), massimo)
+    if not isinstance(valore, str) or len(valore) > TESTO_PIU_LUNGO:
+        raise ValueError(chiave)
+    if chiave in PAROLE_AMMESSE and valore not in PAROLE_AMMESSE[chiave]:
+        raise ValueError(chiave)
+    return valore
 
 
 def questa_macchina() -> str:

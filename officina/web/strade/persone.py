@@ -190,10 +190,10 @@ async def un_corpo(richiesta: Request, corpo_id: int, lato: int = 240):
 
 @strada.post("/persone/unisci")
 def unisci_gruppi_di_persone(gruppi: list[str] = Form([]), verso: str = Form("")):
-    if not verso.isdigit():
+    if not verso.isdecimal():
         raise ErroreOfficina("Scegli a quale persona vanno i gruppi.")
     meta = int(verso)
-    da_unire = {int(g) for g in gruppi if g.isdigit()} - {meta}
+    da_unire = {int(g) for g in gruppi if g.isdecimal()} - {meta}
     if not da_unire:
         raise ErroreOfficina("Spunta almeno un gruppo diverso da quello in cui vanno.")
     with accesso.aperto().scrittura() as connessione:
@@ -206,7 +206,7 @@ def unisci_gruppi_di_persone(gruppi: list[str] = Form([]), verso: str = Form("")
 def api_chiama(persona_id: int, nome: str = Form(...), unisci_a: str = Form(""),
                accetta_omonimo: str = Form("")):
     with accesso.aperto().scrittura() as connessione:
-        if unisci_a.strip().isdigit():
+        if unisci_a.strip().isdecimal():
             fatto = persone.unisci(connessione, persona_id, int(unisci_a))
             return {"unito": True, **fatto}
         gia = persone.omonimi(connessione, nome, tranne=persona_id)
@@ -235,14 +235,14 @@ def api_ignora(persona_id: int):
 @strada.post("/api/persone/{persona_id}/riprendi")
 def api_riprendi(persona_id: int):
     with accesso.aperto().scrittura() as connessione:
-        connessione.execute("UPDATE persone SET stato = 'attiva' WHERE id = ?",
-                            (persona_id,))
+        connessione.execute("UPDATE persone SET stato = 'attiva' "
+                            "WHERE id = ? AND stato <> 'congelata'", (persona_id,))
     return {"fatto": True}
 
 
 @strada.post("/api/persone/non-e-lui")
 def api_non_e_lui(volti: str = Form(...)):
-    numeri = [int(x) for x in volti.split(",") if x.strip().isdigit()]
+    numeri = [int(x) for x in volti.split(",") if x.strip().isdecimal()]
     with accesso.aperto().scrittura() as connessione:
         nuova = persone.non_e_lui(connessione, numeri)
     return {"persona_id": nuova}
@@ -414,7 +414,7 @@ def pagina_persona(richiesta: Request, persona_id: int):
 
 @strada.post("/persone/{persona_id}/insegna", dependencies=solo_qui)
 def insegna_altre_facce(persona_id: int, cartella: str = Form("")):
-    scritto = (cartella or "").strip().strip('"')
+    scritto = base.cartella_per_intero(cartella)
     if not scritto:
         raise ErroreOfficina(
             "Manca la cartella da leggere: scrivi il percorso della cartella "

@@ -9,6 +9,7 @@
     <h1>Stato</h1>
     <p class="sottotitolo">Come stanno l'albero, i modelli e l'archivio. Si aggiorna da sola.</p>
 
+    {% include "_st_semaforo.html" %}
     {% include "_st_carte.html" %}
 
     {% set guai_modelli = sistemare|selectattr('dove', 'equalto', 'modelli')|list %}

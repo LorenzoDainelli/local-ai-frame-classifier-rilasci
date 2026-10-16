@@ -12,14 +12,6 @@ def inversa_affine(matrice: torch.Tensor) -> torch.Tensor:
     return torch.cat([torch.cat([girata, -girata @ spostamento], dim=-1), resto], dim=-2)
 
 
-def omogenea(matrice: torch.Tensor) -> torch.Tensor:
-    if matrice.shape[-2:] == (4, 4):
-        return matrice
-    riga = torch.zeros_like(matrice[..., :1, :4])
-    riga[..., 0, 3] = 1.0
-    return torch.cat([matrice, riga], dim=-2)
-
-
 def _radice_positiva(x: torch.Tensor) -> torch.Tensor:
     fuori = torch.zeros_like(x)
     positivi = x > 0

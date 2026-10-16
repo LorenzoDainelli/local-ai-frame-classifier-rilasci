@@ -128,7 +128,7 @@ def da_immagine(immagine: Image.Image, formato: str | None = None,
 
 
 def lato_per_guardare(lato: int | None) -> int:
-    return min(lato or LATO_PER_GUARDARE, LATO_PER_GUARDARE)
+    return min(max(lato or LATO_PER_GUARDARE, 16), LATO_PER_GUARDARE)
 
 
 def a_piena_misura(percorso: Path) -> tuple[bytes, str]:

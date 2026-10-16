@@ -240,3 +240,10 @@ def test_la_cartella_sbagliata_si_dice_subito(cliente, archivio_pieno):
 def test_come_va_la_raccolta_si_puo_chiedere(cliente):
     dati = cliente.get("/api/raccolta").json()
     assert "finito" in dati and "righe" in dati
+
+
+def test_un_nome_lunghissimo_non_fa_una_cartella_che_windows_rifiuta():
+    nome = raccolta.nome_cartella(7, "vacanze " * 60 + ".")
+    assert nome.startswith("Importazione 7 - vacanze")
+    assert len(nome) <= len("Importazione 7 - ") + 80
+    assert not nome.endswith((" ", "."))

@@ -23,7 +23,7 @@ def scegli_l_ambito(zona: str, gruppo: str = Form(""), dove: str = Form("")):
 
     if zona not in gruppi.ZONE:
         return RedirectResponse("/", status_code=303)
-    gruppo_id = int(gruppo) if gruppo.isdigit() else None
+    gruppo_id = int(gruppo) if gruppo.isdecimal() else None
     with accesso.aperto().scrittura() as connessione:
         gruppi.ricorda(connessione, zona, gruppo_id)
     return RedirectResponse(base.torna_a(dove, "/"), status_code=303)
@@ -51,6 +51,9 @@ def _nome_bello(cosa: str) -> str:
     return (cosa[0].upper() + cosa[1:]) if cosa else cosa
 
 
+IN_ATTESA = "in attesa della scheda"
+
+
 @strada.get("/api/in-corso")
 def api_in_corso():
     fuori: list[dict] = []
@@ -66,11 +69,12 @@ def api_in_corso():
         fuori.append({"nome": _nome_bello(un_lavoro.cosa),
                       "dove": _DOVE_SI_GUARDA.get(un_lavoro.cosa, "/stato"),
                       "percento": numeri.get("percento"),
-                      "detto": ""})
+                      "detto": IN_ATTESA if numeri.get("in_attesa_della_scheda") else ""})
     miglioratore = getattr(miglioramento_web, "_miglioratore", None)
     if miglioratore is not None and miglioratore.lavoro.sta_lavorando:
+        aspetta = miglioratore.lavoro.numeri.get("in_attesa_della_scheda")
         fuori.append({"nome": "Miglioramento", "dove": "/miglioramento",
-                      "percento": None, "detto": ""})
+                      "percento": None, "detto": IN_ATTESA if aspetta else ""})
     return {"lavori": fuori}
 
 
@@ -80,6 +84,15 @@ def lavori_in_corso() -> list[str]:
     if comune.lavoro is not None and comune.lavoro.sta_lavorando:
         nomi.insert(0, "l'importazione")
     return nomi
+
+
+def disco_occupato() -> bool:
+    if lavori_in_corso():
+        return True
+    if comune.lavoro_ia is not None and comune.lavoro_ia.sta_lavorando:
+        return True
+    miglioratore = getattr(miglioramento_web, "_miglioratore", None)
+    return miglioratore is not None and miglioratore.lavoro.sta_lavorando
 
 
 def ferma_tutto(entro: float = 5.0) -> None:

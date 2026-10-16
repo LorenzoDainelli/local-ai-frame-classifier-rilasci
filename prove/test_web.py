@@ -42,7 +42,8 @@ PAGINE = ["/", "/albero", "/albero?da=foto", "/importazione", "/elenchi",
           "/officina", "/officina?da_fare=1", "/api/nodi", "/api/nodi?cerca=nodo",
           "/api/albero",
           "/persone", "/persone/mazzo", "/persone/cassetto", "/luoghi",
-          "/api/cerca", "/api/cerca?frase=nodo_1", "/scatto/1",
+          "/tempo", "/tempo?dal=2024-01-01&al=2024-12-31", "/api/tempo/punti",
+          "/api/tempo/zona?zona=-90,-180,90,180", "/api/cerca", "/api/cerca?frase=nodo_1", "/scatto/1",
           "/telefono", "/api/telefono", "/fuori", "/fuori?dove=computer",
           "/benvenuto", "/benvenuto/cartella", "/benvenuto/lavoro",
           "/benvenuto/pronto",
@@ -210,11 +211,14 @@ def test_una_copia_cancellata_non_fa_sparire_lo_scatto(cliente, archivio_pieno, 
     assert doppio, "l'archivio finto contiene dei doppioni"
 
     shutil.move(doppio["primo"], tmp_path / "via.dat")
-    cliente.post("/elenchi/controlla-i-file", follow_redirects=False)
+    try:
+        cliente.post("/elenchi/controlla-i-file", follow_redirects=False)
 
-    spariti = [r["id"] for r in file_media.non_trovati(connessione)]
-    assert doppio["id"] not in spariti
-    assert file_media.percorso_migliore(connessione, doppio["id"]) is not None
+        spariti = [r["id"] for r in file_media.non_trovati(connessione)]
+        assert doppio["id"] not in spariti
+        assert file_media.percorso_migliore(connessione, doppio["id"]) is not None
+    finally:
+        shutil.move(tmp_path / "via.dat", doppio["primo"])
 
 
 def test_ogni_voce_del_menu_porta_da_qualche_parte(cliente):
@@ -242,7 +246,7 @@ def test_la_barra_ha_quattro_gruppi_e_niente_tendine(cliente):
     gruppi = re.findall(r'<p class="nav-gruppo"><a href="[^"]*">([^<]+)</a>', dentro)
     assert gruppi == ["Lavoro", "Archivio", "Collegamenti"], gruppi
     voci = re.findall(r'<span class="voce-nome">([^<]+)</span>', dentro)
-    assert voci == ["Galleria", "Persone", "Luoghi", "Aggiungi scatti",
+    assert voci == ["Galleria", "Persone", "Luoghi", "Tempo e mappa", "Aggiungi scatti",
                     "Intelligenza artificiale", "Da sistemare", "Etichetta",
                     "Miglioramento", "Albero dei nodi", "Stato", "Dispositivi"], voci
     assert "<details" not in dentro
@@ -448,6 +452,34 @@ def test_l_elenco_dei_doppioni_porta_il_conto(cliente_coi_doppioni):
     assert gruppo["copie"][0]["peso"] == "4,0 MB"
     assert gruppo["copie"][0]["la_piu_grande"] is True
     assert gruppo["copie"][1]["la_piu_grande"] is False
+
+
+def test_l_elenco_dei_doppioni_non_si_fa_chiedere_tutto_con_un_numero_negativo(
+        archivio_pieno):
+    from officina.doppioni import decisioni
+    from officina.web.server import app
+
+    with archivio_pieno.scrittura() as connessione:
+        righe = connessione.execute(
+            "SELECT id FROM file_media WHERE genere = 'immagine' "
+            "AND scatto_id IS NOT NULL ORDER BY id LIMIT 6").fetchall()
+        assert len(righe) == 6
+        lontane = ("0000000000000000", "ffffffffffffffff", "00000000ffffffff")
+        for posto, riga in enumerate(righe):
+            connessione.execute(
+                "UPDATE file_media SET impronta_occhio = ?, dimensione = ? "
+                "WHERE id = ?",
+                (lontane[posto // 2], 1000 + posto, riga["id"]))
+    decisioni.conta_e_scrivi(archivio_pieno)
+    cliente = TestClient(app, client=("127.0.0.1", 51000))
+
+    tutti = cliente.get("/api/doppioni/gruppi").json()["gruppi"]
+    assert len(tutti) == 3
+    for quanti in (-1, 0):
+        dati = cliente.get(f"/api/doppioni/gruppi?quanti={quanti}").json()
+        assert len(dati["gruppi"]) == 1
+    da_capo = cliente.get("/api/doppioni/gruppi?da=-5&quanti=2").json()["gruppi"]
+    assert [g["firma"] for g in da_capo] == [g["firma"] for g in tutti[:2]]
 
 
 def test_la_galleria_mette_il_bollo_e_lo_toglie_quando_hai_deciso(

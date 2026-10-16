@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from officina import cartelle
 from officina.errori import ErroreOfficina
 from officina.programma import carta, scheda
 
@@ -197,14 +198,26 @@ def leggi_una_riga(riga: str, stato: Avanzamento) -> None:
         stato.fatti = stato.totale = 0
 
 
+PIP_DA_TENERE = ("PIP_CERT", "PIP_PROXY")
+
+DI_PYTHON_DA_TOGLIERE = ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE",
+                         "PYTHONINSPECT", "PYTHONEXECUTABLE", "PYTHONBREAKPOINT",
+                         "PYTHONPLATLIBDIR", "PYTHONPYCACHEPREFIX")
+
+
 def ambiente_per_pip() -> dict:
     ambiente = dict(os.environ)
+    for chiave in list(ambiente):
+        maiuscola = chiave.upper()
+        if maiuscola.startswith("PIP_") and maiuscola not in PIP_DA_TENERE:
+            ambiente.pop(chiave, None)
+        elif maiuscola in DI_PYTHON_DA_TOGLIERE:
+            ambiente.pop(chiave, None)
     ambiente["PYTHONIOENCODING"] = "utf-8"
     ambiente["PIP_NO_INPUT"] = "1"
+    ambiente["PIP_CONFIG_FILE"] = os.devnull
     ambiente["PYTHONNOUSERSITE"] = "1"
-    for togli in ("PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL", "PIP_TARGET", "PIP_PREFIX",
-                  "PIP_USER", "PYTHONPATH", "PIP_CONSTRAINT", "PIP_REQUIRE_VIRTUALENV"):
-        ambiente.pop(togli, None)
+    ambiente["PYTHONSAFEPATH"] = "1"
     certificati = _certificati()
     if certificati:
         ambiente.setdefault("PIP_CERT", certificati)
@@ -287,12 +300,7 @@ def _togli(cartella_da_togliere: Path) -> None:
 
 def _metti_al_posto(nuova: Path, parte: str) -> Path:
     arrivo = cartella(parte)
-    vecchia = arrivo.with_name(parte + ".vecchia")
-    _togli(vecchia)
-    if arrivo.exists():
-        arrivo.rename(vecchia)
-    nuova.rename(arrivo)
-    _togli(vecchia)
+    cartelle.metti_al_posto(nuova, arrivo)
     return arrivo
 
 
@@ -328,7 +336,7 @@ def cosa_manca(richieste: list[str] | None = None) -> list[str]:
     manca = []
     torcia = scritto.get("torch") or {}
     if (torcia.get("python") != python or not cartella("torch").is_dir()
-            or not torcia.get("torch")):
+            or not scheda.torch_legge_in_sicurezza(torcia.get("torch"))):
         manca.append("torch")
     modelli = scritto.get("modelli") or {}
     attesa = impronta_delle_richieste(richieste if richieste is not None
@@ -336,6 +344,13 @@ def cosa_manca(richieste: list[str] | None = None) -> list[str]:
     if modelli.get("impronta") != attesa or not cartella("modelli").is_dir():
         manca.append("modelli")
     return manca
+
+
+def torch_vecchio() -> str | None:
+    versione = (stato_scritto().get("torch") or {}).get("torch")
+    if not versione or not cartella("torch").is_dir():
+        return None
+    return None if scheda.torch_legge_in_sicurezza(versione) else str(versione)
 
 
 def manca_la_miglioria(richieste: list[str] | None = None,
@@ -512,9 +527,10 @@ class Installatore:
                                       indice=piano.indice, extra=[PYPI],
                                       file_vincoli=file_vincoli)
             else:
+                minima = ".".join(str(n) for n in scheda.TORCH_MINIMO)
                 comando = comando_pip(python_per_i_comandi(), nuova,
-                                      ["torch", "torchvision"], indice=PYPI,
-                                      file_vincoli=file_vincoli)
+                                      [f"torch>={minima}", "torchvision"],
+                                      indice=PYPI, file_vincoli=file_vincoli)
             self.stato.fase = "scarico"
             self.stato.detto = piano.perche
             if not self._esegui_pip(comando):

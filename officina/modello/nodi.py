@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from officina.archivio.database import adesso, inserisci, tutti, uno
 from officina.errori import OperazioneNonPermessa
 from officina.modello import cambiamenti
-from officina.modello import ripassi
+from officina.modello import nomi, ripassi
 
 SEPARATORE = " › "
 
@@ -144,7 +144,7 @@ def in_fila(nodi: list[Nodo], livello: int = 0) -> list[tuple[int, Nodo]]:
 
 def crea(connessione: sqlite3.Connection, nome: str, genitore_id: int | None = None,
          criterio: str | None = None) -> int:
-    nome = nome.strip()
+    nome = nomi.da_salvare(nome)
     if not nome:
         raise OperazioneNonPermessa("Un nodo deve avere un nome.")
     if genitore_id is not None and per_id(connessione, genitore_id) is None:
@@ -174,7 +174,7 @@ def crea(connessione: sqlite3.Connection, nome: str, genitore_id: int | None = N
 
 
 def rinomina(connessione: sqlite3.Connection, nodo_id: int, nome: str) -> None:
-    nome = nome.strip()
+    nome = nomi.da_salvare(nome)
     if not nome:
         raise OperazioneNonPermessa("Un nodo deve avere un nome.")
     riga = per_id(connessione, nodo_id)
@@ -239,6 +239,16 @@ def copia_ramo(connessione: sqlite3.Connection, da_id: int, dentro_id: int) -> i
 def cambia_stato(connessione: sqlite3.Connection, nodo_id: int, stato: str) -> None:
     if stato not in ("attivo", "cestino", "congelato"):
         raise OperazioneNonPermessa(f"Stato sconosciuto: {stato}")
+    if stato == "attivo":
+        gemello = connessione.execute(
+            "SELECT altro.nome FROM nodi lui JOIN nodi altro "
+            "ON ifnull(altro.genitore_id, -1) = ifnull(lui.genitore_id, -1) "
+            "AND altro.nome = lui.nome AND altro.id != lui.id AND altro.stato = 'attivo' "
+            "WHERE lui.id = ? AND lui.stato != 'attivo'", (nodo_id,)).fetchone()
+        if gemello is not None:
+            raise OperazioneNonPermessa(
+                f"Non posso rimettere «{gemello[0]}»: nello stesso posto c'è già un "
+                "nodo con lo stesso nome. Rinomina quello nuovo, poi riprova.")
     connessione.execute(
         "UPDATE nodi SET stato = ?, cestinato_il = ? WHERE id = ?",
         (stato, adesso() if stato == "cestino" else None, nodo_id),
@@ -268,11 +278,18 @@ def rimetti_ramo(connessione: sqlite3.Connection, nodo_id: int) -> int:
     rami = [r for r in discendenti(connessione, nodo_id)
             if (lui := per_id(connessione, r))["stato"] == "cestino"
             and lui["cestinato_il"] == quando]
-    for ramo in rami:
-        cambia_stato(connessione, ramo, "attivo")
-    padre = riga["genitore_id"]
-    if padre is not None and per_id(connessione, padre)["stato"] == "cestino":
-        sposta(connessione, nodo_id, None)
+    connessione.execute("SAVEPOINT dal_cestino")
+    try:
+        for ramo in rami:
+            cambia_stato(connessione, ramo, "attivo")
+        padre = riga["genitore_id"]
+        if padre is not None and per_id(connessione, padre)["stato"] == "cestino":
+            sposta(connessione, nodo_id, None)
+    except Exception:
+        connessione.execute("ROLLBACK TO dal_cestino")
+        connessione.execute("RELEASE dal_cestino")
+        raise
+    connessione.execute("RELEASE dal_cestino")
     return len(rami)
 
 
@@ -329,22 +346,34 @@ def unisci(connessione: sqlite3.Connection, da_id: int, a_id: int) -> dict:
             "Il secondo nodo sta dentro il primo: unirli lascerebbe l'albero "
             "senza il ramo che li teneva."
         )
-    if per_id(connessione, da_id) is None or per_id(connessione, a_id) is None:
+    meta = per_id(connessione, a_id)
+    if per_id(connessione, da_id) is None or meta is None:
         raise OperazioneNonPermessa("Uno dei due nodi non esiste più.")
+    if meta["stato"] != "attivo":
+        raise OperazioneNonPermessa(
+            f"«{meta['nome']}» è archiviato o nel cestino: rimettilo nell'albero, "
+            "poi unisci.")
+    return _unisci(connessione, da_id, a_id)
 
+
+def _unisci(connessione: sqlite3.Connection, da_id: int, a_id: int) -> dict:
     spostate = 0
     for riga in tutti(connessione,
-                      "SELECT scatto_id, stato, origine FROM etichette WHERE nodo_id = ?",
-                      da_id):
+                      "SELECT scatto_id, stato, origine, sicurezza FROM etichette "
+                      "WHERE nodo_id = ?", da_id):
         gia = uno(connessione,
-                  "SELECT id FROM etichette WHERE scatto_id = ? AND nodo_id = ?",
+                  "SELECT id, origine FROM etichette WHERE scatto_id = ? AND nodo_id = ?",
                   riga["scatto_id"], a_id)
-        if gia is None:
+        if gia is None or (gia["origine"] == "sistema" and riga["origine"] == "utente"):
             connessione.execute(
-                "INSERT INTO etichette (scatto_id, nodo_id, stato, origine, creata_il) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (riga["scatto_id"], a_id, riga["stato"], riga["origine"], adesso()))
-            cambiamenti.annota(connessione, "etichetta", "messa",
+                "INSERT INTO etichette (scatto_id, nodo_id, stato, origine, sicurezza, creata_il) "
+                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(scatto_id, nodo_id) DO UPDATE SET "
+                "stato = excluded.stato, origine = excluded.origine, "
+                "sicurezza = excluded.sicurezza, creata_il = excluded.creata_il",
+                (riga["scatto_id"], a_id, riga["stato"], riga["origine"], riga["sicurezza"],
+                 adesso()))
+            cambiamenti.annota(connessione, "etichetta",
+                               "messa" if gia is None else "cambiata",
                                scatto_id=riga["scatto_id"], nodo_id=a_id,
                                stato=riga["stato"], origine=riga["origine"])
             spostate += 1
@@ -352,13 +381,24 @@ def unisci(connessione: sqlite3.Connection, da_id: int, a_id: int) -> dict:
                            scatto_id=riga["scatto_id"], nodo_id=da_id,
                            origine="utente")
     connessione.execute("DELETE FROM etichette WHERE nodo_id = ?", (da_id,))
-
-    figli = [r["id"] for r in tutti(
-        connessione, "SELECT id FROM nodi WHERE genitore_id = ?", da_id)]
-    for figlio in figli:
-        connessione.execute("UPDATE nodi SET genitore_id = ? WHERE id = ?",
-                            (a_id, figlio))
-        cambiamenti.annota(connessione, "nodo", "spostato", nodo_id=figlio)
-
     cambia_stato(connessione, da_id, "congelato")
-    return {"etichette_spostate": spostate, "figli_spostati": len(figli)}
+
+    figli_spostati = 0
+    for figlio in tutti(connessione,
+                        "SELECT id, nome, stato FROM nodi WHERE genitore_id = ? ORDER BY id",
+                        da_id):
+        gemello = None
+        if figlio["stato"] == "attivo":
+            gemello = uno(connessione,
+                          "SELECT id FROM nodi WHERE genitore_id = ? AND nome = ? "
+                          "AND stato = 'attivo'", a_id, figlio["nome"])
+        if gemello is not None:
+            dentro = _unisci(connessione, figlio["id"], gemello["id"])
+            spostate += dentro["etichette_spostate"]
+            figli_spostati += dentro["figli_spostati"]
+            continue
+        connessione.execute("UPDATE nodi SET genitore_id = ? WHERE id = ?",
+                            (a_id, figlio["id"]))
+        cambiamenti.annota(connessione, "nodo", "spostato", nodo_id=figlio["id"])
+        figli_spostati += 1
+    return {"etichette_spostate": spostate, "figli_spostati": figli_spostati}

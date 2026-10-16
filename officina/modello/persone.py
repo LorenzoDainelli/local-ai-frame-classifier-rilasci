@@ -5,6 +5,7 @@ import sqlite3
 
 from officina.archivio.database import adesso, inserisci, tutti, uno
 from officina.errori import OperazioneNonPermessa
+from officina.modello import nomi
 
 QUANTI_VOLTI = 12
 
@@ -112,11 +113,11 @@ def crea(connessione: sqlite3.Connection, nome: str | None = None) -> int:
     return inserisci(
         connessione,
         "INSERT INTO persone (nome, nata_il) VALUES (?, ?)",
-        (nome.strip() if nome else None), adesso())
+        (nomi.da_salvare(nome) or None), adesso())
 
 
 def chiama(connessione: sqlite3.Connection, persona_id: int, nome: str) -> None:
-    nome = (nome or "").strip()
+    nome = nomi.da_salvare(nome)
     if not nome:
         raise OperazioneNonPermessa("Un nome non può essere vuoto.")
     connessione.execute(
@@ -127,7 +128,7 @@ def chiama(connessione: sqlite3.Connection, persona_id: int, nome: str) -> None:
 def omonimi(connessione: sqlite3.Connection, nome: str,
             tranne: int | None = None) -> list[dict]:
     return [voce for voce in elenco(connessione)
-            if voce["nome"] and voce["nome"].casefold() == nome.strip().casefold()
+            if voce["nome"] and nomi.pulito(voce["nome"]).casefold() == nomi.pulito(nome).casefold()
             and voce["id"] != tranne]
 
 
@@ -144,8 +145,12 @@ def ignora(connessione: sqlite3.Connection, persona_id: int) -> None:
 def unisci(connessione: sqlite3.Connection, da_id: int, a_id: int) -> dict:
     if da_id == a_id:
         raise OperazioneNonPermessa("Un gruppo non si unisce a se stesso.")
-    if per_id(connessione, da_id) is None or per_id(connessione, a_id) is None:
+    meta = per_id(connessione, a_id)
+    if per_id(connessione, da_id) is None or meta is None:
         raise OperazioneNonPermessa("Uno dei due gruppi non c'è più.")
+    if meta["stato"] in ("congelata", "cestino"):
+        raise OperazioneNonPermessa(
+            "Il gruppo in cui vuoi unire è già stato unito a un altro o è nel cestino.")
 
     spostati = connessione.execute(
         "UPDATE volti SET persona_id = ? WHERE persona_id = ?",
@@ -160,6 +165,21 @@ def unisci(connessione: sqlite3.Connection, da_id: int, a_id: int) -> dict:
         (a_id, da_id))
     connessione.execute("DELETE FROM volti_riferimento WHERE persona_id = ?",
                         (da_id,))
+    connessione.execute(
+        "DELETE FROM corpi_delle_persone WHERE persona_id = ? AND risposta = 'no' "
+        "AND corpo_id IN (SELECT corpo_id FROM corpi_delle_persone "
+        "WHERE persona_id = ? AND risposta = 'si')", (a_id, da_id))
+    connessione.execute(
+        "UPDATE OR IGNORE corpi_delle_persone SET persona_id = ? WHERE persona_id = ?",
+        (a_id, da_id))
+    connessione.execute(
+        "UPDATE OR IGNORE cartelle_riferimento SET persona_id = ? WHERE persona_id = ?",
+        (a_id, da_id))
+    for domanda in ("DELETE FROM corpi_delle_persone WHERE persona_id = ?",
+                    "DELETE FROM cartelle_riferimento WHERE persona_id = ?",
+                    "DELETE FROM proposte_dei_corpi WHERE persona_id = ?",
+                    "DELETE FROM pesi_delle_persone WHERE persona_id = ?"):
+        connessione.execute(domanda, (da_id,))
     connessione.execute("UPDATE persone SET stato = 'congelata' WHERE id = ?",
                         (da_id,))
     connessione.execute(
@@ -177,15 +197,6 @@ def non_e_lui(connessione: sqlite3.Connection, volti: list[int]) -> int:
         f"UPDATE volti SET persona_id = ?, deciso_da = 'utente' "
         f"WHERE id IN ({segnaposti})", (nuova, *volti))
     return nuova
-
-
-def sposta_volto(connessione: sqlite3.Connection, volto_id: int,
-                 persona_id: int) -> None:
-    if per_id(connessione, persona_id) is None:
-        raise OperazioneNonPermessa("Quella persona non c'è più.")
-    connessione.execute(
-        "UPDATE volti SET persona_id = ?, deciso_da = 'utente' WHERE id = ?",
-        (persona_id, volto_id))
 
 
 def metti_a_mano(connessione: sqlite3.Connection, scatto_id: int,

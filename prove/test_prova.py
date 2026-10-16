@@ -84,6 +84,22 @@ def test_nella_prova_i_file_e_i_lavori_lunghi_non_si_toccano(cliente):
     assert "prova" in risposta.json()["messaggio"]
 
 
+def test_gli_avvisi_delle_impostazioni_non_ripetono_parole_prese_dall_indirizzo(cliente):
+    from urllib.parse import quote
+
+    finto = "Chiama il numero verde"
+    for nome in ("tenuta", "rimesso"):
+        pagina = cliente.get(f"/impostazioni?{nome}={quote(finto)}").text
+        assert finto not in pagina, nome
+    assert "12 nodi sono tornati" in cliente.get("/impostazioni?rimesso=12").text
+
+    _comincia(cliente, "B")
+    cliente.post("/prova/cambia", data={"valore": "C"}, follow_redirects=False)
+    risposta = cliente.post("/prova/tieni", follow_redirects=False)
+    pagina = cliente.get(risposta.headers["location"]).text
+    assert "Da adesso il programma usa «Icone e Ctrl K»" in pagina
+
+
 def test_tieni_questa_la_rende_quella_di_tutti_i_giorni(cliente):
     from officina.programma import aspetto
 
@@ -149,7 +165,7 @@ def test_la_prova_non_ferma_l_importazione_vera(cliente, monkeypatch):
 
     _comincia(cliente)
     lavori = cliente.get("/api/in-corso").json()["lavori"]
-    assert [l["nome"] for l in lavori] == ["Aggiungo le foto"]
+    assert [lavoro["nome"] for lavoro in lavori] == ["Aggiungo le foto"]
     assert not fermata
 
 

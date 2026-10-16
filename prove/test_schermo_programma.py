@@ -47,7 +47,7 @@ def test_il_portatile_sceglie_di_fare_da_schermo_e_si_collega(fisso):
     trovati = programma.cerca_il_fisso()["fissi"]
     assert trovati and trovati[0]["password"] is True
 
-    codice, _ = fisso.codice()
+    codice, _ = fisso.mostra_il_codice()
     risposta = programma.abbina_il_fisso("127.0.0.1", fisso.porta_tcp, codice,
                                          "cavallo-batteria")
     assert risposta["stato"]["passo"] == "apertura"
@@ -65,7 +65,7 @@ def test_il_portatile_sceglie_di_fare_da_schermo_e_si_collega(fisso):
 def test_le_volte_dopo_basta_la_password(fisso):
     programma, finto = _programma()
     programma.scegli_lo_schermo()
-    codice, _ = fisso.codice()
+    codice, _ = fisso.mostra_il_codice()
     programma.abbina_il_fisso("127.0.0.1", fisso.porta_tcp, codice, "cavallo-batteria")
     _aspetta_la_principale(programma, finto)
     programma.ricollegati()
@@ -87,7 +87,7 @@ def test_le_volte_dopo_basta_la_password(fisso):
 def test_chi_cambia_idea_torna_all_archivio_senza_perdere_l_abbinamento(fisso):
     programma, _ = _programma()
     programma.scegli_lo_schermo()
-    codice, _ = fisso.codice()
+    codice, _ = fisso.mostra_il_codice()
     collega.abbina("127.0.0.1", fisso.porta_tcp, codice)
     programma.lascia_lo_schermo()
     assert programma.passo() == "archivio"
@@ -95,3 +95,50 @@ def test_chi_cambia_idea_torna_all_archivio_senza_perdere_l_abbinamento(fisso):
     assert programma.passo() == "schermo-entra"
     programma.riabbina()
     assert programma.passo() == "schermo-cerca"
+
+
+def test_sul_portatile_dopo_la_prima_volta_basta_windows_hello(fisso, monkeypatch):
+    from officina.programma import sigillo
+    from prove.test_sigillo import FintoHello, FintoWindows
+
+    hello = FintoHello()
+    monkeypatch.setattr(sigillo, "PortaHello", lambda: hello)
+    monkeypatch.setattr(sigillo, "PortaWindows", lambda: FintoWindows())
+    programma, finto = _programma()
+    programma.scegli_lo_schermo()
+    codice, _ = fisso.mostra_il_codice()
+    programma.abbina_il_fisso("127.0.0.1", fisso.porta_tcp, codice, "cavallo-batteria")
+    _aspetta_la_principale(programma, finto)
+    programma.ricollegati()
+    assert sigillo.modo("fisso") == sigillo.HELLO
+
+    dopo, finto_dopo = _programma()
+    assert dopo.com_e_il_fisso()["sigillo"] == sigillo.HELLO
+    firme = hello.firme
+    dopo.entra_nel_fisso_con_windows()
+    assert _aspetta_la_principale(dopo, finto_dopo) is not None
+    assert hello.firme == firme + 1
+    dopo.spegni()
+
+
+def test_se_la_password_del_fisso_cambia_il_sigillo_vecchio_si_butta(fisso, monkeypatch):
+    from officina.errori import ErroreOfficina
+    from officina.programma import sigillo
+    from prove.test_sigillo import FintoHello, FintoWindows
+
+    hello = FintoHello()
+    monkeypatch.setattr(sigillo, "PortaHello", lambda: hello)
+    monkeypatch.setattr(sigillo, "PortaWindows", lambda: FintoWindows())
+    programma, finto = _programma()
+    programma.scegli_lo_schermo()
+    codice, _ = fisso.mostra_il_codice()
+    programma.abbina_il_fisso("127.0.0.1", fisso.porta_tcp, codice, "cavallo-batteria")
+    _aspetta_la_principale(programma, finto)
+    programma.ricollegati()
+    fisso.chi_password = _Password("nuova-password-lunga")
+
+    dopo, _ = _programma()
+    with pytest.raises(ErroreOfficina):
+        dopo.entra_nel_fisso_con_windows()
+    assert not sigillo.c_e("fisso")
+    dopo.spegni()

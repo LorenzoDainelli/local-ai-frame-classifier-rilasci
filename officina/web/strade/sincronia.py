@@ -25,6 +25,7 @@ def pagina_sincronia():
 def sincronia_dove(richiesta: Request, cartella: str = Form("")):
     if base.e_di_rete_e_non_scelto(cartella):
         raise ErroreOfficina(base.NO_AL_PERCORSO_DI_RETE)
+    base.cartella_per_intero(cartella)
     with accesso.aperto().scrittura() as connessione:
         sincronia_web.ricorda_la_cartella(connessione, cartella)
     return RedirectResponse(telefono.da_fuori(richiesta, telefono.AL_COMPUTER), status_code=303)
@@ -68,7 +69,7 @@ def sincronia_costruisci(richiesta: Request, per: str = Form(""),
             "Prima dimmi in che cartella costruirlo. È quella che poi porti "
             "all'altro computer: una chiavetta, o una cartella condivisa.")
 
-    per_id = int(per) if per.strip().isdigit() else None
+    per_id = int(per) if per.strip().isdecimal() else None
     if not sincronia_web.in_corso.costruisci(archivio, Path(cartella), parola,
                                              per_macchina_id=per_id):
         raise ErroreOfficina(

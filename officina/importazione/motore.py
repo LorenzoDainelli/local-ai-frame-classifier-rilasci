@@ -15,7 +15,7 @@ from officina.doppioni import motore as doppioni_motore, occhio
 from officina.errori import ErroreOfficina, FileNonLeggibile
 from officina.importazione import abbinamento, impronta as impronta_file, metadati, miniature, scansione
 from officina.miglioria import coda as miglioria_coda
-from officina.modello import file_media, luoghi, scatti
+from officina.modello import file_media, luoghi, salute_file, scatti
 
 CAMPIONE_PER_LA_STIMA = 50
 
@@ -116,7 +116,8 @@ class Motore:
         self._misure = []
 
         registro.evento("importazione.preparata", file=trovati.quanti,
-                        byte=trovati.byte, spazio_ok=spazio.basta)
+                        byte=trovati.byte, spazio_ok=spazio.basta,
+                        collegamenti=trovati.collegamenti)
         return {
             "importazione_id": self.importazione_id,
             "file": trovati.quanti,
@@ -239,7 +240,7 @@ class Motore:
             if pronto.dati.genere == "immagine":
                 try:
                     pronto.occhio = occhio.del_percorso(percorso)
-                except (ErroreOfficina, OSError, ValueError) as errore:
+                except Exception as errore:             # noqa: BLE001
                     pronto.guasto = errore
             return pronto
         except Exception:                               # noqa: BLE001
@@ -319,6 +320,12 @@ class Motore:
                     (self.importazione_id,),
                 )
                 return
+            if salute_file.si_e_rovinato(connessione, percorso, segno):
+                connessione.execute(
+                    "UPDATE importazioni SET gia_presenti = gia_presenti + 1 WHERE id = ?",
+                    (self.importazione_id,),
+                )
+                return
 
         dati = pronto.dati if pronto and pronto.dati else metadati.leggi(percorso)
         dimensione = percorso.stat().st_size
@@ -334,8 +341,12 @@ class Motore:
 
         with self.archivio.lettura() as connessione:
             riga_file = file_media.per_id(connessione, file_id)
-        miniature.per_file(self.archivio, riga_file,
-                           int(self.archivio.impostazione("miniatura_lato") or 640))
+        try:
+            miniature.per_file(self.archivio, riga_file,
+                               int(self.archivio.impostazione("miniatura_lato") or 640))
+        except Exception as errore:                     # noqa: BLE001
+            registro.avviso("importazione.miniatura_non_fatta",
+                            **registro.dove_si_e_rotto(errore))
 
         self._impronta_dell_occhio(file_id, dati.genere, percorso,
                                    pronto if pronto and pronto.dati else None)
@@ -349,7 +360,7 @@ class Motore:
                 raise pronto.guasto
             segno = (pronto.occhio if pronto is not None and pronto.occhio
                      else occhio.del_percorso(percorso))
-        except (ErroreOfficina, OSError, ValueError) as errore:
+        except Exception as errore:                     # noqa: BLE001
             segno = doppioni_motore.NON_SI_E_POTUTA
             registro.avviso("doppioni_immagine_non_guardata",
                             file_id=file_id, motivo=registro.tipo_di(errore))
@@ -479,10 +490,11 @@ class Motore:
             "FROM file_media f JOIN scatti s ON s.id = f.scatto_id "
             "WHERE f.genere = 'video' AND f.ruolo = 'principale' AND s.genere <> 'live' "
             "  AND (f.durata_ms IS NULL OR f.durata_ms <= ?) "
-            "  AND (f.identificatore_ios = ? OR f.istante_utc BETWEEN ? AND ? "
-            "       OR f.data_locale BETWEEN ? AND ? "
-            "       OR EXISTS (SELECT 1 FROM percorsi q WHERE q.file_id = f.id "
-            "                  AND q.nome LIKE ? ESCAPE '\\'))",
+            "  AND f.id IN (SELECT id FROM file_media WHERE identificatore_ios = ? "
+            "               UNION SELECT id FROM file_media WHERE istante_utc BETWEEN ? AND ? "
+            "               UNION SELECT id FROM file_media WHERE data_locale BETWEEN ? AND ? "
+            "               UNION SELECT file_id FROM percorsi WHERE nome LIKE ? ESCAPE '\\') "
+            "ORDER BY f.id",
             abbinamento.DURATA_MASSIMA_LIVE_MS,
             foto.identificatore_ios or "\x00",
             _istante_meno(foto.istante_utc, abbinamento.TOLLERANZA_SECONDI),
@@ -543,9 +555,13 @@ def _sposta(istante: str | None, secondi: int) -> str:
 
 
 def _attorno(momento, secondi: int, coda: str = "Z") -> str:
-    from datetime import timedelta
+    from datetime import datetime, timedelta
 
-    return (momento + timedelta(seconds=secondi)).strftime("%Y-%m-%dT%H:%M:%S") + coda
+    try:
+        spostato = momento + timedelta(seconds=secondi)
+    except OverflowError:
+        spostato = datetime.min if secondi < 0 else datetime.max
+    return spostato.isoformat(timespec="seconds") + coda
 
 
 def _come(testo: str) -> str:

@@ -98,6 +98,7 @@ class Stato:
     passo: int | None = None
     cartella_foto: Path | None = None
     lo_ha_fatto_il_giro: bool = False
+    detto_alla_fine: str = ""
     righe: list[str] = field(default_factory=list)
 
     @property

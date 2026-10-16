@@ -84,23 +84,30 @@ class Passata:
 
         import time
 
-        for scatto_id in da_fare:
-            if self.fermata:
-                break
-            partito = time.monotonic()
-            try:
-                self._guarda_uno(scatto_id)
-                self.avanzamento.fatti += 1
-            except ErroreOfficina as errore:
-                self._segnala(scatto_id, errore)
-            except Exception:                    # noqa: BLE001
-                self._segnala(scatto_id, ErroreOfficina(
-                    "Questo scatto non si è lasciato guardare."))
-            if al_passo:
-                al_passo(self.avanzamento)
-            freno.riposa(time.monotonic() - partito)
-
-        self.rilevatore.spegni()
+        memoria = torcia.ContoDellaMemoria()
+        try:
+            for scatto_id in da_fare:
+                if self.fermata:
+                    break
+                partito = time.monotonic()
+                try:
+                    self._guarda_uno(scatto_id)
+                    self.avanzamento.fatti += 1
+                    for pesante in memoria.riuscito():
+                        self._segnala(pesante, ErroreOfficina(torcia.TROPPO_PER_LA_MEMORIA))
+                except ErroreOfficina as errore:
+                    self._segnala(scatto_id, errore)
+                except Exception as guasto:          # noqa: BLE001
+                    if torcia.memoria_finita(guasto):
+                        memoria.finita(scatto_id, guasto)
+                    else:
+                        self._segnala(scatto_id, ErroreOfficina(
+                            "Questo scatto non si è lasciato guardare."))
+                if al_passo:
+                    al_passo(self.avanzamento)
+                freno.riposa(time.monotonic() - partito)
+        finally:
+            self.rilevatore.spegni()
         registro.evento("volti.passata", fatti=self.avanzamento.fatti,
                         volti=self.avanzamento.volti)
         return self.avanzamento

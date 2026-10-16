@@ -22,7 +22,7 @@ class Pacchetto(
                     "Questo pacchetto non ha il suo database: e' rimasto a meta'. " +
                         "Va ricopiato dal computer.", "pacchetto_senza_dati")
             }
-            return Pacchetto(cartella, carta, chiave, apre.apri(chiave.leggiTutto(dove)))
+            return Pacchetto(cartella, carta, chiave, apre.apri(chiave.leggiTutto(dove, DATI)))
         }
     }
 
@@ -176,12 +176,12 @@ class Pacchetto(
         val riga = scatto(scattoId)
         val posto = riga.testo("mini")
             ?: throw ErroreVisore("Questo scatto non ha una miniatura.")
-        return chiave.leggiTutto(dentro(cartella, posto))
+        return chiave.leggiTutto(dentro(cartella, posto), posto)
     }
 
     fun originale(scattoId: Long): ByteArray {
-        val riga = scatto(scattoId)
-        return chiave.leggiTutto(dentro(cartella, riga.testo("posto") ?: ""))
+        val posto = scatto(scattoId).testo("posto") ?: ""
+        return chiave.leggiTutto(dentro(cartella, posto), posto)
     }
 
     fun movimento(scattoId: Long): ByteArray? {
@@ -190,17 +190,17 @@ class Pacchetto(
         if (posto.isEmpty()) {
             return null
         }
-        return chiave.leggiTutto(dentro(cartella, posto))
+        return chiave.leggiTutto(dentro(cartella, posto), posto)
     }
 
     fun pezzo(scattoId: Long, da: Long, quanti: Int): ByteArray {
-        val riga = scatto(scattoId)
-        return chiave.leggiPezzo(dentro(cartella, riga.testo("posto") ?: ""), da, quanti)
+        val posto = scatto(scattoId).testo("posto") ?: ""
+        return chiave.leggiPezzo(dentro(cartella, posto), da, quanti, posto)
     }
 
     fun tiraFuori(scattoId: Long, destinazione: File): String {
-        val riga = scatto(scattoId)
-        return chiave.decifraFile(dentro(cartella, riga.testo("posto") ?: ""), destinazione)
+        val posto = scatto(scattoId).testo("posto") ?: ""
+        return chiave.decifraFile(dentro(cartella, posto), destinazione, posto)
     }
 
     fun verifica(solo: Int? = null): Verifica {
@@ -240,7 +240,7 @@ class Pacchetto(
         val impronta = Blake2b.Impronta()
         var quanto = 0L
         return try {
-            chiave.scorri(dove) { pezzo ->
+            chiave.scorri(dove, posto) { pezzo ->
                 impronta.aggiungi(pezzo)
                 quanto += pezzo.size.toLong()
             }

@@ -51,20 +51,26 @@ def togli_di(connessione: sqlite3.Connection, descrittore: str,
 
 def scatti_da_fare(connessione: sqlite3.Connection, descrittore: str,
                    versione: str, quanti: int = 200,
-                   escludi: Sequence[int] | None = None) -> list[sqlite3.Row]:
-    fuori = ""
+                   escludi: Sequence[int] | None = None,
+                   fra: Sequence[int] | None = None) -> list[sqlite3.Row]:
     parametri: list = []
+    if fra is None:
+        da_dove = "SELECT s.id, s.genere, s.durata_ms FROM scatti s WHERE s.fuori_archivio = 0"
+    elif not fra:
+        return []
+    else:
+        da_dove = ("SELECT s.id, s.genere, s.durata_ms FROM json_each(?) AS j "
+                   "CROSS JOIN scatti s ON s.id = j.value WHERE s.fuori_archivio = 0")
+        parametri.append(json.dumps(list(fra)))
+    fuori = ""
     if escludi:
-        segnaposti = ",".join("?" * len(escludi))
-        fuori = f" AND s.id NOT IN ({segnaposti})"
-        parametri.extend(escludi)
+        fuori = " AND s.id NOT IN (SELECT value FROM json_each(?))"
+        parametri.append(json.dumps(list(escludi)))
     parametri.extend([descrittore, versione, quanti])
     return tutti(
         connessione,
         f"""
-        SELECT s.id, s.genere, s.durata_ms
-        FROM scatti s
-        WHERE s.fuori_archivio = 0{fuori}{CHIUSO}{gruppi.clausola(connessione, 'intelligenza')}
+        {da_dove}{fuori}{CHIUSO}{gruppi.clausola(connessione, 'intelligenza')}
           AND NOT EXISTS (
               SELECT 1 FROM impronte i
               WHERE i.scatto_id = s.id AND i.descrittore = ?
@@ -146,6 +152,22 @@ def una(connessione: sqlite3.Connection, scatto_id: int, descrittore: str,
     )
 
 
+PEZZO = 900
+
+
+def _a_pezzi(chi, connessione, *argomenti):
+    *davanti, solo_scatti = argomenti
+    ordinati = sorted(set(solo_scatti))
+    ids: list[int] = []
+    valori: list[bytes] = []
+    for inizio in range(0, len(ordinati), PEZZO):
+        suoi_ids, suoi_valori = chi(connessione, *davanti,
+                                    solo_scatti=ordinati[inizio:inizio + PEZZO])
+        ids.extend(suoi_ids)
+        valori.extend(suoi_valori)
+    return ids, valori
+
+
 def passata(connessione: sqlite3.Connection, descrittore: str, versione: str,
             inquadratura: str, solo_scatti: Sequence[int] | None = None
             ) -> tuple[list[int], list[bytes]]:
@@ -154,6 +176,8 @@ def passata(connessione: sqlite3.Connection, descrittore: str, versione: str,
     if solo_scatti is not None:
         if not solo_scatti:
             return [], []
+        if len(solo_scatti) > PEZZO:
+            return _a_pezzi(passata, connessione, descrittore, versione, inquadratura, solo_scatti)
         segnaposti = ",".join("?" * len(solo_scatti))
         condizione = f" AND scatto_id IN ({segnaposti})"
         parametri.extend(solo_scatti)
@@ -180,6 +204,8 @@ def tutti_i_fotogrammi(connessione: sqlite3.Connection, descrittore: str,
     if solo_scatti is not None:
         if not solo_scatti:
             return [], []
+        if len(solo_scatti) > PEZZO:
+            return _a_pezzi(tutti_i_fotogrammi, connessione, descrittore, versione, inquadratura, solo_scatti)
         segnaposti = ",".join("?" * len(solo_scatti))
         condizione = f" AND scatto_id IN ({segnaposti})"
         parametri.extend(solo_scatti)
@@ -203,6 +229,8 @@ def della_griglia(connessione: sqlite3.Connection, descrittore: str,
     if solo_scatti is not None:
         if not solo_scatti:
             return [], []
+        if len(solo_scatti) > PEZZO:
+            return _a_pezzi(della_griglia, connessione, descrittore, versione, solo_scatti)
         segnaposti = ",".join("?" * len(solo_scatti))
         condizione = f" AND scatto_id IN ({segnaposti})"
         parametri.extend(solo_scatti)

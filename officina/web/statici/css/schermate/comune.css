@@ -244,19 +244,42 @@ body.senza-movimento .griglia { scroll-behavior: auto; }
 }
 
 .barra-selezione {
-    display: flex;
-    align-items: center;
-    gap: var(--s3);
-    flex-wrap: wrap;
-    padding: var(--s3) var(--s5);
-    border-bottom: 1px solid var(--linea);
-    background: var(--superficie);
+    display: grid;
+    gap: 8px;
+    margin: var(--s3) var(--s5);
+    padding: 8px;
+    border: 1px solid var(--linea);
+    border-radius: 24px;
+    background: var(--laterale);
+    box-shadow: var(--ombra);
     animation: scende var(--scena) var(--uscita);
+    min-width: 0;
 }
-
-.barra-selezione .separatore {
-    width: 1px; height: 22px; background: var(--linea);
-}
+.barra-selezione .separatore { width: 1px; height: 22px; background: var(--linea); flex: none; }
+.bs-sopra, .bs-sotto { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.bs-sopra { padding-left: 10px; }
+.bs-sotto { padding: 8px; border-radius: 18px; background: var(--fondo); border: 1px solid var(--linea); }
+.bs-sotto[hidden] { display: none; }
+.bs-conto { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bs-link { background: none; border: 0; padding: 0 4px; color: var(--accento); font: inherit; cursor: pointer; white-space: nowrap; }
+.bs-link:hover { text-decoration: underline; }
+.bs-schede { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--fondo); border: 1px solid var(--linea); }
+.bs-schede button { height: 30px; padding: 0 16px; border-radius: 999px; border: 0; background: transparent; color: var(--attenuato); font: inherit; cursor: pointer; }
+.bs-schede button:hover { color: var(--ink); }
+.bs-schede button[aria-selected="true"] { background: var(--superficie-alta); color: var(--ink); }
+.bs-avviso { color: var(--male); }
+.bs-lascia { margin-left: auto; }
+.bs-tasto { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--linea); background: var(--superficie); color: var(--ink); font: inherit; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; cursor: pointer; }
+.bs-tasto:hover:not(:disabled) { border-color: var(--linea-forte); }
+.bs-tasto:disabled { opacity: .45; cursor: default; }
+.bs-tasto.principale { background: var(--accento); border-color: var(--accento); color: var(--su-accento); font-weight: 600; }
+.bs-tasto.nudo { background: transparent; border-color: transparent; color: var(--attenuato); }
+.bs-tasto.pericolo { color: var(--male); }
+.bs-tasto kbd { font: 11px var(--sans); color: var(--tenue); border: 1px solid var(--linea); border-radius: 4px; padding: 0 4px; }
+.bs-campo { height: 34px; border-radius: 999px; padding: 0 14px; width: 260px; max-width: 100%; box-sizing: border-box; }
+.bs-data { width: auto; }
+.bs-appunti { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--alone); color: var(--accento); font-size: 12px; white-space: nowrap; }
+.bs-appunti[hidden] { display: none; }
 @keyframes scende {
     from { opacity: 0; transform: translateY(-6px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -1828,3 +1851,10 @@ a.carta:hover { transform: translateY(-1px); }
 #appunti { margin: 4px 0 0; overflow-wrap: anywhere; }
 
 @keyframes et-battito { 40% { transform: scale(1.12); } }
+.an-finestra { max-width: 460px; }
+.an-pillole { display: flex; flex-wrap: wrap; gap: 6px; }
+.an-pillola { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--superficie); border: 1px solid var(--linea); font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.an-pillola i { font-style: normal; color: var(--tenue); white-space: pre; }
+.an-spiega { color: var(--attenuato); }
+.an-tasti { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.trovati[hidden], .scegli-nodo .trovati[hidden] { display: none; }

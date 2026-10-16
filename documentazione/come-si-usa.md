@@ -466,17 +466,36 @@ python -m officina sincronizza --applica D:\Scambio\da-il-fisso
 
 ## Lavorare dallo ZenBook
 
-Sul fisso si lancia `python -m officina avvia --rete` e si accende
-l'interruttore nelle impostazioni.
+Sul fisso, in *Impostazioni → Sicurezza*, si accende «Accesso dagli altri
+computer di casa» e si riavvia il programma. Da quel momento, sotto
+l'interruttore, compare l'indirizzo da aprire sullo ZenBook: comincia con
+`https://` e finisce con `:8443`.
 
-Poi si apre `http://<indirizzo-del-fisso>:8080` sullo ZenBook. **La prima volta
-non funziona**, ed è voluto: il programma registra chi ha bussato e lo respinge
-(regola 189). Si torna sul fisso, in *Impostazioni → La rete*, e si dice «sono
-io». Da quel momento passa.
+Sulla rete di casa il programma parla solo cifrato. Il certificato l'ha fatto
+il fisso da solo, non un'azienda, e per questo **la prima volta il browser
+avvisa** che la connessione non è privata. È normale: prima di proseguire si
+aprono i dettagli del certificato e si confronta l'impronta SHA-256 con quella
+scritta nelle impostazioni del fisso. Se coincide si prosegue; se è diversa ci
+si ferma, perché fra lo ZenBook e il fisso c'è qualcun altro.
+
+Poi lo ZenBook mostra un codice di sei cifre e aspetta (regola 189). Sul fisso,
+nelle stesse impostazioni, accanto all'indirizzo dello ZenBook si scrive quel
+codice e si preme «approva»: lo ZenBook se ne accorge in un paio di secondi ed
+entra da solo. In quel momento riceve una chiave sua, che non esce mai dal suo
+browser e che il fisso conserva solo come impronta; da lì in poi servono tutte e
+due le cose insieme, l'indirizzo dello ZenBook e la sua chiave. Chi prende in
+prestito l'indirizzo dello ZenBook mentre è spento, senza la chiave, resta fuori.
+Un dispositivo approvato con una versione di prima va riapprovato una volta così,
+col codice: nelle impostazioni lo dice accanto al suo indirizzo.
 
 Chi non è approvato non riceve una schermata di accesso: riceve un no. È la
 differenza fra «protetto da password» e «invisibile» — e vale per l'ospite
-sulla Wi-Fi come per la lampadina intelligente.
+sulla Wi-Fi come per la lampadina intelligente. «Rifiuta» lo lascia fuori per
+sempre, «dimentica» gli toglie anche la chiave e lo fa ricominciare da capo.
+
+Sul fisso stesso il programma si apre solo dalla sua finestra: a ogni avvio la
+finestra riceve una chiave che vive solo in memoria, e un browser aperto a mano
+su `http://localhost:8080`, o un altro utente dello stesso computer, non entra.
 
 ## I comandi
 

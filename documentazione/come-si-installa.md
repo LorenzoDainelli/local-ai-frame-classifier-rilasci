@@ -199,17 +199,19 @@ Il programma gira sul fisso, insieme al database e (più avanti) alla scheda
 video. Lo ZenBook apre la pagina sulla rete di casa ed è solo una finestra
 (regola 187).
 
-Sul fisso:
+Sul fisso si accende «Accesso dagli altri computer di casa» in *Impostazioni →
+Sicurezza* e si riavvia il programma. Dallo ZenBook si apre l'indirizzo scritto
+lì sotto, `https://<indirizzo-del-fisso>:8443`: la prima volta il browser avvisa
+del certificato fatto in casa, e si confronta l'impronta SHA-256 con quella delle
+impostazioni; poi lo ZenBook mostra un codice di sei cifre che si scrive sul fisso
+per approvarlo. I passi sono in [come si usa](come-si-usa.md#lavorare-dallo-zenbook).
 
-```bash
-python -m officina avvia --rete
-```
-
-Dallo ZenBook si apre `http://<indirizzo-del-fisso>:8080`.
-
-Senza `--rete` il programma risponde soltanto al computer su cui gira
-(regola 190), e anche con `--rete` accetta solo gli indirizzi della rete locale
-(regola 189).
+Con l'interruttore spento il programma risponde soltanto al computer su cui gira
+(regola 190), e lì solo alla sua finestra; acceso, accetta solo gli indirizzi
+della rete locale, solo cifrato e solo dai dispositivi approvati col codice
+(regola 189). Anche `python -m officina avvia --rete` dal terminale fa lo
+stesso: la porta in chiaro resta solo per questo computer e per la rete apre
+quella cifrata, `:8443`.
 
 #### Quando lavorano tutti e due per conto loro
 

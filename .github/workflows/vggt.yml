@@ -28,7 +28,7 @@ concurrency:
 jobs:
   confronta:
     name: VGGT-Omega, l'originale contro il mio
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 240
     env:
       PYTHONPATH: ${{ github.workspace }}

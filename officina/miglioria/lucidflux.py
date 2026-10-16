@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image
 
 from officina.errori import ErroreOfficina
-from officina.miglioria import lucidflux_pesi
+from officina.miglioria import lucidflux_pesi, scaricamento
 
 NOME = "lucidflux"
 SEME = 42
@@ -158,16 +158,26 @@ class LucidFlux:
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def _importa(self):
-        codice = str(self.casa / lucidflux_pesi.CODICE)
-        if codice not in sys.path:
-            sys.path.insert(0, codice)
+        motivo = scaricamento.motivo_del_codice_diverso(
+            self.casa, lucidflux_pesi.manifesto(), ricorda=False)
+        if motivo is not None:
+            raise MancaLucidFlux(scaricamento.spiega_il_codice_diverso(
+                motivo, "LucidFlux"))
+        scaricamento.metti_il_codice_in_fondo(self.casa)
         os.environ["FLUX_DEV_FLOW"] = str(self.pesi / lucidflux_pesi.FLUSSO)
         os.environ["FLUX_DEV_AE"] = str(self.pesi / lucidflux_pesi.AE)
         finto_timm()
         import importlib
 
-        return {nome: importlib.import_module(f"src.flux.{nome}")
-                for nome in ("util", "lucidflux", "sampling", "align_color", "swinir")}
+        with scaricamento.senza_scrivere_bytecode():
+            moduli = {nome: importlib.import_module(f"src.flux.{nome}")
+                      for nome in ("util", "lucidflux", "sampling", "align_color", "swinir")}
+        if scaricamento.moduli_fuori_dal_codice(moduli.values(), self.casa):
+            scaricamento.butta_i_moduli_di_un_altro_posto()
+            raise MancaLucidFlux(
+                "Nel computer c'è un'altra libreria che si chiama «src» e prende il "
+                "posto di quella di LucidFlux: per sicurezza non lo uso.")
+        return moduli
 
     def _controlla_la_ram(self, serve: int) -> None:
         try:

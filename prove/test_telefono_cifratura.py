@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 import pytest
 
@@ -11,6 +12,13 @@ from officina.telefono import cifratura, formato
 PASSWORD = "tre parole che ricordi"
 
 SVELTI = dict(costo=2 ** 8, blocco=8, parallelo=1)
+POSTO = "foto/ab/" + "ab" * 16
+
+
+@pytest.fixture(autouse=True)
+def svelti(monkeypatch):
+    monkeypatch.setattr(cifratura, "COSTI_AMMESSI",
+                        cifratura.COSTI_AMMESSI + (SVELTI["costo"],))
 
 
 @pytest.fixture
@@ -39,14 +47,14 @@ def test_torna_fuori_identico(tmp_path, chiave, quanti):
     dentro = _scrivi(tmp_path, "originale.heic", dati)
     chiuso = tmp_path / "pacchetto" / "foto.heic"
 
-    scritto = chiave.cifra_file(dentro, chiuso)
+    scritto = chiave.cifra_file(dentro, chiuso, POSTO)
     assert scritto.dimensione == quanti
     assert scritto.peso == chiuso.stat().st_size
 
-    assert chiave.leggi_tutto(chiuso) == dati
+    assert chiave.leggi_tutto(chiuso, POSTO) == dati
 
     riaperto = tmp_path / "riaperto.heic"
-    impronta = chiave.decifra_file(chiuso, riaperto)
+    impronta = chiave.decifra_file(chiuso, riaperto, POSTO)
     assert riaperto.read_bytes() == dati
     assert impronta == scritto.impronta
 
@@ -55,22 +63,22 @@ def test_il_peso_si_sa_prima_di_scrivere(tmp_path, chiave):
     for quanti in (0, 1, 999, cifratura.BLOCCO, 2 * cifratura.BLOCCO + 3):
         dentro = _scrivi(tmp_path, f"f{quanti}.bin", os.urandom(quanti))
         chiuso = tmp_path / f"c{quanti}.bin"
-        chiave.cifra_file(dentro, chiuso)
+        chiave.cifra_file(dentro, chiuso, POSTO)
         assert cifratura.peso_cifrato(quanti) == chiuso.stat().st_size
 
 
 def test_i_byte_in_memoria_fanno_lo_stesso_formato(tmp_path, chiave):
     dati = b"un database finto" * 100_000
     percorso = tmp_path / "dati.db"
-    percorso.write_bytes(chiave.cifra_byte(dati))
-    assert chiave.leggi_tutto(percorso) == dati
+    percorso.write_bytes(chiave.cifra_byte(dati, POSTO))
+    assert chiave.leggi_tutto(percorso, POSTO) == dati
     assert chiave.dimensione_in_chiaro(percorso) == len(dati)
 
 
 def test_il_chiaro_non_si_vede_nel_cifrato(tmp_path, chiave):
     dati = b"MARIA AL MARE 2019" * 1000
     chiuso = tmp_path / "chiuso.bin"
-    chiave.cifra_file(_scrivi(tmp_path, "chiaro.bin", dati), chiuso)
+    chiave.cifra_file(_scrivi(tmp_path, "chiaro.bin", dati), chiuso, POSTO)
     assert b"MARIA" not in chiuso.read_bytes()
 
 
@@ -78,10 +86,10 @@ def test_due_file_uguali_non_si_cifrano_uguale(tmp_path, chiave):
     dati = b"la stessa identica foto"
     uno = tmp_path / "uno.bin"
     due = tmp_path / "due.bin"
-    chiave.cifra_file(_scrivi(tmp_path, "a.bin", dati), uno)
-    chiave.cifra_file(_scrivi(tmp_path, "b.bin", dati), due)
+    chiave.cifra_file(_scrivi(tmp_path, "a.bin", dati), uno, POSTO)
+    chiave.cifra_file(_scrivi(tmp_path, "b.bin", dati), due, POSTO)
     assert uno.read_bytes() != due.read_bytes()
-    assert chiave.leggi_tutto(uno) == chiave.leggi_tutto(due) == dati
+    assert chiave.leggi_tutto(uno, POSTO) == chiave.leggi_tutto(due, POSTO) == dati
 
 
 @pytest.mark.parametrize("da, quanti", [
@@ -95,14 +103,14 @@ def test_due_file_uguali_non_si_cifrano_uguale(tmp_path, chiave):
 def test_si_legge_un_pezzo_qualsiasi(tmp_path, chiave, da, quanti):
     dati = os.urandom(3 * cifratura.BLOCCO + 4242)
     chiuso = tmp_path / "video.mov"
-    chiave.cifra_file(_scrivi(tmp_path, "video-chiaro.mov", dati), chiuso)
-    assert chiave.leggi_pezzo(chiuso, da, quanti) == dati[da:da + quanti]
+    chiave.cifra_file(_scrivi(tmp_path, "video-chiaro.mov", dati), chiuso, POSTO)
+    assert chiave.leggi_pezzo(chiuso, da, quanti, POSTO) == dati[da:da + quanti]
 
 
 def test_leggere_un_pezzo_non_legge_tutto(tmp_path, chiave, monkeypatch):
     dati = os.urandom(4 * cifratura.BLOCCO)
     chiuso = tmp_path / "video.mov"
-    chiave.cifra_file(_scrivi(tmp_path, "chiaro.mov", dati), chiuso)
+    chiave.cifra_file(_scrivi(tmp_path, "chiaro.mov", dati), chiuso, POSTO)
 
     letti = []
     apri_vero = open
@@ -129,7 +137,7 @@ def test_leggere_un_pezzo_non_legge_tutto(tmp_path, chiave, monkeypatch):
         return Contato(apri_vero(percorso, modo, *resto, **chiavi))
 
     monkeypatch.setattr("builtins.open", apri_contando)
-    pezzo = chiave.leggi_pezzo(chiuso, 3 * cifratura.BLOCCO + 10, 100)
+    pezzo = chiave.leggi_pezzo(chiuso, 3 * cifratura.BLOCCO + 10, 100, POSTO)
     monkeypatch.undo()
 
     assert pezzo == dati[3 * cifratura.BLOCCO + 10:3 * cifratura.BLOCCO + 110]
@@ -153,37 +161,37 @@ def test_una_chiave_diversa_non_apre_un_file(tmp_path, chiave):
     altra = cifratura.Chiave.dalla_password(PASSWORD, b"un sale diverso",
                                             **SVELTI)
     chiuso = tmp_path / "foto.heic"
-    chiave.cifra_file(_scrivi(tmp_path, "chiaro.heic", b"contenuto"), chiuso)
+    chiave.cifra_file(_scrivi(tmp_path, "chiaro.heic", b"contenuto"), chiuso, POSTO)
     with pytest.raises(cifratura.PacchettoRovinato):
-        altra.leggi_tutto(chiuso)
+        altra.leggi_tutto(chiuso, POSTO)
 
 
 def test_un_file_tagliato_non_finisce_piu_corto(tmp_path, chiave):
     dati = os.urandom(2 * cifratura.BLOCCO + 100)
     chiuso = tmp_path / "foto.heic"
-    chiave.cifra_file(_scrivi(tmp_path, "chiaro.heic", dati), chiuso)
+    chiave.cifra_file(_scrivi(tmp_path, "chiaro.heic", dati), chiuso, POSTO)
 
     grezzo = chiuso.read_bytes()
     chiuso.write_bytes(grezzo[:len(grezzo) - 5000])
     with pytest.raises(cifratura.PacchettoRovinato):
-        chiave.leggi_tutto(chiuso)
+        chiave.leggi_tutto(chiuso, POSTO)
 
 
 def test_un_byte_cambiato_si_vede(tmp_path, chiave):
     chiuso = tmp_path / "foto.heic"
     chiave.cifra_file(_scrivi(tmp_path, "chiaro.heic", os.urandom(5000)),
-                      chiuso)
+                      chiuso, POSTO)
     grezzo = bytearray(chiuso.read_bytes())
     grezzo[-40] ^= 0x01
     chiuso.write_bytes(bytes(grezzo))
     with pytest.raises(cifratura.PacchettoRovinato):
-        chiave.leggi_tutto(chiuso)
+        chiave.leggi_tutto(chiuso, POSTO)
 
 
 def test_i_blocchi_non_si_scambiano(tmp_path, chiave):
     dati = os.urandom(2 * cifratura.BLOCCO)
     chiuso = tmp_path / "foto.heic"
-    chiave.cifra_file(_scrivi(tmp_path, "chiaro.heic", dati), chiuso)
+    chiave.cifra_file(_scrivi(tmp_path, "chiaro.heic", dati), chiuso, POSTO)
 
     grezzo = chiuso.read_bytes()
     inizio = len(grezzo) - 2 * (cifratura.BLOCCO + cifratura.SIGILLO)
@@ -192,12 +200,12 @@ def test_i_blocchi_non_si_scambiano(tmp_path, chiave):
     chiuso.write_bytes(grezzo[:inizio] + due + uno)
 
     with pytest.raises(cifratura.PacchettoRovinato):
-        chiave.leggi_tutto(chiuso)
+        chiave.leggi_tutto(chiuso, POSTO)
 
 
 def test_la_lunghezza_dichiarata_e_autenticata(tmp_path, chiave):
     chiuso = tmp_path / "foto.heic"
-    chiave.cifra_file(_scrivi(tmp_path, "chiaro.heic", b"x" * 3000), chiuso)
+    chiave.cifra_file(_scrivi(tmp_path, "chiaro.heic", b"x" * 3000), chiuso, POSTO)
 
     grezzo = chiuso.read_bytes()
     quanto = int.from_bytes(grezzo[len(cifratura.FIRMA):len(cifratura.FIRMA) + 2],
@@ -210,13 +218,13 @@ def test_la_lunghezza_dichiarata_e_autenticata(tmp_path, chiave):
                        + grezzo[inizio + quanto:])
 
     with pytest.raises(cifratura.PacchettoRovinato):
-        chiave.leggi_tutto(chiuso)
+        chiave.leggi_tutto(chiuso, POSTO)
 
 
 def test_un_file_che_non_e_del_visore_lo_dice(tmp_path, chiave):
     finto = _scrivi(tmp_path, "qualcosa.bin", b"non sono un pacchetto")
     with pytest.raises(cifratura.PacchettoRovinato) as guaio:
-        chiave.leggi_tutto(finto)
+        chiave.leggi_tutto(finto, POSTO)
     assert "pacchetto" in guaio.value.messaggio.lower()
 
 
@@ -288,36 +296,6 @@ def test_una_carta_rovinata_non_e_un_pacchetto_assente(tmp_path):
     assert guaio.value.codice == "carta_rovinata"
 
 
-def test_le_foto_stanno_per_anno_e_mese():
-    posto = formato.posto_dell_originale("2019-07-14", "IMG_1234.HEIC",
-                                         "a" * 64, set())
-    assert posto == "foto/2019/07/IMG_1234.HEIC"
-
-
-def test_senza_data_non_si_inventa_un_mese():
-    posto = formato.posto_dell_originale(None, "scansione.jpg", "b" * 64, set())
-    assert posto == "foto/senza-data/scansione.jpg"
-
-
-def test_il_secondo_nome_uguale_prende_la_coda():
-    presi = set()
-    uno = formato.posto_dell_originale("2019-07-14", "IMG_0001.JPG",
-                                       "a" * 64, presi)
-    presi.add(uno)
-    due = formato.posto_dell_originale("2019-07-20", "IMG_0001.JPG",
-                                       "b" * 64, presi)
-    assert uno == "foto/2019/07/IMG_0001.JPG"
-    assert due == "foto/2019/07/IMG_0001-bbbbbbbb.JPG"
-    assert due.endswith(".JPG")
-
-
-def test_lo_stesso_nome_in_mesi_diversi_non_e_uno_scontro():
-    presi = {"foto/2019/07/IMG_0001.JPG"}
-    altro = formato.posto_dell_originale("2020-01-02", "IMG_0001.JPG",
-                                         "c" * 64, presi)
-    assert altro == "foto/2020/01/IMG_0001.JPG"
-
-
 def test_gli_accenti_restano_e_i_caratteri_vietati_no():
     assert formato.nome_utile("Nonnà è al mare.jpg") == "Nonnà è al mare.jpg"
     assert formato.nome_utile('foto:"strana"?.jpg') == "foto__strana__.jpg"
@@ -329,11 +307,31 @@ def test_il_nome_della_cartella_dice_per_chi_e():
     assert formato.nome_cartella("Redmi Note 11") == "Visore-Redmi Note 11"
 
 
+def test_i_nomi_nel_pacchetto_sono_a_caso():
+    uno = formato.posto_dell_originale()
+    due = formato.posto_dell_originale()
+    assert uno != due
+    cartella, sotto, nome = uno.split("/")
+    assert cartella == "foto" and sotto == nome[:2]
+    assert re.fullmatch(r"[0-9a-f]{32}", nome)
+    assert formato.e_a_caso(uno) and formato.e_a_caso(due)
+
+
 def test_le_miniature_si_spargono_in_sottocartelle():
-    posto = formato.posto_della_miniatura("a3f1" + "0" * 60)
-    assert posto.startswith("mini/a3/")
-    assert posto.endswith(".jpg")
+    posto = formato.posto_della_miniatura()
+    cartella, sotto, nome = posto.split("/")
+    assert cartella == "mini" and sotto == nome[:2]
+    assert "." not in posto
+    assert formato.e_a_caso(posto)
 
 
-def test_i_volti_si_chiamano_col_numero_non_col_nome():
-    assert formato.posto_del_volto(12) == "volti/12.jpg"
+def test_i_volti_non_si_chiamano_ne_col_numero_ne_col_nome():
+    posto = formato.posto_del_volto()
+    assert re.fullmatch(r"volti/[0-9a-f]{32}", posto)
+    assert formato.e_a_caso(posto)
+
+
+@pytest.mark.parametrize("posto", ["foto/2019/07/IMG_1234.HEIC", "volti/12.jpg",
+                                   "mini/a3/" + "a3" * 32 + ".jpg", "../fuori"])
+def test_i_nomi_vecchi_non_sono_a_caso(posto):
+    assert not formato.e_a_caso(posto)

@@ -8,6 +8,9 @@ import zipfile
 import pytest
 
 from officina.miglioria import faceme, faceme_pesi, motori, persone, scaricamento
+from prove import impronte_vuote
+
+senza_impronte_vere = impronte_vuote.senza_impronte_vere
 
 FRONTALE = ((192.98, 239.95), (318.90, 240.19), (256.63, 314.02),
             (201.26, 371.41), (313.09, 371.15))
@@ -367,3 +370,44 @@ def test_i_pezzi_copiati_hanno_i_nomi_dei_pesi():
     assert {"visual_projection.weight", "visual_projection_2.weight",
             "vision_model.embeddings.patch_embedding.weight"} <= occhio
     assert len(occhio) == 393
+
+
+def test_uno_scaricamento_interrotto_riparte_da_quello_che_era_arrivato(finto):
+    vero = finto["opzioni"]["prendi_hf"]
+    grande = "unet/diffusion_pytorch_model.fp16.safetensors"
+
+    def si_interrompe(repo, nome, revisione, cartella, chiave):
+        if nome == "mix/mix.safetensors":
+            mezzo = cartella / ".cache" / "huggingface" / "download" / "mix.incomplete"
+            mezzo.parent.mkdir(parents=True, exist_ok=True)
+            mezzo.write_bytes(b"mi")
+            raise OSError("la rete è caduta")
+        return vero(repo, nome, revisione, cartella, chiave)
+
+    nuova = faceme_pesi.dove(finto["modelli"]).with_name("faceme.nuova")
+    (nuova / "di_una_volta").mkdir(parents=True)
+    (nuova / "di_una_volta" / "x.bin").write_bytes(b"x")
+    with pytest.raises(scaricamento.ScaricamentoFallito):
+        faceme_pesi.scarica(finto["modelli"], **dict(finto["opzioni"], prendi_hf=si_interrompe))
+    assert (nuova / faceme_pesi.GREZZI / ".cache" / "huggingface" / "download" / "mix.incomplete").exists()
+    assert not (nuova / "di_una_volta").exists()
+    assert grande in finto["chiesti"]
+    finto["chiesti"].clear()
+    faceme_pesi.scarica(finto["modelli"], **finto["opzioni"])
+    assert grande not in finto["chiesti"] and "mix/mix.safetensors" in finto["chiesti"]
+    assert faceme_pesi.e_in_casa(finto["modelli"])
+    assert not nuova.exists()
+
+
+def test_senza_l_elenco_quello_che_era_arrivato_resta(finto):
+    nuova = faceme_pesi.dove(finto["modelli"]).with_name("faceme.nuova")
+    mezzo = nuova / faceme_pesi.GREZZI / ".cache" / "pezzo.incomplete"
+    mezzo.parent.mkdir(parents=True)
+    mezzo.write_bytes(b"pe")
+
+    def senza_rete(repo, chiave):
+        raise OSError("niente rete")
+
+    with pytest.raises(scaricamento.ScaricamentoFallito):
+        faceme_pesi.scarica(finto["modelli"], **dict(finto["opzioni"], elenca=senza_rete))
+    assert mezzo.read_bytes() == b"pe"

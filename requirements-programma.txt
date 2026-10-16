@@ -12,3 +12,11 @@
 pywebview==6.2.1          # la finestra del programma, con WebView2 (regola 458)
 nvidia-ml-py==13.590.44   # chiede al driver NVIDIA che scheda c'e' (regola 460)
 pip==26.2.1               # scarica i motori al primo avvio (regola 461)
+
+winrt-runtime==3.2.1 ; sys_platform == "win32"
+winrt-windows-foundation==3.2.1 ; sys_platform == "win32"
+winrt-windows-foundation-collections==3.2.1 ; sys_platform == "win32"
+winrt-windows-security-credentials==3.2.1 ; sys_platform == "win32"
+winrt-windows-security-cryptography==3.2.1 ; sys_platform == "win32"
+winrt-windows-storage-streams==3.2.1 ; sys_platform == "win32"
+winrt-windows-system==3.2.1 ; sys_platform == "win32"

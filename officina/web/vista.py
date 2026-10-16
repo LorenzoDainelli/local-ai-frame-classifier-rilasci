@@ -6,7 +6,7 @@ import sqlite3
 from urllib.parse import urlencode
 
 from officina.archivio.database import uno
-from officina.modello import nodi, persone, posti, scatti
+from officina.modello import mappa, nodi, persone, posti, scatti
 from officina.modello.scatti import Filtro
 
 
@@ -60,14 +60,22 @@ def fuso_a_parole(minuti: int | None) -> str:
 TIPI = {"foto": "fotografia", "live": "live photo", "video": "video"}
 
 
+def _intero(grezzo) -> int | None:
+    testo = str(grezzo or "").strip()
+    if testo.isascii() and testo.isdecimal() and len(testo) <= 18:
+        return int(testo)
+    return None
+
+
 def filtro_da_parametri(parametri) -> Filtro:
     def numeri(chiave: str) -> list[int]:
         grezzo = parametri.get(chiave) or ""
-        return [int(x) for x in str(grezzo).split(",") if x.strip().isdigit()]
+        return [n for n in (_intero(x) for x in str(grezzo).split(",")) if n is not None]
 
     def acceso(chiave: str) -> bool:
         return str(parametri.get(chiave, "")).lower() in ("1", "si", "true", "on")
 
+    simili = _intero(parametri.get("simili"))
     return Filtro(
         nodi_e=numeri("nodo"),
         nodi_o=numeri("nodo_o"),
@@ -82,20 +90,16 @@ def filtro_da_parametri(parametri) -> Filtro:
         col_cuore=acceso("cuore"),
         evidenziati=acceso("stella"),
         persone=numeri("persona"),
-        luogo=(int(parametri["luogo"])
-               if str(parametri.get("luogo", "")).isdigit() else None),
-        importazione=(int(parametri["importazione"])
-                      if str(parametri.get("importazione", "")).isdigit()
-                      else None),
-        gruppo=(int(parametri["gruppo"])
-                if str(parametri.get("gruppo", "")).isdigit() else None),
-        simili_a=(int(parametri["simili"])
-                  if str(parametri.get("simili", "")).isdigit() else None),
+        luogo=_intero(parametri.get("luogo")),
+        importazione=_intero(parametri.get("importazione")),
+        gruppo=_intero(parametri.get("gruppo")),
+        zona=mappa.zona_da_testo(parametri.get("zona")),
+        simili_a=simili,
         simili_larghi=acceso("simili_larghi"),
         parole=(str(parametri.get("parole") or "").strip() or None),
         ordine=(parametri.get("ordine")
                 or ("somiglianza"
-                    if str(parametri.get("simili", "")).isdigit()
+                    if simili is not None
                     or str(parametri.get("parole") or "").strip() else "data_giu")),
     )
 
@@ -134,6 +138,8 @@ def parametri_da_filtro(filtro: Filtro) -> dict:
         parametri["importazione"] = str(filtro.importazione)
     if filtro.gruppo:
         parametri["gruppo"] = str(filtro.gruppo)
+    if filtro.zona:
+        parametri["zona"] = mappa.zona_a_testo(filtro.zona)
     if filtro.simili_a is not None:
         parametri["simili"] = str(filtro.simili_a)
     if filtro.simili_larghi:
@@ -219,6 +225,9 @@ def pillole_attive(connessione: sqlite3.Connection, filtro: Filtro) -> list[dict
         riga = posti.per_id(connessione, filtro.luogo)
         aggiungi(riga["nome"] if riga else "un luogo",
                  filtro.copia_con(luogo=None))
+
+    if filtro.zona:
+        aggiungi("in una zona della mappa", filtro.copia_con(zona=None))
 
     if filtro.parole:
         aggiungi(f"«{filtro.parole}»",

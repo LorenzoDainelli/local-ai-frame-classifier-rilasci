@@ -21,6 +21,9 @@
         {{ fotina('grande dorme') }}
         <h1>Si è chiuso da solo.</h1>
         <p>Era da un po' che non lo usavi. Scrivi la password del forziere e lo riapro.</p>
+        {% if con_windows %}
+        <button class="tasto-comando principale" type="button" data-rientra-windows>Rientra con Windows</button>
+        {% endif %}
         <form method="post" action="/blocco/apri" class="modulo-blocco">
             <input class="campo" type="password" name="password" autocomplete="current-password"
                    autofocus required aria-label="La password del forziere"

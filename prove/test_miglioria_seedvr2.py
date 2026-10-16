@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from PIL import Image
 
+from officina.descrittori.scaricamento import ScaricamentoFallito
 from officina.miglioria import motori, scaricamento, seedvr2
 from officina.programma import carta, librerie
 
@@ -396,3 +399,194 @@ def test_il_modello_mancante_si_legge_a_parole(tmp_path):
     with pytest.raises(seedvr2.MancaSeedVR2) as preso:
         seedvr2.SeedVR2(cartella_modelli=str(tmp_path))
     assert lavoro.a_parole(preso.value.codice) != preso.value.codice
+
+
+def test_se_lo_scaricamento_si_ferma_a_meta_i_pesi_vecchi_restano(finto):
+    scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"],
+                         prendi_peso=finto["prendi_peso"])
+    casa = scaricamento.dove(finto["modelli"])
+    (casa / "pronto.json").write_text(json.dumps({"commit": "vecchio"}), encoding="utf-8")
+    (casa / "pesi" / seedvr2.VAE).unlink()
+
+    def rotto(repo, nome, cartella, chiave):
+        raise OSError("la rete è caduta")
+
+    with pytest.raises(scaricamento.ScaricamentoFallito):
+        scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"],
+                             prendi_peso=rotto)
+    assert (casa / "pesi" / seedvr2.DIT).read_bytes() == b"dit-finto"
+    assert not casa.with_name("seedvr2.nuova").exists()
+    finto["chiesti"].clear()
+    scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"],
+                         prendi_peso=finto["prendi_peso"])
+    assert seedvr2.DIT not in finto["chiesti"] and seedvr2.VAE in finto["chiesti"]
+    assert scaricamento.e_in_casa(finto["modelli"])
+
+
+def test_se_lo_scambio_delle_cartelle_fallisce_la_vecchia_torna(tmp_path, monkeypatch):
+    arrivo = tmp_path / "seedvr2"
+    (arrivo / "pesi").mkdir(parents=True)
+    (arrivo / "pesi" / "x").write_bytes(b"vecchio")
+    nuova = tmp_path / "seedvr2.nuova"
+    nuova.mkdir()
+    vero = type(nuova).rename
+
+    def rinomina(self, dove):
+        if self == nuova:
+            raise OSError("bloccato dall'antivirus")
+        return vero(self, dove)
+
+    monkeypatch.setattr(type(nuova), "rename", rinomina)
+    with pytest.raises(OSError):
+        scaricamento._metti_al_posto(nuova, arrivo)
+    assert (arrivo / "pesi" / "x").read_bytes() == b"vecchio"
+    assert not arrivo.with_name("seedvr2.vecchia").exists()
+
+
+def _hf_finto(monkeypatch, finto, storia, guasto=None) -> list:
+    import huggingface_hub
+
+    presi = []
+    versioni = dict(storia)
+
+    class Api:
+        def list_repo_commits(self, repo, token=None):
+            if guasto is not None:
+                raise guasto
+            return [SimpleNamespace(commit_id=c) for c, _ in storia]
+
+        def get_paths_info(self, repo, percorsi, revision=None, token=None):
+            file = versioni[revision]
+            return [SimpleNamespace(path=n, lfs={"sha256": file[n]}) for n in percorsi if n in file]
+
+    def scarica(repo_id, filename, revision=None, local_dir=None, token=None):
+        presi.append((filename, revision))
+        posto = Path(local_dir) / filename
+        posto.write_bytes(finto["pesi"][filename])
+        return str(posto)
+
+    monkeypatch.setattr(huggingface_hub, "HfApi", Api)
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", scarica)
+    return presi
+
+
+def test_i_pesi_si_scaricano_dalla_versione_con_l_impronta_giusta(finto, monkeypatch):
+    dit, vae = _sha(finto["pesi"][seedvr2.DIT]), _sha(finto["pesi"][seedvr2.VAE])
+    presi = _hf_finto(monkeypatch, finto, [("nuova", {seedvr2.DIT: _sha(b"altro"), seedvr2.VAE: vae}),
+                                           ("vecchia", {seedvr2.DIT: dit, seedvr2.VAE: vae})])
+    scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"])
+    assert presi == [(seedvr2.DIT, "vecchia"), (seedvr2.VAE, "nuova")]
+    assert scaricamento.e_in_casa(finto["modelli"])
+
+
+def test_se_nessuna_versione_ha_l_impronta_non_parte_niente(finto, monkeypatch):
+    presi = _hf_finto(monkeypatch, finto, [("nuova", {seedvr2.DIT: _sha(b"altro"),
+                                                      seedvr2.VAE: _sha(b"altro")})])
+    with pytest.raises(ScaricamentoFallito, match="non lo scarico"):
+        scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"])
+    assert presi == [] and finto["chiesti"] == []
+    assert not scaricamento.dove(finto["modelli"]).with_name("seedvr2.nuova").exists()
+
+
+def test_senza_la_storia_si_scarica_lo_stesso_e_si_controlla_dopo(finto, monkeypatch):
+    presi = _hf_finto(monkeypatch, finto, [], guasto=ConnectionError("niente rete"))
+    scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"])
+    assert presi == [(seedvr2.DIT, None), (seedvr2.VAE, None)]
+    assert scaricamento.e_in_casa(finto["modelli"])
+
+
+def test_un_peso_gia_in_casa_non_si_ferma_se_su_hf_e_cambiato(finto, monkeypatch):
+    vae = _sha(finto["pesi"][seedvr2.VAE])
+    presi = _hf_finto(monkeypatch, finto, [("nuova", {seedvr2.DIT: _sha(b"altro"), seedvr2.VAE: vae})])
+    gia = scaricamento.dove(finto["modelli"]) / scaricamento.PESI / seedvr2.DIT
+    gia.parent.mkdir(parents=True)
+    gia.write_bytes(finto["pesi"][seedvr2.DIT])
+    scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"])
+    assert presi == [(seedvr2.VAE, "nuova")]
+    assert scaricamento.e_in_casa(finto["modelli"])
+
+
+def test_un_peso_dato_con_un_altro_percorso_dello_stesso_file_non_si_sposta(finto, monkeypatch):
+    spostati = []
+    monkeypatch.setattr(scaricamento.shutil, "move", lambda da, a: spostati.append((da, a)))
+
+    def prendi_peso(repo, nome, cartella, chiave):
+        (cartella / nome).write_bytes(finto["pesi"][nome])
+        (cartella / "giro").mkdir(exist_ok=True)
+        return cartella / "giro" / ".." / nome
+
+    scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"], prendi_peso=prendi_peso)
+    assert spostati == []
+    assert scaricamento.e_in_casa(finto["modelli"])
+
+
+def test_uno_scaricamento_interrotto_tiene_quello_che_e_arrivato_e_riparte_da_li(finto, monkeypatch):
+    from collections import namedtuple
+
+    nuova = scaricamento.dove(finto["modelli"]).with_name("seedvr2.nuova")
+    (nuova / "pesi").mkdir(parents=True)
+    (nuova / "pesi" / "di_una_volta.safetensors").write_bytes(b"x")
+    (nuova / "strano").write_bytes(b"x")
+    cartelle = []
+
+    def si_interrompe(repo, nome, cartella, chiave):
+        cartelle.append(cartella)
+        if nome == seedvr2.VAE:
+            mezzo = cartella / ".cache" / "huggingface" / "download" / "vae.incomplete"
+            mezzo.parent.mkdir(parents=True, exist_ok=True)
+            mezzo.write_bytes(b"va")
+            raise OSError("la rete è caduta")
+        return finto["prendi_peso"](repo, nome, cartella, chiave)
+
+    with pytest.raises(ScaricamentoFallito):
+        scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"],
+                             prendi_peso=si_interrompe)
+    assert (nuova / "pesi" / seedvr2.DIT).read_bytes() == b"dit-finto"
+    assert (nuova / "pesi" / ".cache" / "huggingface" / "download" / "vae.incomplete").exists()
+    assert sorted(v.name for v in nuova.iterdir()) == ["pesi"]
+    assert not (nuova / "pesi" / "di_una_volta.safetensors").exists()
+
+    Disco = namedtuple("Disco", "total used free")
+    giusto = scaricamento.MARGINE + len(finto["pesi"][seedvr2.VAE])
+    monkeypatch.setattr(scaricamento.shutil, "disk_usage", lambda _p: Disco(1, 1, giusto))
+    scaricamento.controlla_lo_spazio(finto["modelli"])
+
+    finto["chiesti"].clear()
+
+    def riprende(repo, nome, cartella, chiave):
+        cartelle.append(cartella)
+        return finto["prendi_peso"](repo, nome, cartella, chiave)
+
+    scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"], prendi_peso=riprende)
+    assert seedvr2.DIT not in finto["chiesti"] and seedvr2.VAE in finto["chiesti"]
+    assert len(set(cartelle)) == 1
+    assert scaricamento.e_in_casa(finto["modelli"])
+    assert not nuova.exists()
+
+
+def test_un_peso_arrivato_storto_si_butta_e_la_volta_dopo_si_riscarica_solo_lui(finto):
+    giusto = finto["pesi"][seedvr2.VAE]
+    finto["pesi"][seedvr2.VAE] = b"storto"
+    with pytest.raises(ScaricamentoFallito, match="impronta"):
+        scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"],
+                             prendi_peso=finto["prendi_peso"])
+    nuova = scaricamento.dove(finto["modelli"]).with_name("seedvr2.nuova")
+    assert not (nuova / "pesi" / seedvr2.VAE).exists()
+    assert (nuova / "pesi" / seedvr2.DIT).exists()
+    finto["pesi"][seedvr2.VAE] = giusto
+    finto["chiesti"].clear()
+    scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"],
+                         prendi_peso=finto["prendi_peso"])
+    assert seedvr2.DIT not in finto["chiesti"] and seedvr2.VAE in finto["chiesti"]
+    assert scaricamento.e_in_casa(finto["modelli"])
+
+
+def test_un_peso_gia_arrivato_non_chiede_la_storia_a_hugging_face(finto, monkeypatch):
+    vae = _sha(finto["pesi"][seedvr2.VAE])
+    presi = _hf_finto(monkeypatch, finto, [("nuova", {seedvr2.DIT: _sha(b"altro"), seedvr2.VAE: vae})])
+    arrivato = scaricamento.dove(finto["modelli"]).with_name("seedvr2.nuova") / "pesi" / seedvr2.DIT
+    arrivato.parent.mkdir(parents=True)
+    arrivato.write_bytes(finto["pesi"][seedvr2.DIT])
+    scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"])
+    assert presi == [(seedvr2.VAE, "nuova")]
+    assert scaricamento.e_in_casa(finto["modelli"])

@@ -7,11 +7,19 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import BinaryIO, Iterator
 
+from officina.modello.luoghi import coordinate_valide
+
 SCARTO_1904 = 2082844800
 
 CONTENITORI = {b"moov", b"trak", b"mdia", b"udta", b"meta", b"ilst", b"edts"}
 
 FOGLIA_MASSIMA = 512 * 1024
+
+CAMPIONI_MASSIMI = 2_000_000
+
+MISURA_MASSIMA_CAMPIONE = 64 * 1024 * 1024
+
+FUSO_MASSIMO_MINUTI = 14 * 60
 
 
 @dataclass
@@ -54,13 +62,15 @@ def _atomi(file: BinaryIO, inizio: int, fine: int) -> Iterator[tuple[bytes, int,
             contenuto = posizione + 16
         elif lunghezza == 0:
             lunghezza = fine - posizione
-        if lunghezza < 8 or posizione + lunghezza > fine:
+        if lunghezza < contenuto - posizione or posizione + lunghezza > fine:
             return
         yield nome, contenuto, posizione + lunghezza
         posizione += lunghezza
 
 
 def _leggi(file: BinaryIO, inizio: int, fine: int) -> bytes:
+    if fine <= inizio:
+        return b""
     file.seek(inizio)
     return file.read(min(fine - inizio, FOGLIA_MASSIMA))
 
@@ -82,9 +92,11 @@ def _data_da_stringa(testo: str) -> tuple[str | None, int | None, str | None]:
             if taglio > 9:
                 corpo = testo[:taglio]
                 pezzo = testo[taglio + 1:].replace(":", "")
-                if len(pezzo) >= 4 and pezzo[:4].isdigit():
-                    minuti = int(pezzo[:2]) * 60 + int(pezzo[2:4])
-                    fuso_minuti = minuti if segno == "+" else -minuti
+                if len(pezzo) >= 4 and pezzo[:4].isascii() and pezzo[:4].isdecimal():
+                    ore, primi = int(pezzo[:2]), int(pezzo[2:4])
+                    minuti = ore * 60 + primi
+                    if primi < 60 and minuti <= FUSO_MASSIMO_MINUTI:
+                        fuso_minuti = minuti if segno == "+" else -minuti
                 break
     corpo = corpo.strip()
     if len(corpo) >= 10 and corpo[4] in "/." and corpo[7] == corpo[4]:
@@ -111,7 +123,10 @@ def _data_da_stringa(testo: str) -> tuple[str | None, int | None, str | None]:
         locale = momento.strftime("%Y-%m-%dT%H:%M:%S")
         if fuso_minuti is None:
             return locale, None, None
-        assoluto = (momento - timedelta(minutes=fuso_minuti)).replace(tzinfo=timezone.utc)
+        try:
+            assoluto = (momento - timedelta(minutes=fuso_minuti)).replace(tzinfo=timezone.utc)
+        except OverflowError:
+            return None, None, None
         return locale, fuso_minuti, assoluto.strftime("%Y-%m-%dT%H:%M:%SZ")
     return None, None, None
 
@@ -124,7 +139,7 @@ def _iso6709(testo: str) -> tuple[float | None, float | None]:
             if corrente:
                 numeri.append(corrente)
             corrente = carattere
-        elif carattere.isdigit() or carattere == ".":
+        elif carattere.isdecimal() or carattere == ".":
             corrente += carattere
         else:
             break
@@ -132,7 +147,7 @@ def _iso6709(testo: str) -> tuple[float | None, float | None]:
         numeri.append(corrente)
     try:
         if len(numeri) >= 2:
-            return float(numeri[0]), float(numeri[1])
+            return coordinate_valide(float(numeri[0]), float(numeri[1]))
     except ValueError:
         pass
     return None, None
@@ -184,7 +199,7 @@ def leggi(percorso: Path) -> DatiVideo:
                 _leggi_moov(file, contenuto, fine, dati)
             if dati.creazione_mvhd is None:
                 _cerca_mvhd(file, dimensione, dati)
-    except (OSError, struct.error):
+    except (OSError, struct.error, RecursionError):
         return dati
 
     if dati.origine_data != "apple" and dati.data_di_scorta:
@@ -231,7 +246,7 @@ def chiavi_apple(percorso: Path) -> dict[str, str]:
             for nome, contenuto, fine in _atomi(file, 0, dimensione):
                 if nome == b"moov":
                     _raccogli_chiavi(file, contenuto, fine, trovate)
-    except (OSError, struct.error):
+    except (OSError, struct.error, RecursionError):
         return trovate
     return trovate
 
@@ -420,7 +435,7 @@ def primo_fotogramma_jpeg(percorso: Path) -> bytes | None:
             file.seek(scarto)
             dati = file.read(min(misura, 8 * 1024 * 1024))
             return dati if dati[:3] == b"\xff\xd8\xff" else None
-    except (OSError, struct.error):
+    except (OSError, struct.error, RecursionError):
         return None
 
 
@@ -456,7 +471,7 @@ def codec_video(percorso: Path) -> str | None:
     try:
         with open(percorso, "rb") as file:
             return _cerca_codec(file, 0, percorso.stat().st_size)
-    except (OSError, struct.error):
+    except (OSError, struct.error, RecursionError):
         return None
 
 
@@ -490,11 +505,12 @@ class Campione:
 def campioni_jpeg(percorso: Path) -> list[Campione]:
     try:
         with open(percorso, "rb") as file:
-            tabelle = _tabelle_stbl(file, 0, percorso.stat().st_size)
+            dimensione = percorso.stat().st_size
+            tabelle = _tabelle_stbl(file, 0, dimensione)
             if tabelle is None:
                 return []
-            return _componi_campioni(tabelle)
-    except (OSError, struct.error, ValueError):
+            return _componi_campioni(tabelle, dimensione)
+    except Exception:
         return []
 
 
@@ -516,8 +532,9 @@ def _tabelle_stbl(file: BinaryIO, inizio: int, fine: int) -> dict | None:
     return None
 
 
-def _componi_campioni(tabelle: dict) -> list[Campione]:
-    misure = _misure(tabelle.get("stsz", b""))
+def _componi_campioni(tabelle: dict, dimensione: int | None = None) -> list[Campione]:
+    tetto = CAMPIONI_MASSIMI if dimensione is None else min(CAMPIONI_MASSIMI, dimensione)
+    misure = _misure(tabelle.get("stsz", b""), tetto)
     if not misure:
         return []
     scarti_chunk = _scarti(tabelle.get("stco"), tabelle.get("co64"))
@@ -529,7 +546,7 @@ def _componi_campioni(tabelle: dict) -> list[Campione]:
     campioni: list[Campione] = []
     indice = 0
     tempo = 0
-    for chunk, quanti in enumerate(per_chunk):
+    for chunk, quanti in enumerate(per_chunk[:len(scarti_chunk)]):
         posizione = scarti_chunk[chunk]
         for _ in range(quanti):
             if indice >= len(misure):
@@ -541,10 +558,11 @@ def _componi_campioni(tabelle: dict) -> list[Campione]:
     return campioni
 
 
-def _misure(grezzo: bytes) -> list[int]:
+def _misure(grezzo: bytes, tetto: int = CAMPIONI_MASSIMI) -> list[int]:
     if len(grezzo) < 12:
         return []
     fissa, quanti = struct.unpack(">II", grezzo[4:12])
+    quanti = min(quanti, tetto)
     if fissa:
         return [fissa] * quanti
     corpo = grezzo[12:12 + quanti * 4]
@@ -577,14 +595,16 @@ def _quanti_per_chunk(stsc: bytes, quanti_chunk: int, quanti_campioni: int) -> l
     if not righe:
         return [1] * min(quanti_chunk, quanti_campioni)
 
-    fuori = []
+    fuori: list[int] = []
+    resto = quanti_campioni
     for indice, (primo, per_blocco) in enumerate(righe):
         ultimo = righe[indice + 1][0] - 1 if indice + 1 < len(righe) else quanti_chunk
-        fuori.extend([per_blocco] * max(0, ultimo - primo + 1))
-    while sum(fuori) > quanti_campioni and fuori:
-        fuori[-1] -= 1
-        if fuori[-1] <= 0:
-            fuori.pop()
+        for _ in range(max(0, min(ultimo, quanti_chunk) - primo + 1)):
+            if resto <= 0:
+                return fuori
+            preso = min(per_blocco, resto)
+            fuori.append(preso)
+            resto -= preso
     return fuori
 
 
@@ -595,9 +615,10 @@ def _durate(stts: bytes, quanti_campioni: int) -> list[int]:
     fuori: list[int] = []
     for indice in range(quante_righe):
         inizio = 8 + indice * 8
-        if inizio + 8 > len(stts):
+        if inizio + 8 > len(stts) or len(fuori) >= quanti_campioni:
             break
         quanti, passo = struct.unpack(">II", stts[inizio:inizio + 8])
+        quanti = min(quanti, quanti_campioni - len(fuori))
         fuori.extend([int(passo * 1000 / SCALA_TEMPI)] * quanti)
     if len(fuori) < quanti_campioni:
         fuori.extend([0] * (quanti_campioni - len(fuori)))
@@ -608,7 +629,7 @@ def leggi_campione(percorso: Path, campione: Campione) -> bytes | None:
     try:
         with open(percorso, "rb") as file:
             file.seek(campione.scarto)
-            dati = file.read(campione.misura)
+            dati = file.read(min(campione.misura, MISURA_MASSIMA_CAMPIONE))
         return dati if dati[:3] == b"\xff\xd8\xff" else None
     except OSError:
         return None

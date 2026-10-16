@@ -110,6 +110,49 @@ def libera() -> None:
             torch.cuda.ipc_collect()
 
 
+SEGNI_DI_MEMORIA_FINITA = ("out of memory", "cublas_status_alloc_failed",
+                           "can't allocate memory", "failed to allocate memory")
+FINITE_DI_FILA = 5
+MEMORIA_FINITA = ("La scheda video ha finito la memoria e il lavoro si è fermato. "
+                  "Gli scatti che restano non sono segnati come rotti: riprova quando "
+                  "la scheda è libera, per esempio dopo il miglioramento.")
+TROPPO_PER_LA_MEMORIA = "Questo scatto è troppo pesante per la memoria della scheda video."
+
+
+def memoria_finita(guasto: BaseException | None) -> bool:
+    if guasto is None:
+        return False
+    if isinstance(guasto, MemoryError) or type(guasto).__name__ == "OutOfMemoryError":
+        return True
+    testo = str(guasto).lower()
+    return any(segno in testo for segno in SEGNI_DI_MEMORIA_FINITA)
+
+
+def senza_memoria(guasto: BaseException):
+    from officina import registro
+    from officina.errori import ErroreOfficina
+
+    registro.avviso("torcia.memoria_finita", **registro.dove_si_e_rotto(guasto))
+    return ErroreOfficina(MEMORIA_FINITA, codice="memoria_scheda_finita")
+
+
+class ContoDellaMemoria:
+
+    def __init__(self, di_fila: int = FINITE_DI_FILA):
+        self.di_fila = di_fila
+        self.in_sospeso: list = []
+
+    def finita(self, chi, guasto: BaseException) -> None:
+        libera()
+        self.in_sospeso.append(chi)
+        if len(self.in_sospeso) >= self.di_fila:
+            raise senza_memoria(guasto) from guasto
+
+    def riuscito(self) -> list:
+        sospesi, self.in_sospeso = self.in_sospeso, []
+        return sospesi
+
+
 def temperatura() -> int | None:
     try:  # pragma: no cover - dipende dall'hardware
         import pynvml

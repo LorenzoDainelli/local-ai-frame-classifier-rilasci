@@ -51,6 +51,7 @@ class Passata:
                           else int(archivio.impostazione("intensita_scheda") or 100))
         self.avanzamento = Avanzamento()
         self._fermati = threading.Event()
+        self._memoria = torcia.ContoDellaMemoria()
 
     def ferma(self) -> None:
         self._fermati.set()
@@ -80,6 +81,7 @@ class Passata:
         if quanti:
             da_fare = da_fare[:quanti]
         self.avanzamento.totale = len(da_fare)
+        self._memoria = torcia.ContoDellaMemoria()
 
         try:
             self._accendi(bool(da_fare))
@@ -108,6 +110,7 @@ class Passata:
                     "DISTINCT s.id", gruppi.clausola(connessione, "intelligenza")),
                 rilevatore_mod.SCALA_DEI_PUNTI)]
         rifatti = 0
+        self._memoria = torcia.ContoDellaMemoria()
         try:
             for numero, scatto_id in enumerate(da_fare, start=1):
                 if self.fermata:
@@ -115,14 +118,18 @@ class Passata:
                 partito = time.monotonic()
                 try:
                     rifatti += self._ripunta(scatto_id)
+                    self._riuscito()
                 except Interrotta:
                     break
                 except ErroreOfficina as errore:
                     self._segnala(scatto_id, errore)
                 except Exception as guasto:              # noqa: BLE001
-                    registro.avviso("corpi.punti_non_rifatti", **registro.dove_si_e_rotto(guasto))
-                    self._segnala(scatto_id, ErroreOfficina(
-                        "Questo scatto non si è lasciato guardare."))
+                    if torcia.memoria_finita(guasto):
+                        self._memoria.finita(scatto_id, guasto)
+                    else:
+                        registro.avviso("corpi.punti_non_rifatti", **registro.dove_si_e_rotto(guasto))
+                        self._segnala(scatto_id, ErroreOfficina(
+                            "Questo scatto non si è lasciato guardare."))
                 if al_passo:
                     al_passo(numero, len(da_fare))
                 freno.riposa(time.monotonic() - partito)
@@ -192,9 +199,12 @@ class Passata:
             except ErroreOfficina as errore:
                 self._segnala(scatto_id, errore)
                 continue
-            except Exception:                    # noqa: BLE001
-                self._segnala(scatto_id, ErroreOfficina(
-                    "Questo scatto non si è lasciato guardare."))
+            except Exception as guasto:          # noqa: BLE001
+                if torcia.memoria_finita(guasto):
+                    self._memoria.finita(scatto_id, guasto)
+                else:
+                    self._segnala(scatto_id, ErroreOfficina(
+                        "Questo scatto non si è lasciato guardare."))
                 continue
             letti.append((scatto_id, file_id, visti))
             quadri_in_tutto += len(visti)
@@ -253,6 +263,9 @@ class Passata:
             suoi = guasti[posto:posto + len(visti)]
             posto += len(visti)
             guasto = next((g for g in suoi if g is not None), None)
+            if torcia.memoria_finita(guasto):
+                self._memoria.finita(scatto_id, guasto)
+                continue
             if guasto is not None:
                 self._segnala(scatto_id, guasto if isinstance(guasto, ErroreOfficina)
                               else ErroreOfficina("Questo scatto non si è lasciato guardare."))
@@ -260,6 +273,11 @@ class Passata:
             trovati = [(numero, corpo) for numero, corpi, _ in visti for corpo in corpi]
             self._salva(scatto_id, file_id, trovati)
             self.avanzamento.fatti += 1
+            self._riuscito()
+
+    def _riuscito(self) -> None:
+        for pesante in self._memoria.riuscito():
+            self._segnala(pesante, ErroreOfficina(torcia.TROPPO_PER_LA_MEMORIA))
 
     def _salva(self, scatto_id: int, file_id: int | None, trovati) -> None:
         with self.archivio.scrittura() as connessione:
@@ -298,6 +316,8 @@ def _di_lavoro(intera):
 
 
 def _non_si_accendono(guasto: BaseException) -> ErroreOfficina:
+    if torcia.memoria_finita(guasto):
+        return torcia.senza_memoria(guasto)
     registro.errore("corpi.non_si_accendono", **registro.dove_si_e_rotto(guasto))
     errore = ErroreOfficina(
         "I modelli del corpo non si sono accesi. Gli scatti restano da guardare: "

@@ -125,8 +125,10 @@ def _campione(percorso: Path, campione, lato: int | None,
     grezzo = quicktime.leggi_campione(percorso, campione)
     if grezzo is None:
         return None
+    from officina.immagini import lettura
+
     try:
-        immagine = Image.open(io.BytesIO(grezzo))
+        immagine = Image.open(io.BytesIO(grezzo), formats=lettura.formati_aperti())
         immagine.load()
     except Exception:
         return None

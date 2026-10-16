@@ -128,6 +128,10 @@ def apri_con_cautela(percorso: Path) -> dict:
     import torch
     from torch import serialization
 
+    from officina.programma import scheda
+
+    scheda.controlla_che_torch_legga_in_sicurezza(torch)
+
     elenca = getattr(serialization, "get_unsafe_globals_in_checkpoint", None)
     if elenca is None:
         raise ErroreOfficina("Questa versione di torch è troppo vecchia per aprire i pesi "
@@ -323,6 +327,9 @@ def scarica(cartella_modelli: Path, al_passo: Callable[[str], None] | None = Non
             rifai: bool = False, senza_impronta: bool = False) -> list[Path]:
     casa = dove_stanno(cartella_modelli)
     casa.mkdir(parents=True, exist_ok=True)
+    for avanzo in casa.glob("arriva-*"):
+        if avanzo.is_dir():
+            shutil.rmtree(avanzo, ignore_errors=True)
     fatti = []
     elenco = None
     for numero, pesi in enumerate(PESI, start=1):

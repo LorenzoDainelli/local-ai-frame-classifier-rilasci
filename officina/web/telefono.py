@@ -5,10 +5,10 @@ from datetime import date
 from pathlib import Path
 
 from officina import registro
-from officina.archivio.database import tutti, uno
+from officina.archivio.database import ora_di_qui, tutti, uno
 from officina.errori import ErroreOfficina, PasswordSbagliata
 from officina.modello import luoghi, nodi, persone, scatti, telefoni
-from officina.telefono import cifratura, costruzione, formato, selezione
+from officina.telefono import costruzione, formato, selezione
 from officina.web import lavori
 
 QUANTE_RIGHE_DI_DIARIO = 12
@@ -25,7 +25,7 @@ def scelta_di(telefono: sqlite3.Row) -> selezione.Selezione:
 def leggi_la_scelta(campi) -> selezione.Selezione:
     def numeri(chiave: str) -> list[int]:
         grezzo = campi.get(chiave) or ""
-        return sorted({int(x) for x in str(grezzo).split(",") if x.strip().isdigit()})
+        return sorted({int(x) for x in str(grezzo).split(",") if x.strip().isdecimal()})
 
     def giorno(chiave: str) -> str | None:
         valore = (campi.get(chiave) or "").strip()
@@ -124,8 +124,14 @@ def dimentica_le_cartelle() -> None:
     _verdetti.clear()
 
 
+SCONOSCIUTA = ("La carta d'identità del pacchetto in questa cartella chiede di "
+               "calcolare la password in un modo che il programma non usa: forse "
+               "qualcuno l'ha modificata. Non lo tocco: svuota la cartella e il "
+               "pacchetto si rifà da zero.")
+
+
 def _verdetto_sulla_cartella(cartella, password: str | None,
-                             identificativo: str) -> list[dict]:
+                             identificativo: str | None) -> list[dict]:
     dove = Path(cartella) if cartella else None
     if dove is None or not (dove / formato.CARTA).is_file():
         return []
@@ -148,9 +154,7 @@ def _verdetto_sulla_cartella(cartella, password: str | None,
             "forte": True})
     elif password:
         try:
-            cifratura.controlla_la_password(
-                password, bytes.fromhex(carta.sale), carta.prova,
-                carta.n, carta.r, carta.p)
+            carta.chiave(password)
         except PasswordSbagliata:
             detti.append({
                 "testo": "Il pacchetto che c'è in questa cartella ha ancora "
@@ -158,8 +162,9 @@ def _verdetto_sulla_cartella(cartella, password: str | None,
                          "aprono più con quella di adesso: si rifà da zero, "
                          "e ci vorrà quanto la prima volta.",
                 "forte": True})
-        except (ValueError, ErroreOfficina):
-            pass
+        except ErroreOfficina as guaio:
+            detti.append({"testo": SCONOSCIUTA if guaio.codice == "parametri_sconosciuti"
+                          else guaio.messaggio, "forte": True})
 
     if not carta.completa:
         detti.append({
@@ -179,7 +184,7 @@ def _verdetto_sulla_cartella(cartella, password: str | None,
 
 
 def avvisi(connessione, telefono, stima: selezione.Stima, se_ne_vanno: int,
-           password: str | None, identificativo: str) -> list[dict]:
+           password: str | None, identificativo: str | None) -> list[dict]:
     detti: list[dict] = []
 
     ci_sta = stima.ci_sta_in(telefono["spazio"])
@@ -236,7 +241,7 @@ def conto(archivio, telefono_id: int) -> dict:
         scelta = scelta_di(telefono)
         stima = selezione.stima(connessione, scelta)
         se_ne_vanno = quante_se_ne_vanno(connessione, telefono_id, scelta)
-        identificativo = telefoni.identificativo(connessione)
+        identificativo = telefoni.identificativo_se_c_e(connessione)
         detti = avvisi(connessione, telefono, stima, se_ne_vanno,
                        archivio.parola_del_forziere, identificativo)
 
@@ -394,9 +399,12 @@ def quello_che_e_tornato(connessione, telefono_id: int) -> dict:
 def _quando_a_parole(istante: str | None) -> str:
     if not istante:
         return ""
-    giorno, _, ora = str(istante).partition("T")
-    detto = scatti.giorno_a_parole(giorno)
-    return f"{detto}, {ora[:5]}" if ora[:5] else detto
+    qui = ora_di_qui(istante)
+    if qui is None:
+        giorno, _, ora = str(istante).partition("T")
+        detto = scatti.giorno_a_parole(giorno)
+        return f"{detto}, {ora[:5]}" if ora[:5] else detto
+    return f"{scatti.giorno_a_parole(qui.date().isoformat())}, {qui:%H:%M}"
 
 
 def _durata_a_parole(secondi: int | None) -> str:

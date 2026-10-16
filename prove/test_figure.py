@@ -88,7 +88,7 @@ def test_le_figure_si_fanno_una_volta_per_ogni_corpo(archivio_pieno):
         lenti = connessione.execute("SELECT fonte, campo_verticale FROM obiettivi").fetchall()
         figura = figure.figura_di(connessione, corpi[0]["id"])
     assert len(lenti) == totale
-    assert all(l["fonte"] in (figure.PUFFIN, figure.EXIF) for l in lenti)
+    assert all(lente["fonte"] in (figure.PUFFIN, figure.EXIF) for lente in lenti)
     assert figura["mani"] == [True, False]
     assert len(figura["forma"]) == 45 and len(figura["punti_3d"]) == 70
     assert figure.Passata(archivio_pieno, figure=FigureFinte()).quanti_mancano() == 0
@@ -273,6 +273,71 @@ def test_senza_permesso_per_sam_3d_body_si_dice_dove_chiederlo(tmp_path, monkeyp
         scaricamento._scarica_le_figure(tmp_path, "chiave-finta", False, None, None)
     assert scaricamento.PAGINA_CORPO3D in preso.value.messaggio
     assert "chiave-finta" not in preso.value.messaggio
+
+
+def test_un_modello_delle_figure_interrotto_riparte_da_dove_era(tmp_path, monkeypatch):
+    from officina.corpi import rilevatore, scaricamento
+    from officina.descrittori.scaricamento import ScaricamentoFallito
+
+    _pezzi_finti(monkeypatch, scaricamento)
+    casa = rilevatore.dove_stanno(tmp_path)
+    cartelle = []
+
+    def si_interrompe(pezzo, arrivo, chiave):
+        cartelle.append(arrivo)
+        mezzo = arrivo / ".cache" / "huggingface" / "download" / "pezzo.incomplete"
+        mezzo.parent.mkdir(parents=True, exist_ok=True)
+        mezzo.write_bytes(b"fint")
+        raise ConnectionError("rete caduta")
+
+    prima = scaricamento.quanto_manca(tmp_path)
+    monkeypatch.setattr(scaricamento, "_prendi", si_interrompe)
+    with pytest.raises(ScaricamentoFallito):
+        scaricamento._scarica_le_figure(casa, None, False, None, None)
+    assert (cartelle[0] / ".cache" / "huggingface" / "download" / "pezzo.incomplete").exists()
+    assert scaricamento.quanto_manca(tmp_path) == prima - 4
+    assert scaricamento.quanto_manca(tmp_path, rifai=True) == (
+        scaricamento.SAM3.byte_attesi + scaricamento.POSE_BYTE + scaricamento.BYTE_KPR
+        + 10 * len(scaricamento.FIGURE))
+
+    def riprende(pezzo, arrivo, chiave):
+        cartelle.append(arrivo)
+        mezzo = arrivo / ".cache" / "huggingface" / "download" / "pezzo.incomplete"
+        if mezzo.exists():
+            mezzo.unlink()
+        preso = arrivo / pezzo.file
+        preso.parent.mkdir(parents=True, exist_ok=True)
+        preso.write_bytes(b"finto")
+        return preso
+
+    monkeypatch.setattr(scaricamento, "_prendi", riprende)
+    scaricamento._scarica_le_figure(casa, None, False, None, None)
+    assert cartelle[1] == cartelle[0]
+    assert all((casa / f.dove).read_bytes() == b"finto" for f in scaricamento.FIGURE)
+    assert list(casa.rglob("arriva-*")) == []
+
+
+def test_gli_avanzi_dei_vecchi_scaricamenti_si_tolgono_e_quello_a_meta_resta(tmp_path, monkeypatch):
+    from officina.corpi import corpo3d, rilevatore, scaricamento
+
+    casa = rilevatore.dove_stanno(tmp_path)
+    avanzi = [casa / corpo3d.NOME / "arriva-k3j2h1",
+              (casa / scaricamento.FIGURE[-1].dove).parent / "arriva-9xq", casa / "arriva-p0s3"]
+    for avanzo in avanzi:
+        avanzo.mkdir(parents=True)
+        (avanzo / "pesi.bin").write_bytes(b"x" * 64)
+    (casa / "end2end.preso").write_bytes(b"x" * 64)
+    avanzi.append(casa / "end2end.preso")
+    a_meta = scaricamento._arrivo(casa, scaricamento.FIGURE[0])
+    (a_meta / ".cache").mkdir(parents=True)
+    (a_meta / ".cache" / "pezzo.incomplete").write_bytes(b"fint")
+    for nome in ("_scarica_sam3", "_scarica_la_pose", "_scarica_le_figure"):
+        monkeypatch.setattr(scaricamento, nome, lambda *a, **k: None)
+    monkeypatch.setattr(scaricamento, "_scarica_kpr", lambda *a, **k: None)
+    monkeypatch.setattr(scaricamento, "_controlla_lo_spazio", lambda casa, manca: None)
+    scaricamento.scarica(tmp_path)
+    assert [a for a in avanzi if a.exists()] == []
+    assert (a_meta / ".cache" / "pezzo.incomplete").read_bytes() == b"fint"
 
 
 def test_i_corpi_sono_in_casa_solo_con_le_figure(tmp_path, monkeypatch):

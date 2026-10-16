@@ -12,6 +12,33 @@ def adesso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+MESI = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+        "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre")
+
+
+def ora_di_qui(istante: str | None) -> datetime | None:
+    testo = str(istante or "").strip()
+    if not testo:
+        return None
+    try:
+        momento = datetime.strptime(testo[:15], "%Y%m%d-%H%M%S")
+    except ValueError:
+        try:
+            momento = datetime.fromisoformat(testo.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=timezone.utc)
+    return momento.astimezone()
+
+
+def ora_a_parole(istante: str | None) -> str:
+    qui = ora_di_qui(istante)
+    if qui is None:
+        return str(istante or "")
+    return f"{qui.day} {MESI[qui.month - 1]} {qui.year}, {qui:%H:%M}"
+
+
 def connetti(percorso: Path) -> sqlite3.Connection:
     percorso.parent.mkdir(parents=True, exist_ok=True)
     connessione = sqlite3.connect(

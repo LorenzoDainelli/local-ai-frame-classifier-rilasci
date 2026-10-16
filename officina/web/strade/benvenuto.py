@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from urllib.parse import urlencode
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -114,13 +112,9 @@ def giro_esci():
 
     giro.stato.passo = None
     giro.torna_al_tuo()
-    detto = giro.butta_via()
+    giro.stato.detto_alla_fine = giro.butta_via()
     registro.evento("giro.finito")
-
-    dove = "/benvenuto/pronto?giro=finito"
-    if detto:
-        dove += "&" + urlencode({"detto": detto})
-    return RedirectResponse(dove, status_code=303)
+    return RedirectResponse("/benvenuto/pronto?giro=finito", status_code=303)
 
 
 @strada.get("/benvenuto/cartella", response_class=HTMLResponse)
@@ -177,4 +171,5 @@ def benvenuto_pronto(richiesta: Request):
         "quanti": quanti,
         "con_impronta": con_impronta,
         "primo": primo["id"] if primo else None,
+        "detto_alla_fine": giro.stato.detto_alla_fine,
     })

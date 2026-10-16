@@ -46,19 +46,33 @@ def _scheda() -> dict:
 
 
 def _server() -> dict:
+    import http.cookiejar
+    import urllib.error
     import urllib.request
 
     from officina.archivio import accesso
     from officina.impostazioni import REALE
     from officina.programma.servitore import Servitore, porta_libera
+    from officina.web import origine
 
     accesso.apri(REALE)
     servitore = Servitore(porta=porta_libera(0))
     servitore.parti()
     try:
-        with urllib.request.urlopen(servitore.indirizzo + "benvenuto", timeout=20) as risposta:
+        try:
+            urllib.request.build_opener().open(servitore.indirizzo + "benvenuto",
+                                               timeout=20).close()
+            senza_chiave = 200
+        except urllib.error.HTTPError as rifiuto:
+            senza_chiave = rifiuto.code
+        if senza_chiave != 403:
+            raise AssertionError(f"senza la chiave della finestra risponde {senza_chiave}")
+        con_la_chiave = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        entrata = origine.indirizzo_per_entrare(servitore.indirizzo, "/benvenuto")
+        with con_la_chiave.open(entrata, timeout=20) as risposta:
             corpo = risposta.read()
-            return {"stato": risposta.status, "byte": len(corpo)}
+            return {"stato": risposta.status, "byte": len(corpo), "senza_chiave": senza_chiave}
     finally:
         servitore.ferma()
         accesso.chiudi()

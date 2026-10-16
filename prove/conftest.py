@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import ipaddress
 import os
 from pathlib import Path
 
 import pytest
 
+CHIAVI_DELLE_PROVE = {"attive": True}
+_segreti_dei_dispositivi: dict[tuple[str, int], str] = {}
+
 
 def pytest_configure(config):
     import tempfile
+    import urllib.request
 
     os.environ.setdefault("OFFICINA_NOMI_AMMESSI", "testserver")
     os.environ.setdefault("OFFICINA_CASA_PROGRAMMA",
@@ -15,6 +20,85 @@ def pytest_configure(config):
     config.addinivalue_line(
         "filterwarnings",
         "error::pytest.PytestUnhandledThreadExceptionWarning")
+    urllib.request.install_opener(
+        urllib.request.build_opener(urllib.request.HTTPCookieProcessor()))
+    _i_clienti_di_prova_entrano_come_la_finestra()
+
+
+def _segreto_del_dispositivo(indirizzo: str) -> str | None:
+    import secrets
+
+    from officina.archivio import accesso
+    from officina.errori import ErroreOfficina
+    from officina.modello import dispositivi
+
+    try:
+        archivio = accesso.aperto()
+    except ErroreOfficina:
+        return None
+    with archivio.scrittura() as connessione:
+        riga = dispositivi.trova(connessione, indirizzo)
+        if riga is None or riga["stato"] != "approvato":
+            return None
+        chiave = (str(archivio.dove.database), riga["id"])
+        segreto = _segreti_dei_dispositivi.get(chiave)
+        if segreto and dispositivi.e_lui(connessione, riga, segreto):
+            return segreto
+        segreto = secrets.token_urlsafe(32)
+        dispositivi.abbina(connessione, riga["id"], indirizzo, segreto)
+        _segreti_dei_dispositivi[chiave] = segreto
+        return segreto
+
+
+def _metti_le_chiavi(richiesta, indirizzo: str) -> None:
+    from officina.modello import dispositivi
+    from officina.web import origine
+
+    if not CHIAVI_DELLE_PROVE["attive"]:
+        return
+    try:
+        ip = ipaddress.ip_address(indirizzo)
+    except ValueError:
+        return
+    if ip.is_loopback:
+        biscotto = f"{origine.BISCOTTO_DELLA_FINESTRA}={origine.chiave_della_finestra()}"
+    else:
+        segreto = _segreto_del_dispositivo(indirizzo)
+        if segreto is None:
+            return
+        biscotto = f"{dispositivi.BISCOTTO}={segreto}"
+    gia = richiesta.headers.get("cookie")
+    richiesta.headers["cookie"] = f"{gia}; {biscotto}" if gia else biscotto
+
+
+def _i_clienti_di_prova_entrano_come_la_finestra() -> None:
+    from starlette.testclient import TestClient
+
+    partenza_vera = TestClient.__init__
+
+    def partenza(self, app, base_url="http://testserver", *argomenti, **parole):
+        indirizzo = (parole.get("client") or ("testclient", 50000))[0]
+        try:
+            dalla_rete = not ipaddress.ip_address(indirizzo).is_loopback
+        except ValueError:
+            dalla_rete = False
+        if CHIAVI_DELLE_PROVE["attive"] and dalla_rete and base_url.startswith("http://"):
+            base_url = "https://" + base_url[len("http://"):]
+        partenza_vera(self, app, base_url, *argomenti, **parole)
+        self.event_hooks["request"].append(
+            lambda richiesta: _metti_le_chiavi(richiesta, indirizzo))
+
+    TestClient.__init__ = partenza
+
+
+@pytest.fixture
+def senza_chiavi_delle_prove(monkeypatch):
+    from officina.modello import dispositivi
+
+    monkeypatch.setitem(CHIAVI_DELLE_PROVE, "attive", False)
+    dispositivi.dimentica_le_attese()
+    yield
+    dispositivi.dimentica_le_attese()
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +106,18 @@ def lavori_nello_stesso_processo(monkeypatch):
     from officina.web import in_disparte
 
     monkeypatch.setattr(in_disparte, "A_PARTE", False)
+
+
+@pytest.fixture(autouse=True)
+def il_giro_non_resta_aperto():
+    import sys
+
+    yield
+    giro = sys.modules.get("officina.web.giro")
+    if giro is not None:
+        giro.stato.passo = None
+        giro.stato.cartella_foto = None
+        giro.stato.lo_ha_fatto_il_giro = False
 
 
 @pytest.fixture(autouse=True, scope="session")

@@ -15,9 +15,23 @@ from officina.archivio import copie, database, migrazioni
 from officina.errori import ArchivioChiuso, ErroreOfficina
 from officina.impostazioni import (PREDEFINITE, REALE, SOLO_QUESTA_MACCHINA,
                                    Posizione, chiave_locale, posizione,
-                                   questa_macchina)
+                                   questa_macchina, valore_ammesso)
 
 RICORDI_DELLA_VISTA = ("ultimo_filtro", "ultimo_scatto")
+_MANCANTE = object()
+
+
+def _metti_se_si_legge(valori: dict, chiave: str, scritto: str) -> None:
+    try:
+        letto = json.loads(scritto)
+    except (TypeError, ValueError):
+        return
+    if chiave in PREDEFINITE:
+        try:
+            letto = valore_ammesso(chiave, letto)
+        except ValueError:
+            return
+    valori[chiave] = letto
 
 
 class Archivio:
@@ -30,10 +44,12 @@ class Archivio:
         self._connessione: sqlite3.Connection | None = None
         self._lucchetto = threading.RLock()
         self._lucchetto_dei_lettori = threading.Lock()
+        self._lucchetto_delle_copie = threading.Lock()
         self._registro: registro.Registro | None = None
         self._parola: str | None = None
         self._modifiche_all_apertura = 0
         self._solo_ricordi = 0
+        self._di_servizio = 0
         self._cambiato_all_apertura = False
         self._copia_in_sottofondo: Path | None = None
         self._conteggio_visto = -1
@@ -41,6 +57,10 @@ class Archivio:
         self._tutti_i_lettori: list[sqlite3.Connection] = []
 
     def apri(self, password: str | None = None) -> "Archivio":
+        with self._lucchetto_delle_copie, self._lucchetto:
+            return self._apri(password)
+
+    def _apri(self, password: str | None) -> "Archivio":
         if self._connessione is not None:
             return self
 
@@ -60,6 +80,16 @@ class Archivio:
         if self._tiene_il_registro:
             registro.imposta(self._registro)
 
+        if not self.di_prova:
+            try:
+                copie.pulisci_i_resti(self.dove)
+            except Exception:
+                registro.errore("copie.resti_non_tolti")
+            try:
+                copie.rimetti_se_prenotata(self.dove)
+            except Exception:
+                registro.errore("copie.ripristino_fallito")
+
         nuovo = not self.dove.database.exists()
         self._connessione = database.connetti(self.dove.database)
 
@@ -75,11 +105,19 @@ class Archivio:
         self._cambiato_all_apertura = nuovo or cambiato
         self._modifiche_all_apertura = self._connessione.total_changes
         self._solo_ricordi = 0
+        self._di_servizio = 0
 
         registro.evento("archivio.aperto", nuovo=nuovo)
         return self
 
     def chiudi(self, con_copia: bool = True) -> None:
+        from officina.archivio import riserva
+
+        riserva.ferma_e_aspetta()
+        with self._lucchetto_delle_copie:
+            self._chiudi(con_copia)
+
+    def _chiudi(self, con_copia: bool) -> None:
         if self._connessione is None:
             return
         self._chiudi_i_lettori()
@@ -112,23 +150,43 @@ class Archivio:
     def copia_se_fermo(self) -> bool:
         if self.di_prova:
             return False
-        with self._lucchetto:
-            if self._connessione is None:
-                return False
-            conteggio = self._connessione.total_changes
-            fermo = conteggio == self._conteggio_visto
-            self._conteggio_visto = conteggio
-            if not fermo or not self._serve_la_copia():
-                return False
-            self._connessione.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            copia = copie.fai_copia(self._connessione, self.dove, "in_sottofondo")
-            if self._copia_in_sottofondo is not None:
-                self._copia_in_sottofondo.unlink(missing_ok=True)
-            self._copia_in_sottofondo = copia.percorso
-            self._cambiato_all_apertura = False
-            self._modifiche_all_apertura = self._connessione.total_changes
-            self._solo_ricordi = 0
+        with self._lucchetto_delle_copie:
+            with self._lucchetto:
+                if self._connessione is None:
+                    return False
+                conteggio = self._connessione.total_changes - self._di_servizio
+                fermo = conteggio == self._conteggio_visto
+                self._conteggio_visto = conteggio
+                if not fermo or not self._serve_la_copia():
+                    return False
+                self._connessione.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                sorgente = self._fotografia()
+                modifiche = self._connessione.total_changes
+                ricordi = self._solo_ricordi
+            try:
+                copia = copie.fai_copia(sorgente, self.dove, "in_sottofondo")
+            finally:
+                sorgente.close()
+            with self._lucchetto:
+                if self._copia_in_sottofondo is not None:
+                    self._copia_in_sottofondo.unlink(missing_ok=True)
+                self._copia_in_sottofondo = copia.percorso
+                self._cambiato_all_apertura = False
+                self._modifiche_all_apertura = modifiche
+                self._solo_ricordi -= ricordi
             return True
+
+    def _fotografia(self) -> sqlite3.Connection:
+        if not self.e_aperto:
+            raise ArchivioChiuso("L'archivio è chiuso: non c'è niente da copiare.")
+        sorgente = database.connetti(self.dove.database)
+        try:
+            sorgente.execute("BEGIN")
+            sorgente.execute("SELECT count(*) FROM sqlite_master").fetchone()
+        except BaseException:
+            sorgente.close()
+            raise
+        return sorgente
 
     def _rimetti_nel_forziere(self) -> None:
         cassa = forziere.per(self.dove)
@@ -171,6 +229,19 @@ class Archivio:
                 raise
             else:
                 connessione.execute("COMMIT")
+
+    @contextlib.contextmanager
+    def scrittura_di_servizio(self) -> Iterator[sqlite3.Connection]:
+        with self._lucchetto:
+            prima = self.connessione.total_changes
+            try:
+                with self.scrittura() as connessione:
+                    yield connessione
+            finally:
+                if self._connessione is not None:
+                    fatte = self._connessione.total_changes - prima
+                    self._solo_ricordi += fatte
+                    self._di_servizio += fatte
 
     @contextlib.contextmanager
     def lettura(self) -> Iterator[sqlite3.Connection]:
@@ -219,18 +290,22 @@ class Archivio:
                 database.scrivi_valore_di_partenza(self.connessione, chiave, valore)
 
     def impostazione(self, chiave: str):
+        dove = [chiave_locale(chiave)] if chiave in SOLO_QUESTA_MACCHINA else []
         with self.lettura() as connessione:
-            if chiave in SOLO_QUESTA_MACCHINA:
-                mancante = object()
-                mio = database.leggi_impostazione(
-                    connessione, chiave_locale(chiave), mancante)
-                if mio is not mancante:
-                    return mio
-            return database.leggi_impostazione(
-                connessione, chiave, PREDEFINITE.get(chiave)
-            )
+            for una in [*dove, chiave]:
+                letto = database.leggi_impostazione(connessione, una, _MANCANTE)
+                if letto is _MANCANTE:
+                    continue
+                if chiave not in PREDEFINITE:
+                    return letto
+                try:
+                    return valore_ammesso(chiave, letto)
+                except ValueError:
+                    continue
+        return PREDEFINITE.get(chiave)
 
     def imposta(self, chiave: str, valore) -> None:
+        valore = valore_ammesso(chiave, valore)
         with self._lucchetto:
             dove = chiave_locale(chiave) if chiave in SOLO_QUESTA_MACCHINA else chiave
             database.scrivi_impostazione(self.connessione, dove, valore)
@@ -243,10 +318,11 @@ class Archivio:
                                    "SELECT chiave, valore FROM impostazioni")
         for riga in righe:
             if "@" not in riga["chiave"]:
-                valori[riga["chiave"]] = json.loads(riga["valore"])
+                _metti_se_si_legge(valori, riga["chiave"], riga["valore"])
         for riga in righe:
             if riga["chiave"].endswith(macchina):
-                valori[riga["chiave"][: -len(macchina)]] = json.loads(riga["valore"])
+                _metti_se_si_legge(valori, riga["chiave"][: -len(macchina)],
+                                   riga["valore"])
         return valori
 
     def stato(self, chiave: str, predefinito=None):
@@ -301,9 +377,12 @@ class Archivio:
         quante = 0
         byte = 0
         for percorso in self.dove.miniature.rglob("*"):
-            if percorso.is_file():
-                quante += 1
-                byte += percorso.stat().st_size
+            try:
+                if percorso.is_file():
+                    byte += percorso.stat().st_size
+                    quante += 1
+            except OSError:
+                continue
         return quante, byte
 
     def svuota_miniature(self) -> int:
@@ -322,8 +401,13 @@ class Archivio:
 
 
     def copia_adesso(self, motivo: str = "manuale") -> copie.Copia:
-        with self._lucchetto:
-            return copie.fai_copia(self.connessione, self.dove, motivo)
+        with self._lucchetto_delle_copie:
+            with self._lucchetto:
+                sorgente = self._fotografia()
+            try:
+                return copie.fai_copia(sorgente, self.dove, motivo)
+            finally:
+                sorgente.close()
 
     def copie_esistenti(self) -> list[copie.Copia]:
         return copie.elenco(self.dove)

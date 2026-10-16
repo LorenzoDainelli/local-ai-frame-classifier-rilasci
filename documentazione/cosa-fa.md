@@ -48,8 +48,8 @@ Cosa fa già:
   l'ha ricavata;
 - corregge in blocco: filtra, seleziona tutto, agisci;
 - si accorge se un file sparisce dal disco, senza perdere le sue etichette;
-- risponde solo al computer su cui gira, e sulla rete di casa solo ai
-  dispositivi approvati uno per uno;
+- risponde solo alla sua finestra sul computer su cui gira, e sulla rete di casa
+  solo in modo cifrato e solo ai dispositivi approvati uno per uno con un codice;
 - si può interrompere e riprende da dove era;
 - si apre con un doppio clic, in una finestra senza barra degli indirizzi, e la
   prima volta prepara tutto in sei passi e finisce con un tutorial.
@@ -101,9 +101,9 @@ E dalle tappe 3, 4 e 5:
 E dal Visore, per ora solo la metà che sta sul PC:
 
 - **costruisce il pacchetto per il telefono** (regole 358-372): una cartella
-  con le foto per anno e mese, coi loro nomi veri, le miniature già pronte e un
-  database SQLite, **tutto cifrato file per file** con la stessa password del
-  forziere. Si sceglie cosa entra — per ramo dell'albero, per periodo, per
+  con le foto, le miniature già pronte e un database SQLite, **tutto cifrato
+  file per file** con la stessa password del forziere, e con nomi a caso che non
+  dicono né la data né il nome della foto. Si sceglie cosa entra — per ramo dell'albero, per periodo, per
   persona, e anche al contrario: *tutto tranne le foto in cui c'è questa
   persona* — e si sa quanto pesa **prima** di cominciare;
 - e lo si prepara **guardandolo**, nella schermata «Telefono» (regola 384): la

@@ -11,6 +11,7 @@ from officina import registro
 from officina.archivio.database import adesso, tutti, uno
 from officina.corpi import corpo3d, figure
 from officina.corpi import rilevatore as rilevatore_mod
+from officina.descrittori import torcia
 from officina.importazione import gruppi
 
 VERSIONE = f"1-mhr-{figure.ASPETTO}"
@@ -265,15 +266,22 @@ class Passata:
         try:
             facce = self.pelle.facce()
             _salva_le_facce(self.cartella, facce)
+            memoria = torcia.ContoDellaMemoria()
             for scatto_id in da_fare:
                 if self.fermata:
                     break
                 try:
                     self._fai_lo_scatto(scatto_id, facce)
                 except Exception as guasto:              # noqa: BLE001
-                    registro.avviso("superfici.non_fatte", **registro.dove_si_e_rotto(guasto))
-                    self._segna_non_fatte(scatto_id)
+                    if torcia.memoria_finita(guasto):
+                        memoria.finita(scatto_id, guasto)
+                    else:
+                        registro.avviso("superfici.non_fatte", **registro.dove_si_e_rotto(guasto))
+                        self._segna_non_fatte(scatto_id)
                     self.avanzamento.saltati += 1
+                else:
+                    for pesante in memoria.riuscito():
+                        self._segna_non_fatte(pesante)
                 self.avanzamento.fatti += 1
                 if al_passo:
                     al_passo(self.avanzamento)

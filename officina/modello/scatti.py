@@ -7,6 +7,7 @@ from pathlib import Path
 
 from officina.archivio.database import adesso, inserisci, tutti, uno
 from officina.modello import nodi, persone, posti
+from officina.modello.luoghi import coordinate_valide
 
 MESI = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
         "agosto", "settembre", "ottobre", "novembre", "dicembre")
@@ -34,6 +35,7 @@ class Filtro:
     luogo: int | None = None
     importazione: int | None = None
     gruppo: int | None = None
+    zona: tuple[float, float, float, float] | None = None
     ordine: str = "data_giu"
 
     simili_a: int | None = None
@@ -48,7 +50,7 @@ class Filtro:
             self.solo_schermate, self.escludi_schermate, self.fuori_archivio,
             self.col_cuore, self.evidenziati,
             self.persone, self.luogo, self.simili_a, self.importazione, self.parole,
-            self.gruppo,
+            self.gruppo, self.zona,
         ])
 
     def copia_con(self, **cambi) -> "Filtro":
@@ -160,6 +162,17 @@ def _condizioni(connessione: sqlite3.Connection, filtro: Filtro) -> tuple[str, l
             "WHERE f.scatto_id = s.id AND c.gruppo_id = ?)")
         parametri.append(filtro.gruppo)
 
+    if filtro.zona:
+        sud, ovest, nord, est = filtro.zona
+        pezzi.append("s.latitudine BETWEEN ? AND ?")
+        parametri.extend([sud, nord])
+        if ovest <= est:
+            pezzi.append("s.longitudine BETWEEN ? AND ?")
+            parametri.extend([ovest, est])
+        else:
+            pezzi.append("(s.longitudine >= ? OR s.longitudine <= ?)")
+            parametri.extend([ovest, est])
+
     if filtro.simili_a is not None or filtro.parole:
         if filtro.simili_ids is None:
             raise ValueError(
@@ -184,7 +197,7 @@ def _ordinamento(filtro: Filtro) -> str:
     if filtro.ordine == "data_su":
         return "s.istante_utc ASC NULLS LAST, s.id ASC"
     if filtro.ordine == "casuale":
-        return "random()"
+        return "(s.id * 2654435761) % 4294967296, s.id"
     return "s.istante_utc DESC, s.id DESC"
 
 
@@ -192,6 +205,12 @@ def conta(connessione: sqlite3.Connection, filtro: Filtro) -> int:
     dove, parametri = _condizioni(connessione, filtro)
     riga = uno(connessione, f"SELECT count(*) AS quanti FROM scatti s WHERE {dove}", *parametri)
     return riga["quanti"] if riga else 0
+
+
+def soli_numeri(connessione: sqlite3.Connection, filtro: Filtro) -> list[int]:
+    dove, parametri = _condizioni(connessione, filtro)
+    return [r[0] for r in connessione.execute(
+        f"SELECT s.id FROM scatti s WHERE {dove} ORDER BY {_ordinamento(filtro)}", parametri)]
 
 
 def pagina(connessione: sqlite3.Connection, filtro: Filtro, da: int = 0,
@@ -559,6 +578,7 @@ def conteggi_dei_luoghi(connessione: sqlite3.Connection,
 
 def crea(connessione: sqlite3.Connection, genere: str, dati,
          importazione_id: int | None = None) -> int:
+    latitudine, longitudine = coordinate_valide(dati.latitudine, dati.longitudine)
     return inserisci(
         connessione,
         """
@@ -569,14 +589,10 @@ def crea(connessione: sqlite3.Connection, genere: str, dati,
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         genere, dati.data_locale, dati.fuso_minuti, dati.istante_utc,
-        dati.giorno, dati.origine_data, dati.latitudine, dati.longitudine,
+        dati.giorno, dati.origine_data, latitudine, longitudine,
         dati.larghezza, dati.altezza, dati.durata_ms,
         int(dati.sembra_schermata), importazione_id, adesso(),
     )
-
-
-def cambia_genere(connessione: sqlite3.Connection, scatto_id: int, genere: str) -> None:
-    connessione.execute("UPDATE scatti SET genere = ? WHERE id = ?", (genere, scatto_id))
 
 
 def scrivi_nota(connessione: sqlite3.Connection, scatto_id: int, nota: str | None) -> None:
@@ -724,12 +740,6 @@ def _perche_la_data(prima, dopo, concordi: bool) -> str:
     dove = "subito prima" if prima else "subito dopo"
     return (f"L'unico vicino con una data è «{vicino['nome']}», {dove} nella stessa "
             f"cartella: {giorno_a_parole(vicino['giorno'])}.")
-
-
-def _come_percorso(testo: str) -> str:
-    for carattere in ("\\", "%", "_"):
-        testo = testo.replace(carattere, "\\" + carattere)
-    return testo
 
 
 def _intervallo_di_cartella(percorso: str, cartella: str) -> tuple[str, str]:

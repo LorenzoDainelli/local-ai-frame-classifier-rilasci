@@ -7,7 +7,7 @@ from datetime import datetime
 from officina.archivio import memoria
 from officina.archivio.database import adesso, esegui, inserisci, tutti, uno
 from officina.errori import OperazioneNonPermessa
-from officina.modello import luoghi, nodi
+from officina.modello import luoghi, nodi, nomi
 
 SEPARATORE = " › "
 
@@ -96,7 +96,7 @@ def albero(connessione: sqlite3.Connection) -> list[dict]:
 
 def crea(connessione: sqlite3.Connection, nome: str,
          genitore_id: int | None = None, da_nodo_id: int | None = None) -> int:
-    pulito = (nome or "").strip()
+    pulito = nomi.da_salvare(nome)
     if not pulito:
         raise OperazioneNonPermessa("Un luogo ha bisogno di un nome.")
     if genitore_id is not None and per_id(connessione, genitore_id) is None:
@@ -112,7 +112,7 @@ def crea(connessione: sqlite3.Connection, nome: str,
 
 
 def rinomina(connessione: sqlite3.Connection, posto_id: int, nome: str) -> None:
-    pulito = (nome or "").strip()
+    pulito = nomi.da_salvare(nome)
     if not pulito:
         raise OperazioneNonPermessa("Un luogo ha bisogno di un nome.")
     esegui(connessione, "UPDATE posti SET nome = ? WHERE id = ?", pulito, posto_id)

@@ -95,7 +95,7 @@ def pulisci(dove, tenute: set[int]) -> int:
     tolti = 0
     for file in base.iterdir():
         numero = file.name.split("-", 1)[0]
-        if not file.is_file() or (numero.isdigit() and int(numero) in tenute):
+        if not file.is_file() or (numero.isdecimal() and int(numero) in tenute):
             continue
         file.unlink()
         tolti += 1

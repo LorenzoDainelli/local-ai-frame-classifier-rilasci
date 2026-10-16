@@ -91,3 +91,17 @@
 .ft-corpi svg { position: absolute; inset: 0; overflow: visible; }
 .ft-corpi-chi { position: absolute; transform: translateY(calc(-100% - 2px)); padding: 1px 6px; border-radius: var(--raggio-pillola); color: #fff; font-size: 11px; line-height: 16px; white-space: nowrap; }
 [data-mostra-corpi][aria-pressed="true"] { background: var(--accento); color: var(--su-accento); }
+.ft-nodi .scegli-nodo { display: block; position: relative; }
+.ft-nodi .fn-cerca { width: 100%; }
+.fn-elenco { display: grid; gap: 2px; align-content: start; min-width: 0; }
+.fn-titoletto { font-size: 11px; font-weight: 600; letter-spacing: var(--tracciato-maiuscolo); text-transform: uppercase; color: var(--tenue); padding: 8px 8px 2px; }
+.fn-voce { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--raggio-piccolo); }
+.fn-voce:hover { background: var(--superficie-alta); }
+.fn-nome { min-width: 0; overflow-wrap: anywhere; }
+.fn-nome small { display: block; color: var(--tenue); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fn-voce.proposta .fn-nome::after { content: "proposto dall'IA"; display: block; color: var(--accento); font-size: 12px; }
+.fn-togli { width: 28px; height: 28px; border-radius: var(--raggio-piccolo); border: 1px solid transparent; background: none; color: var(--tenue); font-size: 17px; cursor: pointer; }
+.fn-togli:hover { border-color: var(--linea-forte); color: var(--male); }
+.fn-tieni { height: 28px; padding: 0 12px; }
+.fn-avviso { color: var(--male); margin: 0; }
+.fn-piede { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding-top: 10px; border-top: 1px solid var(--linea); }

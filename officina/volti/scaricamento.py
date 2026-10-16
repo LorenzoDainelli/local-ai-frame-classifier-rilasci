@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -32,16 +33,42 @@ class Fonte:
     def pagina(self) -> str:
         return f"https://huggingface.co/{self.repo}"
 
+    @property
+    def revisione(self) -> str:
+        return revisione_di(self.repo)
+
+
+REVISIONI: dict[str, str] = {
+    "public-data/insightface": "",
+    "menglaoda/_insightface": "8064c689a943c2914e6a4160df1962e53c7d5517",
+    "deepinsight/insightface": "",
+    "Evn9172/cvlface_adaface_ir101_webface12m_onnx": "3af39a8cf2f199127f34e247950df9c4d6f227e8",
+    "minchul/cvlface_adaface_ir101_webface12m": "54f602a0737bd1ee4a4e7e9fd089a485f397fefd",
+    "minchul/cvlface_adaface_ir101_webface4m": "f2b38d9e24bfe301490d8dd081d8924b102333dd",
+}
+
+SHA256_RILEVATORE = "5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91"
+SHA256_RICONOSCITORE = "6168ed3961838a871e706e8e5ebbf963de2821ecb3f64da9d5c3fd373cc80c65"
+
+
+def revisione_di(repo: str) -> str:
+    return REVISIONI.get(repo, "")
+
+
+def _con_la_revisione(repo: str) -> dict[str, str]:
+    fissata = revisione_di(repo)
+    return {"revision": fissata} if fissata else {}
+
 
 DA_DOVE: dict[str, Fonte] = {
     rilevatore_mod.FILE_RILEVATORE: Fonte(
         "public-data/insightface", "models/buffalo_l/det_10g.onnx",
-        provata=True, byte=16_923_827, genere="dataset",
+        provata=True, sha256=SHA256_RILEVATORE, byte=16_923_827, genere="dataset",
         licenza="InsightFace — uso non commerciale, regola 177",
         riserve=("menglaoda/_insightface", "deepinsight/insightface")),
     rilevatore_mod.FILE_RICONOSCITORE: Fonte(
         "Evn9172/cvlface_adaface_ir101_webface12m_onnx", "adaface_ir101.onnx",
-        provata=True, byte=249_000_000,
+        provata=True, sha256=SHA256_RICONOSCITORE, byte=249_000_000,
         licenza="InsightFace/AdaFace — uso non commerciale, regola 177",
         riserve=("minchul/cvlface_adaface_ir101_webface12m",
                  "minchul/cvlface_adaface_ir101_webface4m")),
@@ -101,12 +128,9 @@ def scarica(cartella_modelli: Path, fonti: dict[str, Fonte] | None = None,
                               provati)
                     + "\n  Il resto del programma funziona lo stesso senza i volti."
                 ) from errore
-            (dove / nome_in_casa).write_bytes(Path(preso).read_bytes())
+            corrisponde[nome_in_casa] = _metti_in_casa(Path(preso), dove / nome_in_casa,
+                                                       fonte)
             arrivati.append(nome_in_casa)
-            esito = e_quello_giusto(dove / nome_in_casa, fonte)
-            corrisponde[nome_in_casa] = esito
-            if esito is False and al_passo:
-                al_passo(_non_corrisponde(dove / nome_in_casa, fonte))
     finally:
         torcia.rimetti_la_rete_com_era(prima)
 
@@ -149,7 +173,8 @@ def _prendi(hf_hub_download, fonte: Fonte, chiave: str | None,
             al_passo(f"«{fonte.repo}» non ce l'aveva; lo prendo da "
                      f"{repo}/{trovato}")
         preso = hf_hub_download(repo_id=repo, filename=trovato,
-                                repo_type=genere, token=chiave or None)
+                                repo_type=genere, token=chiave or None,
+                                **_con_la_revisione(repo))
         from dataclasses import replace
 
         return Path(preso), replace(fonte, repo=repo, nome_sul_sito=trovato,
@@ -160,13 +185,9 @@ def _prendi(hf_hub_download, fonte: Fonte, chiave: str | None,
         if esito:
             return esito
 
-    for repo in _posti_che_somigliano(fonte, chiave):
-        esito = prova(repo)
-        if esito:
-            return esito
-
     return hf_hub_download(repo_id=fonte.repo, filename=voluto,
-                           repo_type=fonte.genere, token=chiave or None), fonte
+                           repo_type=fonte.genere, token=chiave or None,
+                           **_con_la_revisione(fonte.repo)), fonte
 
 
 def e_quello_giusto(percorso: Path, fonte: Fonte) -> bool | None:
@@ -175,14 +196,33 @@ def e_quello_giusto(percorso: Path, fonte: Fonte) -> bool | None:
     return _sha256(percorso) == fonte.sha256
 
 
-def _non_corrisponde(percorso: Path, fonte: Fonte) -> str:
-    return ("attenzione: «" + percorso.name + "» non corrisponde all'impronta "
-            "pubblicata\n  da chi ha fatto il modello. Lo tengo lo stesso e i "
-            "volti funzioneranno,\n  ma potrebbe essere una versione diversa "
-            "da quella prevista.\n"
-            f"      attesa:  {fonte.sha256[:16]}... ({fonte.byte} byte)\n"
-            f"      trovata: {_sha256(percorso)[:16]}... "
-            f"({percorso.stat().st_size} byte)")
+def _metti_in_casa(preso: Path, arrivo: Path, fonte: Fonte) -> bool | None:
+    provvisorio = arrivo.with_name(arrivo.name + ".nuovo")
+    try:
+        shutil.copyfile(preso, provvisorio)
+        esito = e_quello_giusto(provvisorio, fonte)
+        if esito is False:
+            provvisorio.unlink(missing_ok=True)
+            _butta_quello_arrivato(preso)
+            registro.errore("volti.file_diverso")
+            raise ScaricamentoFallito(
+                f"«{arrivo.name}» è arrivato, ma non è identico a quello provato: "
+                "per sicurezza non lo tengo. Riprova più tardi; se succede ancora, "
+                "il file pubblicato è cambiato e va controllato in un "
+                "aggiornamento.\n  Il resto del programma funziona lo stesso "
+                "senza i volti.")
+        os.replace(provvisorio, arrivo)
+    finally:
+        provvisorio.unlink(missing_ok=True)
+    return esito
+
+
+def _butta_quello_arrivato(preso: Path) -> None:
+    for percorso in {preso, preso.resolve()}:
+        try:
+            percorso.unlink(missing_ok=True)
+        except OSError:
+            continue
 
 
 def _sha256(percorso: Path) -> str:
@@ -228,7 +268,7 @@ def _perche(errore: Exception, nome_in_casa: str, fonte: Fonte,
                       "scritto il",
                       "  programma: è il caso più probabile."]
         if not provati or len(provati) <= 1:
-            righe += _dove_altro_cercare(fonte, quale, chiave)
+            righe += _dove_altro_cercare(quale)
     else:
         righe.append("  Qualcosa è andato storto durante lo scaricamento.")
 
@@ -283,7 +323,7 @@ def _quali_file_ci_sono(fonte: Fonte, quale: str, chiave: str | None) -> list[st
                                   f"          --file-{quale} NOME.onnx")]
     if not dentro:
         return ["  Lì dentro non c'è nessun file .onnx: è il posto sbagliato.",
-                *_dove_altro_cercare(fonte, quale, chiave)]
+                *_dove_altro_cercare(quale)]
     righe = ["  Di file .onnx, lì dentro, ci sono questi:"]
     righe += [f"      {nome}" for nome in dentro[:8]]
     righe += ["  Riprova indicando quello giusto:",
@@ -292,18 +332,10 @@ def _quali_file_ci_sono(fonte: Fonte, quale: str, chiave: str | None) -> list[st
     return righe
 
 
-def _dove_altro_cercare(fonte: Fonte, quale: str, chiave: str | None) -> list[str]:
-    simili = _posti_che_somigliano(fonte, chiave)
-    if not simili:
-        return ["  Trovane uno che abbia il file .onnx e passalo così:",
-                *_come_si_riprova("      python -m officina modelli --scarica volti \\",
-                                  f"          --repo-{quale} NOME/DEL/POSTO --file-{quale} NOME.onnx")]
-    righe = ["  Posti che potrebbero averlo, cercati adesso:"]
-    righe += [f"      {nome}" for nome in simili]
-    righe += ["  Quando hai visto quale è quello giusto:",
-              *_come_si_riprova("      python -m officina modelli --scarica volti \\",
-                                f"          --repo-{quale} {simili[0]} --file-{quale} NOME.onnx")]
-    return righe
+def _dove_altro_cercare(quale: str) -> list[str]:
+    return ["  Trovane uno che abbia il file .onnx e passalo così:",
+            *_come_si_riprova("      python -m officina modelli --scarica volti \\",
+                              f"          --repo-{quale} NOME/DEL/POSTO --file-{quale} NOME.onnx")]
 
 
 GENERI = ("model", "dataset", "space")
@@ -325,7 +357,8 @@ def _dentro_la_pagina(repo: str, chiave: str | None) -> tuple[list[str], str] | 
     for genere in GENERI:
         try:
             dentro = HfApi().list_repo_files(repo, repo_type=genere,
-                                             token=chiave or None)
+                                             token=chiave or None,
+                                             **_con_la_revisione(repo))
         except Exception:
             continue
         return (sorted(n for n in dentro
@@ -336,26 +369,6 @@ def _dentro_la_pagina(repo: str, chiave: str | None) -> tuple[list[str], str] | 
 def _gli_onnx_di(repo: str, chiave: str | None) -> list[str] | None:
     esito = _dentro_la_pagina(repo, chiave)
     return None if esito is None else esito[0]
-
-
-def _posti_che_somigliano(fonte: Fonte, chiave: str | None) -> list[str]:
-    ultimo_pezzo = fonte.repo.rsplit("/", 1)[-1]
-    parole = [ultimo_pezzo]
-    coda = ultimo_pezzo.rsplit("_", 1)[-1]
-    if coda and coda != ultimo_pezzo:
-        parole.append(coda)
-    for parola in parole:
-        try:
-            from huggingface_hub import HfApi
-
-            trovati = [modello.id for modello in
-                       HfApi().list_models(search=parola, limit=5,
-                                           token=chiave or None)]
-        except Exception:
-            return []
-        if trovati:
-            return trovati
-    return []
 
 
 def _annota(dove: Path, fonti: dict[str, Fonte],
@@ -409,6 +422,14 @@ def verifica(cartella_modelli: Path) -> dict:
     for nome, attesa in (dati.get("impronte") or {}).items():
         percorso = dove / nome
         if not percorso.exists() or _impronta(percorso) != attesa:
+            rovinati.append(nome)
+    scritti = dati.get("da_dove") or {}
+    for nome, fonte in DA_DOVE.items():
+        percorso = dove / nome
+        stesso_file = (Path((scritti.get(nome) or {}).get("file") or "").name
+                       == Path(fonte.nome_sul_sito).name)
+        if (fonte.sha256 and nome not in rovinati and percorso.exists() and stesso_file
+                and _sha256(percorso) != fonte.sha256):
             rovinati.append(nome)
     if rovinati:
         return {"stato": "rovinato", "dettaglio":

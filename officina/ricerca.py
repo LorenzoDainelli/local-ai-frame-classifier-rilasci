@@ -183,7 +183,7 @@ def _dalle_tue_etichette(connessione: sqlite3.Connection, capiti: list[Capito],
         elif capito.genere == "persona":
             filtro.persone.append(capito.numero)
             qualcosa = True
-        elif capito.genere == "quando" and capito.testo.isdigit():
+        elif capito.genere == "quando" and capito.testo.isdecimal():
             filtro.dal = f"{capito.testo}-01-01"
             filtro.al = f"{capito.testo}-12-31"
             qualcosa = True

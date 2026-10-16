@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import sqlite3
 
 import pytest
 
+from officina.archivio.accesso import Archivio
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
 from officina.modello import telefoni
@@ -279,7 +281,7 @@ def test_un_originale_sparito_non_ferma_il_travaso(archivio_pieno, telefono,
 def _scrivi_ritorno(dove, chiave, tmp_path, **cosa):
     grezzo = tmp_path / "ritorno-finto.sqlite"
     ritorno.scrivi_ritorno_finto(grezzo, **cosa)
-    chiave.cifra_file(grezzo, formato.dentro(dove, formato.RITORNO))
+    chiave.cifra_file(grezzo, formato.dentro(dove, formato.RITORNO), formato.RITORNO)
     grezzo.unlink()
 
 
@@ -400,6 +402,116 @@ def test_un_ritorno_rovinato_non_ferma_il_travaso(archivio_pieno, telefono,
     esito = _fai(archivio_pieno, telefono, dove)
     assert esito.completo
     assert esito.tornato.guai
+
+
+def test_un_ritorno_che_si_rompe_a_meta_non_lascia_niente_a_meta(
+        archivio_pieno, telefono, tmp_path):
+    dove = tmp_path / "Visore-iPhone"
+    _fai(archivio_pieno, telefono, dove)
+    chiave = formato.Carta.leggi(dove).chiave(PAROLA)
+    impronte = [r["impronta"] for r in tutti(
+        archivio_pieno.connessione, "SELECT impronta FROM file_media LIMIT 2")]
+    grezzo = tmp_path / "ritorno-storto.sqlite"
+    dentro = sqlite3.connect(grezzo)
+    dentro.executescript(
+        "CREATE TABLE cuori (impronta TEXT, messo_il TEXT);"
+        "CREATE TABLE raccolte (id INTEGER, nome TEXT, creata_il TEXT);")
+    dentro.executemany("INSERT INTO cuori VALUES (?, ?)",
+                       [(x, "2026-08-01T10:00:00") for x in impronte])
+    dentro.execute("INSERT INTO raccolte VALUES (1, NULL, NULL)")
+    dentro.commit()
+    dentro.close()
+    chiave.cifra_file(grezzo, formato.dentro(dove, formato.RITORNO), formato.RITORNO)
+
+    esito = _fai(archivio_pieno, telefono, dove)
+    assert esito.completo
+    assert esito.tornato.guai
+    assert esito.tornato.cuori_nuovi == 0
+    connessione = archivio_pieno.connessione
+    assert uno(connessione, "SELECT count(*) AS q FROM cuori")["q"] == 0
+    assert uno(connessione, "SELECT count(*) AS q FROM raccolte")["q"] == 0
+
+
+def test_il_travaso_non_scrive_mai_dalla_via_di_sola_lettura(
+        archivio_pieno, telefono, tmp_path, monkeypatch):
+    lettori = []
+    vero = Archivio._lettore_a_parte
+
+    def niente_nell_archivio(azione, _1, _2, database, _3):
+        if azione in (sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE,
+                      sqlite3.SQLITE_DELETE) and database == "main":
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+
+    def di_sola_lettura(self):
+        lettore = vero(self)
+        if lettore is not None:
+            lettore[0].set_authorizer(niente_nell_archivio)
+            lettori.append(lettore)
+        return lettore
+
+    monkeypatch.setattr(Archivio, "_lettore_a_parte", di_sola_lettura)
+    dove = tmp_path / "Visore-iPhone"
+    assert _fai(archivio_pieno, telefono, dove).completo
+    chiave = formato.Carta.leggi(dove).chiave(PAROLA)
+    impronta = uno(archivio_pieno.connessione,
+                   "SELECT impronta FROM file_media LIMIT 1")["impronta"]
+    _scrivi_ritorno(dove, chiave, tmp_path,
+                    cuori=[(impronta, "2026-08-01T10:00:00")],
+                    raccolte=[(1, "Vacanze", "2026-08-01T10:00:00")],
+                    raccolte_scatti={1: [impronta]})
+    esito = _fai(archivio_pieno, telefono, dove)
+    assert esito.completo
+    assert esito.tornato.cuori_nuovi == 1
+    assert lettori
+    connessione = archivio_pieno.connessione
+    assert uno(connessione, "SELECT count(*) AS q FROM pacchetto_file "
+               "WHERE telefono_id = ?", telefono)["q"] == esito.verificati
+    assert uno(connessione, "SELECT stato FROM travasi ORDER BY id DESC LIMIT 1"
+               )["stato"] == "finito"
+
+
+def test_il_ritorno_si_decifra_con_l_archivio_libero(archivio_pieno, telefono,
+                                                     tmp_path, monkeypatch):
+    from officina.telefono import cifratura
+
+    dove = tmp_path / "Visore-iPhone"
+    _fai(archivio_pieno, telefono, dove)
+    chiave = formato.Carta.leggi(dove).chiave(PAROLA)
+    impronta = uno(archivio_pieno.connessione,
+                   "SELECT impronta FROM file_media LIMIT 1")["impronta"]
+    _scrivi_ritorno(dove, chiave, tmp_path, cuori=[(impronta, "2026-08-01T10:00:00")])
+    letture = []
+    vera = cifratura.Chiave.leggi_tutto
+
+    def leggi_tutto(self, sorgente, posto):
+        if posto == formato.RITORNO:
+            letture.append(archivio_pieno._lucchetto._is_owned())
+        return vera(self, sorgente, posto)
+
+    with monkeypatch.context() as cambio:
+        cambio.setattr(cifratura.Chiave, "leggi_tutto", leggi_tutto)
+        esito = _fai(archivio_pieno, telefono, dove)
+    assert esito.tornato.cuori_nuovi == 1
+    assert letture == [False]
+
+
+def test_l_identificativo_non_cambia_se_due_lo_creano_insieme(archivio_pieno,
+                                                              monkeypatch):
+    with archivio_pieno.scrittura() as connessione:
+        primo = telefoni.identificativo(connessione)
+    vero = telefoni.leggi_stato
+    chiamate = []
+
+    def non_ancora(connessione, chiave, predefinito=None):
+        chiamate.append(chiave)
+        if len(chiamate) == 1:
+            return None
+        return vero(connessione, chiave, predefinito)
+
+    monkeypatch.setattr(telefoni, "leggi_stato", non_ancora)
+    with archivio_pieno.scrittura() as connessione:
+        assert telefoni.identificativo(connessione) == primo
 
 
 def test_senza_ritorno_non_e_un_errore(archivio_pieno, telefono, tmp_path):

@@ -4,6 +4,7 @@ import bisect
 import sqlite3
 
 from officina.archivio.database import adesso, esegui, tutti, uno, valore
+from officina.errori import OperazioneNonPermessa
 
 _GIA_PASSATO = (
     "EXISTS (SELECT 1 FROM etichette e WHERE e.scatto_id = s.id "
@@ -17,6 +18,8 @@ _NON_DECISO_QUI = (
 
 
 def apri(connessione: sqlite3.Connection, nodo_id: int) -> None:
+    if uno(connessione, "SELECT 1 FROM nodi WHERE id = ?", nodo_id) is None:
+        raise OperazioneNonPermessa("Quel nodo non c'è più: ricarica la pagina.")
     esegui(
         connessione,
         "INSERT OR IGNORE INTO ripassi (nodo_id, stato, creato_il) "

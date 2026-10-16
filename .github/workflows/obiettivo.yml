@@ -26,7 +26,7 @@ jobs:
   esplora:
     name: Com'è fatto Puffin
     if: github.event.inputs.cosa == 'esplora'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       PYTHONPATH: ${{ github.workspace }}
@@ -49,7 +49,7 @@ jobs:
   confronta:
     name: Puffin, l'originale contro il mio
     if: github.event.inputs.cosa != 'esplora'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
       PYTHONPATH: ${{ github.workspace }}

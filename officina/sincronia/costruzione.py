@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import contextlib
+import json
+import secrets
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,6 +15,9 @@ from officina.errori import ErroreOfficina
 from officina.modello import cambiamenti, nodi
 from officina.sincronia import formato
 from officina.telefono import cifratura
+
+APPOGGIO = "sincronia-in-costruzione-"
+A_PEZZI = 2000
 
 SCHEMA_VIAGGIANTE = """
 CREATE TABLE cambiamenti (
@@ -74,7 +80,8 @@ CREATE TABLE file (
     sembra_schermata   INTEGER,
     nome               TEXT,             -- il nome vero dell'originale
     posto              TEXT,             -- dov'è dentro il pacchetto
-    mini_posto         TEXT              -- la miniatura, se c'era
+    mini_posto         TEXT,             -- la miniatura, se c'era
+    mini_formato       TEXT
 );
 
 CREATE TABLE impronte (
@@ -122,6 +129,11 @@ CREATE TABLE impostazioni (
     valore      TEXT NOT NULL,      -- JSON, come nell'archivio
     cambiata_il TEXT                -- vuota se non l'ha mai decisa nessuno
 );
+
+CREATE TABLE informazioni (
+    chiave TEXT PRIMARY KEY,
+    valore TEXT NOT NULL
+);
 """
 
 
@@ -148,46 +160,62 @@ def _capi(connessione: sqlite3.Connection) -> dict[int, str]:
     return capi
 
 
-def _percorso_sul_disco(connessione: sqlite3.Connection,
-                        file_id: int) -> tuple[Path | None, str]:
+def _percorsi(connessione: sqlite3.Connection, da: int,
+              fino: int) -> dict[int, list[tuple[str, str]]]:
+    trovati: dict[int, list[tuple[str, str]]] = {}
+    for riga in connessione.execute(
+            "SELECT file_id, percorso, nome FROM percorsi "
+            "WHERE file_id BETWEEN ? AND ? ORDER BY file_id, presente DESC, id",
+            (da, fino)):
+        trovati.setdefault(riga["file_id"], []).append((riga["percorso"], riga["nome"]))
+    return trovati
+
+
+def _percorso_sul_disco(percorsi: list[tuple[str, str]]) -> tuple[Path | None, str]:
     nome = ""
-    for riga in tutti(connessione,
-                      "SELECT percorso, nome FROM percorsi WHERE file_id = ? "
-                      "ORDER BY presente DESC, id", file_id):
-        nome = nome or riga["nome"]
-        dove = Path(riga["percorso"])
+    for percorso, suo_nome in percorsi:
+        nome = nome or suo_nome
+        dove = Path(percorso)
         if dove.is_file():
-            return dove, riga["nome"]
+            return dove, suo_nome
     return None, nome
+
+
+def _appoggio(archivio) -> Path:
+    lavoro = Path(archivio.dove.radice) / "lavoro"
+    lavoro.mkdir(parents=True, exist_ok=True)
+    for vecchio in lavoro.glob(f"{APPOGGIO}*.sqlite*"):
+        with contextlib.suppress(OSError):
+            vecchio.unlink(missing_ok=True)
+    return lavoro / f"{APPOGGIO}{secrets.token_hex(8)}.sqlite"
 
 
 def costruisci(archivio, dove: Path, password: str,
                per_macchina_id: int | None = None,
                avanzamento: Callable[[int, int], None] | None = None) -> Fatto:
-    connessione = archivio.connessione
-    mia = cambiamenti.questa_macchina(connessione)
+    with archivio.scrittura() as connessione:
+        cambiamenti.questa_macchina(connessione)
+        cambiamenti.recupera_larretrato(connessione)
 
-    destinataria = None
-    if per_macchina_id is not None:
-        destinataria = uno(connessione, "SELECT * FROM macchine WHERE id = ?",
-                           per_macchina_id)
-        if destinataria is None:
-            raise ErroreOfficina("Questa macchina non la conosco.",
-                                 codice="macchina_sconosciuta")
-
-    dal_seriale = destinataria["mi_ha_vista_fino_a"] if destinataria else 0
-    visto_di_te = destinataria["visto_fino_a"] if destinataria else 0
-
-    cambiamenti.recupera_larretrato(connessione)
-
-    righe = cambiamenti.da_mandare(connessione, dal_seriale)
+    with archivio.lettura() as connessione:
+        mia = cambiamenti.questa_macchina(connessione)
+        destinataria = None
+        if per_macchina_id is not None:
+            destinataria = uno(connessione, "SELECT * FROM macchine WHERE id = ?",
+                               per_macchina_id)
+            if destinataria is None:
+                raise ErroreOfficina("Questa macchina non la conosco.",
+                                     codice="macchina_sconosciuta")
+        dal_seriale = destinataria["mi_ha_vista_fino_a"] if destinataria else 0
+        visto_di_te = destinataria["visto_fino_a"] if destinataria else 0
+        righe = cambiamenti.da_mandare(connessione, dal_seriale)
     al_seriale = righe[-1]["seriale"] if righe else dal_seriale
 
     cartella = Path(dove) / formato.nome_cartella(mia["nome"], al_seriale)
     cartella.mkdir(parents=True, exist_ok=True)
 
     sale = cifratura.sale_nuovo()
-    chiave = cifratura.Chiave.dalla_password(password, sale)
+    chiave = cifratura.Chiave.dalla_password(password, sale, formato.COSTO)
     carta = formato.Carta(
         mittente_codice=mia["codice"],
         mittente_nome=mia["nome"],
@@ -203,145 +231,201 @@ def costruisci(archivio, dove: Path, password: str,
     )
     carta.scrivi(cartella)
 
+    appoggio = _appoggio(archivio)
+    try:
+        note, quanti, quante_mini, peso = _riempi(
+            archivio, appoggio, cartella, chiave, carta, righe, destinataria,
+            avanzamento)
+        peso += chiave.cifra_file(appoggio, cartella / formato.DATI, formato.DATI).peso
+    finally:
+        appoggio.unlink(missing_ok=True)
+
+    carta.stato = formato.COMPLETO
+    carta.finito_il = adesso()
+    carta.quanti_file = quanti
+    carta.quante_miniature = quante_mini
+    carta.peso = peso
+    carta.note = [f"{len(note)} avvisi: si leggono quando il pacchetto viene aperto"] if note else []
+    carta.scrivi(cartella)
+    return Fatto(cartella=cartella, carta=carta, note=note)
+
+
+def _riempi(archivio, appoggio: Path, cartella: Path, chiave: cifratura.Chiave,
+            carta: formato.Carta, righe: list, destinataria,
+            avanzamento: Callable[[int, int], None] | None) -> tuple[list[str], int, int, int]:
+    viaggiante = sqlite3.connect(appoggio)
+    try:
+        viaggiante.execute("PRAGMA journal_mode = OFF")
+        viaggiante.execute("PRAGMA synchronous = OFF")
+        viaggiante.executescript(SCHEMA_VIAGGIANTE)
+        with archivio.lettura() as connessione:
+            capi = _capi(connessione)
+            gia_di_la = _quello_che_ha_gia(connessione, destinataria)
+            _metti_quello_che_si_sa(viaggiante, connessione, righe, capi)
+            fino = uno(connessione, "SELECT count(*) AS q, coalesce(max(id), 0) AS ultimo "
+                            "FROM file_media")
+        note, quanti, quante_mini, peso = _metti_i_file(
+            archivio, viaggiante, cartella, chiave, capi, gia_di_la,
+            fino["q"], fino["ultimo"], avanzamento)
+
+        garantiti = {nome: getattr(carta, nome) for nome in formato.GARANTITI}
+        garantiti["note"] = note
+        viaggiante.executemany(
+            "INSERT INTO informazioni (chiave, valore) VALUES (?, ?)",
+            [(nome, json.dumps(valore, ensure_ascii=False))
+             for nome, valore in garantiti.items()])
+        viaggiante.commit()
+    finally:
+        viaggiante.close()
+    return note, quanti, quante_mini, peso
+
+
+def _quello_che_ha_gia(connessione: sqlite3.Connection, destinataria) -> set[str]:
+    if destinataria is None:
+        return set()
+    return {r["impronta"] for r in connessione.execute(
+        "SELECT impronta FROM inventario_altrui WHERE macchina_id = ?",
+        (destinataria["id"],))}
+
+
+def _metti_quello_che_si_sa(viaggiante: sqlite3.Connection,
+                            connessione: sqlite3.Connection, righe: list,
+                            capi: dict[int, str]) -> None:
+    sentieri = _sentieri(connessione)
+
+    viaggiante.executemany(
+        "INSERT INTO cambiamenti (seriale, avvenuto_il, cosa, azione, "
+        "impronta, sentiero, stato, origine, valore, valore_prima) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ((riga["seriale"], riga["avvenuto_il"], riga["cosa"], riga["azione"],
+          capi.get(riga["scatto_id"]), sentieri.get(riga["nodo_id"]),
+          riga["stato"], riga["origine"], riga["valore"], riga["valore_prima"])
+         for riga in righe))
+
+    viaggiante.executemany(
+        "INSERT INTO nodi (sentiero, criterio, soglia, scegline_uno, "
+        "stato, creato_il) VALUES (?, ?, ?, ?, ?, ?)",
+        ((sentieri[riga["id"]], riga["criterio"], riga["soglia"],
+          riga["scegline_uno"], riga["stato"], riga["creato_il"])
+         for riga in connessione.execute("SELECT * FROM nodi")))
+
+    viaggiante.executemany(
+        "INSERT INTO impostazioni (chiave, valore, cambiata_il) VALUES (?, ?, ?)",
+        ((riga["chiave"], riga["valore"], riga["cambiata_il"])
+         for riga in connessione.execute("SELECT * FROM impostazioni")
+         if riga["chiave"] in VIAGGIANO))
+
+    viaggiante.executemany(
+        "INSERT INTO scatti (capo, genere, data_locale, fuso_minuti, "
+        "istante_utc, giorno, origine_data, latitudine, longitudine, "
+        "larghezza, altezza, durata_ms, sembra_schermata, nota) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ((capi[riga["id"]], riga["genere"], riga["data_locale"], riga["fuso_minuti"],
+          riga["istante_utc"], riga["giorno"], riga["origine_data"],
+          riga["latitudine"], riga["longitudine"], riga["larghezza"],
+          riga["altezza"], riga["durata_ms"], riga["sembra_schermata"],
+          riga["nota"])
+         for riga in connessione.execute("SELECT * FROM scatti")
+         if riga["id"] in capi))
+
+    viaggiante.executemany(
+        "INSERT INTO impronte (capo, descrittore, versione, inquadratura, "
+        "metodo, riquadro, fotogramma, istante_ms, dimensione, valori, "
+        "calcolata_il) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ((capi[riga["scatto_id"]], riga["descrittore"], riga["versione"],
+          riga["inquadratura"], riga["metodo"], riga["riquadro"],
+          riga["fotogramma"], riga["istante_ms"], riga["dimensione"],
+          riga["valori"], riga["calcolata_il"])
+         for riga in connessione.execute("SELECT * FROM impronte")
+         if riga["scatto_id"] in capi))
+
+    for riga in tutti(connessione,
+                      "SELECT * FROM persone WHERE nome IS NOT NULL "
+                      "AND stato <> 'cestino'"):
+        viaggiante.execute(
+            "INSERT OR IGNORE INTO persone (nome, stato, nata_il) "
+            "VALUES (?, ?, ?)",
+            (riga["nome"], riga["stato"], riga["nata_il"]))
+        for scatto in tutti(connessione,
+                            "SELECT DISTINCT scatto_id FROM volti "
+                            "WHERE persona_id = ?", riga["id"]):
+            capo = capi.get(scatto["scatto_id"])
+            if capo:
+                viaggiante.execute(
+                    "INSERT OR IGNORE INTO persone_scatti "
+                    "(nome, impronta, a_mano) VALUES (?, ?, 0)",
+                    (riga["nome"], capo))
+        for scatto in tutti(connessione,
+                            "SELECT scatto_id FROM persone_negli_scatti "
+                            "WHERE persona_id = ?", riga["id"]):
+            capo = capi.get(scatto["scatto_id"])
+            if capo:
+                viaggiante.execute(
+                    "INSERT INTO persone_scatti (nome, impronta, a_mano) "
+                    "VALUES (?, ?, 1) ON CONFLICT (nome, impronta) "
+                    "DO UPDATE SET a_mano = 1", (riga["nome"], capo))
+
+    viaggiante.executemany(
+        "INSERT OR IGNORE INTO cuori (telefono, sistema, impronta, "
+        "messo_il, tolto_il) VALUES (?, ?, ?, ?, ?)",
+        ((riga["telefono"], riga["sistema"], riga["impronta"],
+          riga["messo_il"], riga["tolto_il"])
+         for riga in connessione.execute(
+             "SELECT c.*, t.nome AS telefono, t.sistema AS sistema "
+             "FROM cuori c JOIN telefoni t ON t.id = c.telefono_id")))
+
+
+def _metti_i_file(archivio, viaggiante: sqlite3.Connection, cartella: Path,
+                  chiave: cifratura.Chiave, capi: dict[int, str],
+                  gia_di_la: set[str], quanti_file: int, ultimo: int,
+                  avanzamento: Callable[[int, int], None] | None
+                  ) -> tuple[list[str], int, int, int]:
     note: list[str] = []
     peso = 0
-    viaggiante = sqlite3.connect(cartella / (formato.DATI + ".chiaro"))
-    try:
-        viaggiante.executescript(SCHEMA_VIAGGIANTE)
-        sentieri = _sentieri(connessione)
-        capi = _capi(connessione)
-
-        for riga in righe:
-            viaggiante.execute(
-                "INSERT INTO cambiamenti (seriale, avvenuto_il, cosa, azione, "
-                "impronta, sentiero, stato, origine, valore, valore_prima) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (riga["seriale"], riga["avvenuto_il"], riga["cosa"], riga["azione"],
-                 capi.get(riga["scatto_id"]), sentieri.get(riga["nodo_id"]),
-                 riga["stato"], riga["origine"], riga["valore"],
-                 riga["valore_prima"]),
-            )
-
-        for riga in tutti(connessione, "SELECT * FROM nodi"):
-            viaggiante.execute(
-                "INSERT INTO nodi (sentiero, criterio, soglia, scegline_uno, "
-                "stato, creato_il) VALUES (?, ?, ?, ?, ?, ?)",
-                (sentieri[riga["id"]], riga["criterio"], riga["soglia"],
-                 riga["scegline_uno"], riga["stato"], riga["creato_il"]),
-            )
-
-        for riga in tutti(connessione, "SELECT * FROM impostazioni"):
-            if riga["chiave"] not in VIAGGIANO:
-                continue
-            viaggiante.execute(
-                "INSERT INTO impostazioni (chiave, valore, cambiata_il) "
-                "VALUES (?, ?, ?)",
-                (riga["chiave"], riga["valore"], riga["cambiata_il"]),
-            )
-
-        for riga in tutti(connessione, "SELECT * FROM scatti"):
-            capo = capi.get(riga["id"])
-            if capo is None:
-                continue
-            viaggiante.execute(
-                "INSERT INTO scatti (capo, genere, data_locale, fuso_minuti, "
-                "istante_utc, giorno, origine_data, latitudine, longitudine, "
-                "larghezza, altezza, durata_ms, sembra_schermata, nota) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (capo, riga["genere"], riga["data_locale"], riga["fuso_minuti"],
-                 riga["istante_utc"], riga["giorno"], riga["origine_data"],
-                 riga["latitudine"], riga["longitudine"], riga["larghezza"],
-                 riga["altezza"], riga["durata_ms"], riga["sembra_schermata"],
-                 riga["nota"]),
-            )
-
-        for riga in tutti(connessione, "SELECT * FROM impronte"):
-            capo = capi.get(riga["scatto_id"])
-            if capo is None:
-                continue
-            viaggiante.execute(
-                "INSERT INTO impronte (capo, descrittore, versione, inquadratura, "
-                "metodo, riquadro, fotogramma, istante_ms, dimensione, valori, "
-                "calcolata_il) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (capo, riga["descrittore"], riga["versione"], riga["inquadratura"],
-                 riga["metodo"], riga["riquadro"], riga["fotogramma"],
-                 riga["istante_ms"], riga["dimensione"], riga["valori"],
-                 riga["calcolata_il"]),
-            )
-
-        for riga in tutti(connessione,
-                          "SELECT * FROM persone WHERE nome IS NOT NULL "
-                          "AND stato <> 'cestino'"):
-            viaggiante.execute(
-                "INSERT OR IGNORE INTO persone (nome, stato, nata_il) "
-                "VALUES (?, ?, ?)",
-                (riga["nome"], riga["stato"], riga["nata_il"]))
-            for scatto in tutti(connessione,
-                                "SELECT DISTINCT scatto_id FROM volti "
-                                "WHERE persona_id = ?", riga["id"]):
-                capo = capi.get(scatto["scatto_id"])
-                if capo:
-                    viaggiante.execute(
-                        "INSERT OR IGNORE INTO persone_scatti "
-                        "(nome, impronta, a_mano) VALUES (?, ?, 0)",
-                        (riga["nome"], capo))
-            for scatto in tutti(connessione,
-                                "SELECT scatto_id FROM persone_negli_scatti "
-                                "WHERE persona_id = ?", riga["id"]):
-                capo = capi.get(scatto["scatto_id"])
-                if capo:
-                    viaggiante.execute(
-                        "INSERT INTO persone_scatti (nome, impronta, a_mano) "
-                        "VALUES (?, ?, 1) ON CONFLICT (nome, impronta) "
-                        "DO UPDATE SET a_mano = 1", (riga["nome"], capo))
-
-        for riga in tutti(connessione,
-                          "SELECT c.*, t.nome AS telefono, t.sistema AS sistema "
-                          "FROM cuori c JOIN telefoni t ON t.id = c.telefono_id"):
-            viaggiante.execute(
-                "INSERT OR IGNORE INTO cuori (telefono, sistema, impronta, "
-                "messo_il, tolto_il) VALUES (?, ?, ?, ?, ?)",
-                (riga["telefono"], riga["sistema"], riga["impronta"],
-                 riga["messo_il"], riga["tolto_il"]))
-
-        gia_di_la = set()
-        if destinataria is not None:
-            gia_di_la = {r["impronta"] for r in tutti(
-                connessione, "SELECT impronta FROM inventario_altrui "
-                "WHERE macchina_id = ?", destinataria["id"])}
-
-        elenco = tutti(connessione, "SELECT * FROM file_media ORDER BY id")
-        quanti = 0
-        quante_mini = 0
-        for numero, riga in enumerate(elenco, start=1):
+    quanti = 0
+    quante_mini = 0
+    numero = 0
+    dopo = -1
+    while True:
+        with archivio.lettura() as connessione:
+            pezzo = tutti(connessione,
+                          "SELECT * FROM file_media WHERE id > ? AND id <= ? "
+                          "ORDER BY id LIMIT ?", dopo, ultimo, A_PEZZI)
+            if not pezzo:
+                break
+            dopo = pezzo[-1]["id"]
+            percorsi = _percorsi(connessione, pezzo[0]["id"], dopo)
+        for riga in pezzo:
+            numero += 1
             impronta = riga["impronta"]
             viaggiante.execute("INSERT INTO inventario (impronta) VALUES (?)",
                                (impronta,))
             allegare = impronta not in gia_di_la
 
-            sorgente, nome = _percorso_sul_disco(connessione, riga["id"])
+            sorgente, nome = _percorso_sul_disco(percorsi.get(riga["id"], []))
             posto = None
             if not allegare:
                 pass
             elif sorgente is None:
                 note.append(f"originale non trovato sul disco: {impronta[:12]}")
             else:
-                posto = formato.posto_dell_originale(impronta, riga["formato"])
+                posto = formato.posto_dell_originale()
                 destinazione = formato.dentro(cartella, posto)
                 destinazione.parent.mkdir(parents=True, exist_ok=True)
-                scritto = chiave.cifra_file(sorgente, destinazione)
+                scritto = chiave.cifra_file(sorgente, destinazione, posto)
                 peso += scritto.peso
                 quanti += 1
 
             mini_posto = None
+            mini_formato = None
             if allegare and riga["miniatura"]:
                 dati = archivio.leggi_miniatura(riga["miniatura"])
                 if dati:
-                    coda = Path(riga["miniatura"]).suffix or ".jpg"
-                    mini_posto = formato.posto_della_miniatura(impronta, coda)
+                    mini_formato = Path(riga["miniatura"]).suffix.lstrip(".").lower() or "jpg"
+                    mini_posto = formato.posto_della_miniatura()
                     destinazione = formato.dentro(cartella, mini_posto)
                     destinazione.parent.mkdir(parents=True, exist_ok=True)
-                    peso += chiave.scrivi_byte(dati, destinazione).peso
+                    peso += chiave.scrivi_byte(dati, destinazione, mini_posto).peso
                     quante_mini += 1
 
             viaggiante.execute(
@@ -349,33 +433,16 @@ def costruisci(archivio, dove: Path, password: str,
                 "dimensione, larghezza, altezza, orientamento, durata_ms, "
                 "identificatore_ios, data_locale, fuso_minuti, istante_utc, "
                 "origine_data, latitudine, longitudine, sembra_schermata, "
-                "nome, posto, mini_posto) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "nome, posto, mini_posto, mini_formato) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (impronta, capi.get(riga["scatto_id"]), riga["ruolo"], riga["genere"],
                  riga["formato"], riga["dimensione"], riga["larghezza"],
                  riga["altezza"], riga["orientamento"], riga["durata_ms"],
                  riga["identificatore_ios"], riga["data_locale"], riga["fuso_minuti"],
                  riga["istante_utc"], riga["origine_data"], riga["latitudine"],
                  riga["longitudine"], riga["sembra_schermata"], nome, posto,
-                 mini_posto),
+                 mini_posto, mini_formato),
             )
             if avanzamento is not None:
-                avanzamento(numero, len(elenco))
-
-        viaggiante.commit()
-    finally:
-        viaggiante.close()
-
-    in_chiaro = cartella / (formato.DATI + ".chiaro")
-    peso += chiave.scrivi_byte(in_chiaro.read_bytes(),
-                               cartella / formato.DATI).peso
-    in_chiaro.unlink()
-
-    carta.stato = formato.COMPLETO
-    carta.finito_il = adesso()
-    carta.quanti_file = quanti
-    carta.quante_miniature = quante_mini
-    carta.peso = peso
-    carta.note = note
-    carta.scrivi(cartella)
-    return Fatto(cartella=cartella, carta=carta, note=note)
+                avanzamento(numero, max(quanti_file, numero))
+    return note, quanti, quante_mini, peso

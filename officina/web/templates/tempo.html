@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Tempo e mappa — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-tempo">
+
+    <div class="tm-testa">
+        <div>
+            <h1 class="titolo-pagina">Tempo e mappa{% call spiega("Senza internet") %}
+                <p>In alto scorrono gli anni: ogni barretta è un mese, più è alta più
+                scatti ci sono. La parte colorata sono gli scatti che sanno dove sono stati fatti.</p>
+                <p>Clicca un mese o un anno per vedere solo quel periodo sulla mappa.
+                Tieni premuto e trascina, oppure tieni premuto Maiusc, per scegliere da un mese a un altro.</p>
+                <p>La mappa è dentro il programma: non chiede niente a internet e le
+                posizioni delle tue foto non escono dal computer.</p>
+            {% endcall %}</h1>
+            <p class="sottotitolo" id="tm-frase" aria-live="polite">Tutti gli anni.</p>
+        </div>
+        <div class="tm-tasti">
+            <button class="tasto-comando nudo piccolo" id="tm-tutto" type="button" disabled>{{ icona('annulla', 14) }} Tutti gli anni</button>
+            <a class="tasto-comando piccolo" id="tm-galleria" href="/">{{ icona('foto', 14) }} Apri nella Galleria</a>
+        </div>
+    </div>
+
+    <section class="carta tm-linea" aria-label="Linea del tempo">
+        {% if con_data %}
+        <div class="tm-anni" id="tm-anni" role="group" aria-label="Anni e mesi"></div>
+        {% else %}
+        <p class="tenue piccolo tm-vuota">Ancora nessuno scatto con la data. Quando ne aggiungi, qui compaiono gli anni.</p>
+        {% endif %}
+        {% if senza_data %}
+        <p class="minuscolo tenue tm-senza-data"><a href="/senza-data">{{ senza_data|numero }} scatt{{ 'o' if senza_data == 1 else 'i' }} senza data</a> non {{ 'sta' if senza_data == 1 else 'stanno' }} sulla linea del tempo.</p>
+        {% endif %}
+    </section>
+
+    <section class="tm-mappa" aria-label="Mappa">
+        <div class="tm-tela" id="tm-tela" tabindex="0" aria-label="Mappa degli scatti: trascina per spostarti, rotellina o + e − per avvicinarti">
+            <canvas id="tm-disegno"></canvas>
+            <p class="tm-stato" id="tm-stato">Preparo la mappa…</p>
+            <div class="tm-comandi">
+                <button class="tasto-comando piccolo" id="tm-piu" type="button" aria-label="Avvicina">{{ icona('piu', 14) }}</button>
+                <button class="tasto-comando piccolo" id="tm-meno" type="button" aria-label="Allontana"><span aria-hidden="true">−</span></button>
+                <button class="tasto-comando piccolo" id="tm-centra" type="button" title="Mostra tutti i punti">{{ icona('bersaglio', 14) }}</button>
+            </div>
+            <a class="tasto-comando piccolo tm-qui" id="tm-qui" href="/">{{ icona('foto', 14) }} Gli scatti di questa vista</a>
+            <span class="tm-fonte minuscolo">Contorni: Natural Earth</span>
+        </div>
+
+        <aside class="tm-scheda" id="tm-scheda" hidden aria-live="polite">
+            <div class="tm-scheda-testa">
+                <h2 id="tm-scheda-titolo">Qui</h2>
+                <button class="tasto-comando nudo piccolo" id="tm-chiudi" type="button" aria-label="Chiudi">{{ icona('x', 14) }}</button>
+            </div>
+            <p class="minuscolo tenue" id="tm-scheda-sotto"></p>
+            <div class="tm-scheda-tasti">
+                <button class="tasto-comando nudo piccolo" id="tm-avvicina" type="button">{{ icona('cerca', 14) }} Avvicina</button>
+                <a class="tasto-comando piccolo" id="tm-scheda-galleria" href="/">{{ icona('foto', 14) }} Apri nella Galleria</a>
+            </div>
+            <div class="tm-miniature" id="tm-miniature"></div>
+            <button class="tasto-comando nudo piccolo" id="tm-altre" type="button" hidden>Mostrane altre</button>
+        </aside>
+    </section>
+
+</div>
+</main>
+</div>
+<script id="tm-dati" type="application/json">{{ dati_del_tempo|safe }}</script>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/tempo.js"></script>
+{% endblock %}

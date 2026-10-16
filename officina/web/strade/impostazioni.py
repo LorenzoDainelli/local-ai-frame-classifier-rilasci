@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -7,7 +9,8 @@ from officina import forziere, registro
 from officina.archivio import accesso
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
-from officina.impostazioni import PREDEFINITE, SOLO_QUESTA_MACCHINA, questa_macchina
+from officina.impostazioni import (PAROLE_AMMESSE, PREDEFINITE, SOLO_QUESTA_MACCHINA,
+                                   questa_macchina, valore_ammesso)
 from officina.apprendimento import proposte
 from officina.modello import dispositivi, fotografie, nodi, persone
 from officina.web import blocco
@@ -15,7 +18,7 @@ from officina.web import telefono as telefono_web
 from officina.web import vista
 from officina.programma import aspetto
 
-from officina.web.strade import base, comune, schermo, tentativi
+from officina.web.strade import base, comune, copia_esterna, schermo, tentativi
 
 strada = APIRouter()
 
@@ -83,7 +86,22 @@ def impostazioni(richiesta: Request):
         "nodi_nel_cestino": nel_cestino,
         "quante_cartelle": len(cartelle),
         "copie": copie_esistenti(),
+        "copia_esterna": copia_esterna.com_e(),
+        "versione_tenuta": _versione_tenuta(richiesta.query_params.get("tenuta")),
+        "nodi_rimessi": _nodi_rimessi(richiesta.query_params.get("rimesso")),
     })
+
+
+def _versione_tenuta(chiesta: str | None) -> str | None:
+    nomi = {versione[0] for voce in aspetto.VOCI.values()
+            for versione in voce["versioni"].values()}
+    return chiesta if chiesta in nomi else None
+
+
+def _nodi_rimessi(chiesto: str | None) -> int | None:
+    if not chiesto or not chiesto.isdecimal() or len(chiesto) > 9:
+        return None
+    return int(chiesto)
 
 
 def copie_esistenti() -> list[dict]:
@@ -138,15 +156,25 @@ def decidi_dispositivo(dispositivo_id: int, stato: str = Form(...),
     return RedirectResponse("/impostazioni", status_code=303)
 
 
+def _numero(valore, predefinito: int, minimo: int, massimo: int) -> int:
+    try:
+        numero = int(valore)
+    except (TypeError, ValueError):
+        return predefinito
+    return min(max(numero, minimo), massimo)
+
+
 @strada.post("/impostazioni", dependencies=solo_qui)
 async def salva_impostazioni(richiesta: Request):
     modulo = await richiesta.form()
     archivio = accesso.aperto()
-    archivio.imposta("filtri_forma", modulo.get("filtri_forma", "pillole"))
-    archivio.imposta("griglia_altezza_riga", int(modulo.get("griglia_altezza_riga") or 150))
+    forma = modulo.get("filtri_forma")
+    archivio.imposta("filtri_forma",
+                     forma if forma in PAROLE_AMMESSE["filtri_forma"] else "pillole")
+    archivio.imposta("griglia_altezza_riga", _numero(modulo.get("griglia_altezza_riga"), 150, 60, 600))
     archivio.imposta("griglia_mosaico", "griglia_mosaico" in modulo)
     archivio.imposta("movimento", "movimento" in modulo)
-    archivio.imposta("miniatura_lato", int(modulo.get("miniatura_lato") or 640))
+    archivio.imposta("miniatura_lato", _numero(modulo.get("miniatura_lato"), 640, 128, 2048))
     archivio.imposta("accesso_dalla_rete", "accesso_dalla_rete" in modulo)
     return RedirectResponse("/impostazioni", status_code=303)
 
@@ -166,10 +194,15 @@ def api_una_impostazione(richiesta: Request, chiave: str = Form(...),
         try:
             pulito = int(valore)
         except (TypeError, ValueError) as errore:
-            raise ErroreOfficina(f"«{valore}» non è un numero.") from errore
+            raise ErroreOfficina(f"«{valore[:40]}» non è un numero.") from errore
     else:
         pulito = valore
 
+    try:
+        pulito = valore_ammesso(chiave, pulito)
+    except ValueError as errore:
+        raise ErroreOfficina(
+            f"Per «{chiave}» questa scelta il programma non la conosce.") from errore
     accesso.aperto().imposta(chiave, pulito)
     return {"chiave": chiave, "valore": pulito}
 
@@ -190,6 +223,20 @@ def copia_adesso():
     return RedirectResponse("/stato#salute", status_code=303)
 
 
+@strada.post("/impostazioni/copia/rimetti", dependencies=solo_qui)
+def rimetti_copia(nome: str = Form(...)):
+    from officina.archivio import copie
+    copie.prenota(accesso.aperto().dove, nome)
+    return RedirectResponse("/stato#archivio", status_code=303)
+
+
+@strada.post("/impostazioni/copia/disdici", dependencies=solo_qui)
+def disdici_copia():
+    from officina.archivio import copie
+    copie.disdici(accesso.aperto().dove)
+    return RedirectResponse("/stato#archivio", status_code=303)
+
+
 @strada.get("/blocco", response_class=HTMLResponse)
 def pagina_blocco(richiesta: Request):
     archivio = accesso.aperto()
@@ -204,7 +251,15 @@ def pagina_blocco(richiesta: Request):
         "sbagliata": bool(richiesta.query_params.get("sbagliata")),
         "occupato": tentativi.MESSAGGIO_OCCUPATO if richiesta.query_params.get("occupato") else "",
         "aspetta": tentativi.messaggio_di_attesa(attesa) if attesa else "",
+        "con_windows": chi == "qui" and _c_e_il_sigillo(),
     })
+
+
+def _c_e_il_sigillo() -> bool:
+    from officina.impostazioni import REALE
+    from officina.programma import sigillo
+
+    return sigillo.c_e(REALE)
 
 
 @strada.post("/blocco/apri")
@@ -231,6 +286,30 @@ def blocca_adesso(richiesta: Request):
     return {"bloccato": True}
 
 
+def _lega_a_windows(nome: str, password: str) -> bool:
+    from officina.programma import sigillo
+
+    if sigillo.come_si_puo() is None:
+        return False
+    sigillo.sigilla(nome, password)
+    return True
+
+
+def _slega_da_windows(nome: str) -> None:
+    from officina.programma import sigillo
+
+    try:
+        sigillo.togli(nome)
+    except Exception as guasto:
+        registro.errore("forziere.sigillo_non_tolto", **registro.dove_si_e_rotto(guasto))
+
+
+_DA_MOSTRARE: dict[str, tuple[str, str]] = {}
+LETTERE_CHIARE = "abcdefghjkmnpqrstuvwxyz23456789"
+SENZA_WINDOWS = ("Su questo computer non trovo né Windows Hello né la password di Windows, "
+                 "quindi non posso tenerla io: scrivi tu una password.")
+
+
 @strada.post("/forziere/accendi", dependencies=solo_qui)
 def accendi_il_forziere(password: str = Form(""), ancora: str = Form(""),
                         su_carta: str = Form(""), dove_torno: str = Form("")):
@@ -246,6 +325,9 @@ def accendi_il_forziere(password: str = Form(""), ancora: str = Form(""),
     if password != ancora:
         raise ErroreOfficina(
             "Le due password non coincidono. Non ho toccato niente.")
+    creata = not password
+    if creata:
+        password = _password_a_caso()
 
     cassa = forziere.per(archivio.dove)
     if cassa.acceso:
@@ -254,16 +336,47 @@ def accendi_il_forziere(password: str = Form(""), ancora: str = Form(""),
             "apre e si richiude con quella nuova.")
 
     forziere._password_utile(password)
+    legata = _lega_a_windows(nome, password)
+    if creata and not legata:
+        raise ErroreOfficina(SENZA_WINDOWS)
 
     accesso.chiudi(con_copia=False)
     try:
         cassa.accendi(password)
     except Exception:
+        if legata:
+            _slega_da_windows(nome)
         accesso.apri(nome)
         raise
     accesso.apri(nome, password)
     telefono_web.dimentica_le_cartelle()
+    if creata:
+        gettone = secrets.token_urlsafe(24)
+        _DA_MOSTRARE.clear()
+        _DA_MOSTRARE[gettone] = (password, dove)
+        return RedirectResponse(f"/forziere/creata?g={gettone}", status_code=303)
     return RedirectResponse(dove, status_code=303)
+
+
+def _password_a_caso() -> str:
+    return "-".join("".join(secrets.choice(LETTERE_CHIARE) for _ in range(5)) for _ in range(6))
+
+
+@strada.get("/forziere/creata", response_class=HTMLResponse, dependencies=solo_qui)
+def mostra_la_password_creata(richiesta: Request, g: str = ""):
+    trovata = _DA_MOSTRARE.pop(g, None) if g else None
+    if trovata is None:
+        return RedirectResponse("/impostazioni#c6", status_code=303)
+    password, dove = trovata
+    risposta = base.pagine.TemplateResponse(richiesta, "forziere-creato.html", {
+        "request": richiesta,
+        "attributi_aspetto": aspetto.attributi_html(aspetto.leggi()),
+        "impostazioni": accesso.aperto().tutte_le_impostazioni(),
+        "password": password,
+        "dove": dove,
+    })
+    risposta.headers["Cache-Control"] = "no-store"
+    return risposta
 
 
 SCORCIATOIE = [

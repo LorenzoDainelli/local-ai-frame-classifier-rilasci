@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import secrets
 import sqlite3
 
@@ -11,11 +12,23 @@ CHIAVE_ARCHIVIO = "identificativo_archivio"
 SISTEMI = ("ios", "android")
 
 
+def identificativo_se_c_e(connessione: sqlite3.Connection) -> str | None:
+    gia = leggi_stato(connessione, CHIAVE_ARCHIVIO)
+    return str(gia) if gia else None
+
+
 def identificativo(connessione: sqlite3.Connection) -> str:
+    gia = identificativo_se_c_e(connessione)
+    if gia:
+        return gia
+    nuovo = secrets.token_hex(8)
+    esegui(connessione,
+           "INSERT INTO stato (chiave, valore, aggiornato_il) VALUES (?, ?, ?) "
+           "ON CONFLICT(chiave) DO NOTHING",
+           CHIAVE_ARCHIVIO, json.dumps(nuovo), adesso())
     gia = leggi_stato(connessione, CHIAVE_ARCHIVIO)
     if gia:
         return str(gia)
-    nuovo = secrets.token_hex(8)
     scrivi_stato(connessione, CHIAVE_ARCHIVIO, nuovo)
     return nuovo
 
@@ -154,12 +167,6 @@ def dimentica_file(connessione: sqlite3.Connection, telefono_id: int,
            f"DELETE FROM pacchetto_file WHERE telefono_id = ? "
            f"AND posto IN ({segnaposto})", telefono_id, *posti)
     return len(posti)
-
-
-def svuota_il_pacchetto(connessione: sqlite3.Connection,
-                        telefono_id: int) -> None:
-    esegui(connessione, "DELETE FROM pacchetto_file WHERE telefono_id = ?",
-           telefono_id)
 
 
 def peso_del_pacchetto(connessione: sqlite3.Connection,

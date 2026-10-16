@@ -62,7 +62,7 @@
                 <span class="etichetta">Un ramo «scegline uno»</span>
                 <p class="minuscolo tenue">Quando i mucchi si escludono a vicenda: uno scatto messo nel primo diventa un «no» per tutti gli altri, senza dirlo.</p>
                 <div class="lm-in-fila">
-                    <input class="campo" name="nome" placeholder="Come si chiama il ramo" required>
+                    <input class="campo" name="nome" maxlength="120" placeholder="Come si chiama il ramo" required>
                     <button class="tasto-comando" type="submit">Crea</button>
                 </div>
             </form>
@@ -70,7 +70,7 @@
                 <span class="etichetta">Un mucchio</span>
                 <p class="minuscolo tenue">Dentro un ramo se ne mettono due o tre. Da soli funzionano lo stesso, ma ogni «no» va detto a mano.</p>
                 <div class="lm-in-fila">
-                    <input class="campo" name="nome" placeholder="Come si chiama il mucchio" required>
+                    <input class="campo" name="nome" maxlength="120" placeholder="Come si chiama il mucchio" required>
                     <select class="campo" name="ramo_id" aria-label="In quale ramo">
                         <option value="">Senza ramo</option>
                         {% for riga in rami %}
@@ -112,9 +112,15 @@
         </p>
         {% else %}
         <p class="piccolo tenue">
-            L'ultima è del {{ ultima_misura.fatta_il }}: {{ ultima_misura.scatti|numero }}
+            L'ultima è del {{ ultima_misura.fatta_il|ora_di_qui }}: {{ ultima_misura.scatti|numero }}
             scatti in {{ ultima_misura.gruppi|numero }} gruppi, {{ ultima_misura.nodi|numero }} mucchi.
         </p>
+        {% endif %}
+        {% if modo_vincente and modo_vincente != modo_in_uso %}
+        <form method="post" action="/misura/usa-il-migliore" class="riga-fra">
+            <p class="piccolo">Nell'ultima misura le caselle sommate col <b>{{ modo_vincente }}</b> sbagliano meno. Adesso il programma usa {{ "la" if modo_in_uso == "media" else "il" }} {{ modo_in_uso }}.</p>
+            <button class="tasto-comando principale piccolo" type="submit">Usa il migliore</button>
+        </form>
         {% endif %}
         {% if misura_lavoro.guasto and not corre %}
         <p class="mm-guasto">{{ misura_lavoro.guasto }}</p>

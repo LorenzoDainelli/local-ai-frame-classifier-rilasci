@@ -4,7 +4,7 @@ set -euo pipefail
 COPIA="${1:?cartella della repo dei rilasci}"
 ZITTO="${2:-}"
 RAMO=prove
-FUORI=(sviluppo .claude .github/workflows/vetrina.yml)
+FUORI=(sviluppo .claude .github/workflows/vetrina.yml iphone)
 
 RADICE="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 CODICE="$(git -C "$RADICE" rev-parse HEAD)"

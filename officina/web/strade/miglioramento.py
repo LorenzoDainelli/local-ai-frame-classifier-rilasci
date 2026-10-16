@@ -165,18 +165,23 @@ def api_miglioramento():
 
 @strada.post("/api/miglioramento/metti")
 async def api_miglioramento_metti(richiesta: Request):
-    from officina.miglioria import coda as miglioria_coda
 
     try:
         dati = await richiesta.json()
         numeri = [int(x) for x in dati.get("scatti", [])]
     except (ValueError, TypeError, AttributeError):
         dati, numeri = {}, []
+    return await consegna.subito(_metti_in_coda, dati, numeri)
+
+
+def _metti_in_coda(dati: dict, numeri: list[int]) -> dict:
+    from officina.miglioria import coda as miglioria_coda
+
     if dati.get("tutti_i_risultati"):
         filtro = vista.filtro_da_parametri(dati.get("filtro") or {})
         with accesso.aperto().lettura() as connessione:
             filtro = scatti.risolvi_simili(connessione, filtro)
-            numeri = [s["id"] for s in scatti.pagina(connessione, filtro, 0, 100000)]
+            numeri = scatti.soli_numeri(connessione, filtro)
     if not numeri:
         raise ErroreOfficina("Non hai selezionato niente.")
     with accesso.aperto().scrittura() as connessione:
@@ -200,7 +205,7 @@ def api_miglioramento_qualita(fonti: str = "", voti: str = "", tipo: str = "",
     from officina.miglioria import qualita
 
     archivio = accesso.aperto()
-    misurati_ora = qualita.misura_chi_manca(archivio)
+    misurati_ora = qualita.misura_chi_manca(archivio, secondi=0.5)
     with archivio.lettura() as connessione:
         voci = qualita.tutte(connessione)
         nella_galleria = qualita.quanti_nella_galleria(connessione)
@@ -272,7 +277,6 @@ def api_qualita_controllo():
 
 @strada.post("/api/miglioramento/qualita/metti")
 async def api_miglioramento_qualita_metti(richiesta: Request):
-    from officina.miglioria import coda as miglioria_coda, qualita
 
     try:
         dati = await richiesta.json()
@@ -280,6 +284,12 @@ async def api_miglioramento_qualita_metti(richiesta: Request):
         dati = {}
     if not isinstance(dati, dict):
         dati = {}
+    return await consegna.subito(_metti_in_coda_per_qualita, dati)
+
+
+def _metti_in_coda_per_qualita(dati: dict) -> dict:
+    from officina.miglioria import coda as miglioria_coda, qualita
+
     fonti, voti, tipo = _qualita_scelte(dati)
     with accesso.aperto().lettura() as connessione:
         numeri = [v.scatto_id for v in qualita.filtra(
@@ -296,7 +306,7 @@ async def api_miglioramento_qualita_metti(richiesta: Request):
 @strada.get("/miglioramento/rivedi", response_class=HTMLResponse)
 def miglioramento_rivedi(richiesta: Request, saltate: str = ""):
     archivio = accesso.aperto()
-    viste = {int(pezzo) for pezzo in saltate.split(",") if pezzo.strip().isdigit()}
+    viste = {int(pezzo) for pezzo in saltate.split(",") if pezzo.strip().isdecimal()}
     scelta = miglioramento_web.da_rivedere(archivio, viste)
     if scelta is not None and scelta["ricominciato"]:
         viste = set()
@@ -354,19 +364,23 @@ def miglioramento_sfida_lato(miglioria_id: int, lato: str):
     return Response(dati, media_type=tipo, headers=senza_cache)
 
 
-@strada.post("/api/miglioramento/{miglioria_id}/vota")
-async def api_miglioramento_vota(miglioria_id: int, richiesta: Request):
+def _vota(miglioria_id: int, voto: str) -> None:
     from officina.miglioria import sfida
 
-    try:
-        voto = str((await richiesta.json()).get("voto") or "")
-    except (ValueError, TypeError, AttributeError):
-        voto = ""
     archivio = accesso.aperto()
     with archivio.scrittura() as connessione:
         via = sfida.vota(connessione, miglioria_id, voto)
     sfida.butta(via)
     registro.evento("miglioria.votata")
+
+
+@strada.post("/api/miglioramento/{miglioria_id}/vota")
+async def api_miglioramento_vota(miglioria_id: int, richiesta: Request):
+    try:
+        voto = str((await richiesta.json()).get("voto") or "")
+    except (ValueError, TypeError, AttributeError):
+        voto = ""
+    await consegna.subito(_vota, miglioria_id, voto)
     detto = {"nessuna": "Nessuna delle due: le due versioni sono cancellate e la "
                         "foto resta com'era.",
              "pari": "Pari: si terrà la versione del modello che scegli alla fine."

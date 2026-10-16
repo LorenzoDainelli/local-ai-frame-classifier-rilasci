@@ -265,3 +265,9 @@ def test_I_una_live_rimasta_staccata_si_riattacca_alla_sua_foto(archivio):
         assert uno(c, "SELECT ruolo, scatto_id FROM file_media WHERE id = ?",
                    video_id)["scatto_id"] == foto_scatto
         assert uno(c, "SELECT count(*) AS q FROM scatti WHERE id = ?", video_scatto)["q"] == 0
+
+
+def test_date_ai_bordi_del_calendario_non_rompono_l_abbinamento():
+    from officina.importazione import motore
+    assert motore._istante_meno("0001-01-01T00:00:00Z", 10) == "0001-01-01T00:00:00Z"
+    assert motore._istante_piu("9999-12-31T23:59:59Z", 10) == "9999-12-31T23:59:59Z"

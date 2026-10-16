@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from officina import cartelle
 from officina.descrittori import torcia
 from officina.errori import ErroreOfficina
 from officina.parole import SCHEDA
@@ -97,8 +98,7 @@ def converti(grezzo: Path, arrivo: Path, al_passo=None) -> None:
     preparatore.save_pretrained(str(nuova))
     del modello
     torcia.libera()
-    shutil.rmtree(arrivo, ignore_errors=True)
-    nuova.rename(arrivo)
+    cartelle.metti_al_posto(nuova, arrivo)
     (arrivo / SCHEDA.prova_che_c_e).write_text(SCHEDA.identificatore, encoding="utf-8")
 
 

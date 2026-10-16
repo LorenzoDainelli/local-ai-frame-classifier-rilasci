@@ -11,6 +11,18 @@ RAGGIO_METRI = 200.0
 METRI_PER_GRADO = 111_320.0
 
 
+def coordinate_valide(latitudine, longitudine) -> tuple[float | None, float | None]:
+    try:
+        lat, lon = float(latitudine), float(longitudine)
+    except (TypeError, ValueError):
+        return None, None
+    if not (math.isfinite(lat) and math.isfinite(lon)):
+        return None, None
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None, None
+    return lat, lon
+
+
 def distanza_metri(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     mezzo = math.radians((lat1 + lat2) / 2)
     dx = (lon2 - lon1) * METRI_PER_GRADO * math.cos(mezzo)
@@ -84,9 +96,14 @@ def raggruppa(connessione: sqlite3.Connection,
         "WHERE luogo_id IS NULL AND latitudine IS NOT NULL "
         "AND longitudine IS NOT NULL ORDER BY id")
 
+    conosciuti = [luogo for luogo in conosciuti
+                  if coordinate_valide(luogo["lat"], luogo["lon"]) != (None, None)]
+
     nuovi, sistemati = 0, 0
     for scatto in da_sistemare:
-        lat, lon = scatto["latitudine"], scatto["longitudine"]
+        lat, lon = coordinate_valide(scatto["latitudine"], scatto["longitudine"])
+        if lat is None:
+            continue
         vicino, quanto = None, None
         for luogo in conosciuti:
             quanti_metri = distanza_metri(lat, lon, luogo["lat"], luogo["lon"])
@@ -115,9 +132,11 @@ def raggruppa(connessione: sqlite3.Connection,
 
 
 def _riassesta(connessione: sqlite3.Connection, luogo_id: int) -> None:
-    righe = tutti(connessione,
-                  "SELECT latitudine, longitudine FROM scatti "
-                  "WHERE luogo_id = ? AND latitudine IS NOT NULL", luogo_id)
+    righe = [riga for riga in tutti(
+        connessione,
+        "SELECT latitudine, longitudine FROM scatti "
+        "WHERE luogo_id = ? AND latitudine IS NOT NULL", luogo_id)
+        if coordinate_valide(riga["latitudine"], riga["longitudine"]) != (None, None)]
     if not righe:
         esegui(connessione, "UPDATE luoghi SET quanti = 0 WHERE id = ?", luogo_id)
         return
