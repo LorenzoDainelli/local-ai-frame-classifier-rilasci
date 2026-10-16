@@ -31,6 +31,27 @@ body { overflow: hidden; user-select: none; }
 .fotina.addormenta .occhi span { animation: si-addormenta 2.4s var(--uscita) forwards; transform-origin: bottom; }
 @keyframes si-addormenta { 0%, 40% { transform: scaleY(1); } 100% { transform: scaleY(.15); } }
 .fotina.ferma .occhi span { animation: none; }
+.passi li { transition: color var(--passo) var(--uscita), transform var(--passo) var(--uscita), opacity var(--passo) var(--uscita); }
+.passi li:not(.fatto):not(.adesso) { opacity: .62; }
+.passi li.adesso { transform: translateX(3px); }
+.passi li.adesso .spunta { animation: spunta-respira 1.6s ease-in-out infinite; }
+@keyframes spunta-respira { 0%, 100% { box-shadow: 0 0 0 3px var(--alone); } 50% { box-shadow: 0 0 0 6px transparent; } }
+.spunta path { stroke-dasharray: 22; stroke-dashoffset: 22; }
+.passi li.fatto .spunta { animation: spunta-scatta 420ms cubic-bezier(.2, 1.5, .4, 1) both; }
+.passi li.fatto .spunta path { stroke-dashoffset: 0; transition: stroke-dashoffset 360ms 120ms var(--uscita); }
+@keyframes spunta-scatta { from { transform: scale(.55); } to { transform: none; } }
+.linea span { position: relative; overflow: hidden; }
+.linea span::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--su-accento) 55%, transparent), transparent); transform: translateX(-100%); animation: linea-luccica 1.8s ease-in-out infinite; }
+@keyframes linea-luccica { to { transform: translateX(100%); } }
+.esce { animation: esce 520ms var(--uscita) forwards !important; }
+@keyframes esce { to { opacity: 0; transform: scale(.97) translateY(-6px); filter: blur(2px); } }
+.si-spegne { animation: si-spegne 1.6s 400ms var(--uscita) forwards; }
+@keyframes si-spegne { to { opacity: .55; transform: scale(.985); } }
+@media (prefers-reduced-motion: reduce) {
+    .passi li.adesso .spunta, .passi li.fatto .spunta, .linea span::after, .esce, .si-spegne { animation: none !important; }
+    .passi li.adesso { transform: none; }
+    .spunta path { stroke-dashoffset: 0; }
+}
 .scena-fotina { width: 300px; min-height: 120px; display: grid; place-items: center; }
 </style>
 </head>
@@ -72,6 +93,7 @@ window.segna = function (quanti) {
     });
     var linea = document.querySelector("#linea span");
     if (linea && righe.length) { linea.style.width = Math.max(6, Math.round(quanti * 100 / righe.length)) + "%"; }
+    if (righe.length && quanti >= righe.length) { document.querySelector(".attesa-piena").classList.add("si-spegne"); }
 };
 </script>
 </body>

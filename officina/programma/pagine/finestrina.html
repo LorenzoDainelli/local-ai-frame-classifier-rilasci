@@ -36,6 +36,28 @@ body { overflow: hidden; user-select: none; }
 .passi li.adesso .spunta { border-color: var(--accento); box-shadow: 0 0 0 3px var(--alone); }
 .linea { width: 280px; height: 3px; border-radius: 999px; background: var(--pozzo); overflow: hidden; }
 .linea span { display: block; height: 100%; width: 6%; border-radius: inherit; background: var(--accento); transition: width 1s var(--uscita); }
+.passi li { transition: color var(--passo) var(--uscita), transform var(--passo) var(--uscita), opacity var(--passo) var(--uscita); }
+.passi li:not(.fatto):not(.adesso) { opacity: .62; }
+.passi li.adesso { transform: translateX(3px); }
+.passi li.adesso .spunta { animation: spunta-respira 1.6s ease-in-out infinite; }
+@keyframes spunta-respira { 0%, 100% { box-shadow: 0 0 0 3px var(--alone); } 50% { box-shadow: 0 0 0 6px transparent; } }
+.spunta path { stroke-dasharray: 22; stroke-dashoffset: 22; }
+.passi li.fatto .spunta { animation: spunta-scatta 420ms cubic-bezier(.2, 1.5, .4, 1) both; }
+.passi li.fatto .spunta path { stroke-dashoffset: 0; transition: stroke-dashoffset 360ms 120ms var(--uscita); }
+@keyframes spunta-scatta { from { transform: scale(.55); } to { transform: none; } }
+.linea span { position: relative; overflow: hidden; }
+.linea span::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--su-accento) 55%, transparent), transparent); transform: translateX(-100%); animation: linea-luccica 1.8s ease-in-out infinite; }
+@keyframes linea-luccica { to { transform: translateX(100%); } }
+.esce { animation: esce 520ms var(--uscita) forwards !important; }
+@keyframes esce { to { opacity: 0; transform: scale(.97) translateY(-6px); filter: blur(2px); } }
+.si-spegne { animation: si-spegne 1.6s 400ms var(--uscita) forwards; }
+@keyframes si-spegne { to { opacity: .55; transform: scale(.985); } }
+@media (prefers-reduced-motion: reduce) {
+    .passi li.adesso .spunta, .passi li.fatto .spunta, .linea span::after, .esce, .si-spegne { animation: none !important; }
+    .passi li.adesso { transform: none; }
+    .spunta path { stroke-dashoffset: 0; }
+}
+.scena-apertura { width: 280px; min-height: 110px; display: grid; place-items: center; }
 .passo p { margin: 0; max-width: 60ch; }
 .scelte { display: flex; flex-direction: column; gap: var(--s2); margin-top: auto; }
 .scelte .tasto-comando { width: 100%; justify-content: flex-start; height: auto; min-height: var(--altezza-comando); padding: var(--s3) var(--s4); white-space: normal; text-align: left; }
@@ -352,7 +374,7 @@ input.campo { user-select: text; }
     </section>
 
     <section class="passo al-centro" data-passo="apertura" hidden>
-        <span class="fotina grande sveglia" aria-hidden="true"><span class="cornice"><span class="monte"></span><span class="monte due"></span><span class="sole"></span><span class="occhi"><span></span><span></span></span></span></span>
+        <div class="scena-apertura" data-scena-apertura aria-hidden="true"><span class="fotina grande sveglia"><span class="cornice"><span class="monte"></span><span class="monte due"></span><span class="sole"></span><span class="occhi"><span></span><span></span></span></span></span></div>
         <h1 data-campo="titolo-apertura">Apro il tuo archivio</h1>
         <ol class="passi" data-passi>
             <li class="adesso"><span class="spunta"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Apro l'archivio</span></li>
@@ -371,6 +393,7 @@ input.campo { user-select: text; }
         </div>
     </section>
 </main>
+<script>{{ scene }}</script>
 <script>
 (function () {
     "use strict";
@@ -615,11 +638,16 @@ input.campo { user-select: text; }
         var sezione = document.querySelector("[data-passo='apertura']");
         var righe = sezione.querySelectorAll("[data-passi] li");
         var linea = sezione.querySelector("[data-linea] span");
+        var scena = sezione.querySelector("[data-scena-apertura]");
+        if (window.FotinaScena && scena) {
+            try { window.FotinaScena.monta(scena, "C", { fermaA: 7.6 }).gioca(0, 7.6); } catch (e) {}
+        }
         sorveglia_apertura = setInterval(function () {
             if (!api() || !api().come_va_l_apertura) { return; }
             api().come_va_l_apertura().then(function (quanti) {
                 righe.forEach(function (r, i) { r.className = i < quanti ? "fatto" : (i === quanti ? "adesso" : ""); });
                 linea.style.width = Math.max(6, Math.round(quanti * 100 / righe.length)) + "%";
+                if (quanti >= righe.length) { setTimeout(function () { sezione.classList.add("esce"); }, 450); }
             });
         }, 250);
     }

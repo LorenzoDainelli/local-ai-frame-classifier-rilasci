@@ -63,7 +63,8 @@ def _comune(versione: str) -> dict:
 
 
 def finestrina(versione: str) -> str:
-    return _ambiente().get_template("finestrina.html").render(**_comune(versione))
+    return _ambiente().get_template("finestrina.html").render(
+        **_comune(versione), scene=_script("fotina_scene.js"))
 
 
 def attesa(titolo: str, detto: str = "", gira: bool = True, versione: str = "",
