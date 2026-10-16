@@ -196,11 +196,12 @@ def controlla_la_firma_di_microsoft(file: Path) -> None:
                "Write-Output $f.Status; Write-Output $f.SignerCertificate.Subject")
     uscita = subprocess.run([str(powershell), "-NoProfile", "-NonInteractive", "-Command", comando],
                             capture_output=True, text=True, check=True,
-                            env={**os.environ, "FILE_DA_CONTROLLARE": str(file)})
+                            env={**{k: v for k, v in os.environ.items() if k.upper() != "PSMODULEPATH"},
+                                 "FILE_DA_CONTROLLARE": str(file)})
     righe = [r.strip() for r in uscita.stdout.splitlines() if r.strip()]
     if len(righe) < 2 or righe[0] != "Valid" or FIRMATARIO_DI_WEBVIEW2 not in righe[1]:
         file.unlink(missing_ok=True)
-        raise SystemExit(f"{file.name} non porta una firma valida di Microsoft: {righe}")
+        raise SystemExit(f"{file.name} non porta una firma valida di Microsoft: {righe} {uscita.stderr.strip()[:500]}")
 
 
 def impronta(file: Path) -> str:
