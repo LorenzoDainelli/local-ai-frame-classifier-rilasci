@@ -41,6 +41,8 @@ def _tutti_i_lavori() -> list:
 
 _DOVE_SI_GUARDA = {
     "le impronte": "/intelligenza", "i modelli": "/stato", "i volti": "/intelligenza",
+    "i corpi": "/intelligenza", "chi è senza volto": "/intelligenza", "l'intelligenza artificiale": "/intelligenza",
+    "i doppioni": "/doppioni",
     "le scritte nelle foto": "/intelligenza", "le facce insegnate": "/persone",
     "le foto raccolte in un posto solo": "/importazione", "la misura": "/stato#misura", "la copia del video": "/miglioramento",
     "il controllo degli scatti": "/miglioramento#qualita",
