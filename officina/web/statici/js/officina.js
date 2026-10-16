@@ -963,7 +963,7 @@ async function vaiA(scattoId, verso = 0, fresco = false) {
         const pezzo = await prendiDalServer(scattoId);
         if (giro !== st.giro) return;
         mostra(pezzo, verso);
-        mandaModulo(`/api/officina/${scattoId}/qui`, {}).catch(() => {});
+        mandaModulo(`/api/officina/${scattoId}/qui`, { gruppo: st.filtro.gruppo || "" }).catch(() => {});
         preparaVicini();
     } catch (errore) {
         if (giro === st.giro) segnala(errore.message);

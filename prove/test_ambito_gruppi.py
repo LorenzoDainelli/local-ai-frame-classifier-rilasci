@@ -79,3 +79,47 @@ def test_la_tendina_si_ricorda_la_scelta(archivio):
     assert "Su cosa lavora" in cliente.get("/miglioramento").text
     assert cliente.post("/ambito/altro", data={"gruppo": "1"},
                         follow_redirects=False).status_code == 303
+
+
+def _scatto_di_partenza(testo: str) -> int:
+    import json
+    import re
+
+    dati = re.search(r'id="dati-officina" type="application/json">(.*?)</script>', testo, re.S)
+    return json.loads(dati.group(1))["partenza"]["scatto"]["id"]
+
+
+def test_etichetta_ricorda_gruppo_e_ultimo_scatto(archivio, due_cartelle):
+    from officina.modello import scatti
+    from officina.modello.scatti import Filtro
+    from officina.web import server
+    from officina.web.strade import comune
+
+    galleria, altra = due_cartelle
+    connessione = archivio.connessione
+    gruppo_id = gruppi.trova_o_crea(connessione, "Gruppo finto")
+    scansione.aggiungi_cartella(connessione, altra, gruppo_id)
+    connessione.commit()
+    motore = Motore(archivio)
+    motore.prepara([galleria, altra])
+    assert motore.esegui().stato == "finita"
+    nel_gruppo = scatti.soli_numeri(connessione, Filtro(gruppo=gruppo_id))
+    fuori = [n for n in scatti.soli_numeri(connessione, Filtro()) if n not in nel_gruppo]
+    assert len(nel_gruppo) >= 3 and fuori
+
+    comune.bottega = proposte.Bottega()
+    cliente = TestClient(server.app, client=("127.0.0.1", 51000))
+    cliente.post("/ambito/intelligenza", data={"gruppo": str(gruppo_id), "dove": "/intelligenza"})
+    cliente.post("/ambito/etichetta", data={"gruppo": str(gruppo_id), "dove": "/officina"})
+    cliente.post(f"/api/officina/{nel_gruppo[2]}/qui", data={"gruppo": str(gruppo_id)})
+    cliente.post(f"/api/officina/{fuori[0]}/qui", data={"gruppo": ""})
+
+    pagina = cliente.get("/officina")
+    assert f'value="{gruppo_id}" selected' in pagina.text
+    assert _scatto_di_partenza(pagina.text) == nel_gruppo[2]
+
+    cliente.post("/ambito/etichetta", data={"gruppo": "", "dove": "/officina"})
+    assert gruppi.scelto(connessione, "intelligenza") == gruppo_id
+    pagina = cliente.get("/officina")
+    assert f'value="{gruppo_id}" selected' not in pagina.text
+    assert _scatto_di_partenza(pagina.text) == fuori[0]

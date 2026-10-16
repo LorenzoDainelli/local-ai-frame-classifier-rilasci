@@ -28,11 +28,12 @@ def pagina_officina(richiesta: Request, scatto: int | None = None):
         filtro = scatti.risolvi_simili(connessione, filtro)
         quanti = scatti.conta(connessione, filtro)
         if scatto is None:
-            salvato = archivio.stato("ultimo_scatto")
-            if salvato and scatti.per_id(connessione, int(salvato)) is not None:
+            salvato = archivio.stato(_dove_si_ricorda(filtro.gruppo))
+            if salvato and int(salvato) in scatti.soli_numeri(connessione, filtro):
                 scatto = int(salvato)
         if scatto is None or scatti.per_id(connessione, scatto) is None:
-            primi = scatti.pagina(connessione, filtro, 0, 1)
+            primi = (scatti.pagina(connessione, filtro.copia_con(senza_etichetta=True), 0, 1)
+                     or scatti.pagina(connessione, filtro, 0, 1))
             scatto = primi[0]["id"] if primi else None
 
         partenza = None
@@ -53,6 +54,7 @@ def pagina_officina(richiesta: Request, scatto: int | None = None):
     return base.pagine.TemplateResponse(richiesta, "officina.html", {
         **base.comune(richiesta, "officina"),
         **base.ambito_della_pagina(archivio, "etichetta"),
+        "gruppo_ambito": filtro.gruppo,
         "pieno": True,
         "filtro": filtro,
         "quanti": quanti,
@@ -74,6 +76,10 @@ def pagina_officina(richiesta: Request, scatto: int | None = None):
             "non_finiti": non_finiti,
         }),
     })
+
+
+def _dove_si_ricorda(gruppo: int | None) -> str:
+    return f"ultimo_scatto_gruppo_{gruppo}" if gruppo else "ultimo_scatto"
 
 
 def _persone_per_la_pagina(connessione) -> list[dict]:
@@ -118,8 +124,11 @@ def api_officina(richiesta: Request, scatto_id: int):
 
 
 @strada.post("/api/officina/{scatto_id}/qui")
-def api_officina_qui(scatto_id: int):
-    base.ricorda(accesso.aperto(), "ultimo_scatto", scatto_id)
+def api_officina_qui(scatto_id: int, gruppo: str = Form("")):
+    archivio = accesso.aperto()
+    base.ricorda(archivio, "ultimo_scatto", scatto_id)
+    if gruppo.isdecimal() and int(gruppo):
+        base.ricorda(archivio, _dove_si_ricorda(int(gruppo)), scatto_id)
     return {"fatto": True}
 
 

@@ -129,8 +129,8 @@ def _guarda_i_corpi(passata) -> None:
         if fatti >= 3:
             misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / fatti
         comune.lavoro_corpi.numeri = {
-            "fatti": fatti,
-            "totale": avanzamento.totale,
+            "fatti": fatti + avanzamento.gia_fatti,
+            "totale": avanzamento.totale + avanzamento.gia_fatti,
             "corpi": avanzamento.corpi,
             "quanto_manca": misura.quanto_manca(),
         }

@@ -29,6 +29,7 @@ class Avanzamento:
     scatti_con_corpi: int = 0
     volti_collegati: int = 0
     totale: int = 0
+    gia_fatti: int = 0
     motivi: dict[str, int] = field(default_factory=dict)
 
     def a_parole(self) -> str:
@@ -74,10 +75,16 @@ class Passata:
                quanti: int | None = None) -> Avanzamento:
         freno = torcia.Freno(self.intensita, fermato=lambda: self.fermata)
         with self.archivio.lettura() as connessione:
+            piu = gruppi.clausola(connessione, "intelligenza")
             da_fare = [riga["id"] for riga in tutti(
-                connessione, _domanda_da_fare(
-                    "s.id", gruppi.clausola(connessione, "intelligenza")),
+                connessione, _domanda_da_fare("s.id", piu),
                 rilevatore_mod.NOME, self._versione())]
+            guardati = None if piu else uno(
+                connessione,
+                "SELECT count(*) AS q FROM corpi_guardati g JOIN scatti s ON s.id = g.scatto_id "
+                "WHERE s.fuori_archivio = 0 AND g.modello = ? AND g.versione = ?",
+                rilevatore_mod.NOME, self._versione())
+        self.avanzamento.gia_fatti = guardati["q"] if guardati else 0
         if quanti:
             da_fare = da_fare[:quanti]
         self.avanzamento.totale = len(da_fare)

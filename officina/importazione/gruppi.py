@@ -101,13 +101,26 @@ def ricorda_ultimo(connessione: sqlite3.Connection, gruppo_id: int | None) -> No
 def scelto(connessione: sqlite3.Connection, zona: str) -> int | None:
     if zona not in ZONE:
         raise KeyError(zona)
-    return ultimo(connessione)
+    from officina.archivio.database import leggi_impostazione
+
+    valore = leggi_impostazione(connessione, f"{ULTIMO}.{zona}")
+    if valore is None:
+        return ultimo(connessione)
+    try:
+        gruppo_id = int(valore)
+    except (TypeError, ValueError):
+        return None
+    return gruppo_id if gruppo_id and per_id(connessione, gruppo_id) is not None else None
 
 
 def ricorda(connessione: sqlite3.Connection, zona: str, gruppo_id: int | None) -> None:
     if zona not in ZONE:
         raise KeyError(zona)
-    ricorda_ultimo(connessione, gruppo_id)
+    from officina.archivio.database import scrivi_impostazione
+
+    if gruppo_id is not None and per_id(connessione, gruppo_id) is None:
+        gruppo_id = None
+    scrivi_impostazione(connessione, f"{ULTIMO}.{zona}", gruppo_id or 0)
 
 
 def clausola(connessione: sqlite3.Connection, zona: str, colonna: str = "s.id") -> str:
