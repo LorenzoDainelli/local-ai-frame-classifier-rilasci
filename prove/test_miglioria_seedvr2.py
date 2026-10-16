@@ -444,7 +444,7 @@ def test_se_lo_scambio_delle_cartelle_fallisce_la_vecchia_torna(tmp_path, monkey
 
 
 def _hf_finto(monkeypatch, finto, storia, guasto=None) -> list:
-    import huggingface_hub
+    huggingface_hub = pytest.importorskip("huggingface_hub")
 
     presi = []
     versioni = dict(storia)

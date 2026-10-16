@@ -9,6 +9,63 @@ from officina.telefono import cifratura
 
 DATABASE_PER_SCATTO = 1000
 
+IA_DEL_TELEFONO = ("volti", "corpi", "scritte")
+
+
+def ia_in_casa(cartella_modelli) -> tuple[str, ...]:
+    from officina import parole
+    from officina.corpi import rilevatore as corpi
+    from officina.volti import rilevatore as volti
+
+    ci_sono = {"volti": not volti.cosa_manca(cartella_modelli),
+               "corpi": not corpi.cosa_manca(cartella_modelli),
+               "scritte": parole.in_casa(cartella_modelli)}
+    return tuple(k for k in IA_DEL_TELEFONO if ci_sono[k])
+
+
+def _saltato(tipi: tuple[str, ...]) -> str:
+    elenco = ",".join(f"'{t}'" for t in tipi)
+    return (f"EXISTS (SELECT 1 FROM segnalazioni z WHERE z.scatto_id = s.id "
+            f"AND z.tipo IN ({elenco}) AND z.risolta = 0)")
+
+
+def _guardato(ia: str) -> tuple[str, list]:
+    from officina.modello import segnalazioni
+
+    if ia == "volti":
+        from officina.volti import rilevatore
+        tabella, saltato = "volti_guardati", (segnalazioni.VOLTI_NON_LETTI,)
+    elif ia == "corpi":
+        from officina.corpi import rilevatore
+        tabella, saltato = "corpi_guardati", (segnalazioni.CORPI_NON_LETTI,)
+    else:
+        from officina import parole
+        return (f"(EXISTS (SELECT 1 FROM scritte_lette l WHERE l.scatto_id = s.id "
+                f"AND l.modello = ? AND l.versione = ?) "
+                f"OR {_saltato((segnalazioni.NON_SI_APRE,))})",
+                [parole.SCHEDA.nome, parole.SCHEDA.versione])
+    return (f"(EXISTS (SELECT 1 FROM {tabella} g WHERE g.scatto_id = s.id "
+            f"AND g.modello = ? AND g.versione = ?) "
+            f"OR {_saltato(saltato + (segnalazioni.NON_SI_APRE,))})",
+            [rilevatore.NOME, rilevatore.VERSIONE])
+
+
+def condizioni_di_pronto(ia: tuple[str, ...] = ()) -> tuple[list[str], list]:
+    from officina.miglioria import coda
+
+    pezzi = [
+        "EXISTS (SELECT 1 FROM etichette e JOIN nodi n ON n.id = e.nodo_id "
+        "WHERE e.scatto_id = s.id AND e.stato = 'si' AND n.stato = 'attivo')",
+        "NOT EXISTS (SELECT 1 FROM migliorie m WHERE m.scatto_id = s.id "
+        f"AND m.stato IN ({','.join(repr(a) for a in coda.ATTIVE)}))",
+    ]
+    parametri: list = []
+    for chiave in ia:
+        sql, valori = _guardato(chiave)
+        pezzi.append(sql)
+        parametri.extend(valori)
+    return pezzi, parametri
+
 
 @dataclass
 class Selezione:
@@ -89,12 +146,14 @@ def _condizione_persona(persona_id: int) -> tuple[str, list]:
     )
 
 
-def condizioni(connessione, scelta: Selezione) -> tuple[str, list]:
+def condizioni(connessione, scelta: Selezione, ia: tuple[str, ...] = (),
+               pronti: bool = True) -> tuple[str, list]:
+    pronto, parametri = condizioni_di_pronto(ia) if pronti else ([], [])
     pezzi = [
         "s.fuori_archivio = 0",
         "s.sembra_schermata = 0",
+        *pronto,
     ]
-    parametri: list = []
 
     if scelta.nodi:
         alternative = []
@@ -131,8 +190,9 @@ def condizioni(connessione, scelta: Selezione) -> tuple[str, list]:
     return " AND ".join(pezzi), parametri
 
 
-def numeri(connessione, scelta: Selezione) -> list[int]:
-    dove, parametri = condizioni(connessione, scelta)
+def numeri(connessione, scelta: Selezione,
+           ia: tuple[str, ...] = ()) -> list[int]:
+    dove, parametri = condizioni(connessione, scelta, ia)
     righe = tutti(
         connessione,
         f"SELECT s.id FROM scatti s WHERE {dove} "
@@ -154,6 +214,7 @@ class Stima:
     al_giorno: str = ""
     senza_miniatura: int = 0
     file_mancanti: int = 0
+    in_attesa: int = 0
 
     @property
     def peso(self) -> int:
@@ -172,6 +233,8 @@ class Stima:
                          f"({a_misura(self.peso_video)})")
         if self.dal_giorno:
             pezzi.append(f"dal {self.dal_giorno} al {self.al_giorno}")
+        if self.in_attesa:
+            pezzi.append(f"{a_numero(self.in_attesa)} non ancora pronti")
         return " · ".join(pezzi)
 
     def sul_tasto(self, telefono: str) -> str:
@@ -198,9 +261,11 @@ def a_misura(byte: int) -> str:
     return f"{byte} byte"
 
 
-def stima(connessione, scelta: Selezione) -> Stima:
-    dove, parametri = condizioni(connessione, scelta)
+def stima(connessione, scelta: Selezione,
+          ia: tuple[str, ...] = ()) -> Stima:
+    dove, parametri = condizioni(connessione, scelta, ia)
     conto = Stima()
+    tutti_dove, tutti_parametri = condizioni(connessione, scelta, pronti=False)
 
     riga = uno(connessione,
                f"SELECT count(*) AS quanti, "
@@ -212,6 +277,10 @@ def stima(connessione, scelta: Selezione) -> Stima:
         conto.quanti_video = riga["video"] or 0
         conto.dal_giorno = riga["dal"] or ""
         conto.al_giorno = riga["al"] or ""
+
+    riga = uno(connessione, f"SELECT count(*) AS q FROM scatti s WHERE {tutti_dove}",
+               *tutti_parametri)
+    conto.in_attesa = max(0, (riga["q"] if riga else 0) - conto.quanti_scatti)
 
     righe = tutti(
         connessione,

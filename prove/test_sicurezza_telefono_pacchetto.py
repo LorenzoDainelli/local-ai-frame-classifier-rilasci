@@ -6,6 +6,8 @@ import time
 
 import pytest
 
+from prove.conftest import tutto_pronto_per_il_telefono
+
 from officina.archivio.database import tutti
 from officina.errori import ErroreOfficina
 from officina.modello import telefoni
@@ -16,6 +18,7 @@ PAROLA = "tre parole che ricordi"
 
 @pytest.fixture
 def telefono(archivio_pieno):
+    tutto_pronto_per_il_telefono(archivio_pieno)
     with archivio_pieno.scrittura() as connessione:
         return telefoni.crea(connessione, "iPhone", "ios")
 

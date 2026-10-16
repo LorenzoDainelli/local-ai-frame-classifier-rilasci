@@ -249,3 +249,16 @@ def archivio_misurabile(tmp_path, monkeypatch, archivio_con_impronte):
     aperto = accesso.apri("finto")
     yield aperto
     accesso.chiudi(con_copia=False)
+
+
+def tutto_pronto_per_il_telefono(archivio) -> None:
+    from officina.archivio.database import adesso
+
+    with archivio.scrittura() as connessione:
+        connessione.execute(
+            "INSERT INTO nodi (nome, creato_il) VALUES ('pronti_per_il_telefono', ?)",
+            (adesso(),))
+        nodo = connessione.execute("SELECT last_insert_rowid()").fetchone()[0]
+        connessione.execute(
+            "INSERT OR IGNORE INTO etichette (scatto_id, nodo_id, stato, origine, creata_il) "
+            "SELECT id, ?, 'si', 'utente', ? FROM scatti", (nodo, adesso()))

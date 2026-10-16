@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 
 import pytest
+
+from prove.conftest import tutto_pronto_per_il_telefono
 from fastapi.testclient import TestClient
 
 from officina.archivio.database import adesso, uno
@@ -18,6 +20,7 @@ PAROLA = "tre parole che ricordi"
 def cliente(archivio_pieno, monkeypatch):
     from officina.web.server import app
 
+    tutto_pronto_per_il_telefono(archivio_pieno)
     monkeypatch.setattr(telefono_web, "in_corso", telefono_web.InCorso())
     return TestClient(app, client=("127.0.0.1", 51000))
 

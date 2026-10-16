@@ -4,6 +4,8 @@ import sqlite3
 
 import pytest
 
+from prove.conftest import tutto_pronto_per_il_telefono
+
 from officina.archivio.accesso import Archivio
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
@@ -16,6 +18,7 @@ PAROLA = "tre parole che ricordi"
 
 @pytest.fixture
 def telefono(archivio_pieno):
+    tutto_pronto_per_il_telefono(archivio_pieno)
     with archivio_pieno.scrittura() as connessione:
         return telefoni.crea(connessione, "iPhone", "ios")
 

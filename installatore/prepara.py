@@ -8,6 +8,8 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -34,6 +36,8 @@ LIBRERIE_DI_VISUAL_CPP = (
 )
 
 NON_SERVONO = ("__pycache__", "*.pyc")
+
+SOLO_SORGENTE = {"proxy-tools": "proxy_tools"}
 
 
 def scarica(indirizzo: str, dove: Path) -> Path:
@@ -91,13 +95,68 @@ def prepara_python(versione: str, dove: Path) -> None:
     (dove / "Lib" / "site-packages").mkdir(parents=True, exist_ok=True)
 
 
+def dividi_le_librerie(testo: str) -> tuple[str, dict[str, tuple[str, set[str]]]]:
+    tenute: list[str] = []
+    a_parte: dict[str, tuple[str, set[str]]] = {}
+    blocco: list[str] = []
+    for riga in testo.splitlines() + [""]:
+        if blocco and (not riga.startswith((" ", "\t")) or not riga.strip()):
+            nome, _, versione = blocco[0].split(" ")[0].partition("==")
+            if nome.lower() in SOLO_SORGENTE:
+                impronte = set(re.findall(r"--hash=sha256:([0-9a-f]{64})", " ".join(blocco)))
+                a_parte[nome.lower()] = (versione, impronte)
+            else:
+                tenute.extend(blocco)
+            blocco = []
+        if riga and not riga.startswith(("#", " ", "\t")) and "==" in riga:
+            blocco = [riga]
+        elif blocco:
+            blocco.append(riga)
+        else:
+            tenute.append(riga)
+    return "\n".join(tenute).strip() + "\n", a_parte
+
+
+def metti_dal_sorgente(nome: str, versione: str, impronte: set[str], sito: Path) -> None:
+    with urllib.request.urlopen(f"https://pypi.org/pypi/{nome}/{versione}/json", timeout=60) as risposta:
+        file = json.load(risposta)["urls"]
+    giusto = next((f for f in file if f["packagetype"] == "sdist"
+                   and f["digests"]["sha256"] in impronte), None)
+    if giusto is None:
+        raise SystemExit(f"{nome} {versione}: nessun sorgente con l'impronta fissata")
+    with tempfile.TemporaryDirectory() as cartella:
+        archivio = scarica(giusto["url"], Path(cartella) / giusto["filename"])
+        if impronta(archivio) not in impronte:
+            raise SystemExit(f"{nome} {versione}: l'impronta del sorgente non torna")
+        modulo = SOLO_SORGENTE[nome]
+        with tarfile.open(archivio) as tar:
+            for membro in tar.getmembers():
+                pezzi = Path(membro.name).parts
+                if len(pezzi) < 3 or pezzi[1] != modulo or not membro.isfile():
+                    continue
+                if ".." in pezzi or not membro.name.endswith(".py"):
+                    continue
+                destinazione = sito.joinpath(*pezzi[1:])
+                destinazione.parent.mkdir(parents=True, exist_ok=True)
+                with tar.extractfile(membro) as dentro, open(destinazione, "wb") as fuori:
+                    shutil.copyfileobj(dentro, fuori)
+        if not (sito / modulo / "__init__.py").is_file():
+            raise SystemExit(f"{nome} {versione}: nel sorgente non c'è {modulo}")
+
+
 def installa_le_librerie(dove: Path) -> None:
     sito = dove / "Lib" / "site-packages"
-    subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir",
-                    "--disable-pip-version-check", "--no-warn-script-location",
-                    "--require-hashes", "--only-binary", ":all:", "--no-deps",
-                    "--target", str(sito), "-r", str(LIBRERIE_BLOCCATE)],
-                   check=True)
+    tenute, a_parte = dividi_le_librerie(LIBRERIE_BLOCCATE.read_text(encoding="utf-8"))
+    with tempfile.TemporaryDirectory() as cartella:
+        elenco = Path(cartella) / "librerie.txt"
+        elenco.write_text(tenute, encoding="utf-8")
+        subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir",
+                        "--disable-pip-version-check", "--no-warn-script-location",
+                        "--require-hashes", "--only-binary", ":all:", "--no-deps",
+                        "--target", str(sito), "-r", str(elenco)],
+                       check=True)
+    for nome, (versione, impronte) in a_parte.items():
+        metti_dal_sorgente(nome, versione, impronte, sito)
     for cartella in sito.rglob("__pycache__"):
         shutil.rmtree(cartella, ignore_errors=True)
     for inutile in ("bin", "Scripts"):

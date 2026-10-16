@@ -140,9 +140,11 @@ class Travaso:
         self.fermati = threading.Event()
         self._chiave: cifratura.Chiave | None = None
         self._carta: formato.Carta | None = None
+        self._ia: tuple[str, ...] = ()
 
 
     def prepara(self) -> Piano:
+        self._ia = selezione.ia_in_casa(self.archivio.dove.modelli)
         with self.archivio.lettura() as connessione:
             riga = telefoni.per_id(connessione, self.telefono_id)
             if riga is None:
@@ -150,7 +152,7 @@ class Travaso:
             scelta = selezione.Selezione.da_json(riga["selezione"])
             piano = Piano(telefono=riga["nome"], cartella=self.cartella,
                           scelta=scelta)
-            piano.stima = selezione.stima(connessione, scelta)
+            piano.stima = selezione.stima(connessione, scelta, self._ia)
             piano.ripresa = bool(
                 telefoni.travaso_lasciato_a_meta(connessione, self.telefono_id))
 
@@ -178,7 +180,7 @@ class Travaso:
 
     def _cosa_ci_va(self, connessione, scelta: selezione.Selezione,
                     piano: Piano, riuso: dict[str, str]) -> list[Compito]:
-        scelti = selezione.numeri(connessione, scelta)
+        scelti = selezione.numeri(connessione, scelta, self._ia)
         compiti: list[Compito] = []
         presi: set[str] = set()
         miniature: dict[str, Compito] = {}

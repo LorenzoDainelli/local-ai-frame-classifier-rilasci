@@ -11,6 +11,9 @@ from officina.telefono.formato import Carta
 
 VETTORI = Path(__file__).resolve().parents[1] / "iphone/VisoreKit/Tests/VisoreKitTests/Vettori"
 
+if not VETTORI.is_dir():
+    pytest.skip("l'app dell'iPhone sta nel suo deposito", allow_module_level=True)
+
 
 def test_i_vettori_dell_iphone_si_aprono_col_programma():
     carta = Carta.leggi(VETTORI)

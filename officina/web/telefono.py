@@ -101,8 +101,9 @@ def voci_delle_persone(connessione, scelta: selezione.Selezione) -> list[dict]:
 
 
 def quante_se_ne_vanno(connessione, telefono_id: int,
-                       scelta: selezione.Selezione) -> int:
-    dove, parametri = selezione.condizioni(connessione, scelta)
+                       scelta: selezione.Selezione,
+                       ia: tuple[str, ...] = ()) -> int:
+    dove, parametri = selezione.condizioni(connessione, scelta, ia)
     riga = uno(
         connessione,
         f"SELECT count(*) AS quanti FROM pacchetto_file p "
@@ -234,13 +235,14 @@ def avvisi(connessione, telefono, stima: selezione.Stima, se_ne_vanno: int,
 
 
 def conto(archivio, telefono_id: int) -> dict:
+    ia = selezione.ia_in_casa(archivio.dove.modelli)
     with archivio.lettura() as connessione:
         telefono = telefoni.per_id(connessione, telefono_id)
         if telefono is None:
             raise ErroreOfficina("Questo telefono non c'è più.")
         scelta = scelta_di(telefono)
-        stima = selezione.stima(connessione, scelta)
-        se_ne_vanno = quante_se_ne_vanno(connessione, telefono_id, scelta)
+        stima = selezione.stima(connessione, scelta, ia)
+        se_ne_vanno = quante_se_ne_vanno(connessione, telefono_id, scelta, ia)
         identificativo = telefoni.identificativo_se_c_e(connessione)
         detti = avvisi(connessione, telefono, stima, se_ne_vanno,
                        archivio.parola_del_forziere, identificativo)

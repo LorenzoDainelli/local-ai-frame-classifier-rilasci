@@ -436,3 +436,51 @@ def test_il_file_di_lavoro_non_resta_in_giro(piena):
     lavoro = piena.dove.radice / "lavoro"
     _costruisci(piena, quanti=3)
     assert not list(lavoro.glob("*.sqlite"))
+
+
+def _uno_scatto(connessione) -> int:
+    return uno(connessione, "SELECT id FROM scatti WHERE fuori_archivio = 0 "
+               "AND sembra_schermata = 0 ORDER BY id LIMIT 1")["id"]
+
+
+def test_uno_scatto_senza_etichetta_aspetta(piena):
+    connessione = piena.connessione
+    scatto = _uno_scatto(connessione)
+    connessione.execute("DELETE FROM etichette WHERE scatto_id = ?", (scatto,))
+    assert scatto not in selezione.numeri(connessione, selezione.Selezione())
+    conto = selezione.stima(connessione, selezione.Selezione())
+    assert conto.in_attesa >= 1
+    assert "non ancora pronti" in conto.a_parole()
+
+
+@pytest.mark.parametrize("stato, entra", [
+    ("in_coda", False), ("in_lavoro", False), ("da_rivedere", False),
+    ("in_scambio", False), ("approvata", True), ("rifiutata", True)])
+def test_uno_scatto_in_miglioramento_aspetta(piena, stato, entra):
+    connessione = piena.connessione
+    scatto = _uno_scatto(connessione)
+    file_id = uno(connessione, "SELECT id FROM file_media WHERE scatto_id = ?",
+                  scatto)["id"]
+    connessione.execute(
+        "INSERT INTO migliorie (file_id, scatto_id, stato, impronta_originale, "
+        "percorso_originale, messa_il) VALUES (?, ?, ?, 'x', 'x', 'adesso')",
+        (file_id, scatto, stato))
+    assert (scatto in selezione.numeri(connessione, selezione.Selezione())) is entra
+
+
+def test_l_ia_conta_solo_se_i_suoi_modelli_ci_sono(piena):
+    from officina.volti import rilevatore
+
+    connessione = piena.connessione
+    scatto = _uno_scatto(connessione)
+    connessione.execute("DELETE FROM volti_guardati WHERE scatto_id = ?", (scatto,))
+    assert scatto in selezione.numeri(connessione, selezione.Selezione())
+    assert scatto not in selezione.numeri(connessione, selezione.Selezione(), ("volti",))
+    connessione.execute(
+        "INSERT INTO volti_guardati (scatto_id, modello, versione, guardato_il) "
+        "VALUES (?, ?, ?, 'adesso')", (scatto, rilevatore.NOME, rilevatore.VERSIONE))
+    assert scatto in selezione.numeri(connessione, selezione.Selezione(), ("volti",))
+
+
+def test_senza_modelli_non_si_aspetta_nessuna_ia(tmp_path):
+    assert selezione.ia_in_casa(tmp_path) == ()
