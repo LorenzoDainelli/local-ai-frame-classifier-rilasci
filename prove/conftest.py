@@ -121,7 +121,7 @@ def il_giro_non_resta_aperto():
 
 
 @pytest.fixture(autouse=True)
-def windows_hello_non_chiede_nulla(request, monkeypatch):
+def windows_non_chiede_nulla(request, monkeypatch):
     from officina.programma import sigillo
 
     if request.module.__name__.endswith("test_sigillo"):
@@ -131,7 +131,12 @@ def windows_hello_non_chiede_nulla(request, monkeypatch):
         def c_e(self) -> bool:
             return False
 
+    class SenzaWindows(sigillo.PortaWindows):
+        def c_e(self) -> bool:
+            return False
+
     monkeypatch.setattr(sigillo, "PortaHello", SenzaHello)
+    monkeypatch.setattr(sigillo, "PortaWindows", SenzaWindows)
 
 
 @pytest.fixture(autouse=True, scope="session")
