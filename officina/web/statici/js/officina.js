@@ -78,8 +78,6 @@ const st = {
     persone: dati.persone || [],
     nonFiniti: dati.non_finiti ?? null,
     cursore: 0,
-    fuoco: null,
-    colonne: 3,
     vista: { x: 20, y: 20, k: 1 },
     recenti: leggi("eti-recenti", []),
     appunti: {},
@@ -261,29 +259,7 @@ function larghezza(n) {
 }
 
 function finestra() {
-    const fuoco = st.fuoco !== null ? nodo(st.fuoco) : null;
-    if (st.fuoco !== null && !fuoco) st.fuoco = null;
-    if (fuoco) {
-        const limite = fuoco.prof + st.colonne - 1;
-        return { inizio: fuoco.prof, prime: [fuoco.id], aperto: (n) => !foglia(n) && n.prof < limite };
-    }
-    const aperto = (n) => !foglia(n);
-    let fondo = 0;
-    const giro = (ids) => ids.forEach((id) => {
-        const n = nodo(id);
-        fondo = Math.max(fondo, n.prof);
-        if (aperto(n)) giro(n.figli);
-    });
-    giro(radici());
-    const inizio = Math.max(0, fondo - (st.colonne - 1));
-    const prime = [];
-    const scendi = (ids) => ids.forEach((id) => {
-        const n = nodo(id);
-        if (n.prof === inizio) prime.push(n.id);
-        else if (aperto(n)) scendi(n.figli);
-    });
-    scendi(radici());
-    return { inizio, prime, aperto };
+    return { inizio: 0, prime: radici(), aperto: (n) => !foglia(n) };
 }
 
 function curva(x1, y1, x2, y2) {
@@ -398,15 +374,6 @@ function disegnaAlbero() {
 let accesoSu = null;
 let apertoOra = (n) => !foglia(n);
 
-function vaiDa(id) {
-    st.fuoco = id;
-    st.cursore = 0;
-    st.vista.x = 20;
-    st.vista.y = 20;
-    disegnaAlbero();
-    accendiPercorso(null);
-}
-
 function accendiPercorso(id) {
     const mondo = $("mondo");
     accesoSu = id;
@@ -444,7 +411,6 @@ function mostraCursore() {
 function apriFinoA(id) {
     const n = nodo(id);
     if (!n) return;
-    if (st.fuoco !== null && !percorso(n).some((x) => x.id === st.fuoco)) st.fuoco = null;
     percorso(n).forEach((x) => { if (!foglia(x)) st.aperti.add(x.id); });
     ricorda(st.parte === 2 ? "eti-aperti-luoghi" : "eti-aperti", [...st.aperti]);
 }
@@ -593,7 +559,6 @@ function cambiaParte(parte) {
         st.recentiDi[st.parte] = st.recenti;
     }
     st.parte = parte;
-    st.fuoco = null;
     $("cerca").value = "";
     $("risultati").hidden = true;
     $("cerca").placeholder = ["Cerca un nodo…  (Ctrl+F o /)", "Cerca una persona…  (Ctrl+F o /)", "Cerca un luogo…  (Ctrl+F o /)"][parte];
@@ -1306,7 +1271,7 @@ function scampa(testo) {
 let trascinato = false;
 
 document.addEventListener("click", (evento) => {
-    const t = evento.target.closest("[data-nodo],[data-piu],[data-chiudi],[data-recente],[data-pmio],[data-pia],[data-altre],[data-ris],[data-quadro],[data-persona],[data-togli-persona],[data-ripasso],[data-parte],[data-gente],[data-nessuna],[data-nonso],[data-corpo]");
+    const t = evento.target.closest("[data-nodo],[data-piu],[data-recente],[data-pmio],[data-pia],[data-altre],[data-ris],[data-quadro],[data-persona],[data-togli-persona],[data-ripasso],[data-parte],[data-gente],[data-nessuna],[data-nonso],[data-corpo]");
     if (!t) return;
     if (trascinato && t.closest("#tela")) return;
     const d = t.dataset;
@@ -1315,11 +1280,9 @@ document.addEventListener("click", (evento) => {
         st.cursore = Math.max(0, ordine.indexOf(n.id));
         const sulRamo = evento.target.closest(".ramo") !== null;
         if (foglia(n)) giraEtichetta(n.id);
-        else if (!apertoOra(n) && (sulRamo || !sceglibile(n))) vaiDa(n.id);
         else if (sceglibile(n) && !sulRamo) giraEtichetta(n.id);
         else aCursore(n.id);
     } else if (d.piu) nuovoNodo(Number(d.piu));
-    else if (d.chiudi) vaiDa(Number(d.chiudi));
     else if (d.recente) { const id = Number(d.recente); apriFinoA(id); metti(id); }
     else if (d.pmio) togli(Number(d.pmio), d.di !== undefined ? Number(d.di) : st.parte);
     else if (d.pia) metti(Number(d.pia), d.di !== undefined ? Number(d.di) : st.parte);
@@ -1364,12 +1327,6 @@ $("b-intero").addEventListener("click", () => intero(!st.intero));
 $("b-cuore").addEventListener("click", giraCuore);
 $("b-stella").addEventListener("click", giraStella);
 $("z-piu").addEventListener("click", () => { st.vista.k = Math.min(2, st.vista.k * 1.15); mettiVista(); });
-$("colonne").addEventListener("click", () => {
-    st.colonne = st.colonne === 3 ? 5 : 3;
-    $("colonne").textContent = `${st.colonne} colonne`;
-    $("colonne").setAttribute("aria-pressed", String(st.colonne === 5));
-    disegnaAlbero();
-});
 $("z-meno").addEventListener("click", () => { st.vista.k = Math.max(0.4, st.vista.k / 1.15); mettiVista(); });
 $("luogo-in-cima").addEventListener("click", () => nuovoNodo(null));
 $("metti-persona").addEventListener("click", () => {
@@ -1500,8 +1457,25 @@ document.addEventListener("keydown", (evento) => {
 (function trascinaAlbero() {
     const tela = $("tela");
     let da = null;
+    let meta = null;
+    const passo = () => {
+        if (!meta) return;
+        const dx = meta.x - st.vista.x;
+        const dy = meta.y - st.vista.y;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) { st.vista.x = meta.x; st.vista.y = meta.y; meta = null; }
+        else { st.vista.x += dx * 0.25; st.vista.y += dy * 0.25; requestAnimationFrame(passo); }
+        mettiVista();
+    };
+    const scivola = (dx, dy) => {
+        const fermo = !meta;
+        meta = meta || { x: st.vista.x, y: st.vista.y };
+        meta.x += dx;
+        meta.y += dy;
+        if (fermo) requestAnimationFrame(passo);
+    };
     tela.addEventListener("pointerdown", (evento) => {
         if (evento.button !== 0 || evento.target.closest(".et-zoom, .et-angolo")) return;
+        meta = null;
         da = { x: evento.clientX, y: evento.clientY, vx: st.vista.x, vy: st.vista.y };
         trascinato = false;
     });
@@ -1510,7 +1484,7 @@ document.addEventListener("keydown", (evento) => {
         const dx = evento.clientX - da.x;
         const dy = evento.clientY - da.y;
         if (Math.abs(dx) + Math.abs(dy) > 4) { trascinato = true; tela.classList.add("trascina"); }
-        if (trascinato) { st.vista.x = da.vx + dx; st.vista.y = da.vy + dy; mettiVista(); }
+        if (trascinato) { meta = null; st.vista.x = da.vx + dx; st.vista.y = da.vy + dy; mettiVista(); }
     });
     window.addEventListener("pointerup", () => {
         da = null;
@@ -1520,6 +1494,7 @@ document.addEventListener("keydown", (evento) => {
     tela.addEventListener("wheel", (evento) => {
         evento.preventDefault();
         if (evento.ctrlKey) {
+            meta = null;
             const r = tela.getBoundingClientRect();
             const mx = evento.clientX - r.left;
             const my = evento.clientY - r.top;
@@ -1528,11 +1503,11 @@ document.addEventListener("keydown", (evento) => {
             st.vista.x = mx - (mx - st.vista.x) * dopo / prima;
             st.vista.y = my - (my - st.vista.y) * dopo / prima;
             st.vista.k = dopo;
-        } else {
-            st.vista.y -= evento.deltaY;
-            st.vista.x -= evento.deltaX;
+            mettiVista();
+            return;
         }
-        mettiVista();
+        const orizzontale = evento.shiftKey && !evento.deltaX;
+        scivola(orizzontale ? -evento.deltaY : -evento.deltaX, orizzontale ? 0 : -evento.deltaY);
     }, { passive: false });
 }());
 

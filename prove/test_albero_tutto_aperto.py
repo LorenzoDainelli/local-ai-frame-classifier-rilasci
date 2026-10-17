@@ -21,7 +21,7 @@ def _ramo_profondo(connessione) -> list[int]:
     return catena
 
 
-def test_i_nomi_arancio_sopra_l_albero_portano_al_nodo(archivio_pieno):
+def test_albero_tutto_aperto_e_si_scorre_di_lato(archivio_pieno):
     from officina.web.server import app
 
     catena = _ramo_profondo(archivio_pieno.connessione)
@@ -46,21 +46,17 @@ def test_i_nomi_arancio_sopra_l_albero_portano_al_nodo(archivio_pieno):
         pagina.route("http://prova/**", passa)
         pagina.goto("http://prova/officina")
         pagina.wait_for_selector(f'[data-nodo="{catena[-1]}"]')
-        assert pagina.locator(f'[data-nodo="{catena[0]}"]').count() == 0
-        briciola = pagina.locator(f'.et-briciola [data-chiudi="{catena[1]}"]').first
-        briciola.click()
-        pagina.wait_for_selector(f'[data-nodo="{catena[1]}"]')
-        assert pagina.locator(f'[data-nodo="{catena[-1]}"]').count() == 0
-        for _ in range(4):
-            if pagina.locator(f'[data-nodo="{catena[-1]}"]').count():
-                break
-            ultimo = pagina.locator(".et-nodo .ramo", has_text="+").last
-            quale = ultimo.locator("xpath=..").get_attribute("data-nodo")
-            ultimo.click()
-            pagina.wait_for_function(
-                "(id) => !document.querySelector(`.et-briciola [data-chiudi='${id}']`)"
-                " && document.querySelector(`.et-briciola`)", arg=quale)
-        assert pagina.locator(f'[data-nodo="{catena[-1]}"]').count() == 1
-        pagina.locator(f'.et-briciola [data-chiudi="{catena[0]}"]').first.click()
-        pagina.wait_for_selector(f'[data-nodo="{catena[0]}"]')
+        for quale in catena:
+            assert pagina.locator(f'[data-nodo="{quale}"]').count() == 1
+        assert pagina.locator("#colonne").count() == 0
+        assert pagina.locator(".et-briciola").count() == 0
+        prima = pagina.evaluate("getComputedStyle(document.getElementById('mondo')).transform")
+        pagina.mouse.move(700, 450)
+        pagina.keyboard.down("Shift")
+        pagina.mouse.wheel(0, 300)
+        pagina.keyboard.up("Shift")
+        pagina.wait_for_function(
+            "(prima) => getComputedStyle(document.getElementById('mondo')).transform !== prima", arg=prima)
+        dopo = pagina.evaluate("new DOMMatrix(getComputedStyle(document.getElementById('mondo')).transform).e")
+        assert dopo < 20
         browser.close()

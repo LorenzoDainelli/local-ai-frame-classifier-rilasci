@@ -187,21 +187,15 @@
 
 .et-nodo .ramo { font-size: 11px; color: var(--tenue); border: 1px solid var(--linea-forte); border-radius: 4px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex: none; }
 .et-nodo.et-sopra-mio .ramo { color: var(--accento); }
-.et-mondo.con-percorso .et-nodo:not(.et-acceso), .et-mondo.con-percorso .et-briciola:not(.et-accesa) { opacity: .38; }
+.et-mondo.con-percorso .et-nodo:not(.et-acceso) { opacity: .38; }
 .et-mondo.con-percorso .et-filo:not(.et-acceso) { opacity: .25; }
 .et-mondo.con-percorso .et-filo.et-acceso { stroke-width: 2.5; }
 .et-mondo.con-percorso .et-filo.et-acceso:not(.et-mio):not(.et-ia) { stroke: var(--attenuato); }
 .et-mondo.con-percorso .et-nodo.et-acceso:not(.et-mio) { border-color: var(--ink); }
 .et-piu { position: absolute; width: 18px; height: 18px; z-index: 2; border: 1px dashed var(--tenue); border-radius: 6px; color: var(--tenue); display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; background: var(--laterale); }
 .et-piu:hover { border-color: var(--accento); color: var(--accento); }
-.et-briciola { position: absolute; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; transition: opacity var(--gesto); }
-.et-briciola button { background: transparent; border: 0; color: var(--accento); font: 12px/1.4 var(--sans); cursor: pointer; padding: 1px 4px; border-radius: 4px; white-space: nowrap; }
-.et-briciola button:hover { background: var(--superficie-alta); }
-.et-briciola button::after { content: " ›"; color: var(--tenue); }
 .et-zoom { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px; }
 .et-angolo { position: absolute; right: 10px; top: 10px; z-index: 3; }
-.et-colonne { height: 28px; padding: 0 10px; border-radius: 7px; background: var(--superficie); border: 1px solid var(--linea-forte); color: var(--ink); font: 12px/1 var(--sans); cursor: pointer; }
-.et-colonne[aria-pressed="true"] { border-color: var(--accento); color: var(--accento); }
 .et-zoom button { width: 28px; height: 28px; border-radius: 7px; background: var(--superficie); border: 1px solid var(--linea-forte); color: var(--ink); cursor: pointer; }
 .et-bordo { background: var(--linea); cursor: col-resize; }
 .et-bordo:hover, .et-bordo.attivo { background: var(--accento); }
