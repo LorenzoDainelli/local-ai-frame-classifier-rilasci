@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import Callable
 
 from officina import istruzioni, registro
-from officina.archivio.database import tutti
+from officina.archivio.database import tutti, uno
 from officina.descrittori import torcia
 from officina.errori import ErroreOfficina
 from officina.importazione import gruppi
-from officina.stanza import da3, vggt
+from officina.stanza import da3, dettaglio, versioni, vggt
 
-VERSIONE = "1-vggt-omega-da3"
+VERSIONE = "2-4k-versioni"
 NOME = "stanza"
 FILE_VGGT = f"vggt-omega/{vggt.FILE_PESI}"
 FILE_DA3 = f"depth-anything-3/{da3.FILE_PESI}"
@@ -23,12 +23,16 @@ FOTO_MASSIME = 50
 AGGANCI = 16
 NUOVE_A_TURNO = 24
 DA3_A_TURNO = 24
-LATO_DI_LETTURA = 1024
+LATO_DI_LETTURA = 3840
+LATO_PER_METTERE = 1024
+LATO_DELLE_PERSONE = 1024
 STANZE_DI_FILA_SENZA_MEMORIA = 3
 TROPPO_GRANDE = "La scheda video non ha abbastanza memoria per questa stanza."
 STANZA_SENZA_MEMORIA = "stanza_senza_memoria"
-VOXEL = 0.015
-PUNTI_MASSIMI = 1_500_000
+VOXEL = 0.005
+PUNTI_MASSIMI = 6_000_000
+DETTAGLIO_PIENO = "4k"
+DETTAGLIO_RIDOTTO = "ridotto"
 PERCENTILE_DI_FIDUCIA = 40.0
 ALLARGA_LE_PERSONE = 0.015
 SCARTO_DEGLI_AGGANCI = 0.35
@@ -67,9 +71,11 @@ class Avanzamento:
 
 @dataclass
 class Foto:
-    scatto_id: int
+    scatto_id: int | None
     immagine: object
     persone: object = None
+    aiuto_id: int | None = None
+    quando: str | None = None
 
 
 class Modelli:
@@ -101,6 +107,13 @@ class Modelli:
             if self._da3 is None:
                 self._da3 = da3.costruisci(self.casa / FILE_DA3, self.dispositivo)
             return da3.stima(self._da3, immagini, estrinseci, intrinseci, in_mezza=self._mezza())
+
+    def dettaglio(self, immagine):
+        with self._lucchetto:
+            self._via_vggt()
+            if self._da3 is None:
+                self._da3 = da3.costruisci(self.casa / FILE_DA3, self.dispositivo)
+            return da3.stima(self._da3, [immagine], in_mezza=self._mezza())["profondita"][0]
 
     def _via_vggt(self) -> None:
         if self._vggt is not None:
@@ -162,10 +175,8 @@ def persone_allargate(persone, largo: int, alto: int):
     return np.asarray(piccola.filter(ImageFilter.MaxFilter(2 * lato + 1))) > 0
 
 
-def punti_di_una_foto(esito: dict, numero: int, persone=None):
+def buoni_di(esito: dict, numero: int, persone=None):
     import numpy as np
-
-    from officina.stanza.da3 import DEVIAZIONE, MEDIA
 
     profondita = np.asarray(esito["profondita"][numero])
     fiducia = np.asarray(esito["fiducia"][numero])
@@ -174,33 +185,62 @@ def punti_di_una_foto(esito: dict, numero: int, persone=None):
     buoni &= fiducia >= np.percentile(fiducia, PERCENTILE_DI_FIDUCIA)
     if persone is not None and np.asarray(persone).any():
         buoni &= ~persone_allargate(persone, largo, alto)
+    return buoni
+
+
+def dalla_profondita(profondita, buoni, matrice, estrinseci, colori):
+    import numpy as np
+
+    profondita = np.asarray(profondita)
     righe, colonne = np.nonzero(buoni)
     z = profondita[righe, colonne].astype(np.float64)
-    matrice = np.asarray(esito["intrinseci"][numero], dtype=np.float64)
+    matrice = np.asarray(matrice, dtype=np.float64)
     x = (colonne - matrice[0, 2]) / matrice[0, 0] * z
     y = (righe - matrice[1, 2]) / matrice[1, 1] * z
     camera = np.stack([x, y, z], axis=1)
-    estrinseci = np.asarray(esito["estrinseci"][numero], dtype=np.float64)
+    estrinseci = np.asarray(estrinseci, dtype=np.float64)
     mondo = (camera - estrinseci[:3, 3]) @ estrinseci[:3, :3]
+    return mondo, np.asarray(colori)[righe, colonne], z / max(float(matrice[0, 0]), 1e-9)
+
+
+def colori_di(esito: dict, numero: int):
+    import numpy as np
+
+    from officina.stanza.da3 import DEVIAZIONE, MEDIA
+
     immagine = np.asarray(esito["immagini"][numero], dtype=np.float64).transpose(1, 2, 0)
     immagine = np.clip(immagine * np.asarray(DEVIAZIONE) + np.asarray(MEDIA), 0, 1)
-    colori = (immagine[righe, colonne] * 255).round().astype(np.uint8)
+    return (immagine * 255).round().astype(np.uint8)
+
+
+def punti_di_una_foto(esito: dict, numero: int, persone=None):
+    mondo, colori, _ = dalla_profondita(esito["profondita"][numero], buoni_di(esito, numero, persone),
+                                        esito["intrinseci"][numero], esito["estrinseci"][numero],
+                                        colori_di(esito, numero))
     return mondo, colori
 
 
-def a_cubetti(punti, colori, lato: float = VOXEL, massimi: int = PUNTI_MASSIMI, seme: int = 0):
+def a_cubetti(punti, colori, lato: float = VOXEL, massimi: int = PUNTI_MASSIMI, seme: int = 0,
+              passi=None, gruppi=None):
     import numpy as np
 
     if not len(punti):
-        return punti, colori
-    chiavi = np.floor(punti / lato).astype(np.int64)
-    _, primi = np.unique(chiavi, axis=0, return_index=True)
-    primi.sort()
-    punti, colori = punti[primi], colori[primi]
-    if len(punti) > massimi:
-        scelti = np.sort(np.random.default_rng(seme).choice(len(punti), size=massimi, replace=False))
-        punti, colori = punti[scelti], colori[scelti]
-    return punti, colori
+        return (punti, colori) if passi is None and gruppi is None else (punti, colori, passi, gruppi)
+    ordine = np.argsort(passi, kind="stable") if passi is not None else np.arange(len(punti))
+    interi = np.floor(np.asarray(punti, dtype=np.float64)[ordine] / lato).astype(np.int64) + (1 << 18)
+    interi = np.clip(interi, 0, (1 << 19) - 1)
+    chiavi = (((interi[:, 0] << 38) | (interi[:, 1] << 19) | interi[:, 2]) << 4)
+    if gruppi is not None:
+        chiavi |= np.asarray(gruppi, dtype=np.int64)[ordine] & 15
+    _, primi = np.unique(chiavi, return_index=True)
+    scelti = np.sort(ordine[primi])
+    if len(scelti) > massimi:
+        scelti = np.sort(np.random.default_rng(seme).choice(scelti, size=massimi, replace=False))
+    fuori = (np.asarray(punti)[scelti], np.asarray(colori)[scelti])
+    if passi is None and gruppi is None:
+        return fuori
+    return (*fuori, None if passi is None else np.asarray(passi)[scelti],
+            None if gruppi is None else np.asarray(gruppi)[scelti])
 
 
 def centri_e_rotazioni(estrinseci):
@@ -267,6 +307,7 @@ class Passata:
         self._fermato = fermato or (lambda: False)
         self._ferma = threading.Event()
         self.avanzamento = Avanzamento()
+        self._dettaglio_pieno = True
 
     def ferma(self) -> None:
         self._ferma.set()
@@ -320,16 +361,34 @@ class Passata:
         return self.avanzamento
 
     def _non_riuscita(self, posto_id: int, perche: str) -> None:
-        from officina.modello import stanze
+        from officina.modello import aiuti, stanze
 
         self.avanzamento.non_riuscite += 1
         with self.archivio.scrittura() as connessione:
             stanze.non_riuscita(connessione, posto_id, VERSIONE, len(foto_del_posto(connessione, posto_id)),
-                                perche)
+                                perche, aiuti.quanti_di_posto(connessione, posto_id))
 
-    def _leggi(self, scatto_id: int) -> Foto | None:
+    def _persone(self, connessione, scatto_id: int, larga: int, alta: int):
+        import json
+
+        import numpy as np
+
         from officina.corpi import figure
         from officina.corpi import rilevatore as rilevatore_mod
+
+        corpi = tutti(connessione, "SELECT riquadro, maschera FROM corpi WHERE scatto_id = ? "
+                      "AND fotogramma = 0 AND modello = ?", scatto_id, rilevatore_mod.NOME)
+        if not corpi:
+            return None
+        scala = min(1.0, LATO_DELLE_PERSONE / max(larga, alta))
+        larga, alta = max(1, round(larga * scala)), max(1, round(alta * scala))
+        persone = np.zeros((alta, larga), dtype=bool)
+        for corpo in corpi:
+            persone |= figure.maschera_intera(corpo["maschera"], json.loads(corpo["riquadro"]),
+                                              larga, alta).astype(bool)
+        return persone
+
+    def _leggi(self, scatto_id: int, lato: int = LATO_DI_LETTURA) -> Foto | None:
         from officina.immagini import lettura
         from officina.modello import file_media
 
@@ -339,46 +398,102 @@ class Passata:
             if principale is None or principale["genere"] != "immagine":
                 return None
             percorso = file_media.percorso_migliore(connessione, principale["id"])
-            corpi = tutti(connessione, "SELECT riquadro, maschera FROM corpi WHERE scatto_id = ? "
-                          "AND fotogramma = 0 AND modello = ?", scatto_id, rilevatore_mod.NOME)
+            quando = uno(connessione, "SELECT data_locale FROM scatti WHERE id = ?", scatto_id)
         if percorso is None:
             return None
         try:
-            immagine = lettura.copia_di_lavoro(Path(percorso), LATO_DI_LETTURA).convert("RGB")
+            immagine = lettura.copia_di_lavoro(Path(percorso), lato).convert("RGB")
         except Exception:                                # noqa: BLE001
             return None
-        persone = None
-        if corpi:
-            import json
+        with self.archivio.lettura() as connessione:
+            persone = self._persone(connessione, scatto_id, *immagine.size)
+        return Foto(scatto_id, immagine, persone, quando=quando["data_locale"] if quando else None)
 
-            import numpy as np
+    def _leggi_aiuto(self, voce: dict, lato: int = LATO_DI_LETTURA) -> Foto | None:
+        from officina.immagini import lettura
+        from officina.modello import aiuti
 
-            larga, alta = immagine.size
-            persone = np.zeros((alta, larga), dtype=bool)
-            for corpo in corpi:
-                persone |= figure.maschera_intera(corpo["maschera"], json.loads(corpo["riquadro"]),
-                                                  larga, alta).astype(bool)
-        return Foto(scatto_id, immagine, persone)
+        try:
+            immagine = lettura.copia_di_lavoro(aiuti.percorso(self.archivio, voce), lato).convert("RGB")
+        except Exception:                                # noqa: BLE001
+            return None
+        return Foto(None, immagine, None, aiuto_id=voce["aiuto_id"], quando=voce["quando"])
 
-    def _scegli(self, scatti: list[int]) -> list[int]:
+    def _scegli(self, scatti: list[int], quante: int = FOTO_MASSIME) -> list[int]:
+        if quante <= 0:
+            return []
         with self.archivio.lettura() as connessione:
             vettori = impronte_di(connessione, scatti)
         con = [s for s in scatti if s in vettori]
         senza = [s for s in scatti if s not in vettori]
         if not con:
-            return scatti[:FOTO_MASSIME]
-        scelti = [con[i] for i in le_piu_diverse([vettori[s] for s in con], FOTO_MASSIME)]
-        return (scelti + senza)[:FOTO_MASSIME]
+            return scatti[:quante]
+        scelti = [con[i] for i in le_piu_diverse([vettori[s] for s in con], quante)]
+        return (scelti + senza)[:quante]
+
+    def _forma_grezza(self, foto: list[Foto], estrinseci, sulla_foto) -> tuple[list, list[float]]:
+        import numpy as np
+
+        grezze: list = [None] * len(foto)
+        scale = []
+        for pezzo in _a_gruppi(foto):
+            if self.fermata:
+                return [], []
+            esito = self.modelli.forma([foto[i].immagine for i in pezzo], omogenee(estrinseci[pezzo]),
+                                       np.asarray([sulla_foto[i] for i in pezzo], dtype=np.float32))
+            scale.append(float(esito["allineamento"][2]))
+            for posto, i in enumerate(pezzo):
+                grezze[i] = {"profondita": np.asarray(esito["profondita"][posto], dtype=np.float32),
+                             "buoni": buoni_di(esito, posto, foto[i].persone),
+                             "intrinseci": np.asarray(esito["intrinseci"][posto], dtype=np.float64),
+                             "estrinseci": np.asarray(esito["estrinseci"][posto], dtype=np.float64),
+                             "colori": colori_di(esito, posto)}
+        return grezze, scale
+
+    def _fine(self, foto: Foto, grezza: dict):
+        stima = getattr(self.modelli, "dettaglio", None)
+        if stima is None or not self._dettaglio_pieno:
+            return None
+        import cv2
+        import numpy as np
+
+        try:
+            profondita = dettaglio.profondita_fine(stima, foto.immagine, grezza["profondita"],
+                                                   lambda: self.fermata)
+        except Exception as guasto:
+            if not torcia.memoria_finita(guasto):
+                raise
+            torcia.libera()
+            self._dettaglio_pieno = False
+            registro.avviso("stanza.dettaglio_ridotto")
+            return None
+        if profondita is None:
+            return None
+        alta, larga = profondita.shape
+        grezza_alta, grezza_larga = grezza["profondita"].shape
+        buoni = dettaglio.allarga(grezza["buoni"], larga, alta) & np.isfinite(profondita) & (profondita > 0)
+        if foto.persone is not None and np.asarray(foto.persone).any():
+            buoni &= ~persone_allargate(foto.persone, larga, alta)
+        colori = cv2.resize(np.asarray(foto.immagine), (larga, alta), interpolation=cv2.INTER_AREA)
+        matrice = dettaglio.matrice_a_misura(grezza["intrinseci"], grezza_larga, grezza_alta, larga, alta)
+        return profondita, buoni, matrice, colori
 
     def _costruisci(self, posto_id: int) -> None:
         import numpy as np
 
-        from officina.modello import stanze
+        from officina.modello import aiuti, stanze
 
         with self.archivio.lettura() as connessione:
             tutte = foto_del_posto(connessione, posto_id)
+            di_aiuto = aiuti.di_posto(connessione, posto_id)
         foto = []
-        for scatto_id in self._scegli(tutte):
+        for voce in di_aiuto[:FOTO_MASSIME]:
+            if self.fermata:
+                return
+            letta = self._leggi_aiuto(voce)
+            if letta is not None:
+                foto.append(letta)
+        for scatto_id in self._scegli(tutte, FOTO_MASSIME - len(foto)):
             if self.fermata:
                 return
             letta = self._leggi(scatto_id)
@@ -391,37 +506,62 @@ class Passata:
         estrinseci = posizioni["estrinseci"]
         sulla_foto = [vggt.intrinseci_sulla_foto(k, v)
                       for k, v in zip(posizioni["intrinseci"], posizioni["viaggi"], strict=True)]
-        nuvole, colori, scale = [], [], []
-        for pezzo in _a_gruppi(foto):
+        grezze, scale = self._forma_grezza(foto, estrinseci, sulla_foto)
+        if not grezze:
+            return
+        metri = float(np.median(scale))
+        nuvole_grezze = [dalla_profondita(g["profondita"], g["buoni"], g["intrinseci"], g["estrinseci"],
+                                          g["colori"])[0] for g in grezze]
+        tutti_i_grezzi = np.concatenate(nuvole_grezze) if nuvole_grezze else np.zeros((0, 3))
+        sistemazione, misure = sistema(estrinseci, tutti_i_grezzi, metri)
+        del tutti_i_grezzi
+        viste = [versioni.Vista(g["profondita"], g["intrinseci"], g["estrinseci"], g["buoni"], f.quando)
+                 for f, g in zip(foto, grezze, strict=True)]
+        cambi = versioni.trova([sistemazione.punti(n) for n in nuvole_grezze], viste, sistemazione)
+        del nuvole_grezze, viste
+        self._dettaglio_pieno = True
+        punti = np.zeros((0, 3))
+        tinte = np.zeros((0, 3), dtype=np.uint8)
+        passi = np.zeros(0)
+        gruppi = np.zeros(0, dtype=np.uint8)
+        for numero, (letta, grezza) in enumerate(zip(foto, grezze, strict=True)):
             if self.fermata:
                 return
-            esito = self.modelli.forma([foto[i].immagine for i in pezzo], omogenee(estrinseci[pezzo]),
-                                       np.asarray([sulla_foto[i] for i in pezzo], dtype=np.float32))
-            scale.append(float(esito["allineamento"][2]))
-            for posto, i in enumerate(pezzo):
-                punti, tinte = punti_di_una_foto(esito, posto, foto[i].persone)
-                nuvole.append(punti)
-                colori.append(tinte)
-        metri = float(np.median(scale))
-        punti = np.concatenate(nuvole) if nuvole else np.zeros((0, 3))
-        tinte = np.concatenate(colori) if colori else np.zeros((0, 3), dtype=np.uint8)
-        sistemazione, misure = sistema(estrinseci, punti, metri)
-        punti, tinte = a_cubetti(sistemazione.punti(punti), tinte)
+            fine = self._fine(letta, grezza)
+            if fine is None:
+                fine = (grezza["profondita"], grezza["buoni"], grezza["intrinseci"], grezza["colori"])
+            nuovi, colori, passo = dalla_profondita(*fine[:3], grezza["estrinseci"], fine[3])
+            nuovi = sistemazione.punti(nuovi)
+            passo = passo * metri
+            gruppo = versioni.gruppi_dei_punti(nuovi, cambi.gruppo_della_foto[numero], cambi)
+            punti, tinte, passi, gruppi = a_cubetti(np.concatenate([punti, nuovi]), np.concatenate([tinte, colori]),
+                                                    massimi=PUNTI_MASSIMI * 2, passi=np.concatenate([passi, passo]),
+                                                    gruppi=np.concatenate([gruppi, gruppo]))
+            grezze[numero] = None
+        punti, tinte, passi, gruppi = a_cubetti(punti, tinte, passi=passi, gruppi=gruppi)
         nome = f"{posto_id}.npz"
-        _salva_la_nuvola(self.archivio.dove.stanze / nome, punti, tinte)
+        _salva_la_nuvola(self.archivio.dove.stanze / nome, punti, tinte, gruppi)
         centri, rotazioni = sistemazione.macchine(*centri_e_rotazioni(estrinseci))
+        elenco = _elenco_delle_versioni(cambi, foto, gruppi)
+        livello = DETTAGLIO_PIENO if self._dettaglio_pieno else DETTAGLIO_RIDOTTO
         with self.archivio.scrittura() as connessione:
-            stanze.salva(connessione, posto_id, nome, VERSIONE, len(foto), len(tutte), len(punti), misure, metri)
+            stanze.salva(connessione, posto_id, nome, VERSIONE, len(foto), len(tutte), len(punti), misure, metri,
+                         aiuti_visti=len(di_aiuto), versioni=elenco, dettaglio=livello)
             insieme = zip(foto, centri, rotazioni, sulla_foto, strict=True)
-            for ordine, (letta, centro, rotazione, matrice) in enumerate(insieme):
+            ordine = 0
+            for letta, centro, rotazione, matrice in insieme:
+                if letta.scatto_id is None:
+                    continue
                 larga, alta = letta.immagine.size
                 campo, cx, cy, proporzione, allungo = _campo_e_centro(matrice, larga, alta)
                 stanze.metti_foto(connessione, posto_id, letta.scatto_id, usata=True, ordine=ordine,
                                   centro=centro, rotazione=rotazione, campo=campo, centro_x=cx, centro_y=cy,
                                   proporzione=proporzione, allungo=allungo)
+                ordine += 1
         self.avanzamento.stanze += 1
-        self.avanzamento.foto_messe += len(foto)
-        registro.evento("stanza.costruita", foto=len(foto), punti=len(punti))
+        self.avanzamento.foto_messe += sum(1 for f in foto if f.scatto_id is not None)
+        registro.evento("stanza.costruita", foto=len(foto), punti=len(punti), versioni=len(elenco),
+                        dettaglio=livello)
         self._metti_le_nuove(posto_id)
 
     def _posizioni_robuste(self, foto: list[Foto]) -> dict:
@@ -456,7 +596,7 @@ class Passata:
             agganci = stanze.agganci(connessione, posto_id, AGGANCI)
         if not nuove or len(agganci) < 3:
             return self._segna_viste(posto_id)
-        lette_agganci = [(a, self._leggi(a["scatto_id"])) for a in agganci]
+        lette_agganci = [(a, self._leggi(a["scatto_id"], LATO_PER_METTERE)) for a in agganci]
         lette_agganci = [(a, f) for a, f in lette_agganci if f is not None]
         if len(lette_agganci) < 3:
             return self._segna_viste(posto_id)
@@ -464,7 +604,8 @@ class Passata:
         for inizio in range(0, len(nuove), NUOVE_A_TURNO):
             if self.fermata:
                 return
-            lette = [f for f in (self._leggi(s) for s in nuove[inizio:inizio + NUOVE_A_TURNO]) if f is not None]
+            lette = [f for f in (self._leggi(s, LATO_PER_METTERE) for s in nuove[inizio:inizio + NUOVE_A_TURNO])
+                     if f is not None]
             if not lette:
                 continue
             immagini = [f.immagine for _, f in lette_agganci] + [f.immagine for f in lette]
@@ -506,21 +647,46 @@ def _a_gruppi(foto: list[Foto]) -> list[list[int]]:
     return pezzi
 
 
-def _salva_la_nuvola(percorso: Path, punti, colori) -> None:
+def _salva_la_nuvola(percorso: Path, punti, colori, gruppi=None) -> None:
     import numpy as np
 
     percorso.parent.mkdir(parents=True, exist_ok=True)
+    gruppi = np.zeros(len(punti), dtype=np.uint8) if gruppi is None else np.asarray(gruppi, dtype=np.uint8)
     provvisorio = percorso.with_name(percorso.name + f".{os.getpid()}.{int(time.time() * 1000)}.tmp")
     with open(provvisorio, "wb") as f:
-        np.savez_compressed(f, punti=np.asarray(punti, dtype=np.float16), colori=np.asarray(colori, dtype=np.uint8))
+        np.savez_compressed(f, punti=np.asarray(punti, dtype=np.float32), colori=np.asarray(colori, dtype=np.uint8),
+                            gruppi=gruppi)
     os.replace(provvisorio, percorso)
 
 
 def leggi_la_nuvola(percorso: Path):
+    punti, colori, _ = leggi_tutta_la_nuvola(percorso)
+    return punti, colori
+
+
+def leggi_tutta_la_nuvola(percorso: Path):
     import numpy as np
 
     with np.load(percorso) as dati:
-        return dati["punti"].astype(np.float32), dati["colori"].astype(np.uint8)
+        punti = dati["punti"].astype(np.float32)
+        gruppi = dati["gruppi"].astype(np.uint8) if "gruppi" in dati.files else np.zeros(len(punti), dtype=np.uint8)
+        return punti, dati["colori"].astype(np.uint8), gruppi
+
+
+def _elenco_delle_versioni(cambi, foto: list[Foto], gruppi) -> list[dict]:
+    import numpy as np
+
+    if not cambi.ci_sono:
+        return []
+    conti = np.bincount(np.asarray(gruppi, dtype=np.int64), minlength=len(cambi.versioni) + 1)
+    elenco = []
+    for versione in cambi.versioni:
+        dentro = [foto[i] for i in versione["foto"]]
+        elenco.append({"numero": versione["numero"], "dal": versione["dal"], "al": versione["al"],
+                       "punti": int(conti[versione["numero"]]),
+                       "scatti": [f.scatto_id for f in dentro if f.scatto_id is not None],
+                       "aiuti": [f.aiuto_id for f in dentro if f.aiuto_id is not None]})
+    return elenco
 
 
 def foto_del_posto(connessione, posto_id: int) -> list[int]:
@@ -533,28 +699,36 @@ def foto_del_posto(connessione, posto_id: int) -> list[int]:
 
 
 def da_fare(connessione) -> list[tuple[int, str]]:
-    righe = tutti(
+    quante = {riga["id"]: riga["quante"] for riga in tutti(
         connessione,
         f"SELECT p.id, count(DISTINCT s.id) AS quante FROM posti p "
         f"JOIN posti_negli_scatti n ON n.posto_id = p.id JOIN scatti s ON s.id = n.scatto_id "
         f"WHERE p.stato = 'attivo' AND s.fuori_archivio = 0 AND s.genere IN ('foto','live')"
-        f"{gruppi.clausola(connessione, 'intelligenza')} GROUP BY p.id HAVING quante >= ? ORDER BY p.id",
-        FOTO_MINIME)
+        f"{gruppi.clausola(connessione, 'intelligenza')} GROUP BY p.id")}
+    di_aiuto = {riga["posto_id"]: riga["quanti"] for riga in tutti(
+        connessione,
+        "SELECT a.posto_id, count(*) AS quanti FROM aiuti a JOIN posti p ON p.id = a.posto_id "
+        "WHERE p.stato = 'attivo' GROUP BY a.posto_id")}
     fatte = {riga["posto_id"]: riga for riga in tutti(connessione, "SELECT * FROM stanze")}
     lavoro = []
-    for riga in righe:
-        stanza = fatte.get(riga["id"])
+    for posto_id in sorted(set(quante) | set(di_aiuto)):
+        scatti, aiuti_qui = quante.get(posto_id, 0), di_aiuto.get(posto_id, 0)
+        if scatti + aiuti_qui < FOTO_MINIME:
+            continue
+        stanza = fatte.get(posto_id)
         if stanza is None or stanza["versione"] != VERSIONE:
-            lavoro.append((riga["id"], "costruisci"))
+            lavoro.append((posto_id, "costruisci"))
+        elif stanza["aiuti_visti"] != aiuti_qui:
+            lavoro.append((posto_id, "costruisci"))
         elif stanza["stato"] != "fatta":
-            if stanza["foto_viste"] != riga["quante"]:
-                lavoro.append((riga["id"], "costruisci"))
+            if stanza["foto_viste"] != scatti:
+                lavoro.append((posto_id, "costruisci"))
         else:
             messe = tutti(connessione, "SELECT count(*) AS q FROM stanze_foto f JOIN posti_negli_scatti n "
                           "ON n.scatto_id = f.scatto_id AND n.posto_id = f.posto_id WHERE f.posto_id = ?",
-                          riga["id"])[0]["q"]
-            if messe < riga["quante"] and riga["quante"] != stanza["foto_viste"]:
-                lavoro.append((riga["id"], "metti"))
+                          posto_id)[0]["q"]
+            if messe < scatti and scatti != stanza["foto_viste"]:
+                lavoro.append((posto_id, "metti"))
     return lavoro
 
 

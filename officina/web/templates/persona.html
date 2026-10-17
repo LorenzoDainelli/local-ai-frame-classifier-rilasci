@@ -120,6 +120,25 @@
             {% if lavoro.sta_lavorando %}<span class="gira-poco"></span> Sta leggendo{% else %}Insegna da una cartella{% endif %}</button>
     </div>
 
+    <div class="carta ps-riga ps-aiuti" id="aiuti">
+        <span class="ps-riga-icona">{{ icona('volto', 20) }}</span>
+        <span class="ps-riga-testo">
+            <b>Foto di aiuto</b>
+            <span class="minuscolo tenue">Foto e video solo di questa persona: migliorano la sua figura in 3D e la riconoscono meglio da volto, corpo e vestiti. Non entrano nella galleria.
+                {% if di_aiuto %}{{ di_aiuto|length|numero }} finora, {{ conti_di_aiuto.guardate|numero }} già guardate dall'IA.{% endif %}</span>
+            {% if di_aiuto %}
+            <span class="ps-aiuti-provini">
+                {% for a in di_aiuto %}
+                <span class="provino"><img src="/aiuti/{{ a.aiuto_id }}/miniatura" alt="" loading="lazy">
+                    <button class="tasto-comando piccolo nudo" type="button" data-togli-aiuto="{{ a.aiuto_id }}" title="Togli">×</button></span>
+                {% endfor %}
+            </span>
+            {% endif %}
+        </span>
+        <label class="tasto-comando">Aggiungi foto
+            <input id="scegli-aiuti" type="file" multiple accept="image/*,video/*" hidden></label>
+    </div>
+
     <dialog class="finestra" id="insegna" aria-label="Insegna da una cartella">
         <header>
             <h2>Insegna da una cartella{% call spiega("Cosa resta, e cosa no") %}
@@ -218,6 +237,23 @@
 
         if (!dati.guasto) setTimeout(() => window.location.reload(), 1200);
     }
+
+    const sceltaAiuti = document.getElementById("scegli-aiuti");
+    if (sceltaAiuti) sceltaAiuti.addEventListener("change", async () => {
+        if (!sceltaAiuti.files.length) return;
+        const corpo = new FormData();
+        Array.from(sceltaAiuti.files).forEach((f) => corpo.append("file", f, f.name));
+        const risposta = await fetch("/api/persone/{{ chi.id }}/aiuti", { method: "POST", body: corpo,
+                                                                          headers: { "Accept": "application/json" } });
+        if (risposta.ok) window.location.reload();
+    });
+    document.querySelectorAll("[data-togli-aiuto]").forEach((bottone) => {
+        bottone.addEventListener("click", async () => {
+            const risposta = await fetch(`/api/luoghi/aiuto/${bottone.dataset.togliAiuto}/togli`,
+                                         { method: "POST", headers: { "Accept": "application/json" } });
+            if (risposta.ok) window.location.reload();
+        });
+    });
 
     if (zona && !zona.classList.contains("nascosto")) {
         orologio = setInterval(guarda, 1500);

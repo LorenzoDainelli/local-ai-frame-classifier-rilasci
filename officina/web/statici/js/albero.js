@@ -704,6 +704,7 @@ async function apriPannello(id, dalNodo = false) {
                   `<img src="/miniatura/${s.file_id}" alt="" loading="lazy"></a>`).join("") +
               `</div></div>`
             : "") +
+        (dati.stanza ? riquadroDellaStanza(dati.stanza) : "") +
         `<div class="azioni-nodo">` +
         `<button class="tasto-comando piccolo" data-fa="rinomina">Rinomina</button>` +
         `<button class="tasto-comando piccolo" data-fa="sposta">Sposta <kbd>S</kbd></button>` +
@@ -909,7 +910,57 @@ async function apriPannelloDelLuogo(id, dalNodo = false) {
     pannello.querySelectorAll("[data-fa]").forEach((bottone) => {
         bottone.addEventListener("click", () => azioneSulLuogo(bottone.dataset.fa, dati));
     });
+    const scelta = pannello.querySelector(".st-scegli");
+    if (scelta) scelta.addEventListener("change", () => caricaGliAiuti(dati.posto_id, scelta.files));
+    pannello.querySelectorAll("[data-togli-aiuto]").forEach((bottone) => {
+        bottone.addEventListener("click", () => togliAiuto(dati.posto_id, bottone.dataset.togliAiuto));
+    });
     animaDalNodo(pannello, partenza);
+}
+
+const STATO_DELLA_STANZA = { fatta: "fatta", non_riuscita: "non riuscita", da_fare: "non ancora fatta" };
+
+function riquadroDellaStanza(stanza) {
+    const versioni = stanza.versioni || [];
+    const aiuti = stanza.aiuti || [];
+    return `<div class="pn-stanza"><p class="riga-fra minuscolo tenue"><span>Stanza in 3D</span>` +
+        `<span>${STATO_DELLA_STANZA[stanza.stato] || ""}</span></p>` +
+        `<div class="conti">` +
+        riga("Foto usate", stanza.foto_usate || 0) +
+        riga("Foto di aiuto", aiuti.length ? `${aiuti.length}, di cui ${stanza.aiuti_in_4k} in 4K` : "nessuna") +
+        (stanza.dettaglio ? riga("Dettaglio", stanza.dettaglio === "pieno" ? "pieno, in 4K" : "ridotto") : "") +
+        (versioni.length > 1 ? riga("Versioni", versioni.map((v) =>
+            v.dal ? scampa(v.dal === v.al ? v.dal : `${v.dal} → ${v.al}`) : "senza data").join(" · ")) : "") +
+        (stanza.stato === "non_riuscita" && stanza.perche ? riga("Perché", scampa(stanza.perche)) : "") +
+        `</div>` +
+        (aiuti.length ? `<div class="provini">` + aiuti.map((a) =>
+            `<span class="provino"><img src="/aiuti/${a.aiuto_id}/miniatura" alt="" loading="lazy">` +
+            `<button class="tasto-comando piccolo nudo" data-togli-aiuto="${a.aiuto_id}" ` +
+            `title="Togli">×</button></span>`).join("") + `</div>` : "") +
+        `<label class="tasto-comando piccolo">Aggiungi foto per migliorare` +
+        `<input class="st-scegli" type="file" multiple accept="image/*,video/*" hidden></label>` +
+        `<p class="minuscolo tenue">Servono solo alla stanza: non entrano nella galleria.</p></div>`;
+}
+
+async function caricaGliAiuti(id, file) {
+    if (!file || !file.length) return;
+    const corpo = new FormData();
+    Array.from(file).forEach((f) => corpo.append("file", f, f.name));
+    avvisa("Carico le foto…");
+    try {
+        const esito = await chiedi(`${API}/luogo/${id}/aiuti`, { method: "POST", body: corpo });
+        avvisa(esito.scartate
+            ? `Messe ${esito.messe}, scartate ${esito.scartate}${esito.perche.length ? `: ${esito.perche[0]}` : ""}`
+            : `Messe ${esito.messe}: la stanza si rifà nella fila dell'IA`);
+        apriPannello(id);
+    } catch (errore) { avvisa(errore.message); }
+}
+
+async function togliAiuto(id, aiutoId) {
+    try {
+        await mandaModulo(`${API}/aiuto/${aiutoId}/togli`, {});
+        apriPannello(id);
+    } catch (errore) { avvisa(errore.message); }
 }
 
 async function azioneSulLuogo(quale, dati) {

@@ -9,10 +9,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from officina import registro
 from officina.archivio import accesso
 from officina.archivio.database import uno
-from officina.corpi import fascicolo
+from officina.corpi import aiuti_persona, fascicolo
 from officina.errori import ErroreOfficina
 from officina.immagini import consegna, lettura
-from officina.modello import file_media, persone
+from officina.modello import aiuti, file_media, persone
 from officina.volti import gruppi as volti_gruppi
 from officina.volti import motore as volti_motore
 from officina.volti import rilevatore as volti_rilevatore
@@ -400,12 +400,17 @@ def pagina_persona(richiesta: Request, persona_id: int):
         chi["volti"] = persone.volti_di(connessione, persona_id, 12)
         suo = fascicolo.di(connessione, persona_id, chi.get("nome"))
         chi["scatti"] = suo["scatti"]
-        insegnate = volti_riferimento.elenco(connessione, persona_id)
+        insegnate = [r for r in volti_riferimento.elenco(connessione, persona_id)
+                     if not str(r["da_file"]).startswith(aiuti_persona.PREFISSO)]
+        di_aiuto = aiuti.di_persona(connessione, persona_id)
+        conti_di_aiuto = aiuti_persona.quanti_di_persona(connessione, persona_id)
     return base.pagine.TemplateResponse(richiesta, "persona.html", {
         **base.comune(richiesta, "persone"),
         "chi": chi,
         "fascicolo": suo,
         "insegnate": insegnate,
+        "di_aiuto": di_aiuto,
+        "conti_di_aiuto": conti_di_aiuto,
         "manca_il_modello": volti_rilevatore.cosa_manca(archivio.dove.modelli),
         "lavoro": comune.lavoro_riferimento.come_va(),
         "quante_al_massimo": volti_riferimento.TROPPE,
@@ -452,6 +457,13 @@ def _impara_le_facce(archivio, persona_id: int, cartella: Path) -> None:
         comune.lavoro_riferimento.di(f"saltata «{nome}»: non ci ho trovato nessuna faccia")
     for nome in raccolto.non_leggibili:
         comune.lavoro_riferimento.di(f"saltata «{nome}»: non si apre")
+
+
+@strada.post("/api/persone/{persona_id}/aiuti")
+async def api_aggiungi_aiuti_della_persona(richiesta: Request, persona_id: int):
+    from officina.web.strade.luoghi import _carica
+
+    return JSONResponse(await _carica(richiesta, persona_id=persona_id))
 
 
 @strada.post("/persone/insegnata/{riferimento_id}/togli")

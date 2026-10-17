@@ -1248,6 +1248,46 @@ def _versione_58(connessione: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS file_per_data_locale ON file_media(data_locale)")
 
 
+def _versione_59(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE aiuti (
+            id           INTEGER PRIMARY KEY,
+            posto_id     INTEGER REFERENCES posti(id) ON DELETE CASCADE,
+            persona_id   INTEGER REFERENCES persone(id) ON DELETE CASCADE,
+            file         TEXT NOT NULL,
+            impronta     TEXT NOT NULL,
+            origine      TEXT NOT NULL DEFAULT 'foto' CHECK (origine IN ('foto','video')),
+            larghezza    INTEGER NOT NULL,
+            altezza      INTEGER NOT NULL,
+            scattata_il  TEXT,
+            messa_il     TEXT NOT NULL,
+            guardato     TEXT,
+            CHECK ((posto_id IS NULL) <> (persona_id IS NULL))
+        )
+        """
+    )
+    connessione.execute("CREATE UNIQUE INDEX aiuti_del_posto ON aiuti(posto_id, impronta) "
+                        "WHERE posto_id IS NOT NULL")
+    connessione.execute("CREATE UNIQUE INDEX aiuti_della_persona ON aiuti(persona_id, impronta) "
+                        "WHERE persona_id IS NOT NULL")
+    connessione.execute(
+        """
+        CREATE TABLE aspetti_di_aiuto (
+            aiuto_id  INTEGER NOT NULL REFERENCES aiuti(id) ON DELETE CASCADE,
+            modello   TEXT NOT NULL,
+            parti     INTEGER NOT NULL,
+            vettore   BLOB NOT NULL,
+            visibili  BLOB,
+            PRIMARY KEY (aiuto_id, modello)
+        )
+        """
+    )
+    connessione.execute("ALTER TABLE stanze ADD COLUMN aiuti_visti INTEGER NOT NULL DEFAULT 0")
+    connessione.execute("ALTER TABLE stanze ADD COLUMN versioni TEXT")
+    connessione.execute("ALTER TABLE stanze ADD COLUMN dettaglio TEXT")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1352,6 +1392,8 @@ MIGRAZIONI: list[Migrazione] = [
                "le persone messe a mano si ritrovano subito", _versione_57),
     Migrazione(58, "le foto live si ritrovano in fretta all'importazione, anche con "
                "centinaia di migliaia di file", _versione_58),
+    Migrazione(59, "le foto di aiuto: caricate per migliorare una stanza in 3D o una persona, "
+               "senza entrare nella galleria", _versione_59),
 ]
 
 

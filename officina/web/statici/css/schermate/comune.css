@@ -1682,6 +1682,13 @@ button.versione:active { transform: scale(0.98); }
 .pn-ultimi .provino { width: auto; height: auto; aspect-ratio: 1; border: 0; border-radius: 7px; }
 .mappa .azioni-nodo { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; padding-top: 0; border-top: 0; }
 .pn-etichetta { width: 100%; margin-top: auto; }
+.pn-stanza { display: grid; gap: 8px; }
+.pn-stanza p { margin: 0; }
+.pn-stanza .provini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.pn-stanza .provino { position: relative; width: auto; height: auto; aspect-ratio: 1; border: 0; border-radius: 7px; overflow: hidden; }
+.pn-stanza .provino img { width: 100%; height: 100%; object-fit: cover; }
+.pn-stanza .provino button { position: absolute; top: 2px; right: 2px; min-width: 0; padding: 0 6px; background: var(--pozzo); }
+.pn-stanza label { justify-self: start; cursor: pointer; }
 
 @keyframes onda { from { opacity: 0; transform: translateY(var(--sale, 6px)); } }
 .pillola.appena { animation: tac var(--passo) var(--uscita); }
@@ -1858,3 +1865,9 @@ a.carta:hover { transform: translateY(-1px); }
 .an-spiega { color: var(--attenuato); }
 .an-tasti { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .trovati[hidden], .scegli-nodo .trovati[hidden] { display: none; }
+
+.ps-aiuti-provini { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.ps-aiuti-provini .provino { position: relative; width: 56px; height: 56px; border-radius: 7px; overflow: hidden; }
+.ps-aiuti-provini .provino img { width: 100%; height: 100%; object-fit: cover; }
+.ps-aiuti-provini .provino button { position: absolute; top: 1px; right: 1px; min-width: 0; padding: 0 5px; background: var(--pozzo); }
+.ps-aiuti label { cursor: pointer; }

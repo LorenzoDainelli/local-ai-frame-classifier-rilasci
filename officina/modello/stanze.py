@@ -23,22 +23,39 @@ def _macchina_da_byte(dati: bytes) -> tuple[list[float], list[list[float]]]:
 
 
 def salva(connessione: sqlite3.Connection, posto_id: int, file: str, versione: str, foto_usate: int,
-          foto_viste: int, punti: int, misure: tuple[float, float, float], metri: float) -> None:
+          foto_viste: int, punti: int, misure: tuple[float, float, float], metri: float, *,
+          aiuti_visti: int = 0, versioni: list | None = None, dettaglio: str | None = None) -> None:
+    import json
+
     connessione.execute("DELETE FROM stanze_foto WHERE posto_id = ?", (posto_id,))
     connessione.execute(
         "INSERT OR REPLACE INTO stanze (posto_id, stato, file, versione, foto_usate, foto_viste, punti, "
-        "larga, lunga, alta, metri, perche, costruita_il) VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,?)",
+        "larga, lunga, alta, metri, perche, costruita_il, aiuti_visti, versioni, dettaglio) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?)",
         (posto_id, FATTA, file, versione, foto_usate, foto_viste, punti, *[float(m) for m in misure],
-         float(metri), adesso()))
+         float(metri), adesso(), int(aiuti_visti), json.dumps(versioni or [], ensure_ascii=False), dettaglio))
 
 
 def non_riuscita(connessione: sqlite3.Connection, posto_id: int, versione: str, foto_viste: int,
-                 perche: str) -> None:
+                 perche: str, aiuti_visti: int = 0) -> None:
     connessione.execute("DELETE FROM stanze_foto WHERE posto_id = ?", (posto_id,))
     connessione.execute(
         "INSERT OR REPLACE INTO stanze (posto_id, stato, file, versione, foto_usate, foto_viste, punti, "
-        "larga, lunga, alta, metri, perche, costruita_il) VALUES (?,?,'',?,0,?,0,NULL,NULL,NULL,NULL,?,?)",
-        (posto_id, NON_RIUSCITA, versione, foto_viste, perche[:500], adesso()))
+        "larga, lunga, alta, metri, perche, costruita_il, aiuti_visti, versioni, dettaglio) "
+        "VALUES (?,?,'',?,0,?,0,NULL,NULL,NULL,NULL,?,?,?,NULL,NULL)",
+        (posto_id, NON_RIUSCITA, versione, foto_viste, perche[:500], adesso(), int(aiuti_visti)))
+
+
+def versioni_di(stanza: dict | None) -> list[dict]:
+    import json
+
+    if not stanza or not stanza.get("versioni"):
+        return []
+    try:
+        elenco = json.loads(stanza["versioni"])
+    except (TypeError, ValueError):
+        return []
+    return elenco if isinstance(elenco, list) else []
 
 
 def viste(connessione: sqlite3.Connection, posto_id: int, quante: int) -> None:

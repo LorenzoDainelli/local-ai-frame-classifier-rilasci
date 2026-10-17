@@ -2,13 +2,13 @@ from __future__ import annotations
 
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from officina import registro
 from officina.archivio import accesso
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
-from officina.modello import luoghi, posti
+from officina.modello import aiuti, luoghi, posti, stanze
 
 from officina.web import vista
 from officina.web.strade import base
@@ -180,7 +180,87 @@ def api_luogo(posto_id: int):
             "coordinate": posti.coordinate(connessione, posto_id),
             "corsia": _corsia(connessione, posto_id),
             "ultimi": ultimi,
+            "stanza": _la_stanza(connessione, posto_id),
         }
+
+
+def _la_stanza(connessione, posto_id: int) -> dict:
+    fatta = stanze.di_posto(connessione, posto_id)
+    di_aiuto = aiuti.di_posto(connessione, posto_id)
+    return {
+        "stato": fatta["stato"] if fatta else "da_fare",
+        "perche": fatta["perche"] if fatta else None,
+        "foto_usate": fatta["foto_usate"] if fatta else 0,
+        "dettaglio": fatta["dettaglio"] if fatta else None,
+        "versioni": stanze.versioni_di(fatta),
+        "aiuti": di_aiuto,
+        "aiuti_in_4k": sum(1 for a in di_aiuto if a["in_4k"]),
+    }
+
+
+async def _carica(richiesta: Request, **di_chi) -> dict:
+    import functools
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    from officina.immagini import consegna
+
+    modulo = await richiesta.form()
+    archivio = accesso.aperto()
+    messe, scartate, perche = 0, 0, []
+    for arrivato in modulo.getlist("file"):
+        if not hasattr(arrivato, "filename"):
+            continue
+        nome = Path(arrivato.filename or "").name
+        with tempfile.TemporaryDirectory() as cartella:
+            provvisorio = Path(cartella) / f"arrivo{Path(nome).suffix.lower()}"
+            with open(provvisorio, "wb") as fuori:
+                shutil.copyfileobj(arrivato.file, fuori, 1 << 20)
+            esito = await consegna.subito(functools.partial(aiuti.aggiungi, **di_chi), archivio, provvisorio, nome)
+        messe += esito["messe"]
+        scartate += esito["scartate"]
+        if esito["perche"]:
+            perche.append(f"{nome}: {esito['perche']}")
+    return {"messe": messe, "scartate": scartate, "perche": perche[:20]}
+
+
+@strada.post("/api/luoghi/luogo/{posto_id}/aiuti")
+async def api_aggiungi_aiuti(richiesta: Request, posto_id: int):
+    return JSONResponse(await _carica(richiesta, posto_id=posto_id))
+
+
+@strada.post("/api/luoghi/aiuto/{aiuto_id}/togli")
+def api_togli_aiuto(aiuto_id: int):
+    voce = aiuti.togli(accesso.aperto(), aiuto_id)
+    if voce is None:
+        raise ErroreOfficina("Questa foto di aiuto non c'è più.")
+    return {"tolta": aiuto_id}
+
+
+def _miniatura_aiuto(aiuto_id: int):
+    from officina.immagini import consegna, lettura
+
+    archivio = accesso.aperto()
+    with archivio.lettura() as connessione:
+        voce = aiuti.per_id(connessione, aiuto_id)
+    if voce is None:
+        return None
+    percorso = aiuti.percorso(archivio, voce)
+    if not percorso.exists():
+        return None
+    return consegna.da_immagine(lettura.copia_di_lavoro(percorso, 384), "JPEG", 85)
+
+
+@strada.get("/aiuti/{aiuto_id}/miniatura")
+async def miniatura_aiuto(aiuto_id: int):
+    from officina.immagini import consegna
+
+    fatta = await consegna.subito(_miniatura_aiuto, aiuto_id)
+    if fatta is None:
+        return Response(status_code=404)
+    dati, tipo = fatta
+    return Response(dati, media_type=tipo, headers={"Cache-Control": "private, max-age=86400"})
 
 
 @strada.post("/api/luoghi/sposta")

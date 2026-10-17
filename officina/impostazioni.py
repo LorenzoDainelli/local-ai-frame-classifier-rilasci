@@ -69,13 +69,17 @@ class Posizione:
         return self.radice / "superfici"
 
     @property
+    def aiuti(self) -> Path:
+        return self.radice / "aiuti"
+
+    @property
     def rovinati(self) -> Path:
         return self.radice / "rovinati"
 
     def prepara(self) -> None:
         for cartella in (self.radice, self.miniature, self.copie,
                          self.modelli, self.imparato, self.registro,
-                         self.ricevute, self.stanze, self.superfici):
+                         self.ricevute, self.stanze, self.superfici, self.aiuti):
             cartella.mkdir(parents=True, exist_ok=True)
         self._porta_fuori_i_modelli_vecchi()
 

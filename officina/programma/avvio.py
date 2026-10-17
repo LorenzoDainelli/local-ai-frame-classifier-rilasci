@@ -758,6 +758,8 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             geometria = self._geometria()
             if massimizzata:
                 geometria["massimizzata"] = True
+            elif int(finestra.x) <= -10000 or int(finestra.y) <= -10000:
+                return
             else:
                 geometria = {"larga": int(finestra.width), "alta": int(finestra.height),
                              "x": int(finestra.x), "y": int(finestra.y),

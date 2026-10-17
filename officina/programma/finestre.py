@@ -55,6 +55,19 @@ class Finestre:
         scritta = carta.leggi().get("finestra")
         return scritta if isinstance(scritta, dict) else {}
 
+    def _si_vede(self, x: int, y: int, larga: int, alta: int) -> bool:
+        try:
+            schermi = list(self.webview.screens)
+        except Exception:
+            return False
+        for schermo in schermi:
+            sx, sy = int(getattr(schermo, "x", 0)), int(getattr(schermo, "y", 0))
+            sl, sa = int(schermo.width), int(schermo.height)
+            if (min(x + larga, sx + sl) - max(x, sx) >= 200
+                    and sy <= y + 20 <= sy + sa - 40):
+                return True
+        return False
+
     def crea_la_principale(self, indirizzo: str | None = None):
         from officina.web import sfoglia
 
@@ -67,7 +80,8 @@ class Finestre:
                        js_api=PontePrincipale(self),
                        maximized=bool(geometria.get("massimizzata")),
                        text_select=True)
-        if geometria.get("x") is not None and geometria.get("y") is not None:
+        if (geometria.get("x") is not None and geometria.get("y") is not None
+                and self._si_vede(int(geometria["x"]), int(geometria["y"]), opzioni["width"], opzioni["height"])):
             opzioni.update(x=int(geometria["x"]), y=int(geometria["y"]))
         else:
             opzioni.update(self._schermo())

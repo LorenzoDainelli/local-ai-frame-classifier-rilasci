@@ -757,7 +757,7 @@ def test_con_la_stanza_la_scena_ha_il_luogo_e_le_foto_con_questa_per_prima(con_i
     for f in dati["foto"]:
         assert f["file_id"] == _il_principale(archivio, f["scatto_id"])
         assert set(f) == {"scatto_id", "file_id", "questa", "data", "centro", "rotazione", "campo", "centro_x",
-                          "centro_y", "proporzione", "allungo", "descrizione", "obiettivo"}
+                          "centro_y", "proporzione", "allungo", "descrizione", "obiettivo", "versione"}
         assert re.fullmatch(r"da \d+,\d m di altezza, guardando [a-z' ùài]+", f["descrizione"])
         assert f["proporzione"] == pytest.approx(_proporzione(archivio, f["scatto_id"]), abs=0.02)
         assert len(f["centro"]) == 3 and len(f["rotazione"]) == 3
@@ -900,7 +900,7 @@ def test_una_nuvola_con_pochi_punti_dispari_si_riempie_e_si_legge(archivio_pieno
     costruzione._salva_la_nuvola(archivio_pieno.dove.stanze / riga["file"], punti, colori)
     dati = in3d.nuvola_in_binario(archivio_pieno, posto_id)
     letta = _nuvola_letta(dati)
-    assert letta["testa"] == {"punti": 5, "centro": [0.0, 0.0, 0.0], "mezzo": [1.0, 2.0, 3.0]}
+    assert letta["testa"] == {"punti": 5, "centro": [0.0, 0.0, 0.0], "mezzo": [1.0, 2.0, 3.0], "gruppi": [5]}
     assert len(dati) == _testa(dati, in3d.FIRMA_NUVOLA)[1] + 32 + 16
     assert letta["punti"] == pytest.approx(punti, abs=1e-4)
     assert (letta["colori"] == colori).all()
@@ -914,7 +914,7 @@ def test_una_nuvola_vuota_ha_solo_l_intestazione(archivio_pieno):
                                  np.zeros((0, 3), dtype=np.uint8))
     dati = in3d.nuvola_in_binario(archivio_pieno, posto_id)
     testa, fine = _testa(dati, in3d.FIRMA_NUVOLA)
-    assert testa == {"punti": 0, "centro": [0, 0, 0], "mezzo": [1, 1, 1]}
+    assert testa == {"punti": 0, "centro": [0, 0, 0], "mezzo": [1, 1, 1], "gruppi": []}
     assert fine == len(dati)
 
 

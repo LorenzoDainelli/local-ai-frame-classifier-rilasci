@@ -142,6 +142,11 @@ def scena(connessione, scatto_id: int) -> dict | None:
         persone = [] if stanza is not None else persone
     principali = _principali(connessione, [f["scatto_id"] for f in foto] + [scatto_id])
     obiettivi = _obiettivi(connessione, [f["scatto_id"] for f in foto] + [scatto_id])
+    di_versione = {}
+    versioni_qui = stanze.versioni_di(stanza) if stanza is not None else []
+    for v in versioni_qui:
+        for numero in v.get("scatti", []):
+            di_versione[numero] = v["numero"]
     elenco = []
     for f in foto:
         if f["scatto_id"] not in principali:
@@ -152,7 +157,7 @@ def scena(connessione, scatto_id: int) -> dict | None:
             "data": scatti_mod.giorno_a_parole((f["data"] or "")[:10] or None),
             "centro": f["centro"], "rotazione": f["rotazione"], "campo": f["campo"],
             "centro_x": f["centro_x"], "centro_y": f["centro_y"], "proporzione": f["proporzione"],
-            "allungo": f["allungo"],
+            "allungo": f["allungo"], "versione": di_versione.get(f["scatto_id"], 0),
             "descrizione": descrivi(f),
             "obiettivo": _obiettivo(obiettivi.get(f["scatto_id"]), f["campo"], f["proporzione"]),
             "quando": f["data"] or ""})
@@ -169,7 +174,9 @@ def scena(connessione, scatto_id: int) -> dict | None:
             "misure": (f"{_virgola(stanza['larga'] or 0)} × {_virgola(stanza['lunga'] or 0)} m, "
                        f"alta {_virgola(stanza['alta'] or 0)} m"),
             "alta": stanza["alta"] or 2.5, "larga": stanza["larga"] or 4.0, "lunga": stanza["lunga"] or 4.0,
-            "versione": f"{stanza['versione']}-{stanza['costruita_il']}"}
+            "versione": f"{stanza['versione']}-{stanza['costruita_il']}",
+            "versioni": [{"numero": v["numero"], "dal": scatti_mod.giorno_a_parole(v.get("dal")),
+                          "al": scatti_mod.giorno_a_parole(v.get("al"))} for v in versioni_qui]}
     if not elenco or not elenco[0]["questa"]:
         fuori["obiettivo"] = _obiettivo(obiettivi.get(scatto_id), None, proporzione)
     return fuori
@@ -298,14 +305,17 @@ def nuvola_in_binario(archivio, posto_id: int) -> bytes | None:
     if stanza is None or attivo is None or stanza["stato"] != stanze.FATTA or not stanza["file"]:
         return None
     try:
-        punti, colori = costruzione.leggi_la_nuvola(archivio.dove.stanze / stanza["file"])
+        punti, colori, gruppi = costruzione.leggi_tutta_la_nuvola(archivio.dove.stanze / stanza["file"])
     except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile):
         return None
     if not len(punti):
-        return _binario(FIRMA_NUVOLA, {"punti": 0, "centro": [0, 0, 0], "mezzo": [1, 1, 1]}, [b"", b""])
+        return _binario(FIRMA_NUVOLA, {"punti": 0, "centro": [0, 0, 0], "mezzo": [1, 1, 1], "gruppi": []}, [b"", b""])
     basso, alto = punti.min(axis=0), punti.max(axis=0)
     centro = (basso + alto) / 2
     mezzo = np.maximum((alto - basso) / 2, 1e-6)
+    ordine = np.argsort(gruppi, kind="stable")
+    punti, colori = punti[ordine], colori[ordine]
+    conti = np.bincount(np.asarray(gruppi, dtype=np.int64)).tolist()
     stretti = np.round((punti - centro) / mezzo * 32767).clip(-32767, 32767).astype("<i2")
-    testa = {"punti": int(len(punti)), "centro": centro.tolist(), "mezzo": mezzo.tolist()}
+    testa = {"punti": int(len(punti)), "centro": centro.tolist(), "mezzo": mezzo.tolist(), "gruppi": conti}
     return _binario(FIRMA_NUVOLA, testa, [stretti.tobytes(), np.ascontiguousarray(colori, dtype=np.uint8).tobytes()])

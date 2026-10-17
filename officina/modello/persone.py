@@ -161,6 +161,12 @@ def unisci(connessione: sqlite3.Connection, da_id: int, a_id: int) -> dict:
     connessione.execute("DELETE FROM persone_negli_scatti WHERE persona_id = ?",
                         (da_id,))
     connessione.execute(
+        "UPDATE OR IGNORE aiuti SET persona_id = ? WHERE persona_id = ?", (a_id, da_id))
+    connessione.execute(
+        "DELETE FROM volti_riferimento WHERE persona_id = ? AND da_file IN "
+        "(SELECT 'aiuto-' || id FROM aiuti WHERE persona_id = ?)", (da_id, da_id))
+    connessione.execute("DELETE FROM aiuti WHERE persona_id = ?", (da_id,))
+    connessione.execute(
         "UPDATE OR IGNORE volti_riferimento SET persona_id = ? WHERE persona_id = ?",
         (a_id, da_id))
     connessione.execute("DELETE FROM volti_riferimento WHERE persona_id = ?",

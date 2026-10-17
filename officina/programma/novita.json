@@ -308,6 +308,26 @@
       [
         "calendario",
         "Sotto Foto c'è «Tempo e mappa»: in alto gli anni mese per mese, sotto una mappa del mondo con i tuoi scatti. Clicca un anno o trascina sui mesi per scegliere il periodo, clicca un punto per vedere le foto fatte lì. Funziona senza internet"
+      ],
+      [
+        "cubo",
+        "La stanza in 3D ora usa le foto a 4K: un pezzo alla volta, così si vedono anche i dettagli piccoli. Ogni punto tiene il colore più nitido"
+      ],
+      [
+        "cubo",
+        "Se nella stanza qualcosa cambia negli anni (un mobile spostato, un quadro nuovo), il programma fa una stanza fissa e le sue versioni con le date. Nel 3D scegli la versione, e aprendo una foto vedi quella giusta"
+      ],
+      [
+        "luoghi",
+        "In Luoghi, su ogni luogo, puoi aggiungere «foto di aiuto» per la stanza: servono solo a costruire il 3D e non vanno nella Galleria"
+      ],
+      [
+        "persona",
+        "Nella pagina della persona c'è «Foto di aiuto»: le foto che metti lì insegnano il volto, la corporatura, i vestiti e la figura in 3D di quella persona, e non vanno nella Galleria. Se in una foto ci sono più volti, il volto non si impara, ma il corpo sì"
+      ],
+      [
+        "persona",
+        "Se unisci due persone, anche le loro foto di aiuto vanno insieme. Togliendo una foto di aiuto sparisce anche quello che aveva insegnato"
       ]
     ],
     "tecnico": [
@@ -451,6 +471,14 @@
       [
         "luoghi",
         "Pagina <code>/tempo</code>: conti per mese da <code>scatti.giorno</code>, punti GPS raggruppati sul server per 0,001° (o meno fini oltre 30.000 celle) e sullo schermo a celle di 56 px. Contorni Natural Earth ridotti in <code>statici/mappa/</code> (0,01° e 0,001°, il secondo caricato solo da vicino), Mercatore su canvas con Path2D. Nuovo filtro <code>zona=sud,ovest,nord,est</code> anche in Galleria, che passa l'antimeridiano"
+      ],
+      [
+        "cubo",
+        "Stanza: VGGT-Omega, poi DA3 grezzo e passata fine a tasselli 4K; cubetti di 5 mm che tengono il punto più nitido. Versioni da cubi di 4 cm che votano pieno o vuoto; il gruppo di ogni punto sta nel .npz e il visore disegna il gruppo 0 più la versione scelta con drawRange"
+      ],
+      [
+        "persona",
+        "Migrazione 59: <code>aiuti.guardato</code> e tabella <code>aspetti_di_aiuto</code>. <code>corpi.aiuti_persona</code> salva il volto in <code>volti_riferimento</code> (<code>da_file</code> = <code>aiuto-&lt;id&gt;</code>) e KPR, vestiti e figura; <code>chi_e</code> li usa come riferimenti con id negativo"
       ]
     ]
   },

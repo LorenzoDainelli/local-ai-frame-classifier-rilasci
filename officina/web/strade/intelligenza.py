@@ -144,9 +144,29 @@ def _guarda_i_corpi(passata) -> None:
     if not passata.fermata:
         _fai_le_superfici(passata)
     if not passata.fermata:
+        _guarda_gli_aiuti_delle_persone(passata)
+    if not passata.fermata:
         cerca_chi_e(passata.archivio, comune.lavoro_corpi, fermato=lambda: passata.fermata)
     if not passata.fermata:
         _fai_le_stanze(passata)
+
+
+def _guarda_gli_aiuti_delle_persone(passata_corpi) -> None:
+    from officina.corpi import aiuti_persona
+
+    passata = aiuti_persona.Passata(passata_corpi.archivio, rilevatore=passata_corpi.rilevatore,
+                                    fermato=lambda: passata_corpi.fermata)
+
+    def al_passo(avanzamento) -> None:
+        comune.lavoro_corpi.numeri = {"fatti": avanzamento.fatti + avanzamento.saltati,
+                                      "totale": avanzamento.totale, "corpi": avanzamento.corpi,
+                                      "quanto_manca": ""}
+
+    try:
+        if passata.esegui(al_passo=al_passo).totale:
+            comune.lavoro_corpi.di(passata.avanzamento.a_parole())
+    except ErroreOfficina as errore:
+        comune.lavoro_corpi.di(errore.messaggio.split("\n")[0])
 
 
 def _fai_le_superfici(passata_corpi) -> None:

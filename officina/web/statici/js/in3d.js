@@ -203,6 +203,9 @@ function costruisci(T, finestra, dati, corpi, nuvola) {
     let centro = new T.Vector3(0, 1, 0);
     let raggio = 3;
     let punti = null;
+    let cambia = null;
+    let inizi = [];
+    let conti = [];
     if (conStanza) {
         const forma = new T.BufferGeometry();
         forma.setAttribute("position", new T.Int16BufferAttribute(nuvola.posti, 3, true));
@@ -214,6 +217,17 @@ function costruisci(T, finestra, dati, corpi, nuvola) {
         punti.scale.set(...nuvola.testa.mezzo);
         punti.frustumCulled = false;
         scena.add(punti);
+        const gruppi = nuvola.testa.gruppi || [];
+        if (gruppi.length > 2) {
+            punti.geometry.setDrawRange(0, gruppi[0]);
+            cambia = new T.Points(forma, punti.material);
+            cambia.position.copy(punti.position);
+            cambia.scale.copy(punti.scale);
+            cambia.frustumCulled = false;
+            scena.add(cambia);
+            inizi = gruppi.map((_, i) => gruppi.slice(0, i).reduce((a, b) => a + b, 0));
+            conti = gruppi;
+        }
         centro = new T.Vector3(0, dati.stanza.alta * 0.35, 0);
         raggio = Math.max(1.5, 0.5 * Math.hypot(dati.stanza.larga, dati.stanza.lunga, dati.stanza.alta));
     }
@@ -288,6 +302,34 @@ function costruisci(T, finestra, dati, corpi, nuvola) {
     nomi.append(daQui);
 
     const scelta = { dove: { tipo: "intorno" }, chi: null, coni: true, quanto: Number(misto.value) / 100 };
+    const versioni = conStanza && cambia ? (dati.stanza.versioni || []) : [];
+    let laVersione = 0;
+    let sceltaVersioni = null;
+    function mettiVersione(numero, eRidisegna = true) {
+        if (!cambia || !numero || numero >= conti.length || numero === laVersione) return;
+        laVersione = numero;
+        cambia.geometry.drawRange.start = inizi[numero];
+        cambia.geometry.drawRange.count = conti[numero];
+        if (sceltaVersioni) sceltaVersioni.value = String(numero);
+        if (eRidisegna) ridisegna();
+    }
+    if (versioni.length > 1) {
+        sceltaVersioni = document.createElement("select");
+        sceltaVersioni.className = "in3d-versioni";
+        sceltaVersioni.setAttribute("aria-label", "Com'era la stanza");
+        versioni.forEach((v) => {
+            const voce = document.createElement("option");
+            voce.value = String(v.numero);
+            voce.textContent = v.dal === v.al ? v.dal : `${v.dal} → ${v.al}`;
+            sceltaVersioni.append(voce);
+        });
+        sceltaVersioni.addEventListener("change", () => mettiVersione(Number(sceltaVersioni.value)));
+        tela.append(sceltaVersioni);
+    }
+    if (cambia) {
+        const sua = questa >= 0 ? foto[questa].versione : 0;
+        mettiVersione(sua || (versioni.length ? versioni[versioni.length - 1].numero : 1), false);
+    }
     const stato = { giro: PRESET.intorno[0], alto: PRESET.intorno[1], vicino: 1 };
     if (questa >= 0) stato.giro = giroVerso(centro, new T.Vector3(...foto[questa].centro)) + PRESET.intorno[0];
     let volo = null;
@@ -461,6 +503,7 @@ function costruisci(T, finestra, dati, corpi, nuvola) {
         });
         const f = inFoto ? foto[scelta.dove.i] : foto[questa];
         const altra = inFoto && scelta.dove.i !== questa;
+        if (inFoto && f && f.versione) mettiVersione(f.versione);
         cursore.hidden = !fermo;
         apri.hidden = !(fermo && altra);
         if (fermo && altra) apri.href = "/scatto/" + f.scatto_id + location.search;

@@ -320,7 +320,8 @@ def perche(indizi, pesi: Pesi, contesto_perche: str, riferimento: Gruppo, quale:
     stesso = bool(not numpy.isnan(altro) and not numpy.isnan(giorno) and abs(altro - giorno) < 1.0)
     elenco = parti[0] if len(parti) == 1 else ", ".join(parti[:-1]) + " e " + parti[-1]
     detto = elenco + " " + _quando_a_parole(riferimento.quando[fonte], stesso)
-    return detto, riferimento.ids[fonte]
+    simile = int(riferimento.ids[fonte])
+    return detto, simile if simile > 0 else None
 
 
 SQL_DEI_NOTI = (
@@ -380,23 +381,102 @@ def firme(connessione: sqlite3.Connection, gruppi: dict[int, list]) -> dict[int,
         risposte.setdefault(riga["persona_id"], []).append(
             [riga["risposta"], riga["quante"], riga["ultima"]])
     fuori = {}
-    for persona_id in set(gruppi) | set(risposte):
+    di_aiuto = {persona_id: [r["id"] for r in righe] for persona_id, righe in aiuti_per_persona(connessione).items()}
+    for persona_id in set(gruppi) | set(risposte) | set(di_aiuto):
         quanti = gruppi.get(persona_id, [])
         fuori[persona_id] = json.dumps([len(quanti), max((r["id"] for r in quanti), default=0),
-                                        sorted(risposte.get(persona_id, []))])
+                                        sorted(risposte.get(persona_id, []))]
+                                       + ([di_aiuto[persona_id]] if persona_id in di_aiuto else []))
+    return fuori
+
+
+def aiuti_per_persona(connessione: sqlite3.Connection) -> dict[int, list]:
+    fuori: dict[int, list] = {}
+    for riga in tutti(connessione,
+                      "SELECT a.id, a.persona_id, a.scattata_il AS quando, julianday(a.scattata_il) AS giorno "
+                      "FROM aiuti a JOIN persone p ON p.id = a.persona_id AND p.stato = 'attiva' AND p.nome IS NOT NULL "
+                      "WHERE EXISTS (SELECT 1 FROM aspetti_di_aiuto d WHERE d.aiuto_id = a.id) ORDER BY a.id"):
+        fuori.setdefault(int(riga["persona_id"]), []).append(dict(riga))
+    return fuori
+
+
+def carica_aiuti(connessione: sqlite3.Connection, righe: list) -> Gruppo:
+    numpy = vettori.numpy_o_spiega()
+    quanti = len(righe)
+    ids = [-int(riga["id"]) for riga in righe]
+    posto = {int(riga["id"]): indice for indice, riga in enumerate(righe)}
+    raccolti: dict[str, dict[int, object]] = {nome: {} for nome in VETTORI}
+    if righe:
+        for riga in tutti(connessione,
+                          "SELECT aiuto_id, modello, parti, vettore, visibili FROM aspetti_di_aiuto "
+                          "WHERE aiuto_id IN (SELECT value FROM json_each(?)) "
+                          "AND modello IN (SELECT value FROM json_each(?))",
+                          json.dumps(list(posto)), json.dumps([*KPR, VESTITI, FIGURA])):
+            vettore = _leggi_il_vettore(riga)
+            if vettore is not None:
+                raccolti[_nome_del_vettore(riga["modello"])][posto[riga["aiuto_id"]]] = vettore
+    gruppo = Gruppo(
+        ids=ids, scatti=numpy.array(ids, dtype=numpy.int64),
+        persone=numpy.array([int(riga["persona_id"]) for riga in righe], dtype=numpy.int64),
+        giorni=numpy.array([float(riga["giorno"]) if riga["giorno"] is not None else numpy.nan
+                            for riga in righe], dtype=numpy.float64),
+        quando=[riga["quando"] for riga in righe])
+    for nome in VETTORI:
+        dentro = raccolti[nome]
+        lungo = max((len(v) for v in dentro.values()), default=1)
+        matrice = numpy.zeros((quanti, lungo), dtype=numpy.float32)
+        presenti = numpy.zeros(quanti, dtype=bool)
+        for indice, vettore in dentro.items():
+            if len(vettore) == lungo:
+                matrice[indice] = vettore
+                presenti[indice] = True
+        gruppo.vettori[nome] = matrice
+        gruppo.presenti[nome] = presenti
+    return gruppo
+
+
+def unisci(gruppi_da_unire: list[Gruppo]) -> Gruppo:
+    numpy = vettori.numpy_o_spiega()
+    pieni = [g for g in gruppi_da_unire if len(g)]
+    if len(pieni) <= 1:
+        return pieni[0] if pieni else gruppi_da_unire[0]
+    fuori = Gruppo(ids=[i for g in pieni for i in g.ids],
+                   scatti=numpy.concatenate([g.scatti for g in pieni]),
+                   persone=numpy.concatenate([g.persone for g in pieni]),
+                   giorni=numpy.concatenate([g.giorni for g in pieni]),
+                   quando=[q for g in pieni for q in g.quando])
+    for nome in VETTORI:
+        lungo = max(g.vettori[nome].shape[1] for g in pieni if g.presenti[nome].any()) if any(
+            g.presenti[nome].any() for g in pieni) else 1
+        matrici, presenti = [], []
+        for g in pieni:
+            matrice, ci_sono = g.vettori[nome], g.presenti[nome]
+            if matrice.shape[1] != lungo:
+                matrice = numpy.zeros((len(g), lungo), dtype=numpy.float32)
+                ci_sono = numpy.zeros(len(g), dtype=bool)
+            matrici.append(matrice)
+            presenti.append(ci_sono)
+        fuori.vettori[nome] = numpy.concatenate(matrici)
+        fuori.presenti[nome] = numpy.concatenate(presenti)
     return fuori
 
 
 def riferimenti(connessione: sqlite3.Connection, gruppi: dict[int, list],
                 chi: set[int] | None = None) -> tuple[Gruppo, dict[int, tuple[int, int]]]:
-    scelte, segmenti = [], {}
-    for persona_id in sorted(gruppi):
+    di_aiuto = aiuti_per_persona(connessione)
+    pezzi, segmenti, quanti = [], {}, 0
+    for persona_id in sorted(set(gruppi) | set(di_aiuto)):
         if chi is not None and persona_id not in chi:
             continue
-        prese = scelti_per_persona(gruppi[persona_id])
-        segmenti[persona_id] = (len(scelte), len(scelte) + len(prese))
-        scelte.extend(prese)
-    return carica(connessione, scelte), segmenti
+        prese = scelti_per_persona(gruppi.get(persona_id, []))
+        suoi = di_aiuto.get(persona_id, [])
+        pezzi.append(carica(connessione, prese))
+        pezzi.append(carica_aiuti(connessione, suoi))
+        segmenti[persona_id] = (quanti, quanti + len(prese) + len(suoi))
+        quanti += len(prese) + len(suoi)
+    if not pezzi:
+        return carica(connessione, []), segmenti
+    return unisci(pezzi), segmenti
 
 
 def parte(gruppo: Gruppo, a: int, b: int) -> Gruppo:
@@ -601,6 +681,8 @@ class Passata:
         with self.archivio.lettura() as connessione:
             tutti_i_noti = noti(connessione)
             gruppi = per_persona(tutti_i_noti)
+            for persona_id in aiuti_per_persona(connessione):
+                gruppi.setdefault(persona_id, [])
             firme_adesso = firme(connessione, gruppi)
             salvati = pesi_salvati(connessione)
             di_tutti, ricordo = pesi_di_tutti(connessione)
