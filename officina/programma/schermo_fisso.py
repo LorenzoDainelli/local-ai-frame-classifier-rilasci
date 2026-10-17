@@ -17,6 +17,7 @@ class ColFisso:
 
     def lascia_lo_schermo(self) -> None:
         carta.aggiorna(modo=None)
+        registro.evento("programma.lascia_lo_schermo")
 
     def riabbina(self) -> None:
         from officina.schermo import collega

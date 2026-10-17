@@ -231,7 +231,22 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
     def fa_da_schermo(self) -> bool:
         return carta.leggi().get("modo") == "schermo"
 
+    def _scrivi_la_prima_scelta(self, passo: str) -> None:
+        if getattr(self, "_prima_scelta_scritta", False):
+            return
+        self._prima_scelta_scritta = True
+        scritta = carta.leggi()
+        registro.evento("programma.prima_scelta", passo=registro.Parola(passo),
+                        modo=registro.Parola(str(scritta.get("modo") or "nessuno")),
+                        con_archivio=scritta.get("cartella_dati") is not None,
+                        campi=len(scritta), argomenti=len(sys.argv) - 1)
+
     def passo(self) -> str:
+        risposta = self._il_passo()
+        self._scrivi_la_prima_scelta(risposta)
+        return risposta
+
+    def _il_passo(self) -> str:
         if self.guasto:
             return "guasto"
         if self.fa_da_schermo():

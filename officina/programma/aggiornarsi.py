@@ -5,7 +5,7 @@ import time
 
 from officina import registro
 from officina.errori import ErroreOfficina
-from officina.programma import (aggiornamenti)
+from officina.programma import aggiornamenti, carta
 
 OGNI_QUANTO_CONTROLLO = 300
 
@@ -55,6 +55,9 @@ class Aggiornarsi:
         }
 
     def aggiorna_adesso(self) -> dict:
+        registro.evento("aggiornamento.riavvia_ora",
+                        modo=registro.Parola(str(carta.leggi().get("modo") or "nessuno")),
+                        col_fisso=getattr(self, "ponte", None) is not None)
         trovato = self.aggiornamento_trovato
         if trovato is None:
             sospeso = aggiornamenti.in_sospeso()
