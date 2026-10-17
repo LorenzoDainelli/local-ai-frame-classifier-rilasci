@@ -1871,3 +1871,17 @@ a.carta:hover { transform: translateY(-1px); }
 .ps-aiuti-provini .provino img { width: 100%; height: 100%; object-fit: cover; }
 .ps-aiuti-provini .provino button { position: absolute; top: 1px; right: 1px; min-width: 0; padding: 0 5px; background: var(--pozzo); }
 .ps-aiuti label { cursor: pointer; }
+
+img[data-si-ingrandisce] { cursor: zoom-in; }
+.velo-ingrandita {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: var(--fondo);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+    animation: velo-arriva var(--gesto) var(--uscita);
+}
+.velo-ingrandita > img { max-width: 100%; max-height: 100%; object-fit: contain; }
