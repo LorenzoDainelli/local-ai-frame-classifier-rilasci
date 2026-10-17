@@ -7,7 +7,7 @@ from officina.errori import OperazioneNonPermessa
 
 LUNGHEZZA_MASSIMA = 120
 
-_INVISIBILI = re.compile(r"[\u0000-\u001f\u007f-\u009f​-‏ -‮⁠-⁤﻿]")
+_INVISIBILI = re.compile(r"[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]")
 _SPAZI = re.compile(r"\s+")
 
 

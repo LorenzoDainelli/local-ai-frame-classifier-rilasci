@@ -115,13 +115,6 @@ class Pacchetto:
         return self.dentro.execute(
             "SELECT * FROM persone ORDER BY quanti DESC, nome").fetchall()
 
-    def insieme_a(self, persona_id: int) -> list[sqlite3.Row]:
-        return self.dentro.execute(
-            "SELECT p.*, i.quante FROM insieme i "
-            "JOIN persone p ON p.id = i.altra_id "
-            "WHERE i.persona_id = ? ORDER BY i.quante DESC",
-            (persona_id,)).fetchall()
-
     def dettagli(self, scatto_id: int) -> dict:
         scatto = self.scatto(scatto_id)
         luogo = None

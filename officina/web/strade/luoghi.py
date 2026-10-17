@@ -198,10 +198,19 @@ def _la_stanza(connessione, posto_id: int) -> dict:
     }
 
 
-async def _carica(richiesta: Request, **di_chi) -> dict:
-    import functools
+def _aggiungi_un_aiuto(sorgente, nome: str, archivio, di_chi: dict) -> dict:
     import shutil
     import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as cartella:
+        provvisorio = Path(cartella) / f"arrivo{Path(nome).suffix.lower()}"
+        with open(provvisorio, "wb") as fuori:
+            shutil.copyfileobj(sorgente, fuori, 1 << 20)
+        return aiuti.aggiungi(archivio, provvisorio, nome, **di_chi)
+
+
+async def _carica(richiesta: Request, **di_chi) -> dict:
     from pathlib import Path
 
     from officina.immagini import consegna
@@ -213,11 +222,7 @@ async def _carica(richiesta: Request, **di_chi) -> dict:
         if not hasattr(arrivato, "filename"):
             continue
         nome = Path(arrivato.filename or "").name
-        with tempfile.TemporaryDirectory() as cartella:
-            provvisorio = Path(cartella) / f"arrivo{Path(nome).suffix.lower()}"
-            with open(provvisorio, "wb") as fuori:
-                shutil.copyfileobj(arrivato.file, fuori, 1 << 20)
-            esito = await consegna.subito(functools.partial(aiuti.aggiungi, **di_chi), archivio, provvisorio, nome)
+        esito = await consegna.subito(_aggiungi_un_aiuto, arrivato.file, nome, archivio, di_chi)
         messe += esito["messe"]
         scartate += esito["scartate"]
         if esito["perche"]:

@@ -37,11 +37,6 @@ def misura_di_lavoro(larghezza: int, altezza: int) -> tuple[int, int]:
             max(MULTIPLO, altezza // MULTIPLO * MULTIPLO))
 
 
-def byte_di(modulo) -> int:
-    return sum(p.numel() * p.element_size() for p in modulo.parameters()) + \
-        sum(b.numel() * b.element_size() for b in modulo.buffers())
-
-
 def quanti_ne_stanno(pesi: list[int], posto: int) -> int:
     usati = 0
     for numero, peso in enumerate(pesi):

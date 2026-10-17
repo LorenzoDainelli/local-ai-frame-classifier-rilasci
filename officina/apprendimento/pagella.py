@@ -117,20 +117,3 @@ def _con_le_caselle(modello, punteggi, dove, caselle, come: str):
         fuori[posto] = griglia.combina(
             [float(punteggi[posto])] + modello.punteggi(sue).tolist(), come)
     return fuori
-
-
-@dataclass
-class Confronto:
-
-    etichetta: str
-    voti: dict[str, Voto] = field(default_factory=dict)
-
-    @property
-    def media(self) -> float | None:
-        numeri = [voto.azzecca for voto in self.voti.values()
-                  if voto.azzecca is not None]
-        return sum(numeri) / len(numeri) if numeri else None
-
-    @property
-    def nodi_giudicabili(self) -> int:
-        return sum(1 for voto in self.voti.values() if voto.abbastanza)
