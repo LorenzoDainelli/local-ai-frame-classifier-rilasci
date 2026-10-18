@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import dataclasses
 import json
+import numbers
 import re
 import sqlite3
 from pathlib import Path
 
-from officina.archivio.database import tutti
 from officina.misura.banco import Rapporto, Riga
 
 LARGHEZZA = 78
 
-GIA_ANONIMO = re.compile(r"(?i)(nodo|categoria|scena|persona)[ _-]?\d+")
+UN_PERCORSO = re.compile(r"[A-Za-z]:\\[^\s]+|/[^\s]*/[^\s]*")
+
+UN_ISTANTE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+
+CHIAVI_DEI_NODI = frozenset({"nodo", "si", "no", "no_regalati", "gruppi"})
 
 
 def conclusioni(rapporto: Rapporto) -> list[str]:
@@ -289,32 +294,59 @@ def _a_capo(testo: str, larghezza: int) -> list[str]:
     return righe
 
 
-def controlla(testo: str, connessione: sqlite3.Connection) -> list[str]:
-    trovati: list[str] = []
-    minuscolo = testo.lower()
+def _percorsi(testo: str) -> list[str]:
+    return [pezzo for pezzo in UN_PERCORSO.findall(testo)
+            if not pezzo.startswith(("/misura", "/statici"))]
 
-    def guarda(valore: object, che_cos_e: str) -> None:
-        if not isinstance(valore, str) or len(valore.strip()) < 3:
-            return
-        if GIA_ANONIMO.fullmatch(valore.strip()):
-            return
-        if re.search(rf"\b{re.escape(valore.strip().lower())}\b", minuscolo):
-            trovati.append(f"{che_cos_e}: «{valore.strip()}»")
 
-    for riga in tutti(connessione, "SELECT nome, criterio FROM nodi"):
-        guarda(riga["nome"], "nome di nodo")
-        guarda(riga["criterio"], "criterio di nodo")
-    for riga in tutti(connessione, "SELECT percorso FROM cartelle_sorgente"):
-        guarda(riga["percorso"], "cartella")
-    for riga in tutti(connessione,
-                      "SELECT nota FROM scatti WHERE nota IS NOT NULL "
-                      "ORDER BY id LIMIT 500"):
-        guarda(riga["nota"], "nota")
+def _scritte_permesse(connessione: sqlite3.Connection) -> frozenset[str]:
+    from officina import VERSIONE
+    from officina.descrittori import SCHEDE, griglia, preparazione
+    from officina.impostazioni import FINTO, REALE
+    from officina.misura import banco
+    from officina.modello import impronte
 
-    for pezzo in re.findall(r"[A-Za-z]:\\[^\s]+|/[^\s]*/[^\s]*", testo):
-        if not pezzo.startswith("/misura") and not pezzo.startswith("/statici"):
-            trovati.append(f"sembra un percorso: «{pezzo}»")
+    scritti = {descrittore for descrittore, _ in impronte.modelli_presenti(connessione)}
+    return frozenset({
+        VERSIONE, REALE, FINTO, banco.TUTTI_I_DESCRITTORI,
+        banco.TUTTE_LE_INQUADRATURE, *SCHEDE, *scritti, *preparazione.INQUADRATURE,
+        *(banco.inquadratura_delle_caselle(come) for come in griglia.MODI),
+    })
 
+
+def _scritte(valore: object, dove: str):
+    if isinstance(valore, str):
+        yield dove, valore
+    elif valore is None or isinstance(valore, numbers.Number):
+        return
+    elif isinstance(valore, dict):
+        for chiave, dentro in valore.items():
+            if not (isinstance(chiave, numbers.Number)
+                    or (dove == "nodi" and chiave in CHIAVI_DEI_NODI)):
+                yield from _scritte(chiave, dove)
+            yield from _scritte(dentro, dove)
+    elif isinstance(valore, (list, tuple, set, frozenset)):
+        for dentro in valore:
+            yield from _scritte(dentro, dove)
+    elif dataclasses.is_dataclass(valore) and not isinstance(valore, type):
+        for campo in dataclasses.fields(valore):
+            yield from _scritte(getattr(valore, campo.name),
+                                f"{dove} · {campo.name}" if dove else campo.name)
+    else:
+        yield dove, object()
+
+
+def fuori_posto(rapporto: Rapporto, connessione: sqlite3.Connection) -> list[str]:
+    permesse = _scritte_permesse(connessione)
+    campi = sorted({dove for dove, scritta in _scritte(rapporto, "")
+                    if not (isinstance(scritta, str)
+                            and (scritta in permesse or UN_ISTANTE.fullmatch(scritta)))})
+    trovati = [f"una scritta che il programma non conosce, in «{dove}»"
+               for dove in campi]
+    if trovati:
+        return trovati
+    if _percorsi(come_testo(rapporto)) or _percorsi(come_json(rapporto)):
+        trovati.append("qualcosa che sembra un percorso")
     return trovati
 
 
@@ -322,7 +354,7 @@ def scrivi(rapporto: Rapporto, connessione: sqlite3.Connection,
            dove: Path) -> Path:
     testo = come_testo(rapporto)
     numeri = come_json(rapporto)
-    sfuggiti = controlla(testo, connessione) + controlla(numeri, connessione)
+    sfuggiti = fuori_posto(rapporto, connessione)
     if sfuggiti:
         from officina.errori import OperazioneNonPermessa
 

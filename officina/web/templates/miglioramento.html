@@ -11,15 +11,17 @@
 </form>
 {% else %}
 <form method="post" action="/miglioramento/avvia">
-    <button class="tasto-comando accento piccolo" type="submit" {% if not pronto or not conti.in_coda %}disabled{% endif %}>Avvia</button>
+    <button class="tasto-comando accento piccolo" type="submit" {% if not pronto or not (conti.in_coda or (sfida and sfida.si_riprende)) %}disabled{% endif %}>Avvia</button>
 </form>
 {% endif %}
 {% endmacro %}
 
 {% macro cosa_fa() %}
 {% if lavoro.sta_lavorando and al_lavoro %}<b>{{ al_lavoro.nome }}</b> <span class="tenue numeri">{{ al_lavoro.prima }} &rarr; {{ al_lavoro.dopo }}</span>
+{% elif lavoro.sta_lavorando and lavoro.adesso and lavoro.adesso.ripresa %}<b>{{ lavoro.adesso.nome }}</b> <span class="tenue">LucidFlux fa la sua versione, per la sfida</span>
 {% elif lavoro.sta_lavorando %}Sto cominciando.
 {% elif conti.in_coda %}Si lavora quando premi Avvia, e si ferma quando vuoi: un file lasciato a metà ricomincia da capo.
+{% elif sfida and sfida.si_riprende %}LucidFlux deve ancora fare la sua versione di foto già fatte da SeedVR2: premi Avvia.
 {% else %}Niente in coda. Nella galleria seleziona le foto o i video e premi &laquo;Migliora&raquo;.
 {% endif %}
 {% endmacro %}
@@ -73,6 +75,12 @@
         in &laquo;Da rivedere&raquo;, dove si approva come sempre. Alla fine si
         vedono i nomi e il conteggio, e decidi tu quale modello usare per le
         foto.</p>
+        <p>Se LucidFlux non riesce su {{ sfida.pausa_dopo }} foto di fila, la sfida si
+        mette in pausa: le foto le fa solo SeedVR2 finché non premi
+        &laquo;Riprova la sfida&raquo;.</p>
+        <p>Le foto già fatte solo da SeedVR2 LucidFlux le rifà quando premi
+        Avvia, dopo la coda, e poi si votano come le altre. Se una la approvi o
+        la rifiuti prima, resta fuori dalla sfida.</p>
     {% endcall %}</h2>
     <p class="piccolo attenuato">
         {% if sfida.da_votare %}
@@ -80,11 +88,34 @@
         I nomi e i punti si vedono solo alla fine.
         {% elif sfida.si_puo_chiudere %}
         Finita: adesso si possono vedere i nomi e chi ha vinto.
-        {% else %}
+        {% elif not sfida.in_pausa %}
         Le prossime foto che migliori le fanno tutti e due i modelli, e poi si
         votano qui.
         {% endif %}
     </p>
+    {% if sfida.salto %}
+    <p class="avviso forte" role="status" data-salto-della-sfida>
+        {% if sfida.in_pausa %}Sfida in pausa: su <b class="numeri">{{ sfida.salto.di_fila|numero }}</b> foto di fila
+        LucidFlux non è riuscito: {{ sfida.salto.perche }}.
+        {% elif sfida.salto.di_fila > 1 %}Sulle ultime <b class="numeri">{{ sfida.salto.di_fila|numero }}</b> foto
+        LucidFlux non è riuscito: {{ sfida.salto.perche }}. Le ha fatte solo SeedVR2.
+        {% else %}Sull'ultima foto LucidFlux non è riuscito: {{ sfida.salto.perche }}.
+        L'ha fatta solo SeedVR2.
+        {% endif %}
+        {% if sfida.salto.tecnico %}<span class="piccolo tenue">Dettaglio tecnico: {{ sfida.salto.tecnico }}</span>{% endif %}
+    </p>
+    {% if sfida.in_pausa %}
+    <form method="post" action="/miglioramento/sfida/riprova">
+        <button class="tasto-comando piccolo" type="submit" {% if not pronto %}disabled{% endif %}>Riprova la sfida</button>
+    </form>
+    {% endif %}
+    {% elif sfida.si_riprende %}
+    <p class="piccolo" data-ripresa-della-sfida>
+        LucidFlux deve ancora rifare <b class="numeri">{{ sfida.da_riprendere|numero }}</b>
+        {{ 'foto già fatta' if sfida.da_riprendere == 1 else 'foto già fatte' }} da SeedVR2:
+        le fa quando premi Avvia.
+    </p>
+    {% endif %}
     <span class="barretta" aria-hidden="true"><span style="width:{{ sfida.percento }}%"></span></span>
     {% if sfida.da_votare %}
     <a class="tasto-comando piccolo" href="/miglioramento/sfida">Vota</a>

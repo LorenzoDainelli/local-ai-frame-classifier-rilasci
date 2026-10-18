@@ -14,6 +14,8 @@ QUANTE = 100
 SFIDANTI = (motori.SEEDVR2, motori.LUCIDFLUX)
 VOTI = ("A", "B", "pari", "nessuna")
 CHIUSA = "sfida_chiusa"
+SALTO = "sfida_ultimo_salto"
+PAUSA_DOPO = 3
 NOMI = {motori.SEEDVR2: "SeedVR2", motori.LUCIDFLUX: "LucidFlux"}
 
 
@@ -32,6 +34,54 @@ def quante_fatte(connessione: sqlite3.Connection) -> int:
 
 def si_fa(connessione: sqlite3.Connection, pronte: bool) -> bool:
     return pronte and chiusa(connessione) is None and quante_fatte(connessione) < QUANTE
+
+
+def ultimo_salto(connessione: sqlite3.Connection) -> dict | None:
+    esito = leggi_impostazione(connessione, SALTO)
+    return esito if isinstance(esito, dict) else None
+
+
+def segna_il_salto(connessione: sqlite3.Connection, esito: dict | None) -> None:
+    if esito is None:
+        if ultimo_salto(connessione) is not None:
+            scrivi_impostazione(connessione, SALTO, None)
+        return
+    prima = ultimo_salto(connessione) or {}
+    scrivi_impostazione(connessione, SALTO, {
+        "codice": str(esito.get("guasto") or ""),
+        "spiegazione": str(esito.get("spiegazione") or ""),
+        "tipo": str(esito.get("tipo") or ""),
+        "dove": str(esito.get("dove") or ""),
+        "riga": str(esito.get("riga") or ""),
+        "di_fila": int(prima.get("di_fila") or 0) + 1,
+        "quando": adesso(),
+    })
+
+
+def in_pausa(connessione: sqlite3.Connection) -> bool:
+    salto = ultimo_salto(connessione)
+    return salto is not None and int(salto.get("di_fila") or 0) >= PAUSA_DOPO
+
+
+def _solo_seedvr2(usati_scritti: str | None) -> bool:
+    try:
+        usati = json.loads(usati_scritti or "[]")
+    except ValueError:
+        return False
+    nomi = [str(usato.get("nome")) for usato in usati if isinstance(usato, dict)]
+    return bool(nomi) and nomi[0] == motori.SEEDVR2 and motori.LUCIDFLUX not in nomi
+
+
+def da_riprendere(connessione: sqlite3.Connection) -> list[sqlite3.Row]:
+    posto = QUANTE - quante_fatte(connessione)
+    if posto <= 0 or chiusa(connessione) is not None:
+        return []
+    righe = tutti(connessione,
+                  "SELECT m.* FROM migliorie AS m JOIN file_media AS f ON f.id = m.file_id "
+                  "WHERE m.stato = ? AND f.genere = 'immagine' AND m.in_revisione IS NOT NULL "
+                  "AND NOT EXISTS (SELECT 1 FROM sfide AS s WHERE s.miglioria_id = m.id) "
+                  "ORDER BY m.id", coda.DA_RIVEDERE)
+    return [riga for riga in righe if _solo_seedvr2(riga["motori"])][:posto]
 
 
 def l_altro(motore: str) -> str:

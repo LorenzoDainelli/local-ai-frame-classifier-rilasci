@@ -565,11 +565,18 @@ def test_altri_guasti_in_mezzo_non_azzerano_il_conto_della_scheda(quattro_piccol
     assert len(_riga(quattro_piccole, coda.IN_CODA)) == 3
 
 
-def test_la_stanza_riconosce_anche_la_memoria_finita_di_onnx(tmp_path, monkeypatch):
+def test_la_stanza_riconosce_anche_la_memoria_finita_di_onnx(monkeypatch):
+    esito = _stanza_che_scoppia(monkeypatch, RuntimeError(
+        "[ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Failed to allocate memory"))
+    assert esito["guasto"] == lavoro.SCHEDA_FINITA
+    assert "spiegazione" not in esito
+
+
+def _stanza_che_scoppia(monkeypatch, errore):
     from officina.miglioria import catena, rete, stanza
 
     def esegui(*_):
-        raise RuntimeError("[ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Failed to allocate memory")
+        raise errore
 
     monkeypatch.setattr(catena, "esegui", esegui)
     monkeypatch.setattr(rete, "chiudi", lambda: None)
@@ -584,4 +591,22 @@ def test_la_stanza_riconosce_anche_la_memoria_finita_di_onnx(tmp_path, monkeypat
 
     monkeypatch.setattr(stanza, "_canale", Canale)
     assert stanza.main() == 1
-    assert json.loads(mandati[-1])["guasto"] == lavoro.SCHEDA_FINITA
+    return json.loads(mandati[-1])
+
+
+def test_la_stanza_dice_perche_lucidflux_non_parte(monkeypatch):
+    from officina.miglioria import lucidflux
+
+    detto = "Per LucidFlux servono circa 21 GB di RAM libera e ce ne sono 12."
+    esito = _stanza_che_scoppia(monkeypatch, lucidflux.RamPoca(detto))
+    assert esito == {"guasto": "memoria_finita", "spiegazione": detto}
+
+
+def test_la_stanza_non_ripete_i_messaggi_che_possono_avere_nomi(monkeypatch):
+    from officina.errori import ErroreOfficina
+
+    class Qualunque(ErroreOfficina):
+        codice = "originale_sparito"
+
+    esito = _stanza_che_scoppia(monkeypatch, Qualunque("manca C:/Foto/Nonna/mare.jpg"))
+    assert esito == {"guasto": "originale_sparito"}

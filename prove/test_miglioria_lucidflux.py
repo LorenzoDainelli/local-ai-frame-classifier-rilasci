@@ -191,6 +191,47 @@ def test_lo_scambiatore_porta_dentro_e_rimette_fuori():
     scambio.togli()
 
 
+class _Pezzo:
+    pass
+
+
+def test_prima_dell_ultimo_passo_la_scheda_resta_solo_all_immagine(monkeypatch):
+    import gc
+    import inspect
+    import sys
+    import types
+    import weakref
+
+    svuotata = []
+    monkeypatch.setitem(sys.modules, "torch", types.SimpleNamespace(
+        cuda=types.SimpleNamespace(empty_cache=lambda: svuotata.append(1))))
+    motore = object.__new__(lucidflux.LucidFlux)
+    tolto = []
+    motore._scambio = types.SimpleNamespace(togli=lambda: tolto.append(1))
+    flusso, ramo = _Pezzo(), _Pezzo()
+    resta_flusso, resta_ramo = weakref.ref(flusso), weakref.ref(ramo)
+    pezzi = {"flusso": flusso, "ramo": ramo, "ae": "ae",
+             "dispositivo": types.SimpleNamespace(type="cuda")}
+    motore._pezzi = pezzi
+    del flusso, ramo
+
+    motore._libera_la_scheda(pezzi)
+    gc.collect()
+    assert resta_flusso() is None and resta_ramo() is None
+    assert pezzi["ae"] == "ae"
+    assert motore._pezzi is None and motore._scambio is None
+    assert tolto == [1] and svuotata == [1]
+
+    codice = inspect.getsource(lucidflux.LucidFlux.foto)
+    assert codice.index("denoise_lucidflux(") < codice.index("_libera_la_scheda(")
+    assert codice.index("_libera_la_scheda(") < codice.index(".decode(")
+
+
+def test_i_messaggi_di_lucidflux_si_possono_mostrare():
+    for errore in (lucidflux.MancaLucidFlux, lucidflux.RamPoca, lucidflux.SoloFoto):
+        assert errore.senza_nomi is True
+
+
 def test_timm_finto_basta_a_swinir():
     pytest.importorskip("torch")
     lucidflux.finto_timm()

@@ -247,6 +247,15 @@ def test_nessun_filo_puo_morire_in_silenzio():
             "il filo che rifà la pagella prende dentro qualunque errore e lo "
             "scrive nel registro: la pagella vecchia resta, e la prossima "
             "pagina ne chiede un'altra",
+        "officina/sicuro/sottofondo.py":
+            "`Sottofondo._gira` prende dentro qualunque guasto, anche quello "
+            "di `_alla_fine`, e lo tiene in `errore` e `codice` per la pagina",
+        "officina/sicuro/chiavetta.py":
+            "il filo del `Guardiano` prende dentro qualunque errore di un giro, "
+            "lo segna come problema e riprova al giro dopo",
+        "officina/sicuro/recupera.py":
+            "`Regia._prepara` prende dentro qualunque guasto e torna alla "
+            "password con il messaggio, che la finestrina mostra",
     }
 
     radice = Path(__file__).resolve().parent.parent

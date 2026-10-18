@@ -1076,7 +1076,7 @@ class Chiavetta:
                 self.resoconto.problema("chiave_non_rimessa")
             return
         dati = chiavi._in_byte(buono)
-        for nome, documento in zip((chiavi.FILE, chiavi.RISERVA), sopra):
+        for nome, documento in zip((chiavi.FILE, chiavi.RISERVA), sopra, strict=True):
             if documento is not None and chiavi._in_byte(documento) == dati:
                 continue
             with self._sulla_chiavetta(radice):

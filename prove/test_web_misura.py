@@ -98,6 +98,46 @@ def test_il_rapporto_nel_browser_e_pulito(cliente, archivio_misurabile):
     assert "nodo_1" in rapporto
 
 
+def test_nodi_chiamati_come_le_parole_del_rapporto_non_lo_fermano(
+        cliente, archivio_misurabile):
+    from officina.modello import nodi
+    from officina.web.strade import comune
+
+    with archivio_misurabile.scrittura() as connessione:
+        for nome in ("pecore", "notte", "descrittore", "foto", "intera"):
+            nodi.crea(connessione, nome, None, criterio=f"solo {nome}")
+
+    assert cliente.post("/misura/esegui", follow_redirects=False).status_code == 303
+    assert comune.lavoro_misura.aspetta_che_finisca(120)
+    assert not comune.lavoro_misura.guasto
+    pagina = cliente.get("/stato").text
+    assert "non doveva uscire" not in pagina
+    assert re.search(r'<pre class="rapporto-misura"', pagina)
+
+
+def test_un_rapporto_sporco_si_ferma_senza_dire_cosa_c_era(
+        cliente, archivio_misurabile, monkeypatch):
+    import dataclasses
+
+    from officina.misura import banco
+    from officina.web.strade import comune
+
+    vera = banco.misura
+
+    def sporca(*argomenti, **chiavi):
+        misurato = vera(*argomenti, **chiavi)
+        misurato.righe[0] = dataclasses.replace(misurato.righe[0],
+                                                inquadratura="Felpa di Dublino")
+        return misurato
+
+    monkeypatch.setattr(banco, "misura", sporca)
+    assert cliente.post("/misura/esegui", follow_redirects=False).status_code == 303
+    assert comune.lavoro_misura.aspetta_che_finisca(120)
+    assert "non doveva uscire" in str(comune.lavoro_misura.guasto)
+    pagina = cliente.get("/stato").text
+    assert "Felpa di Dublino" not in pagina
+
+
 def _uno_con_impronta(archivio) -> int:
     with archivio.lettura() as connessione:
         return connessione.execute(

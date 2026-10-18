@@ -336,6 +336,26 @@
       [
         "computer",
         "La finestra del programma non si riapre più fuori dallo schermo se l'avevi chiusa ridotta a icona."
+      ],
+      [
+        "controlla",
+        "«Misura adesso» non si ferma più col messaggio rosso quando un nodo si chiama come una parola del rapporto"
+      ],
+      [
+        "sfida",
+        "LucidFlux libera la scheda video prima dell'ultimo passo, così ha memoria per finire la foto"
+      ],
+      [
+        "avviso",
+        "Quando LucidFlux non riesce, il riquadro della Sfida dice perché, e la foto la fa solo SeedVR2"
+      ],
+      [
+        "pausa",
+        "Se LucidFlux non riesce su 3 foto di fila la sfida va in pausa: le foto le fa solo SeedVR2 finché premi «Riprova la sfida»"
+      ],
+      [
+        "riprova",
+        "Le foto già fatte solo da SeedVR2 e non ancora decise: premendo Avvia, LucidFlux fa anche la sua versione e la foto entra nella sfida alla cieca. I video restano solo di SeedVR2"
       ]
     ],
     "tecnico": [
@@ -487,6 +507,22 @@
       [
         "persona",
         "Migrazione 59: <code>aiuti.guardato</code> e tabella <code>aspetti_di_aiuto</code>. <code>corpi.aiuti_persona</code> salva il volto in <code>volti_riferimento</code> (<code>da_file</code> = <code>aiuto-&lt;id&gt;</code>) e KPR, vestiti e figura; <code>chi_e</code> li usa come riferimenti con id negativo"
+      ],
+      [
+        "controlla",
+        "<code>rapporto</code> controlla ogni scritta contro le parole che il programma conosce, non cerca più i nomi dei nodi nel testo"
+      ],
+      [
+        "sfida",
+        "LucidFlux: dopo <code>denoise_lucidflux</code> si tolgono flusso, ramo e scambiatore e si svuota la cache CUDA prima della decodifica fp32"
+      ],
+      [
+        "avviso",
+        "La stanza manda <code>spiegazione</code> solo per gli errori con <code>senza_nomi</code>; impostazione <code>sfida_ultimo_salto</code> con codice, tipo, file, riga e <code>di_fila</code>, azzerata a ogni sfida riuscita"
+      ],
+      [
+        "riprova",
+        "<code>sfida.da_riprendere</code>: foto da rivedere con motori che iniziano da seedvr2 senza lucidflux e senza riga in <code>sfide</code>, fino a 100; il controllo di stato e impronte si rifà prima di registrare, altrimenti il file di LucidFlux si butta"
       ]
     ]
   },

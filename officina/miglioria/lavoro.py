@@ -50,6 +50,13 @@ def a_parole(codice: str | None) -> str:
     return MESSAGGI.get(codice, codice)
 
 
+def perche_saltata(esito: dict | None) -> str:
+    if not esito:
+        return ""
+    detto = str(esito.get("spiegazione") or "") or a_parole(str(esito.get("guasto") or ""))
+    return detto.strip().rstrip(".")
+
+
 def percorsi_della_stanza() -> list[str]:
     from officina.programma import librerie
 
@@ -116,6 +123,7 @@ class Miglioratore:
         self._fermati = threading.Event()
         self._processo: subprocess.Popen | None = None
         self.adesso: dict = {}
+        self._saltate_in_sfida: set[int] = set()
 
     @property
     def sta_lavorando(self) -> bool:
@@ -174,7 +182,7 @@ class Miglioratore:
         if genere != "immagine":
             return False
         with self.archivio.lettura() as connessione:
-            if not sfida.si_fa(connessione, True):
+            if not sfida.si_fa(connessione, True) or sfida.in_pausa(connessione):
                 return False
         return bool(self._sfidanti_pronti())
 
@@ -187,6 +195,7 @@ class Miglioratore:
             self.lavoro.di(f"riprendo {riparato['riprese']} file lasciati a metà")
         fatti = 0
         senza_memoria: list[int] = []
+        self._saltate_in_sfida = set()
         try:
             while not self._fermati.is_set():
                 with self.archivio.scrittura() as connessione:
@@ -197,6 +206,7 @@ class Miglioratore:
                 self._uno(riga)
                 fatti += 1
                 senza_memoria = self._conta_la_memoria(riga["id"], senza_memoria)
+            fatti += self._riprendi_la_sfida()
         finally:
             self.adesso = {}
             registro.evento("miglioria.giro", fatti=fatti,
@@ -249,24 +259,8 @@ class Miglioratore:
         finale = dove / attesa.nome_in_attesa(miglioria_id, originale, suffisso)
         parziale = finale.with_name(finale.name + attesa.PARZIALE)
 
-        scelti = self._scelti()
-        chi = []
-        if genere == "immagine" and scelti.get("volti") == motori.FACEME:
-            with self.archivio.lettura() as connessione:
-                chi = persone.nella_foto(connessione, riga["file_id"])
-        lavoro = {
-            "genere": genere,
-            "originale": str(originale),
-            "motori": scelti,
-            "persone": chi,
-            "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
-            "percorsi": percorsi_della_stanza(),
-            "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli)},
-        }
-
-        def al_passo(fatti: int, totale: int) -> None:
-            self.adesso.update(fatti=fatti, totale=totale)
-            self.lavoro.a_che_punto(fatti, totale)
+        lavoro = self._il_lavoro(genere, originale, riga["file_id"])
+        al_passo = self._al_passo
 
         if self._in_sfida(genere):
             self._due_versioni(miglioria_id, originale, lavoro, finale, al_passo)
@@ -296,6 +290,26 @@ class Miglioratore:
                        finita_il=adesso())
         self.lavoro.di(f"pronto da rivedere: «{originale.name}»")
 
+    def _il_lavoro(self, genere: str, originale: Path, file_id: int) -> dict:
+        scelti = self._scelti()
+        chi = []
+        if genere == "immagine" and scelti.get("volti") == motori.FACEME:
+            with self.archivio.lettura() as connessione:
+                chi = persone.nella_foto(connessione, file_id)
+        return {
+            "genere": genere,
+            "originale": str(originale),
+            "motori": scelti,
+            "persone": chi,
+            "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
+            "percorsi": percorsi_della_stanza(),
+            "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli)},
+        }
+
+    def _al_passo(self, fatti: int, totale: int) -> None:
+        self.adesso.update(fatti=fatti, totale=totale)
+        self.lavoro.a_che_punto(fatti, totale)
+
     def _una_versione(self, lavoro: dict, parziale: Path, al_passo) -> dict | None:
         parziale.unlink(missing_ok=True)
         try:
@@ -310,7 +324,8 @@ class Miglioratore:
             parziale.unlink(missing_ok=True)
             return {"guasto": str(esito.get("guasto") or "stanza_muta"),
                     "dove": esito.get("dove", ""), "riga": esito.get("riga", ""),
-                    "tipo": esito.get("tipo", "")}
+                    "tipo": esito.get("tipo", ""),
+                    "spiegazione": esito.get("spiegazione", "")}
         return esito
 
     def _fedelta(self, genere: str, originale: Path, finale: Path) -> dict:
@@ -347,6 +362,7 @@ class Miglioratore:
     def _due_versioni(self, miglioria_id: int, originale: Path, lavoro: dict,
                       finale: Path, al_passo) -> None:
         fatte: dict = {}
+        saltata: dict | None = None
         for motore in sfida.SFIDANTI:
             arrivo = finale.with_name(f"{finale.stem}.{motore}{finale.suffix}")
             parziale = arrivo.with_name(arrivo.name + attesa.PARZIALE)
@@ -361,8 +377,7 @@ class Miglioratore:
                 if motore == motori.SEEDVR2:
                     self._non_riuscita(miglioria_id, esito)
                     return
-                registro.avviso("miglioria.sfida_saltata",
-                                motivo=registro.Parola(esito["guasto"]))
+                saltata = esito
                 break
             os.replace(parziale, arrivo)
             fatte[motore] = (arrivo, impronta.del_file(arrivo), esito["fatto"])
@@ -377,6 +392,7 @@ class Miglioratore:
                 sfida.registra(connessione, miglioria_id, {
                     motore: (dati[0], dati[1], dati[2].get("motori"))
                     for motore, dati in fatte.items()})
+                sfida.segna_il_salto(connessione, None)
                 self.lavoro.di(f"pronto da votare: «{originale.name}»")
                 return
             arrivo, sua_impronta, _fatto = fatte[motori.SEEDVR2]
@@ -386,7 +402,102 @@ class Miglioratore:
                        altezza_dopo=int(base.get("altezza") or 0) or None,
                        motori=json.dumps(base.get("motori") or []),
                        finita_il=adesso())
-        self.lavoro.di(f"pronto da rivedere: «{originale.name}», senza sfida")
+            self._lucidflux_saltato(connessione, miglioria_id, saltata)
+        self.lavoro.di(f"pronto da rivedere: «{originale.name}», senza sfida: "
+                       f"LucidFlux non è riuscito ({perche_saltata(saltata)})")
+        self._se_in_pausa()
+
+    def _lucidflux_saltato(self, connessione, miglioria_id: int, esito: dict) -> None:
+        registro.avviso("miglioria.sfida_saltata",
+                        motivo=registro.Parola(esito["guasto"]),
+                        tipo=registro.Parola(str(esito.get("tipo", ""))),
+                        dove=registro.Parola(str(esito.get("dove", ""))),
+                        riga=str(esito.get("riga", "")))
+        sfida.segna_il_salto(connessione, esito)
+        self._saltate_in_sfida.add(miglioria_id)
+
+    def _se_in_pausa(self) -> None:
+        with self.archivio.lettura() as connessione:
+            ferma = sfida.in_pausa(connessione)
+        if ferma:
+            self.lavoro.di(f"sfida in pausa: LucidFlux non è riuscito su {sfida.PAUSA_DOPO} "
+                           "foto di fila, le prossime le fa solo SeedVR2")
+
+    def _riprendi_la_sfida(self) -> int:
+        with self.archivio.lettura() as connessione:
+            if not sfida.si_fa(connessione, True) or sfida.in_pausa(connessione):
+                return 0
+            da_fare = [riga for riga in sfida.da_riprendere(connessione)
+                       if riga["id"] not in self._saltate_in_sfida]
+        if not da_fare or not self._sfidanti_pronti():
+            return 0
+        self.lavoro.di(f"LucidFlux riprende {len(da_fare)} foto già fatte da SeedVR2, "
+                       "per la sfida alla cieca")
+        fatte = 0
+        for riga in da_fare:
+            if self._fermati.is_set():
+                break
+            with self.archivio.lettura() as connessione:
+                if not sfida.si_fa(connessione, True) or sfida.in_pausa(connessione):
+                    break
+            self._riprendi_una(riga)
+            fatte += 1
+        return fatte
+
+    def _riprendi_una(self, riga) -> None:
+        miglioria_id = riga["id"]
+        originale = Path(riga["percorso_originale"])
+        tenuta = Path(riga["in_revisione"])
+        self.adesso = {"id": miglioria_id, "nome": originale.name, "fatti": 0,
+                       "totale": 0, "ripresa": True}
+        self.lavoro.di(f"LucidFlux riprende «{originale.name}» per la sfida alla cieca")
+        if not (originale.is_file() and tenuta.is_file() and attesa.e_dentro(tenuta)):
+            return
+        if (impronta.del_file(originale) != riga["impronta_originale"]
+                or impronta.del_file(tenuta) != riga["impronta_migliorata"]):
+            return
+        serve = originale.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
+        if shutil.disk_usage(tenuta.parent).free < serve:
+            return
+        finale = tenuta.parent / attesa.nome_in_attesa(miglioria_id, originale,
+                                                       originale.suffix)
+        arrivo = finale.with_name(f"{finale.stem}.{motori.LUCIDFLUX}{finale.suffix}")
+        parziale = arrivo.with_name(arrivo.name + attesa.PARZIALE)
+        lavoro = self._il_lavoro("immagine", originale, riga["file_id"])
+        lavoro["motori"] = dict(lavoro["motori"], foto=motori.LUCIDFLUX)
+        esito = self._una_versione(lavoro, parziale, self._al_passo)
+        if esito is None:
+            return
+        if "guasto" in esito:
+            with self.archivio.scrittura() as connessione:
+                self._lucidflux_saltato(connessione, miglioria_id, esito)
+            self.lavoro.di(f"«{originale.name}» resta solo di SeedVR2: LucidFlux non è "
+                           f"riuscito ({perche_saltata(esito)})")
+            self._se_in_pausa()
+            return
+        os.replace(parziale, arrivo)
+        sua_impronta = impronta.del_file(arrivo)
+        with self.archivio.scrittura() as connessione:
+            adesso_e = coda.per_id(connessione, miglioria_id)
+            entra = (adesso_e is not None and adesso_e["stato"] == coda.DA_RIVEDERE
+                     and adesso_e["in_revisione"] == riga["in_revisione"]
+                     and adesso_e["impronta_migliorata"] == riga["impronta_migliorata"]
+                     and sfida.per_miglioria(connessione, miglioria_id) is None
+                     and sfida.si_fa(connessione, True))
+            if entra:
+                coda.segna(connessione, miglioria_id, coda.DA_RIVEDERE, in_revisione=None,
+                           impronta_migliorata=None, motori=None, fedelta=None)
+                sfida.registra(connessione, miglioria_id, {
+                    motori.SEEDVR2: (tenuta, riga["impronta_migliorata"],
+                                     json.loads(riga["motori"] or "[]")),
+                    motori.LUCIDFLUX: (arrivo, sua_impronta, esito["fatto"].get("motori"))})
+                sfida.segna_il_salto(connessione, None)
+        if not entra:
+            sfida.butta([arrivo])
+            self.lavoro.di(f"«{originale.name}» era già stata decisa: la versione di "
+                           "LucidFlux non serve più")
+            return
+        self.lavoro.di(f"pronto da votare: «{originale.name}»")
 
     def _copie_da_guardare(self, miglioria_id: int, originale: Path,
                            finale: Path) -> None:

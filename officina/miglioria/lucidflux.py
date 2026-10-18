@@ -22,14 +22,17 @@ GIGA = 2 ** 30
 
 class MancaLucidFlux(ErroreOfficina):
     codice = "motore_mancante"
+    senza_nomi = True
 
 
 class RamPoca(ErroreOfficina):
     codice = "memoria_finita"
+    senza_nomi = True
 
 
 class SoloFoto(ErroreOfficina):
     codice = "solo_foto"
+    senza_nomi = True
 
 
 def misura_di_lavoro(larghezza: int, altezza: int) -> tuple[int, int]:
@@ -326,8 +329,7 @@ class LucidFlux:
                 siglip_txt=con_vista, siglip_txt_ids=con_vista_ids, vec=ingresso["vec"],
                 timesteps=tempi, guidance=GUIDA, condition_cond_lq=condizione,
                 condition_cond_pre=condizione_pulita)
-            if dispositivo.type == "cuda":
-                torch.cuda.empty_cache()
+            self._libera_la_scheda(p)
             latente = s["sampling"].unpack(fatto.float(), lavoro_a, lavoro_l)
             decodificata = self._a_turno(p["ae"], dispositivo,
                                          lambda: p["ae"].decode(latente))
@@ -340,6 +342,18 @@ class LucidFlux:
         if grande.size != (larghezza, altezza):
             grande = grande.resize((larghezza, altezza), Image.Resampling.LANCZOS)
         return grande
+
+    def _libera_la_scheda(self, pezzi: dict) -> None:
+        import torch
+
+        if self._scambio is not None:
+            self._scambio.togli()
+        self._scambio = None
+        pezzi.pop("flusso", None)
+        pezzi.pop("ramo", None)
+        self._pezzi = None
+        if pezzi["dispositivo"].type == "cuda":
+            torch.cuda.empty_cache()
 
     def video(self, quadri, larghezza: int, altezza: int):
         raise SoloFoto("LucidFlux migliora solo le foto.")

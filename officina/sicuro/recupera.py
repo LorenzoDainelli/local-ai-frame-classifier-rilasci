@@ -843,7 +843,7 @@ class Finestra:
         self.radice.destroy()
 
     def _mostra(self, quali, righe) -> None:
-        for widget, (riga, opzioni) in zip(quali, righe):
+        for widget, (riga, opzioni) in zip(quali, righe, strict=True):
             widget.grid(row=riga, column=0, columnspan=2, **opzioni)
 
     def _nascondi(self, quali) -> None:

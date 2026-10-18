@@ -112,9 +112,24 @@ def api_modelli_del_miglioramento():
 
 @strada.post("/miglioramento/avvia")
 def miglioramento_avvia():
-    from officina.miglioria import preparazione
+    _avvia(accesso.aperto())
+    return RedirectResponse("/miglioramento", status_code=303)
+
+
+@strada.post("/miglioramento/sfida/riprova")
+def miglioramento_sfida_riprova():
+    from officina.miglioria import sfida
 
     archivio = accesso.aperto()
+    with archivio.scrittura() as connessione:
+        sfida.segna_il_salto(connessione, None)
+    _avvia(archivio)
+    return RedirectResponse("/miglioramento", status_code=303)
+
+
+def _avvia(archivio) -> None:
+    from officina.miglioria import preparazione
+
     if not preparazione.e_pronto(archivio.dove.modelli):
         raise ErroreOfficina(
             "Per migliorare serve SeedVR2, che non è ancora sul computer: "
@@ -128,7 +143,6 @@ def miglioramento_avvia():
                            applica="officina.web.miglioramento:applica_di_qua")
     else:
         miglioratore.parti()
-    return RedirectResponse("/miglioramento", status_code=303)
 
 
 @strada.post("/miglioramento/ferma")

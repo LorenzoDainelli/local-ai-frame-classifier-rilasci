@@ -1173,7 +1173,8 @@ class Elenco:
                 "contenuti", "numero, dimensione, blake2b, sha256, peso, testa, "
                 "scritto", " AND stato = 'rovinato'"):
             yield fatto_ricordo(dict(zip(("numero", "dimensione", "blake2b", "sha256",
-                                          "peso", "testa", "scritto"), riga)))
+                                          "peso", "testa", "scritto"), riga,
+                                         strict=True)))
         for riga in self._a_pagine(
                 "contenuti", "numero, stato, perche, scritto, controllato",
                 " AND (controllato IS NOT NULL OR stato != 'buono' "

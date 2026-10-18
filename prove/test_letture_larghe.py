@@ -185,9 +185,6 @@ RACCOLTE = {
         "Già spiegata fra le PERDONATE.",
     "SELECT * FROM non_importati ORDER BY tentato_il DESC LIMIT 200":
         "gli ultimi duecento guasti. Già spiegata fra le PERDONATE.",
-    "SELECT nota FROM scatti WHERE nota IS NOT NULL ORDER BY id LIMIT 500":
-        "cinquecento note per il rapporto della misura: si ferma lì, e il "
-        "rapporto lo si chiede a mano.",
     "SELECT * FROM scatti ORDER BY giorno DESC, istante_utc "
     "DESC LIMIT ? OFFSET ?":
         "una pagina del Visore, e per giunta letta dal database del "

@@ -419,12 +419,13 @@ def _misura_in_sottofondo(archivio) -> None:
     misurato = officina_banco.misura(archivio, al_passo=comune.lavoro_misura.di)
     testo = resoconto.come_testo(misurato)
     with archivio.lettura() as connessione:
-        sfuggiti = resoconto.controlla(testo, connessione)
+        sfuggiti = resoconto.fuori_posto(misurato, connessione)
     if sfuggiti:
-        raise ErroreOfficina(
+        guasto = ErroreOfficina(
             "Nel rapporto è finito qualcosa che non doveva uscire, quindi non "
-            "te lo mostro. È un difetto del programma."
-        )
+            "te lo mostro. È un difetto del programma.", codice="rapporto_sporco")
+        guasto.dettaglio = "\n".join(sfuggiti)
+        raise guasto
     with archivio.scrittura() as connessione:
         connessione.execute(
             "INSERT INTO misure (fatta_il, archivio, scatti, gruppi, nodi, "

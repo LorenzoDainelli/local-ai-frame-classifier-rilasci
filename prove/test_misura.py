@@ -39,33 +39,97 @@ def test_il_rapporto_non_contiene_nessun_nome(archivio_misurabile):
         assert nome not in testo
         assert nome.lower() not in testo.lower()
     with archivio_misurabile.lettura() as connessione:
-        assert resoconto.controlla(testo, connessione) == []
+        assert resoconto.fuori_posto(misurato, connessione) == []
 
 
-def test_il_controllo_si_accorge_di_una_fuga(archivio_misurabile):
+PAROLE_DEL_RAPPORTO = ["pecore", "notte", "descrittore", "foto", "persona",
+                       "intera", "stretto", "nodo", "insieme", "misura", "scatti"]
+
+
+def test_i_nodi_chiamati_come_le_parole_del_rapporto_non_danno_l_allarme(
+        archivio_misurabile, tmp_path):
     with archivio_misurabile.scrittura() as connessione:
-        nodi.crea(connessione, "Maglietta gialla", None)
-    sporco = "il nodo Maglietta gialla prende il 78% su 40 esempi"
+        for nome in PAROLE_DEL_RAPPORTO:
+            nodi.crea(connessione, nome, None, criterio=f"solo {nome}")
+
+    misurato = banco.misura(archivio_misurabile)
     with archivio_misurabile.lettura() as connessione:
-        trovati = resoconto.controlla(sporco, connessione)
-    assert trovati and "Maglietta gialla" in trovati[0]
+        assert resoconto.fuori_posto(misurato, connessione) == []
+        resoconto.scrivi(misurato, connessione, tmp_path / "misura.txt")
+    assert (tmp_path / "misura.txt").exists()
 
 
-def test_i_percorsi_non_passano(archivio_misurabile):
+def _sporca_una_riga(misurato, **campi):
+    import dataclasses
+
+    misurato.righe[0] = dataclasses.replace(misurato.righe[0], **campi)
+    return misurato
+
+
+def test_il_controllo_si_accorge_di_una_scritta_estranea(archivio_misurabile):
+    misurato = _sporca_una_riga(banco.misura(archivio_misurabile),
+                                inquadratura="Maglietta gialla")
     with archivio_misurabile.lettura() as connessione:
-        assert resoconto.controlla(r"tutto bene C:\Users\x\Foto\IMG_1.HEIC",
-                                   connessione)
-        assert resoconto.controlla("cartella /home/qualcuno/foto", connessione)
+        trovati = resoconto.fuori_posto(misurato, connessione)
+    assert trovati == ["una scritta che il programma non conosce, in «righe · inquadratura»"]
+
+
+def test_il_controllo_non_ripete_mai_quello_che_ha_trovato(archivio_misurabile):
+    misurato = _sporca_una_riga(banco.misura(archivio_misurabile),
+                                descrittore="Vacanze in Irlanda")
+    misurato.nodi[0]["nome"] = "Magliette Tommy"
+    with archivio_misurabile.lettura() as connessione:
+        trovati = resoconto.fuori_posto(misurato, connessione)
+    assert len(trovati) == 2
+    tutto = " ".join(trovati)
+    assert "Irlanda" not in tutto and "Tommy" not in tutto
+
+
+def test_una_scritta_che_non_e_una_scritta_si_vede(archivio_misurabile):
+    misurato = _sporca_una_riga(banco.misura(archivio_misurabile),
+                                inquadratura=object())
+    with archivio_misurabile.lettura() as connessione:
+        assert resoconto.fuori_posto(misurato, connessione)
+
+
+@pytest.mark.parametrize("percorso", [r"C:\Users\x\Foto\IMG_1.HEIC",
+                                      "/home/qualcuno/foto"])
+def test_i_percorsi_non_passano(archivio_misurabile, monkeypatch, percorso):
+    misurato = banco.misura(archivio_misurabile)
+    vero = resoconto.come_testo
+    monkeypatch.setattr(resoconto, "come_testo",
+                        lambda rapporto: vero(rapporto) + f"\ntutto bene {percorso}\n")
+    with archivio_misurabile.lettura() as connessione:
+        trovati = resoconto.fuori_posto(misurato, connessione)
+    assert trovati == ["qualcosa che sembra un percorso"]
 
 
 def test_un_rapporto_sporco_non_si_scrive(archivio_misurabile, tmp_path):
-    misurato = banco.misura(archivio_misurabile)
-    with archivio_misurabile.scrittura() as connessione:
-        nodi.crea(connessione, "descrittore", None)
+    misurato = _sporca_una_riga(banco.misura(archivio_misurabile),
+                                inquadratura="Maglietta gialla")
     with archivio_misurabile.lettura() as connessione:
-        with pytest.raises(OperazioneNonPermessa):
+        with pytest.raises(OperazioneNonPermessa) as errore:
             resoconto.scrivi(misurato, connessione, tmp_path / "misura.txt")
+    assert "Maglietta" not in str(errore.value)
     assert not (tmp_path / "misura.txt").exists()
+    assert not (tmp_path / "misura.json").exists()
+
+
+def test_un_descrittore_di_prima_scritto_dal_programma_e_permesso(archivio_misurabile):
+    from officina.archivio.database import uno
+    from officina.modello import impronte
+
+    misurato = _sporca_una_riga(banco.misura(archivio_misurabile),
+                                descrittore="descrittore_di_prima")
+    with archivio_misurabile.lettura() as connessione:
+        assert resoconto.fuori_posto(misurato, connessione)
+    with archivio_misurabile.scrittura() as connessione:
+        riga = uno(connessione, "SELECT scatto_id, file_id FROM impronte LIMIT 1")
+        impronte.scrivi(connessione, riga["scatto_id"], riga["file_id"],
+                        "descrittore_di_prima", "1", "intera", "intera", None,
+                        [0.1, 0.2, 0.3])
+    with archivio_misurabile.lettura() as connessione:
+        assert resoconto.fuori_posto(misurato, connessione) == []
 
 
 def test_i_nomi_astratti_non_fanno_scattare_l_allarme(archivio_misurabile):
@@ -73,7 +137,7 @@ def test_i_nomi_astratti_non_fanno_scattare_l_allarme(archivio_misurabile):
     testo = resoconto.come_testo(misurato)
     assert "nodo_1" in testo
     with archivio_misurabile.lettura() as connessione:
-        assert resoconto.controlla(testo, connessione) == []
+        assert resoconto.fuori_posto(misurato, connessione) == []
 
 
 def test_le_conclusioni_vengono_dai_numeri(archivio_misurabile):
@@ -107,8 +171,8 @@ def test_anche_i_numeri_si_controllano(archivio_misurabile, tmp_path):
         resoconto.scrivi(misurato, connessione, tmp_path / "misura.txt")
         assert (tmp_path / "misura.txt").exists()
         assert (tmp_path / "misura.json").exists()
-        assert resoconto.controlla(
-            (tmp_path / "misura.json").read_text(encoding="utf-8"), connessione) == []
+    assert resoconto.UN_PERCORSO.search(
+        (tmp_path / "misura.json").read_text(encoding="utf-8")) is None
 
 
 def _metti_le_caselle(archivio):
@@ -138,6 +202,8 @@ def test_massimo_e_media_delle_caselle_si_misurano(archivio_misurabile):
     assert {"caselle · massimo", "caselle · media"} <= inquadrature
     testo = " ".join(resoconto.conclusioni(misurato))
     assert "caselle" in testo
+    with archivio_misurabile.lettura() as connessione:
+        assert resoconto.fuori_posto(misurato, connessione) == []
 
 
 def test_senza_caselle_non_compaiono(archivio_misurabile):

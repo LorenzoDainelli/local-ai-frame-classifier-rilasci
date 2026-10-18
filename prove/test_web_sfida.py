@@ -112,3 +112,95 @@ def test_senza_voti_i_risultati_rimandano_alla_coda(cliente):
     assert risposta.status_code == 303
     risposta = cliente.get("/miglioramento/sfida", follow_redirects=False)
     assert risposta.status_code == 303
+
+
+def _salta(importato, volte, **esito):
+    with importato.scrittura() as connessione:
+        for _ in range(volte):
+            sfida.segna_il_salto(connessione, esito)
+
+
+def test_la_coda_dice_perche_lucidflux_non_ha_fatto_la_sua_parte(cliente, importato,
+                                                                  monkeypatch):
+    monkeypatch.setattr(preparazione, "e_pronto", lambda *argomenti: True)
+    assert "data-salto-della-sfida" not in _pagina(cliente, "/miglioramento")
+    _salta(importato, 1, guasto="memoria_finita", tipo="RamPoca", dove="lucidflux",
+           riga="212", spiegazione="Per LucidFlux servono circa 21 GB di RAM libera "
+                                   "e ce ne sono 12.")
+    testo = _pagina(cliente, "/miglioramento")
+    assert "data-salto-della-sfida" in testo
+    assert "Sull'ultima foto" in testo and "L'ha fatta solo SeedVR2" in testo
+    assert "servono circa 21 GB di RAM libera e ce ne sono 12." in testo
+    assert "ce ne sono 12.." not in testo
+    assert "Dettaglio tecnico: RamPoca in lucidflux, riga 212" in testo
+
+    assert 'action="/miglioramento/sfida/riprova"' not in testo
+
+    _salta(importato, 1, guasto="memoria_scheda_finita", tipo="OutOfMemoryError",
+           dove="lucidflux", riga="340")
+    testo = _pagina(cliente, "/miglioramento")
+    assert 'Sulle ultime <b class="numeri">2</b> foto' in testo
+    assert "Le ha fatte solo SeedVR2" in testo
+    assert "Sfida in pausa" not in testo
+
+
+def test_il_dettaglio_tecnico_mostra_solo_nomi_del_programma():
+    from officina.web import miglioramento
+
+    salto = miglioramento.il_salto({"codice": "rotto", "tipo": "C:/Foto/Nonna",
+                                    "dove": "lucidflux", "riga": "1"})
+    assert salto["tecnico"] == ""
+    salto = miglioramento.il_salto({"codice": "rotto", "tipo": "KeyError",
+                                    "dove": "mare di Nonna.jpg", "riga": "x"})
+    assert salto["tecnico"] == "KeyError"
+    salto = miglioramento.il_salto({"codice": "rotto", "tipo": "KeyError",
+                                    "dove": "catena", "riga": "C:/x"})
+    assert salto["tecnico"] == "KeyError in catena, riga ?"
+    assert miglioramento.il_salto(None) is None
+
+
+def test_dopo_tre_salti_la_coda_dice_che_la_sfida_e_in_pausa_e_si_riprova(
+        cliente, importato, monkeypatch):
+    from officina.miglioria import lavoro
+    from officina.web import miglioramento
+
+    monkeypatch.setattr(preparazione, "e_pronto", lambda *argomenti: True)
+    _salta(importato, sfida.PAUSA_DOPO, guasto="memoria_scheda_finita")
+    testo = _pagina(cliente, "/miglioramento")
+    assert "Sfida in pausa: su <b class=\"numeri\">3</b> foto di fila" in testo
+    assert 'action="/miglioramento/sfida/riprova"' in testo
+
+    partito = []
+    miglioramento._miglioratore = lavoro.Miglioratore(
+        importato, lancia=lambda *argomenti: partito.append(1) or {},
+        sfidanti_pronti=lambda: True)
+    try:
+        risposta = cliente.post("/miglioramento/sfida/riprova", follow_redirects=False)
+        assert risposta.status_code == 303
+        assert miglioramento._miglioratore.lavoro.aspetta_che_finisca(30)
+    finally:
+        miglioramento._miglioratore = None
+    assert partito == []
+    with importato.lettura() as connessione:
+        assert sfida.ultimo_salto(connessione) is None
+    testo = _pagina(cliente, "/miglioramento")
+    assert "data-salto-della-sfida" not in testo and "Sfida in pausa" not in testo
+
+
+def test_le_foto_da_riprendere_si_vedono_e_fanno_partire_avvia(cliente, importato,
+                                                               monkeypatch):
+    from prove.test_miglioria_sfida import _fatta_solo_da_seedvr2
+
+    _fatta_solo_da_seedvr2(importato)
+    monkeypatch.setattr(preparazione, "e_pronto", lambda *argomenti: True)
+    testo = _pagina(cliente, "/miglioramento")
+    assert "data-ripresa-della-sfida" in testo
+    assert 'LucidFlux deve ancora rifare <b class="numeri">1</b>' in testo
+    assert "foto già fatta da SeedVR2" in testo
+    assert 'type="submit" disabled>Avvia' not in testo
+    assert "premi Avvia" in testo
+
+    _salta(importato, sfida.PAUSA_DOPO, guasto="memoria_scheda_finita")
+    testo = _pagina(cliente, "/miglioramento")
+    assert "data-ripresa-della-sfida" not in testo
+    assert 'type="submit" disabled>Avvia' in testo

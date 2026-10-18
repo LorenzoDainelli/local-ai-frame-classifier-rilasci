@@ -46,7 +46,10 @@ def main() -> int:
     try:
         esito = catena.esegui(lavoro, al_passo, freno)
     except ErroreOfficina as errore:
-        manda({"guasto": errore.codice})
+        messaggio = {"guasto": errore.codice}
+        if getattr(errore, "senza_nomi", False):
+            messaggio["spiegazione"] = str(errore)
+        manda(messaggio)
         return 1
     except MemoryError:
         manda({"guasto": "memoria_finita"})

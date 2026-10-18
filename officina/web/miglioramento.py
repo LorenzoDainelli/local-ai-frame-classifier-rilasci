@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -13,6 +14,7 @@ QUANTI_IN_CODA = 200
 QUANTE_FALLITE = 100
 QUANTE_DA_RIVEDERE = 5000
 QUANTE_A_VISTA = 4
+_UN_NOME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,60}$")
 
 NOMI_DEI_MOTORI = {
     "seedvr2": "SeedVR2",
@@ -264,10 +266,33 @@ def la_sfida(archivio, pronti: bool) -> dict | None:
             "ON f.id = m.file_id WHERE m.stato IN (?, ?) AND f.genere = 'immagine'",
             coda.IN_CODA, coda.IN_LAVORO)["q"])
         chiudibile = sfida.si_puo_chiudere(connessione, in_coda_foto)
+        salto = sfida.ultimo_salto(connessione)
+        in_pausa = sfida.in_pausa(connessione)
+        da_riprendere = len(sfida.da_riprendere(connessione)) if pronti else 0
     if chiusa is not None or not (pronti or numeri["fatte"]):
         return None
-    return {**numeri, "si_puo_chiudere": chiudibile,
+    return {**numeri, "si_puo_chiudere": chiudibile, "salto": il_salto(salto),
+            "in_pausa": in_pausa, "da_riprendere": da_riprendere,
+            "pausa_dopo": sfida.PAUSA_DOPO,
+            "si_riprende": bool(da_riprendere) and not in_pausa,
             "percento": round(100 * numeri["votate"] / sfida.QUANTE)}
+
+
+def il_salto(salto: dict | None) -> dict | None:
+    from officina.miglioria import lavoro
+
+    if not salto:
+        return None
+    tipo, dove, riga = (str(salto.get(chiave) or "") for chiave in ("tipo", "dove", "riga"))
+    tecnico = tipo if _UN_NOME.match(tipo) else ""
+    if tecnico and _UN_NOME.match(dove):
+        tecnico += f" in {dove}, riga {riga if riga.isdigit() else '?'}"
+    return {
+        "perche": lavoro.perche_saltata({"guasto": salto.get("codice"),
+                                         "spiegazione": salto.get("spiegazione")}),
+        "di_fila": max(1, int(salto.get("di_fila") or 1)),
+        "tecnico": tecnico,
+    }
 
 
 def quante_da_votare(archivio) -> int:

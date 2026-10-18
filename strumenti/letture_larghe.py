@@ -15,6 +15,8 @@ GRANDI = frozenset({
     "doppioni_gruppi", "impronte", "scatti_parole", "non_importati",
 })
 
+ALTRI_DATABASE = frozenset({"sicuro"})
+
 PAGINE = (
     "/", "/api/griglia", "/scatto/1", "/miniatura/1", "/immagine/1",
     "/officina", "/api/officina/1", "/api/persone/cerca?q=a", "/api/ripassi",
@@ -194,6 +196,8 @@ def _ogni_domanda_scritta(radice: Path) -> dict[str, list[str]]:
 
     trovate: dict[str, list[str]] = collections.defaultdict(list)
     for file in sorted(radice.rglob("*.py")):
+        if ALTRI_DATABASE & set(file.relative_to(radice).parts[:-1]):
+            continue
         for nodo in ast.walk(ast.parse(file.read_text(encoding="utf-8"))):
             scritto = testo(nodo)
             if scritto and COMINCIA_UNA_DOMANDA.match(scritto):
