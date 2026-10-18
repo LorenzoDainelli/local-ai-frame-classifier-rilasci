@@ -16,6 +16,7 @@ from officina.errori import ErroreOfficina, FileNonLeggibile
 from officina.importazione import abbinamento, impronta as impronta_file, metadati, miniature, scansione
 from officina.miglioria import coda as miglioria_coda
 from officina.modello import file_media, luoghi, salute_file, scatti
+from officina.ritocco import elenco as ritocchi
 
 CAMPIONE_PER_LA_STIMA = 50
 
@@ -232,6 +233,7 @@ class Motore:
             with self.archivio.lettura() as connessione:
                 gia_noto = bool(
                     miglioria_coda.di_impronta_migliorata(connessione, segno)
+                    or ritocchi.ritoccata_di_impronta(connessione, segno)
                     or file_media.per_impronta(connessione, segno))
             pronto = Preparato(segno=segno, gia_noto=gia_noto)
             if gia_noto:
@@ -295,7 +297,8 @@ class Motore:
         segno = pronto.segno if pronto else impronta_file.del_file(percorso)
 
         with self.archivio.scrittura() as connessione:
-            if miglioria_coda.di_impronta_migliorata(connessione, segno):
+            if (miglioria_coda.di_impronta_migliorata(connessione, segno)
+                    or ritocchi.ritoccata_di_impronta(connessione, segno)):
                 connessione.execute(
                     "UPDATE importazioni SET gia_presenti = gia_presenti + 1 WHERE id = ?",
                     (self.importazione_id,),

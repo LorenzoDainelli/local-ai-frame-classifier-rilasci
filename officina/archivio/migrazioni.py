@@ -1288,6 +1288,70 @@ def _versione_59(connessione: sqlite3.Connection) -> None:
     connessione.execute("ALTER TABLE stanze ADD COLUMN dettaglio TEXT")
 
 
+def _versione_60(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE ritocchi (
+            id                 INTEGER PRIMARY KEY,
+            file_id            INTEGER NOT NULL
+                               REFERENCES file_media(id) ON DELETE CASCADE,
+            scatto_id          INTEGER REFERENCES scatti(id) ON DELETE SET NULL,
+            genere             TEXT NOT NULL CHECK (genere IN ('pixela','togli')),
+            cosa               TEXT NOT NULL CHECK (cosa IN ('volto','persona','oggetto')),
+            volto_id           INTEGER REFERENCES volti(id) ON DELETE SET NULL,
+            corpo_id           INTEGER REFERENCES corpi(id) ON DELETE SET NULL,
+            larghezza          INTEGER NOT NULL,
+            altezza            INTEGER NOT NULL,
+            maschera           BLOB NOT NULL,
+            misura             REAL NOT NULL,
+            quadretto          INTEGER,
+            origine_x          INTEGER,
+            origine_y          INTEGER,
+            scelta             TEXT,
+            traccia            TEXT,
+            stato              TEXT NOT NULL DEFAULT 'fatto'
+                               CHECK (stato IN ('in_coda','in_lavoro','da_rivedere',
+                                                'fatto','tolto','rifiutato','fallito')),
+            risultato          TEXT,
+            impronta_risultato TEXT,
+            guasto             TEXT,
+            messo_il           TEXT NOT NULL,
+            fatto_il           TEXT,
+            tolto_il           TEXT
+        )
+        """
+    )
+    connessione.execute("CREATE INDEX ritocchi_del_file ON ritocchi(file_id, stato, id)")
+    connessione.execute("CREATE INDEX ritocchi_per_stato ON ritocchi(stato, id)")
+    connessione.execute(
+        """
+        CREATE TABLE ritoccate (
+            file_id          INTEGER PRIMARY KEY
+                             REFERENCES file_media(id) ON DELETE CASCADE,
+            stato            TEXT NOT NULL
+                             CHECK (stato IN ('in_scambio','fatta','in_ritorno')),
+            percorso_copia   TEXT NOT NULL,
+            impronta_copia   TEXT,
+            percorso_base    TEXT NOT NULL,
+            impronta_base    TEXT NOT NULL,
+            base_e           TEXT NOT NULL CHECK (base_e IN ('originale','migliorata')),
+            miglioria_id     INTEGER REFERENCES migliorie(id) ON DELETE SET NULL,
+            in_preparazione  TEXT,
+            impronta_nuova   TEXT,
+            fatta_il         TEXT,
+            guasto           TEXT
+        )
+        """
+    )
+    connessione.execute(
+        "CREATE UNIQUE INDEX ritoccate_per_impronta ON ritoccate(impronta_copia) "
+        "WHERE impronta_copia IS NOT NULL")
+    connessione.execute(
+        "CREATE INDEX ritoccate_in_preparazione ON ritoccate(impronta_nuova) "
+        "WHERE impronta_nuova IS NOT NULL")
+    connessione.execute("CREATE INDEX ritoccate_per_stato ON ritoccate(stato)")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1394,6 +1458,8 @@ MIGRAZIONI: list[Migrazione] = [
                "centinaia di migliaia di file", _versione_58),
     Migrazione(59, "le foto di aiuto: caricate per migliorare una stanza in 3D o una persona, "
                "senza entrare nella galleria", _versione_59),
+    Migrazione(60, "i ritocchi: volti pixelati e cose tolte, con la copia al posto dello "
+               "scatto e l'originale in «Originali»", _versione_60),
 ]
 
 

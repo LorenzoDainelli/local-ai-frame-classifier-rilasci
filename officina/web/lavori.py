@@ -18,7 +18,7 @@ GUASTO_IMPREVISTO = (
     "previsto. È un difetto del programma.")
 
 
-NOMI_NEL_TURNO = {"miglioramento": "il miglioramento"}
+NOMI_NEL_TURNO = {"miglioramento": "il miglioramento", "ritocco": "lo strumento Ritocca"}
 
 
 class TurnoDellaScheda:
@@ -62,6 +62,15 @@ class TurnoDellaScheda:
         if avvisato:
             lavoro.di("la scheda è libera: parto")
         return True
+
+    def prendi_se_libera(self, lavoro: Lavoro) -> bool:
+        with self._cambiato:
+            if self._chi is lavoro:
+                return True
+            if self._chi is not None or self._in_attesa:
+                return False
+            self._chi = lavoro
+            return True
 
     def lascia(self, lavoro: Lavoro) -> None:
         with self._cambiato:

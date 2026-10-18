@@ -547,6 +547,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         self._parti_le_copie_in_sottofondo()
         self._parti_la_salute_in_sottofondo()
         threading.Thread(target=self._prepara_i_conti, name="preparazione", daemon=True).start()
+        threading.Thread(target=self._ripara_i_ritocchi, name="ritocchi", daemon=True).start()
         registro.evento("programma.acceso", in_rete=in_rete,
                         archivio_ms=round(aperto_in * 1000),
                         tutto_ms=round((time.monotonic() - partenza) * 1000))
@@ -581,6 +582,17 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             return
         registro.evento("programma.conti_pronti",
                         ms=round((time.monotonic() - partenza) * 1000))
+
+    def _ripara_i_ritocchi(self) -> None:
+        from officina.archivio import accesso
+        from officina.ritocco import copia
+
+        try:
+            copia.ripara(accesso.aperto())
+        except ErroreOfficina:
+            return
+        except Exception as guasto:
+            registro.errore("programma.ritocchi_non_riparati", **registro.dove_si_e_rotto(guasto))
 
     def _parti_le_copie_in_sottofondo(self) -> None:
         if getattr(self, "_copie", None) is not None:

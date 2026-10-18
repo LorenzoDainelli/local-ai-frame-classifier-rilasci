@@ -33,6 +33,7 @@ class Esito:
     gia_migliorati: int = 0
     non_adatti: list[str] = field(default_factory=list)
     assenti: list[str] = field(default_factory=list)
+    ritoccati: int = 0
 
     def a_parole(self) -> str:
         pezzi = []
@@ -48,6 +49,8 @@ class Esito:
             pezzi.append(f"{len(self.non_adatti)} in un formato che non si migliora")
         if self.assenti:
             pezzi.append(f"{len(self.assenti)} non sono sul disco")
+        if self.ritoccati:
+            pezzi.append(f"{self.ritoccati} ritoccati: togli prima i ritocchi")
         return " · ".join(pezzi) if pezzi else "niente da mettere in coda"
 
 
@@ -87,6 +90,10 @@ def _metti_uno(connessione: sqlite3.Connection, riga: sqlite3.Row,
             esito.gia_migliorati += 1
         else:
             esito.gia_in_coda += 1
+        return
+
+    if uno(connessione, "SELECT 1 FROM ritoccate WHERE file_id = ?", riga["id"]):
+        esito.ritoccati += 1
         return
 
     percorso = file_media.percorso_migliore(connessione, riga["id"])

@@ -81,6 +81,32 @@ def percorso_migliore(connessione: sqlite3.Connection, file_id: int) -> Path | N
 
 def da_mostrare(connessione: sqlite3.Connection,
                 file_id: int) -> tuple[Path | None, str | None]:
+    ritoccata = uno(connessione,
+                    "SELECT stato, percorso_copia, impronta_copia FROM ritoccate "
+                    "WHERE file_id = ?", file_id)
+    if ritoccata is None:
+        return senza_ritocchi(connessione, file_id)
+    if ritoccata["stato"] == "fatta" and ritoccata["impronta_copia"]:
+        percorso = Path(ritoccata["percorso_copia"])
+        if percorso.exists():
+            return percorso, ritoccata["impronta_copia"]
+    return None, None
+
+
+def da_mostrare_sotto(connessione: sqlite3.Connection,
+                      file_id: int) -> tuple[Path | None, str | None]:
+    ritoccata = uno(connessione,
+                    "SELECT percorso_base, impronta_base FROM ritoccate "
+                    "WHERE file_id = ? AND stato = 'fatta'", file_id)
+    if ritoccata is not None:
+        percorso = Path(ritoccata["percorso_base"])
+        if percorso.exists():
+            return percorso, ritoccata["impronta_base"]
+    return senza_ritocchi(connessione, file_id)
+
+
+def senza_ritocchi(connessione: sqlite3.Connection,
+                   file_id: int) -> tuple[Path | None, str | None]:
     migliorata = uno(
         connessione,
         "SELECT percorso_migliorata, impronta_migliorata FROM migliorie "

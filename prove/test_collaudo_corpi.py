@@ -191,3 +191,100 @@ def test_la_prova_intera_con_modelli_finti(collaudo, monkeypatch, tmp_path):
     assert "persona" not in collaudo.riassunto(solo)
     assert collaudo.riassunto(solo)["punto"]["voti_adesso_corpo"]["giusti"] == 1
     assert collaudo.controlla(solo) == []
+
+
+def _rettangolo(alta, larga, x0, y0, x1, y1):
+    import numpy as np
+
+    maschera = np.zeros((alta, larga), dtype=bool)
+    maschera[y0:y1, x0:x1] = True
+    return maschera
+
+
+def test_il_clic_va_nel_punto_piu_dentro(collaudo):
+    x, y = collaudo.punto_dentro(_rettangolo(50, 80, 10, 10, 41, 41))
+    assert abs(x - 25.5) <= 1 and abs(y - 25.5) <= 1
+    assert collaudo.punto_dentro(_rettangolo(50, 80, 0, 0, 0, 0)) is None
+
+
+def test_la_correzione_clicca_dove_sbaglia_di_piu(collaudo):
+    vera = _rettangolo(60, 60, 0, 0, 40, 40)
+    poca = _rettangolo(60, 60, 0, 0, 10, 10)
+    x, y, dentro = collaudo.correzione(poca, vera)
+    assert dentro and vera[int(y), int(x)] and not poca[int(y), int(x)]
+    troppa = _rettangolo(60, 60, 0, 0, 60, 60)
+    x, y, dentro = collaudo.correzione(troppa, vera)
+    assert not dentro and not vera[int(y), int(x)]
+    assert collaudo.correzione(vera, vera) is None
+
+
+def test_la_sovrapposizione_e_la_maschera_intera(collaudo):
+    from officina.ritocco import maschere
+
+    prima = _rettangolo(20, 20, 0, 0, 10, 10)
+    seconda = _rettangolo(20, 20, 5, 0, 15, 10)
+    assert collaudo.sovrapposizione(prima, seconda) == 50 / 150
+    assert collaudo.sovrapposizione(prima & False, seconda & False) == 1.0
+    pezzo = maschere.apri(maschere.comprimi(seconda, (0, 0), 20, 20))
+    assert (collaudo.intera(pezzo, 20, 20) == seconda).all()
+    assert not collaudo.intera(None, 20, 20).any()
+
+
+def test_gli_oggetti_scelti_sono_grandi_e_non_folla(collaudo):
+    dati = {"images": [{"id": i} for i in (3, 1, 2)],
+            "annotations": [
+                {"image_id": 1, "iscrowd": 0, "area": 5000.0},
+                {"image_id": 1, "iscrowd": 0, "area": 9000.0},
+                {"image_id": 1, "iscrowd": 1, "area": 90000.0},
+                {"image_id": 1, "iscrowd": 0, "area": 2000.0},
+                {"image_id": 1, "iscrowd": 0, "area": 3000.0},
+                {"image_id": 2, "iscrowd": 0, "area": 100.0},
+                {"image_id": 3, "iscrowd": 0, "area": 1600.0}]}
+    scelte = collaudo.scegli_gli_oggetti(dati, 10)
+    assert [foto["id"] for foto, _ in scelte] == [1, 3]
+    assert [a["area"] for a in scelte[0][1]] == [9000.0, 5000.0, 3000.0]
+
+
+def test_la_prova_dei_clic_con_lo_sceglitore_finto(collaudo, monkeypatch, tmp_path):
+    from PIL import Image
+
+    from officina.corpi import rilevatore
+    from officina.ritocco import maschere, scelta
+    from prove import sceglitore_finto
+
+    (tmp_path / rilevatore.CARTELLA_SAM3).mkdir()
+    dati = {"images": [{"id": 1, "file_name": "uno.jpg"}],
+            "annotations": [{"image_id": 1, "iscrowd": 0, "area": 3200.0,
+                             "bbox": [20, 10, 40, 80]}]}
+
+    def scarica(url, dove):
+        dove.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (100, 100)).save(dove)
+        return dove
+
+    def maschera_vera(annotazione, alta, larga):
+        x, y, w, h = annotazione["bbox"]
+        return _rettangolo(alta, larga, x, y, x + w, y + h)
+
+    def dritta(sceglitore, percorso, punti, riquadro):
+        fatta = sceglitore.scegli("dritta", percorso, punti, riquadro, False)
+        return collaudo.intera(maschere.apri(fatta.maschera), 100, 100)
+
+    monkeypatch.setattr(collaudo, "_annotazioni", lambda cartella, dentro: dati)
+    monkeypatch.setattr(collaudo, "_scarica", scarica)
+    monkeypatch.setattr(collaudo, "_maschera_vera", maschera_vera)
+    monkeypatch.setattr(collaudo, "_via_dritta", dritta)
+    monkeypatch.setattr(scelta, "Sceglitore", sceglitore_finto.Finto)
+    esito = {"prova": collaudo.prova_dei_clic(tmp_path, tmp_path, 5),
+             "sam3": {"file": {"model.safetensors": {"uguale_a_hugging_face": True}}}}
+    prova = esito["prova"]
+    assert (prova["foto"], prova["oggetti"]) == (1, 1)
+    assert prova["clic"]["riquadro"]["media"] == 1.0
+    assert prova["clic"]["un_clic"]["media"] == round(100 / 3200, 4)
+    assert prova["clic"]["correzione"]["media"] > prova["clic"]["un_clic"]["media"]
+    assert prova["uguale_alla_via_dritta"] == {"quanti": 2, "minimo": 1.0}
+    assert [visto["sulla_scheda"] for visto in sceglitore_finto.visti(
+        tmp_path / rilevatore.CARTELLA_SAM3)] == [False] * 5
+    assert collaudo.riassunto(esito)["clic"]["riquadro"] == 1.0
+    assert collaudo.controlla(esito) == [
+        f"SAM 3 sceglie male con un_clic: {round(100 / 3200, 4)}"]

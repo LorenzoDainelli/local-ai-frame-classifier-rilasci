@@ -233,6 +233,35 @@ def metti_fuori(scatto_id: int, fuori: int = Form(1)):
     return RedirectResponse(f"/scatto/{scatto_id}", status_code=303)
 
 
+DA_RICONTROLLARE = "private, no-cache"
+
+
+def segno(*pezzi) -> str:
+    import hashlib
+
+    from officina import VERSIONE
+
+    testo = "#".join(str(pezzo) for pezzo in (VERSIONE, *pezzi))
+    return 'W/"' + hashlib.sha256(testo.encode("utf-8")).hexdigest()[:32] + '"'
+
+
+def combacia(chiesto: str | None, atteso: str) -> bool:
+    return any(pezzo.strip() in (atteso, atteso[2:], "*") for pezzo in (chiesto or "").split(","))
+
+
+def gia_ce_l_ha(richiesta: Request, atteso: str) -> bool:
+    return combacia(richiesta.headers.get("if-none-match"), atteso)
+
+
+def non_e_cambiata(atteso: str) -> Response:
+    return Response(status_code=304, headers={"ETag": atteso, "Cache-Control": DA_RICONTROLLARE})
+
+
+def da_ricontrollare(dati: bytes, tipo: str, atteso: str) -> Response:
+    return Response(dati, media_type=tipo,
+                    headers={"ETag": atteso, "Cache-Control": DA_RICONTROLLARE})
+
+
 def _cosa_mostrare(file_id: int) -> tuple | None:
     with accesso.aperto().lettura() as connessione:
         riga = file_media.per_id(connessione, file_id)
@@ -244,14 +273,16 @@ def _cosa_mostrare(file_id: int) -> tuple | None:
     return riga, percorso, migliorata or riga["impronta"]
 
 
-def _miniatura_pronta(file_id: int) -> tuple | None:
+def _miniatura_pronta(file_id: int, chiesto: str | None = None) -> tuple | None:
     archivio = accesso.aperto()
     with archivio.lettura() as connessione:
         riga = file_media.per_id(connessione, file_id)
     if riga is None:
         return None
     nome = riga["miniatura"]
-    return riga, nome, archivio.leggi_miniatura(nome) if nome else None
+    if not nome or combacia(chiesto, segno("miniatura", nome)):
+        return riga, nome, None
+    return riga, nome, archivio.leggi_miniatura(nome)
 
 
 def _miniatura_nuova(riga) -> tuple | None:
@@ -266,10 +297,13 @@ def _tipo_della_cache(nome: str) -> str:
 
 @strada.get("/miniatura/{file_id}")
 async def una_miniatura(richiesta: Request, file_id: int):
-    pronta = await consegna.subito(_miniatura_pronta, file_id)
+    pronta = await consegna.subito(_miniatura_pronta, file_id,
+                                   richiesta.headers.get("if-none-match"))
     if pronta is None:
         return Response(status_code=404)
     riga, nome, dati = pronta
+    if nome and gia_ce_l_ha(richiesta, segno("miniatura", nome)):
+        return non_e_cambiata(segno("miniatura", nome))
     if dati is None:
         fatta = await consegna.a_parte(richiesta, _miniatura_nuova, riga,
                                        filmato=riga["genere"] == "video")
@@ -278,8 +312,7 @@ async def una_miniatura(richiesta: Request, file_id: int):
         nome, dati = fatta
     if dati is None:
         return Response(status_code=404)
-    return Response(dati, media_type=_tipo_della_cache(nome),
-                    headers={"Cache-Control": "private, max-age=86400"})
+    return da_ricontrollare(dati, _tipo_della_cache(nome), segno("miniatura", nome))
 
 
 def _foto_per_browser(percorso: Path, lato: int | None) -> tuple[bytes, str]:
@@ -300,12 +333,16 @@ async def una_immagine(richiesta: Request, file_id: int, lato: int | None = None
     if riga["genere"] == "video":
         return await _manda_un_fotogramma(richiesta, percorso, impronta, 0, None, lato)
 
+    from officina import schermo
+
+    atteso = segno("immagine", impronta, lato or 0, int(bool(schermo.dal_portatile())))
+    if gia_ce_l_ha(richiesta, atteso):
+        return non_e_cambiata(atteso)
     fatta = await consegna.a_parte(richiesta, _foto_per_browser, percorso, lato)
     if fatta is None:
         return Response(status_code=404)
     dati, tipo = fatta
-    return Response(dati, media_type=tipo,
-                    headers={"Cache-Control": "private, max-age=3600"})
+    return da_ricontrollare(dati, tipo, atteso)
 
 
 @strada.get("/fotogramma/{file_id}")
@@ -338,13 +375,16 @@ def _fotogramma_in_cache(percorso: Path, impronta: str, numero: int,
 async def _manda_un_fotogramma(richiesta: Request, percorso: Path, impronta: str,
                                numero: int, istante: int | None,
                                lato: int | None) -> Response:
+    atteso = segno("fotogramma", impronta, numero, istante or 0,
+                   consegna.lato_per_guardare(lato))
+    if gia_ce_l_ha(richiesta, atteso):
+        return non_e_cambiata(atteso)
     fatto = await consegna.a_parte(richiesta, _fotogramma_in_cache, percorso, impronta,
                                    numero, istante, lato, filmato=True)
     if fatto is None:
         return Response(status_code=404)
     dati, tipo = fatto
-    return Response(dati, media_type=tipo,
-                    headers={"Cache-Control": "private, max-age=3600"})
+    return da_ricontrollare(dati, tipo, atteso)
 
 
 @strada.get("/originale/{file_id}")

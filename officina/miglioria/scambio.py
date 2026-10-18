@@ -15,7 +15,7 @@ class ScambioFermato(ErroreOfficina):
     codice = "scambio_fermato"
 
 
-def _sposta(da: Path, verso: Path) -> None:
+def sposta(da: Path, verso: Path) -> None:
     if verso.exists():
         raise ScambioFermato(
             f"In «{verso.parent.name}» c'è già un file che si chiama "
@@ -34,7 +34,7 @@ def _sposta(da: Path, verso: Path) -> None:
     os.unlink(da)
 
 
-def _uguali(una: Path, altra: Path) -> bool:
+def uguali(una: Path, altra: Path) -> bool:
     try:
         return una.exists() and altra.exists() and os.path.samefile(una, altra)
     except OSError:
@@ -117,13 +117,13 @@ def porta_a_termine(archivio, miglioria_id: int) -> Path:
             raise ScambioFermato(
                 "Non trovo l'originale né al suo posto né in «Originali». Non "
                 "ho cancellato niente: controlla la cartella.")
-        _sposta(originale, spostato)
-    if _uguali(originale, spostato):
+        sposta(originale, spostato)
+    if uguali(originale, spostato):
         os.unlink(originale)
 
     if impronta.del_file(spostato) != riga["impronta_originale"]:
         if not originale.exists():
-            _sposta(spostato, originale)
+            sposta(spostato, originale)
         _torna_indietro(archivio, miglioria_id,
                         "l'originale spostato non torna bit per bit")
         raise ScambioFermato(
@@ -136,13 +136,13 @@ def porta_a_termine(archivio, miglioria_id: int) -> Path:
             raise ScambioFermato(
                 "La copia migliorata è sparita a metà scambio. L'originale è "
                 f"in «{attesa.ORIGINALI}», intatto.")
-        _sposta(in_attesa, finale)
+        sposta(in_attesa, finale)
 
     if impronta.del_file(finale) != riga["impronta_migliorata"]:
         if not in_attesa.exists():
-            _sposta(finale, in_attesa)
+            sposta(finale, in_attesa)
         if not originale.exists():
-            _sposta(spostato, originale)
+            sposta(spostato, originale)
         _torna_indietro(archivio, miglioria_id,
                         "la migliorata spostata non torna bit per bit")
         raise ScambioFermato(
@@ -150,7 +150,7 @@ def porta_a_termine(archivio, miglioria_id: int) -> Path:
             "com'era e lo scambio non è avvenuto.")
 
     with archivio.scrittura() as connessione:
-        _il_percorso_dell_originale(connessione, riga["file_id"], originale,
+        cambia_il_percorso(connessione, riga["file_id"], originale,
                                     spostato)
         connessione.execute("UPDATE file_media SET miniatura = NULL WHERE id = ?",
                             (riga["file_id"],))
@@ -160,7 +160,7 @@ def porta_a_termine(archivio, miglioria_id: int) -> Path:
     return finale
 
 
-def _il_percorso_dell_originale(connessione, file_id: int, prima: Path,
+def cambia_il_percorso(connessione, file_id: int, prima: Path,
                                 dopo: Path) -> None:
     riga = uno(connessione,
                "SELECT id, cartella_id FROM percorsi WHERE percorso = ?", str(prima))

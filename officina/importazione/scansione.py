@@ -24,7 +24,7 @@ DA_SALTARE = {
 CARTELLE_DA_SALTARE = {
     ".git", "__pycache__", "@eadir", ".thumbnails", ".cache", "$recycle.bin",
     "system volume information", ".trash", ".trashes", "officina",
-    ".in-revisione",
+    ".in-revisione", ".ritocchi",
 }
 
 ATTRIBUTO_RIMANDO = 0x400

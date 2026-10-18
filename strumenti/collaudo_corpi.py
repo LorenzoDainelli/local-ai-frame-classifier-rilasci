@@ -15,6 +15,7 @@ from pathlib import Path
 RADICE = Path(__file__).resolve().parent.parent
 ANNOTAZIONI = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
 DENTRO_LE_ANNOTAZIONI = "annotations/person_keypoints_val2017.json"
+DENTRO_GLI_OGGETTI = "annotations/instances_val2017.json"
 FOTO = "http://images.cocodataset.org/val2017/"
 SIGMA = (0.026, 0.025, 0.025, 0.035, 0.035, 0.079, 0.079, 0.072, 0.072,
          0.062, 0.062, 0.107, 0.107, 0.087, 0.087, 0.089, 0.089)
@@ -30,6 +31,12 @@ CENTESIMI = (5, 10, 25, 50, 75, 90, 95)
 GRUPPI = ("al_posto_giusto", "fuori_posto", "non_segnati")
 PIU_BASSA = 0.2
 TESTI_NELLO_ZIP = (".json", ".txt")
+OGGETTI_PER_FOTO = 3
+AREA_MINIMA = 1500
+MODI_DEL_CLIC = ("un_clic", "riquadro", "correzione")
+CLIC_ALMENO = {"un_clic": 0.55, "riquadro": 0.7}
+FOTO_PER_LA_VIA_DRITTA = 3
+UGUALE_ALLA_VIA_DRITTA = 0.98
 
 
 def _sha256(percorso: Path) -> str:
@@ -125,10 +132,10 @@ def _rtmw(casa: Path, cartella: Path, chiave: str | None) -> dict:
     return esito
 
 
-def _annotazioni(cartella: Path) -> dict:
+def _annotazioni(cartella: Path, dentro: str = DENTRO_LE_ANNOTAZIONI) -> dict:
     compresso = _scarica(ANNOTAZIONI, cartella / "annotazioni.zip")
     with zipfile.ZipFile(compresso) as zip_:
-        dati = json.loads(zip_.read(DENTRO_LE_ANNOTAZIONI))
+        dati = json.loads(zip_.read(dentro))
     compresso.unlink(missing_ok=True)
     return dati
 
@@ -412,6 +419,192 @@ def prova(casa: Path, cartella: Path, quante: int) -> dict:
     }
 
 
+def scegli_gli_oggetti(dati: dict, quante: int) -> list[tuple[dict, list[dict]]]:
+    per_foto: dict[int, list[dict]] = {}
+    for annotazione in dati["annotations"]:
+        if not annotazione["iscrowd"] and annotazione["area"] >= AREA_MINIMA:
+            per_foto.setdefault(annotazione["image_id"], []).append(annotazione)
+    adatte = [foto for foto in sorted(dati["images"], key=lambda f: f["id"])
+              if foto["id"] in per_foto]
+    if quante >= len(adatte):
+        scelte = adatte
+    else:
+        passo = len(adatte) / quante
+        scelte = [adatte[int(i * passo)] for i in range(quante)]
+    return [(foto, sorted(per_foto[foto["id"]], key=lambda a: -a["area"])[:OGGETTI_PER_FOTO])
+            for foto in scelte]
+
+
+def _il_piu_dentro(maschera) -> tuple[float, float, float]:
+    import cv2
+    import numpy as np
+
+    bordata = np.pad(np.asarray(maschera, dtype=np.uint8), 1)
+    distanze = cv2.distanceTransform(bordata, cv2.DIST_L2, 5)[1:-1, 1:-1]
+    y, x = divmod(int(np.argmax(distanze)), distanze.shape[1])
+    return x + 0.5, y + 0.5, float(distanze[y, x])
+
+
+def punto_dentro(maschera) -> tuple[float, float] | None:
+    if not maschera.any():
+        return None
+    x, y, _ = _il_piu_dentro(maschera)
+    return x, y
+
+
+def correzione(trovata, vera) -> tuple[float, float, bool] | None:
+    import numpy as np
+
+    mancante = np.logical_and(vera, np.logical_not(trovata))
+    in_piu = np.logical_and(trovata, np.logical_not(vera))
+    candidati = [(*_il_piu_dentro(errore), dentro)
+                 for errore, dentro in ((mancante, True), (in_piu, False)) if errore.any()]
+    if not candidati:
+        return None
+    x, y, _, dentro = max(candidati, key=lambda candidato: candidato[2])
+    return x, y, dentro
+
+
+def sovrapposizione(prima, seconda) -> float:
+    import numpy as np
+
+    unione = float(np.logical_or(prima, seconda).sum())
+    return float(np.logical_and(prima, seconda).sum()) / unione if unione else 1.0
+
+
+def intera(pezzo, larga: int, alta: int):
+    import numpy as np
+
+    tela = np.zeros((alta, larga), dtype=bool)
+    if pezzo is None:
+        return tela
+    quanto_alta, quanto_larga = pezzo.maschera.shape
+    tela[pezzo.y:pezzo.y + quanto_alta, pezzo.x:pezzo.x + quanto_larga] = pezzo.maschera
+    return tela
+
+
+def _scelta_intera(sceglitore, chiave: str, percorso: Path, punti, riquadro, larga: int,
+                   alta: int, tempi: list[float]):
+    from officina.ritocco import maschere
+
+    inizio = time.monotonic()
+    fatta = sceglitore.scegli(chiave, percorso, punti, riquadro, False)
+    tempi.append(time.monotonic() - inizio)
+    return intera(maschere.apri(fatta.maschera), larga, alta)
+
+
+def _via_dritta(sceglitore, percorso: Path, punti, riquadro):
+    import torch
+
+    from officina.miglioria import metadati
+    from officina.ritocco import scelta
+
+    immagine = metadati.apri(Path(percorso)).immagine
+    larga, alta = immagine.size
+    coordinate, etichette, scatola = scelta.in_pixel(punti, riquadro, larga, alta)
+    richiesta = {}
+    if coordinate:
+        richiesta["input_points"] = [[coordinate]]
+        richiesta["input_labels"] = [[etichette]]
+    if scatola is not None:
+        richiesta["input_boxes"] = [[scatola]]
+    ingresso = sceglitore._preparatore(images=immagine, return_tensors="pt", **richiesta)
+    tipo = sceglitore._tipo
+    dati = {"pixel_values": ingresso["pixel_values"].to(sceglitore.dispositivo, dtype=tipo)}
+    for nome in ("input_points", "input_labels", "input_boxes"):
+        if nome in ingresso:
+            dati[nome] = ingresso[nome].to(sceglitore.dispositivo)
+    for nome in ("input_points", "input_boxes"):
+        if nome in dati:
+            dati[nome] = dati[nome].to(tipo)
+    with torch.inference_mode():
+        uscita = sceglitore._modello(multimask_output=scelta.tre_contorni(punti, riquadro),
+                                     **dati)
+    voti = uscita.iou_scores[0, 0].float()
+    migliore = int(torch.argmax(voti))
+    bassa = uscita.pred_masks[:, :, migliore:migliore + 1].float()
+    piena = sceglitore._preparatore.post_process_masks(
+        [bassa[0]], ingresso["original_sizes"], mask_threshold=scelta.SOGLIA, binarize=True)[0]
+    return piena[0, 0].cpu().numpy().astype(bool)
+
+
+def _media(valori: list[float]) -> dict:
+    return {"media": round(sum(valori) / len(valori), 4) if valori else 0.0,
+            "sotto_0_5": sum(1 for valore in valori if valore < 0.5), **_quantili(valori)}
+
+
+def prova_dei_clic(casa: Path, cartella: Path, quante: int) -> dict:
+    from PIL import Image
+
+    from officina.corpi import rilevatore
+    from officina.ritocco import scelta
+
+    scelte = scegli_gli_oggetti(_annotazioni(cartella, DENTRO_GLI_OGGETTI), quante)
+    sceglitore = scelta.Sceglitore(casa / rilevatore.CARTELLA_SAM3)
+    partito = time.monotonic()
+    sceglitore.accendi(False)
+    accensione = round(time.monotonic() - partito, 1)
+    voti: dict[str, list[float]] = {modo: [] for modo in MODI_DEL_CLIC}
+    uguali: list[float] = []
+    tempi: dict[str, list[float]] = {"guarda": [], "clic": []}
+    per_foto = []
+    for numero, (foto, oggetti) in enumerate(scelte, start=1):
+        chiave = foto["file_name"]
+        percorso = _scarica(FOTO + chiave, cartella / "foto" / chiave)
+        with Image.open(percorso) as aperta:
+            larga, alta = aperta.size
+        inizio = time.monotonic()
+        sceglitore.guarda(chiave, percorso, False)
+        tempi["guarda"].append(time.monotonic() - inizio)
+        suoi = {modo: [] for modo in MODI_DEL_CLIC}
+        for posto, oggetto in enumerate(oggetti):
+            vera = _maschera_vera(oggetto, alta, larga)
+            dentro = punto_dentro(vera)
+            if dentro is None:
+                continue
+            clic = [scelta.Punto(dentro[0] / larga, dentro[1] / alta, True)]
+            bx, by, bw, bh = oggetto["bbox"]
+            riquadro = scelta.Riquadro(max(0.0, bx / larga), max(0.0, by / alta),
+                                       min(1.0, (bx + bw) / larga), min(1.0, (by + bh) / alta))
+            con_un_clic = _scelta_intera(sceglitore, chiave, percorso, clic, None, larga, alta,
+                                         tempi["clic"])
+            col_riquadro = _scelta_intera(sceglitore, chiave, percorso, [], riquadro, larga, alta,
+                                          tempi["clic"])
+            corretta = con_un_clic
+            altro = correzione(con_un_clic, vera)
+            if altro is not None:
+                secondo = [*clic, scelta.Punto(altro[0] / larga, altro[1] / alta, altro[2])]
+                corretta = _scelta_intera(sceglitore, chiave, percorso, secondo, None, larga,
+                                          alta, tempi["clic"])
+            for modo, trovata in (("un_clic", con_un_clic), ("riquadro", col_riquadro),
+                                  ("correzione", corretta)):
+                suoi[modo].append(sovrapposizione(trovata, vera))
+            if numero <= FOTO_PER_LA_VIA_DRITTA and posto == 0:
+                uguali.append(sovrapposizione(con_un_clic,
+                                              _via_dritta(sceglitore, percorso, clic, None)))
+                uguali.append(sovrapposizione(col_riquadro,
+                                              _via_dritta(sceglitore, percorso, [], riquadro)))
+        for modo, valori in suoi.items():
+            voti[modo].extend(valori)
+        per_foto.append({"foto": chiave, "oggetti": len(suoi["un_clic"]),
+                         **{modo: round(sum(v) / len(v), 3) if v else None
+                            for modo, v in suoi.items()},
+                         "secondi_per_guardare": round(tempi["guarda"][-1], 1)})
+        print(f"[{numero}/{len(scelte)}] {chiave}: {per_foto[-1]}", flush=True)
+    sceglitore.spegni()
+    return {
+        "foto": len(scelte),
+        "oggetti": len(voti["un_clic"]),
+        "accensione_secondi": accensione,
+        "secondi_per_guardare": round(sum(tempi["guarda"]) / max(1, len(tempi["guarda"])), 2),
+        "secondi_per_clic": round(sum(tempi["clic"]) / max(1, len(tempi["clic"])), 3),
+        "clic": {modo: _media(valori) for modo, valori in voti.items()},
+        "uguale_alla_via_dritta": {"quanti": len(uguali),
+                                   "minimo": round(min(uguali), 4) if uguali else 0.0},
+        "per_foto": per_foto,
+    }
+
+
 def _al_posto_giusto(segnati: dict) -> dict:
     return {nome: round(v["al_posto_giusto"] / v["segnati"], 4) if v["segnati"] else 0.0
             for nome, v in segnati.items()}
@@ -461,6 +654,11 @@ def riassunto(esito: dict) -> dict:
     from officina.corpi import rilevatore, sam3
 
     prova_ = esito["prova"]
+    if "clic" in prova_:
+        return {"clic": {modo: voti["media"] for modo, voti in prova_["clic"].items()},
+                "uguale_alla_via_dritta": prova_["uguale_alla_via_dritta"]["minimo"],
+                "secondi_per_guardare": prova_["secondi_per_guardare"],
+                "secondi_per_clic": prova_["secondi_per_clic"]}
     fuori: dict = {}
     if "persone" in prova_:
         persone = prova_["persone"]
@@ -489,18 +687,37 @@ def controlla(esito: dict) -> list[str]:
 
     guai = []
     prova_ = esito["prova"]
-    if "persone" in prova_:
+    if "clic" in prova_:
+        guai.extend(_controlla_i_clic(prova_))
+    elif "persone" in prova_:
         adesso = prova_["persone"][str(rilevatore.SICUREZZA_MINIMA)]
         if not adesso["giusti"]:
             guai.append("SAM 3 non ha trovato nessuna persona giusta")
         elif adesso["richiamo"] < 0.6:
             guai.append(f"SAM 3 trova troppo poche persone: {adesso['richiamo']}")
-    if prova_["al_posto_giusto"]["veri"] < 0.7:
+    if "al_posto_giusto" in prova_ and prova_["al_posto_giusto"]["veri"] < 0.7:
         guai.append(f"RTMW mette troppo pochi punti al posto giusto: {prova_['al_posto_giusto']['veri']}")
-    if prova_["al_posto_giusto"]["veri_bgr"] > prova_["al_posto_giusto"]["veri"] + 0.02:
+    if ("al_posto_giusto" in prova_
+            and prova_["al_posto_giusto"]["veri_bgr"] > prova_["al_posto_giusto"]["veri"] + 0.02):
         guai.append("RTMW va meglio coi colori al contrario: la preparazione è sbagliata")
     if "sam3" in esito and not all(f["uguale_a_hugging_face"] for f in esito["sam3"]["file"].values()):
         guai.append("un file di SAM 3 non è uguale a quello di Hugging Face")
+    return guai
+
+
+def _controlla_i_clic(prova_: dict) -> list[str]:
+    guai = []
+    clic = prova_["clic"]
+    if not prova_["oggetti"]:
+        guai.append("nessun oggetto provato coi clic")
+    for modo, almeno in CLIC_ALMENO.items():
+        if clic[modo]["media"] < almeno:
+            guai.append(f"SAM 3 sceglie male con {modo}: {clic[modo]['media']}")
+    if clic["correzione"]["media"] < clic["un_clic"]["media"] - 0.01:
+        guai.append("il secondo clic peggiora la scelta invece di correggerla")
+    if prova_["uguale_alla_via_dritta"]["minimo"] < UGUALE_ALLA_VIA_DRITTA:
+        guai.append("la scelta del programma non è uguale a quella fatta dritta: "
+                    f"{prova_['uguale_alla_via_dritta']['minimo']}")
     return guai
 
 
@@ -509,26 +726,32 @@ def main() -> int:
     parser.add_argument("--cartella", type=Path, required=True)
     parser.add_argument("--quante", type=int, default=60)
     parser.add_argument("--uscita", type=Path, required=True)
-    parser.add_argument("--parte", choices=("tutto", "punti"), default="tutto")
+    parser.add_argument("--parte", choices=("tutto", "punti", "clic"), default="tutto")
     argomenti = parser.parse_args()
     sys.path.insert(0, str(RADICE))
     from officina.descrittori import torcia
 
     torcia.con_la_rete_accesa()
     chiave = os.environ.get("HF_TOKEN") or None
-    if not chiave and argomenti.parte == "tutto":
+    if not chiave and argomenti.parte in ("tutto", "clic"):
         raise SystemExit("manca HF_TOKEN nei segreti del deposito")
     cartella = argomenti.cartella
     casa = cartella / "modelli" / "corpi"
     casa.mkdir(parents=True, exist_ok=True)
     esito: dict = {}
-    if argomenti.parte == "tutto":
+    if argomenti.parte in ("tutto", "clic"):
         esito["sam3"] = _sam3(casa, chiave)
-    esito["rtmw"] = _rtmw(casa, cartella, chiave)
-    print(json.dumps({"sam3": esito.get("sam3"), "rtmw": {k: v for k, v in esito["rtmw"].items()
-                                                           if k != "testi_nello_zip"}}, indent=1), flush=True)
-    esito["prova"] = (prova(casa, cartella, argomenti.quante) if argomenti.parte == "tutto"
-                      else prova_dei_punti(casa, cartella, argomenti.quante))
+    if argomenti.parte != "clic":
+        esito["rtmw"] = _rtmw(casa, cartella, chiave)
+    print(json.dumps({"sam3": esito.get("sam3"),
+                      "rtmw": {k: v for k, v in esito.get("rtmw", {}).items()
+                               if k != "testi_nello_zip"}}, indent=1), flush=True)
+    if argomenti.parte == "clic":
+        esito["prova"] = prova_dei_clic(casa, cartella, argomenti.quante)
+    elif argomenti.parte == "tutto":
+        esito["prova"] = prova(casa, cartella, argomenti.quante)
+    else:
+        esito["prova"] = prova_dei_punti(casa, cartella, argomenti.quante)
     esito["riassunto"] = riassunto(esito)
     esito["guai"] = controlla(esito)
     argomenti.uscita.write_text(json.dumps(esito, ensure_ascii=False, indent=1), encoding="utf-8")

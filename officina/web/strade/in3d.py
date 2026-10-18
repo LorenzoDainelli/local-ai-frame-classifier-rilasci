@@ -56,12 +56,15 @@ async def la_foto_intera(richiesta: Request, file_id: int, lato: int | None = No
     trovato = await consegna.subito(scatto_web._cosa_mostrare, file_id)
     if trovato is None:
         return Response(status_code=404)
-    riga, percorso, _ = trovato
+    riga, percorso, impronta = trovato
     if riga["genere"] != "immagine":
         return Response(status_code=404)
-    fatta = await consegna.a_parte(richiesta, _foto_intera, percorso,
-                                   max(256, min(lato or LATO_MASSIMO_DELLA_FOTO, LATO_MASSIMO_DELLA_FOTO)))
+    misura = max(256, min(lato or LATO_MASSIMO_DELLA_FOTO, LATO_MASSIMO_DELLA_FOTO))
+    atteso = scatto_web.segno("in3d", impronta, misura)
+    if scatto_web.gia_ce_l_ha(richiesta, atteso):
+        return scatto_web.non_e_cambiata(atteso)
+    fatta = await consegna.a_parte(richiesta, _foto_intera, percorso, misura)
     if fatta is None:
         return Response(status_code=404)
     dati, tipo = fatta
-    return Response(dati, media_type=tipo, headers={"Cache-Control": "private, max-age=3600"})
+    return scatto_web.da_ricontrollare(dati, tipo, atteso)

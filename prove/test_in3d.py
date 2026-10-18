@@ -957,7 +957,10 @@ def test_la_foto_intera_e_un_jpeg_e_si_puo_rimpicciolire(archivio_pieno, cliente
     intera = cliente.get(f"/in3d/foto/{file_id}")
     assert intera.status_code == 200
     assert intera.headers["content-type"] == "image/jpeg"
-    assert intera.headers["cache-control"] == "private, max-age=3600"
+    assert intera.headers["cache-control"] == "private, no-cache"
+    assert intera.headers["etag"].startswith('W/"')
+    assert cliente.get(f"/in3d/foto/{file_id}",
+                       headers={"if-none-match": intera.headers["etag"]}).status_code == 304
     assert intera.content[:2] == b"\xff\xd8"
     larga, alta = Image.open(io.BytesIO(intera.content)).size
     assert (larga, alta) == (800, 600)

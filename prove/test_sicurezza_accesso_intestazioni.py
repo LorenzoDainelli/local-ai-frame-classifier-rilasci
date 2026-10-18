@@ -64,7 +64,8 @@ def test_le_miniature_restano_in_cache_solo_su_questo_computer(cliente, tablet):
     qui = cliente.get("/miniatura/1")
     assert qui.status_code == 200
     assert qui.headers["content-type"].startswith("image/")
-    assert qui.headers["cache-control"] == "private, max-age=86400"
+    assert qui.headers["cache-control"] == "private, no-cache"
+    assert qui.headers["etag"].startswith('W/"')
     fuori = tablet.get("/miniatura/1")
     assert fuori.status_code == 200
     assert fuori.headers["cache-control"] == "no-store"
