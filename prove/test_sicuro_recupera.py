@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import subprocess
 import sys
 import threading
 from contextlib import contextmanager
@@ -929,6 +930,18 @@ def _schermo() -> bool:
     return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
 
+def _da_solo(richiesta: Path) -> int:
+    radice = Path(__file__).resolve().parent.parent
+    ambiente = dict(os.environ)
+    ambiente["PYTHONPATH"] = os.pathsep.join(
+        filter(None, [str(radice), os.environ.get("PYTHONPATH")]))
+    giro = subprocess.run(
+        [sys.executable, "-c", "import sys; from officina.sicuro import recupera; "
+         "sys.exit(recupera.collaudo(sys.argv[1]))", str(richiesta)],
+        cwd=radice, env=ambiente, timeout=ATTESA * 3 + 120)
+    return giro.returncode
+
+
 @pytest.mark.skipif(not _schermo(), reason="serve uno schermo")
 def test_la_finestrina_tira_fuori_tutto(tmp_path, chiave):
     pytest.importorskip("tkinter")
@@ -937,7 +950,7 @@ def test_la_finestrina_tira_fuori_tutto(tmp_path, chiave):
     fuori = tmp_path / "fuori"
     richiesta = _richiesta(tmp_path, archivio=str(prova.dove), password=PASSWORD,
                            dove=str(fuori), finestra=True)
-    assert recupera.collaudo(richiesta) == 0, _esito(tmp_path)
+    assert _da_solo(richiesta) == 0, _esito(tmp_path)
     esito = _esito(tmp_path)
     assert FINE in esito["fasi_viste"]
     assert esito["scritte"]["frase"].startswith("Fatto!")
@@ -953,7 +966,7 @@ def test_la_finestrina_con_la_password_sbagliata(tmp_path, chiave):
     richiesta = _richiesta(tmp_path, archivio=str(prova.dove),
                            password="una password sbagliata",
                            dove=str(tmp_path / "fuori"), finestra=True)
-    assert recupera.collaudo(richiesta) == 2, _esito(tmp_path)
+    assert _da_solo(richiesta) == 2, _esito(tmp_path)
     esito = _esito(tmp_path)
     assert "non sono state toccate" in esito["scritte"]["errore"]
     assert not esito["tasto_apri"] and not esito["scaduto"]

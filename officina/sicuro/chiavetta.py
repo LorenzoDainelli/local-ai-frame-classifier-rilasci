@@ -28,7 +28,7 @@ from officina.sicuro.sottofondo import FINITO, PAUSA_SE_USI, Sottofondo
 
 __all__ = ["Avanzamento", "AggiornaChiavetta", "Chiavetta", "ChiavettaStaccata",
            "Esame", "Guardiano", "Resoconto", "dischi_attaccati", "leggi_segno",
-           "sistema_dei_file"]
+           "sistema_dei_file", "tutti_i_dischi"]
 
 CARTELLA = "Archivio sicuro"
 SEGNO = "chiavetta.json"
@@ -232,7 +232,7 @@ def sistema_dei_file(percorso) -> str | None:
     return nome.value or None
 
 
-def dischi_attaccati() -> list[Path]:
+def tutti_i_dischi() -> list[Path]:
     if WINDOWS:
         try:
             kernel32 = _kernel32()
@@ -260,6 +260,13 @@ def dischi_attaccati() -> list[Path]:
                                  if sotto.is_dir(follow_symlinks=False))
             except OSError:
                 continue
+    return dischi
+
+
+def dischi_attaccati() -> list[Path]:
+    dischi = tutti_i_dischi()
+    if WINDOWS:
+        return dischi
     return [disco for disco in dischi if (disco / CARTELLA / SEGNO).is_file()]
 
 
