@@ -14,13 +14,20 @@ function cambiati(prima, adesso) {
     return CONTI_CHE_CONTANO.some((chiave) => (prima || {})[chiave] !== (adesso || {})[chiave]);
 }
 
+function chiLavora(adesso) {
+    if (!adesso || !adesso.sfidante) return "";
+    return `${adesso.sfidante}, versione ${adesso.versione} di ${adesso.versioni} per la sfida`;
+}
+
 function aParole(adesso) {
-    if (!adesso || !adesso.totale) return "";
+    const chi = chiLavora(adesso);
+    if (!adesso || !adesso.totale) return chi;
     const fatti = numeroAParole(adesso.fatti || 0);
     const totale = numeroAParole(adesso.totale);
-    return dati.genere === "video"
+    const passo = dati.genere === "video"
         ? `fotogrammi ${fatti} di ${totale}`
         : `passo ${fatti} di ${totale}`;
+    return chi ? `${chi} · ${passo}` : passo;
 }
 
 async function comeVa() {

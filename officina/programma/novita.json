@@ -360,6 +360,14 @@
       [
         "indietro",
         "Etichetta ricorda lo scatto dove eri per tutto l'archivio e per ogni gruppo, ognuno per conto suo. Aprire una foto dalla Galleria o fare un ripasso non ti sposta più: finito il ripasso torni allo scatto di prima"
+      ],
+      [
+        "sfida",
+        "Durante la sfida alla cieca il riquadro di Miglioramento dice chi sta lavorando: «SeedVR2, versione 1 di 2» e poi «LucidFlux, versione 2 di 2». Il conto sale quando hai votato"
+      ],
+      [
+        "avviso",
+        "Se LucidFlux non può riprendere una foto già fatta da SeedVR2, la riga sotto dice perché: foto non trovata, foto cambiata o poco spazio sul disco"
       ]
     ],
     "tecnico": [
@@ -531,6 +539,10 @@
       [
         "indietro",
         "Chiave <code>ultimo_scatto_etichetta</code> per tutto l'archivio, <code>ultimo_scatto_gruppo_N</code> per i gruppi; <code>/api/officina/{id}/qui</code> scrive solo quella della scelta attuale e non si chiama durante il ripasso. La carta di Lavoro legge la stessa chiave; le chiavi <code>ultimo_scatto_*</code> non fanno rifare la copia"
+      ],
+      [
+        "sfida",
+        "<code>Miglioratore.adesso</code> ha <code>sfidante</code>, <code>versione</code> e <code>versioni</code> durante <code>_due_versioni</code>; <code>miglioramento.js</code> li scrive prima del passo. <code>_riprendi_una</code> scrive il motivo quando salta e manda l'avviso <code>miglioria.sfida_non_ripresa</code>"
       ]
     ]
   },

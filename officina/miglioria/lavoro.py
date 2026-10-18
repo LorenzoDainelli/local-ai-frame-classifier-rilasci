@@ -363,10 +363,13 @@ class Miglioratore:
                       finale: Path, al_passo) -> None:
         fatte: dict = {}
         saltata: dict | None = None
-        for motore in sfida.SFIDANTI:
+        for passo, motore in enumerate(sfida.SFIDANTI, start=1):
             arrivo = finale.with_name(f"{finale.stem}.{motore}{finale.suffix}")
             parziale = arrivo.with_name(arrivo.name + attesa.PARZIALE)
-            self.lavoro.di(f"lavoro «{originale.name}» per la sfida alla cieca")
+            self.adesso.update(sfidante=sfida.NOMI[motore], versione=passo,
+                               versioni=len(sfida.SFIDANTI), fatti=0, totale=0)
+            self.lavoro.di(f"lavoro «{originale.name}» per la sfida alla cieca: "
+                           f"{sfida.NOMI[motore]}, versione {passo} di {len(sfida.SFIDANTI)}")
             scelti = dict(lavoro["motori"], foto=motore)
             esito = self._una_versione(dict(lavoro, motori=scelti), parziale, al_passo)
             if esito is None:
@@ -452,12 +455,17 @@ class Miglioratore:
                        "totale": 0, "ripresa": True}
         self.lavoro.di(f"LucidFlux riprende «{originale.name}» per la sfida alla cieca")
         if not (originale.is_file() and tenuta.is_file() and attesa.e_dentro(tenuta)):
+            self._non_ripresa(originale, "assente",
+                              "non trovo la foto o la versione di SeedVR2")
             return
         if (impronta.del_file(originale) != riga["impronta_originale"]
                 or impronta.del_file(tenuta) != riga["impronta_migliorata"]):
+            self._non_ripresa(originale, "cambiata",
+                              "la foto è cambiata da quando SeedVR2 l'ha fatta")
             return
         serve = originale.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
         if shutil.disk_usage(tenuta.parent).free < serve:
+            self._non_ripresa(originale, "spazio", "manca spazio sul disco")
             return
         finale = tenuta.parent / attesa.nome_in_attesa(miglioria_id, originale,
                                                        originale.suffix)
@@ -498,6 +506,10 @@ class Miglioratore:
                            "LucidFlux non serve più")
             return
         self.lavoro.di(f"pronto da votare: «{originale.name}»")
+
+    def _non_ripresa(self, originale: Path, codice: str, perche: str) -> None:
+        registro.avviso("miglioria.sfida_non_ripresa", motivo=registro.Parola(codice))
+        self.lavoro.di(f"«{originale.name}» resta solo di SeedVR2: {perche}")
 
     def _copie_da_guardare(self, miglioria_id: int, originale: Path,
                            finale: Path) -> None:

@@ -307,6 +307,27 @@ def test_lucidflux_riprende_le_foto_gia_fatte_e_le_manda_al_voto(importato):
     assert di_nuovo.chiamati == []
 
 
+def test_in_sfida_si_vede_quale_dei_due_sta_lavorando(importato):
+    _metti(importato, "piccola.jpg")
+    visti = []
+    miglioratore = lavoro.Miglioratore(importato, motori_scelti=SCELTI,
+                                       sfidanti_pronti=lambda: True)
+
+    def lancia(lavoro_da_fare, al_passo, ricorda):
+        al_passo(1, 4)
+        adesso = miglioratore.come_va()["adesso"]
+        visti.append((adesso["sfidante"], adesso["versione"], adesso["versioni"],
+                      adesso["fatti"], adesso["totale"]))
+        return _versione_finta(lavoro_da_fare, al_passo, ricorda)
+
+    miglioratore._lancia = lancia
+    assert miglioratore.parti()
+    assert miglioratore.lavoro.aspetta_che_finisca(60)
+    assert visti == [("SeedVR2", 1, 2, 1, 4), ("LucidFlux", 2, 2, 1, 4)]
+    assert any("LucidFlux, versione 2 di 2" in riga for riga in miglioratore.lavoro.righe)
+    assert miglioratore.come_va()["adesso"] == {}
+
+
 def test_votare_la_ripresa_tiene_la_versione_scelta(importato):
     prima = _fatta_solo_da_seedvr2(importato)
     _gira(importato, _versione_finta, pronti=True)
@@ -342,8 +363,10 @@ def test_una_versione_tenuta_che_e_cambiata_non_si_riprende(importato):
     prima = _fatta_solo_da_seedvr2(importato)
     Path(prima["in_revisione"]).write_bytes(b"toccata da qualcuno")
     lancia = _contato(_versione_finta)
-    _gira(importato, lancia, pronti=True)
+    miglioratore = _gira(importato, lancia, pronti=True)
     assert lancia.chiamati == []
+    assert any("resta solo di SeedVR2: la foto è cambiata" in riga
+               for riga in miglioratore.lavoro.righe)
     with importato.lettura() as connessione:
         assert sfida.quante_fatte(connessione) == 0
 
