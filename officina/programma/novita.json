@@ -356,6 +356,10 @@
       [
         "riprova",
         "Le foto già fatte solo da SeedVR2 e non ancora decise: premendo Avvia, LucidFlux fa anche la sua versione e la foto entra nella sfida alla cieca. I video restano solo di SeedVR2"
+      ],
+      [
+        "indietro",
+        "Etichetta ricorda lo scatto dove eri per tutto l'archivio e per ogni gruppo, ognuno per conto suo. Aprire una foto dalla Galleria o fare un ripasso non ti sposta più: finito il ripasso torni allo scatto di prima"
       ]
     ],
     "tecnico": [
@@ -523,6 +527,10 @@
       [
         "riprova",
         "<code>sfida.da_riprendere</code>: foto da rivedere con motori che iniziano da seedvr2 senza lucidflux e senza riga in <code>sfide</code>, fino a 100; il controllo di stato e impronte si rifà prima di registrare, altrimenti il file di LucidFlux si butta"
+      ],
+      [
+        "indietro",
+        "Chiave <code>ultimo_scatto_etichetta</code> per tutto l'archivio, <code>ultimo_scatto_gruppo_N</code> per i gruppi; <code>/api/officina/{id}/qui</code> scrive solo quella della scelta attuale e non si chiama durante il ripasso. La carta di Lavoro legge la stessa chiave; le chiavi <code>ultimo_scatto_*</code> non fanno rifare la copia"
       ]
     ]
   },

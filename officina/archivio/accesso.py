@@ -18,6 +18,7 @@ from officina.impostazioni import (PREDEFINITE, REALE, SOLO_QUESTA_MACCHINA,
                                    questa_macchina, valore_ammesso)
 
 RICORDI_DELLA_VISTA = ("ultimo_filtro", "ultimo_scatto")
+RICORDI_DEGLI_SCATTI = "ultimo_scatto_"
 _MANCANTE = object()
 
 
@@ -333,7 +334,7 @@ class Archivio:
         with self._lucchetto:
             prima = self.connessione.total_changes
             database.scrivi_stato(self.connessione, chiave, valore)
-            if chiave in RICORDI_DELLA_VISTA:
+            if chiave in RICORDI_DELLA_VISTA or chiave.startswith(RICORDI_DEGLI_SCATTI):
                 self._solo_ricordi += self.connessione.total_changes - prima
 
     @property

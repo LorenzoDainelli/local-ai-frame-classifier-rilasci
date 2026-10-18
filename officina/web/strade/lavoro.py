@@ -15,6 +15,7 @@ from officina.modello.scatti import Filtro
 from officina.web import vista
 
 from officina.web.strade import base, comune, intelligenza
+from officina.web.strade.etichetta import scatto_dove_eri
 
 strada = APIRouter()
 
@@ -23,7 +24,7 @@ strada = APIRouter()
 def casa_del_lavoro(richiesta: Request):
     from officina import parole as parole_mod
     from officina.descrittori import pronti
-    from officina.importazione import scansione
+    from officina.importazione import gruppi, scansione
     from officina.miglioria import coda as miglioria_coda
 
     insieme = base.comune(richiesta, "lavoro")
@@ -40,9 +41,9 @@ def casa_del_lavoro(richiesta: Request):
                      "SELECT finita_il, nuovi_scatti FROM importazioni "
                      "WHERE stato = 'finita' ORDER BY id DESC LIMIT 1")
         ripartenza = None
-        salvato = archivio.stato("ultimo_scatto")
+        salvato = scatto_dove_eri(archivio, gruppi.scelto(connessione, "etichetta"))
         if salvato:
-            quello = scatti.per_id(connessione, int(salvato))
+            quello = scatti.per_id(connessione, salvato)
             if quello is not None and quello["data_locale"]:
                 ripartenza = scatti.giorno_a_parole(str(quello["data_locale"])[:10])
 

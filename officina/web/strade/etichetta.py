@@ -28,9 +28,9 @@ def pagina_officina(richiesta: Request, scatto: int | None = None):
         filtro = scatti.risolvi_simili(connessione, filtro)
         quanti = scatti.conta(connessione, filtro)
         if scatto is None:
-            salvato = archivio.stato(_dove_si_ricorda(filtro.gruppo))
-            if salvato and int(salvato) in scatti.soli_numeri(connessione, filtro):
-                scatto = int(salvato)
+            salvato = scatto_dove_eri(archivio, filtro.gruppo)
+            if salvato and salvato in scatti.soli_numeri(connessione, filtro):
+                scatto = salvato
         if scatto is None or scatti.per_id(connessione, scatto) is None:
             primi = (scatti.pagina(connessione, filtro.copia_con(senza_etichetta=True), 0, 1)
                      or scatti.pagina(connessione, filtro, 0, 1))
@@ -79,7 +79,15 @@ def pagina_officina(richiesta: Request, scatto: int | None = None):
 
 
 def _dove_si_ricorda(gruppo: int | None) -> str:
-    return f"ultimo_scatto_gruppo_{gruppo}" if gruppo else "ultimo_scatto"
+    return f"ultimo_scatto_gruppo_{gruppo}" if gruppo else "ultimo_scatto_etichetta"
+
+
+def scatto_dove_eri(archivio, gruppo: int | None) -> int | None:
+    salvato = archivio.stato(_dove_si_ricorda(gruppo))
+    try:
+        return int(salvato) if salvato is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _persone_per_la_pagina(connessione) -> list[dict]:
@@ -127,8 +135,8 @@ def api_officina(richiesta: Request, scatto_id: int):
 def api_officina_qui(scatto_id: int, gruppo: str = Form("")):
     archivio = accesso.aperto()
     base.ricorda(archivio, "ultimo_scatto", scatto_id)
-    if gruppo.isdecimal() and int(gruppo):
-        base.ricorda(archivio, _dove_si_ricorda(int(gruppo)), scatto_id)
+    gruppo_id = int(gruppo) if gruppo.isdecimal() and int(gruppo) else None
+    base.ricorda(archivio, _dove_si_ricorda(gruppo_id), scatto_id)
     return {"fatto": True}
 
 

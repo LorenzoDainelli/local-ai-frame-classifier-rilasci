@@ -91,6 +91,7 @@ const st = {
     ordine: new Map(),
     domande: dati.ripassi || [],
     ripasso: null,
+    primaDelRipasso: null,
     perche: null,
     live: false,
     fotogramma: 0,
@@ -928,7 +929,7 @@ async function vaiA(scattoId, verso = 0, fresco = false) {
         const pezzo = await prendiDalServer(scattoId);
         if (giro !== st.giro) return;
         mostra(pezzo, verso);
-        mandaModulo(`/api/officina/${scattoId}/qui`, { gruppo: st.filtro.gruppo || "" }).catch(() => {});
+        if (!st.ripasso) mandaModulo(`/api/officina/${scattoId}/qui`, { gruppo: st.filtro.gruppo || "" }).catch(() => {});
         preparaVicini();
     } catch (errore) {
         if (giro === st.giro) segnala(errore.message);
@@ -1178,9 +1179,15 @@ async function aggiornaDomande() {
     if (st.ripasso) {
         const ancora = st.domande.find((v) => v.nodo_id === st.ripasso.nodo_id);
         if (ancora) st.ripasso.restano = ancora.restano;
-        else st.ripasso = null;
+        else { st.ripasso = null; tornaDalRipasso(); }
     }
     disegnaRipasso();
+}
+
+function tornaDalRipasso() {
+    const dove = st.primaDelRipasso;
+    st.primaDelRipasso = null;
+    if (dove !== null && dove !== undefined && (!st.pezzo || st.pezzo.scatto.id !== dove)) vaiA(dove);
 }
 
 async function ripasso(come) {
@@ -1190,6 +1197,7 @@ async function ripasso(come) {
             st.ripasso = null;
             if (voce) await mandaModulo("/api/ripasso/abbandona", { nodo_id: voce.nodo_id });
             await aggiornaDomande();
+            tornaDalRipasso();
             return;
         }
         const voce = st.domande[0];
@@ -1206,6 +1214,7 @@ async function ripasso(come) {
             await aggiornaDomande();
             return;
         }
+        st.primaDelRipasso = st.pezzo ? st.pezzo.scatto.id : null;
         st.ripasso = { nodo_id: voce.nodo_id, nome: voce.nome, restano: risposta.restano };
         disegnaRipasso();
         await vaiA(risposta.scatto_id, 1);
@@ -1223,6 +1232,7 @@ async function avantiNelRipasso() {
             st.ripasso = null;
             avviso("Ripasso finito");
             await aggiornaDomande();
+            tornaDalRipasso();
             return;
         }
         disegnaRipasso();
