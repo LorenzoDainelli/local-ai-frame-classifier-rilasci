@@ -8,6 +8,7 @@ on:
       - "installatore/**"
       - "prove/**"
       - "requirements*.txt"
+      - "strumenti/collaudo_recupera.py"
       - ".github/workflows/versione-2.yml"
   workflow_dispatch:
     inputs:
@@ -68,6 +69,8 @@ jobs:
       - run: python -m pip install pip-audit==2.9.0
       - name: Controlla le librerie del programma
         run: python -m pip_audit -r installatore/librerie-del-programma.txt --require-hashes --disable-pip --progress-spinner off --desc on
+      - name: Controlla le librerie di «Recupera foto.exe»
+        run: python -m pip_audit -r installatore/librerie-di-recupera.txt --require-hashes --disable-pip --progress-spinner off --desc on
       - name: Controlla le librerie dei modelli
         run: python -m pip_audit -r requirements-modelli.txt --progress-spinner off --desc on --no-deps
 
@@ -140,6 +143,45 @@ jobs:
           costruzione\python\python.exe -m officina.programma --collaudo collaudo-forziere.json --forziere
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
+      - name: Costruisci «Recupera foto.exe»
+        run: |
+          python -m pip install --require-hashes --only-binary :all: --no-deps -r installatore\librerie-di-recupera.txt
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $casa = (Get-Location).Path
+          $lavoro = Join-Path $env:RUNNER_TEMP "pyinstaller"
+          $icona = Join-Path $casa "officina\web\statici\officina.ico"
+          python -m PyInstaller --noconfirm --clean --onefile --noconsole --name "Recupera foto" --icon $icona --add-data "${icona}:." --paths $casa --distpath (Join-Path $casa "costruzione\app\strumenti") --workpath (Join-Path $lavoro "lavoro") --specpath $lavoro (Join-Path $casa "installatore\recupera_foto.py")
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not (Test-Path -LiteralPath "costruzione\app\strumenti\Recupera foto.exe")) { Write-Output "manca «Recupera foto.exe»"; exit 1 }
+
+      - name: Collaudo di «Recupera foto.exe» su una chiavetta finta
+        timeout-minutes: 20
+        run: |
+          $base = Join-Path $env:RUNNER_TEMP "recupera"
+          python strumenti\collaudo_recupera.py prepara $base --programmino "costruzione\app\strumenti\Recupera foto.exe"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $programmino = Join-Path $base "chiavetta\Recupera foto.exe"
+          $codici = @()
+          foreach ($nome in @("senza-finestra", "finestra", "sbagliata")) {
+            $richiesta = Join-Path $base "richieste\$nome.json"
+            $giro = Start-Process -FilePath $programmino -ArgumentList @("--collaudo", "`"$richiesta`"") -WorkingDirectory $env:RUNNER_TEMP -PassThru
+            $null = $giro.Handle
+            if ($giro.WaitForExit(300000)) {
+              $giro.WaitForExit()
+              $codici += @("--codice", "$nome=$($giro.ExitCode)")
+            } else {
+              Write-Output "$nome non ha finito in cinque minuti"
+              Stop-Process -Id $giro.Id -Force -ErrorAction SilentlyContinue
+              $codici += @("--codice", "$nome=99")
+            }
+          }
+          python strumenti\collaudo_recupera.py verifica $base --congelato @codici
+          $uscita = $LASTEXITCODE
+          foreach ($esito in Get-ChildItem (Join-Path $base "esiti") -Filter *.json -ErrorAction SilentlyContinue) {
+            Copy-Item -LiteralPath $esito.FullName "collaudo-recupera-$($esito.Name)"
+          }
+          exit $uscita
+
       - name: Costruisci l'installatore
         env:
           VERSIONE: ${{ steps.versione.outputs.versione }}
@@ -197,7 +239,7 @@ jobs:
       - name: Prove del programma su Windows
         run: |
           python -m pip install -r requirements-sviluppo.txt
-          python -m pytest prove/test_programma.py prove/test_programma_finestre.py -q -p no:cacheprovider
+          python -m pytest prove/test_programma.py prove/test_programma_finestre.py prove/test_sicuro_recupera.py -q -p no:cacheprovider
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
