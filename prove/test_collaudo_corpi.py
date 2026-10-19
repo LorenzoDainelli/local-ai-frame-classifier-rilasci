@@ -360,3 +360,20 @@ def test_la_prova_del_seguito_con_lo_sceglitore_finto(collaudo, monkeypatch, tmp
     assert rifatti[0] == [[6, 0, 11]] and rifatti[1] == prova["per_video"][0]["tratti_rifatti"]
     assert "seguito" in collaudo.riassunto(esito)
     assert all("dritto" not in guaio for guaio in collaudo.controlla(esito))
+
+
+def test_il_guasto_del_collaudo_finisce_nelle_note_senza_chiavi():
+    spec = importlib.util.spec_from_file_location("annota_il_guasto",
+                                                  RADICE / "strumenti" / "annota_il_guasto.py")
+    annota = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(annota)
+    testo = "\n".join([f"riga {numero}" for numero in range(200)]
+                      + ["Traceback (most recent call last):", "token hf_abcdefghijklmnop 100%",
+                         "scrivi a qualcuno@esempio.it", "ValueError: rotto"])
+    note = annota.note(testo)
+    assert 1 < len(note) <= annota.NOTE
+    assert all(nota.startswith("::error title=Il collaudo, pezzo ") for nota in note)
+    tutto = "".join(note)
+    assert "ValueError: rotto" in note[-1]
+    assert "hf_abcdefghijklmnop" not in tutto and "qualcuno@esempio.it" not in tutto
+    assert "100%25" in tutto and "\n" not in tutto

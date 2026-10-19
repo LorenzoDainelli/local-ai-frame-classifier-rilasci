@@ -56,9 +56,14 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -o pipefail
           python strumenti/collaudo_corpi.py --cartella "$RUNNER_TEMP/corpi" \
             --quante "${{ github.event.inputs.quante || '40' }}" \
-            --parte "${{ github.event.inputs.parte || 'tutto' }}" --uscita corpi-collaudo.json
+            --parte "${{ github.event.inputs.parte || 'tutto' }}" --uscita corpi-collaudo.json \
+            2>&1 | tee "$RUNNER_TEMP/collaudo.log"
+      - name: Perché si è fermato
+        if: failure()
+        run: python strumenti/annota_il_guasto.py "$RUNNER_TEMP/collaudo.log"
       - name: Cosa ha detto
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
