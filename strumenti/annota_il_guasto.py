@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -28,12 +30,33 @@ def note(testo: str, righe: int = RIGHE, per_nota: int = PER_NOTA, quante: int =
     return fuori
 
 
+def nota_dell_esito(esito: dict) -> str:
+    dentro = {"riassunto": esito.get("riassunto"), "guai": esito.get("guai")}
+    if isinstance(esito.get("prova"), dict) and "per_video" in esito["prova"]:
+        dentro["per_video"] = esito["prova"]["per_video"]
+    righe = json.dumps(dentro, ensure_ascii=False, indent=1).splitlines()
+    corpo = "%0A".join(_pulita(riga) for riga in righe)
+    livello = "error" if esito.get("guai") else "notice"
+    return f"::{livello} title=Com'è andato il collaudo::{corpo}"
+
+
 def main(argomenti: list[str]) -> int:
-    registro = Path(argomenti[0]) if argomenti else None
-    if registro is None or not registro.is_file():
+    lettore = argparse.ArgumentParser()
+    lettore.add_argument("registro", type=Path)
+    lettore.add_argument("--esito", type=Path)
+    lettore.add_argument("--com-e-andato", dest="andato", default="")
+    detti = lettore.parse_args(argomenti)
+    if detti.esito is not None and detti.esito.is_file():
+        try:
+            print(nota_dell_esito(json.loads(detti.esito.read_text(encoding="utf-8"))))
+        except ValueError:
+            print("::error title=Il collaudo::l'esito scritto non si legge")
+    if detti.andato != "failure":
+        return 0
+    if not detti.registro.is_file():
         print("::error title=Il collaudo::non ha scritto niente prima di fermarsi")
         return 0
-    for nota in note(registro.read_text(encoding="utf-8", errors="replace")):
+    for nota in note(detti.registro.read_text(encoding="utf-8", errors="replace")):
         print(nota)
     return 0
 

@@ -377,3 +377,8 @@ def test_il_guasto_del_collaudo_finisce_nelle_note_senza_chiavi():
     assert "ValueError: rotto" in note[-1]
     assert "hf_abcdefghijklmnop" not in tutto and "qualcuno@esempio.it" not in tutto
     assert "100%25" in tutto and "\n" not in tutto
+    bene = annota.nota_dell_esito({"riassunto": {"seguito": {"prima": 0.81}}, "guai": [],
+                                   "prova": {"per_video": [{"foto": "uno.jpg"}]}})
+    assert bene.startswith("::notice title=Com'è andato il collaudo::")
+    assert "0.81" in bene and "uno.jpg" in bene and "\n" not in bene
+    assert annota.nota_dell_esito({"riassunto": {}, "guai": ["rotto"]}).startswith("::error ")
