@@ -65,6 +65,18 @@ def per_misura(pezzo: Pezzo, larghezza: int, altezza: int) -> Pezzo:
     return Pezzo(larghezza, altezza, x0, y0, rifatta)
 
 
+def intera(pezzo: Pezzo):
+    numpy = vettori.numpy_o_spiega()
+    piena = numpy.zeros((pezzo.altezza, pezzo.larghezza), dtype=bool)
+    alta, larga = pezzo.maschera.shape
+    x0, y0 = max(0, pezzo.x), max(0, pezzo.y)
+    x1, y1 = min(pezzo.larghezza, pezzo.x + larga), min(pezzo.altezza, pezzo.y + alta)
+    if x1 > x0 and y1 > y0:
+        piena[y0:y1, x0:x1] = pezzo.maschera[y0 - pezzo.y:y1 - pezzo.y,
+                                             x0 - pezzo.x:x1 - pezzo.x]
+    return piena
+
+
 def misura_corta(pezzo: Pezzo) -> int:
     alta, larga = pezzo.maschera.shape
     return min(alta, larga)

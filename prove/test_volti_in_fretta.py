@@ -58,6 +58,7 @@ def test_guardare_i_volti_di_una_foto_non_rallenta_con_i_volti_gia_trovati(archi
 
     guardato, altrove = _scatti_con_immagine(archivio_pieno)[:2]
     passata = Passata(archivio_pieno, rilevatore=UnaFaccia(), intensita=100)
+    passata._guarda_uno(guardato)
 
     misure = []
     for quanti in (200, 4000):

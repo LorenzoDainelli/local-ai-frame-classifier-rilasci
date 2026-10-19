@@ -240,6 +240,9 @@ def test_nessun_filo_puo_morire_in_silenzio():
         "officina/miglioria/preparazione.py":
             "il filo che racconta le librerie prende dentro qualunque errore: "
             "chi racconta non deve poter fermare chi installa",
+        "officina/web/ritocco.py":
+            "il filo che libera la scheda dopo i clic prende dentro qualunque "
+            "errore, lo scrive nel registro e riprova al giro dopo",
         "officina/programma/sigillo.py":
             "il filo di Windows Hello prende dentro anche i BaseException e chi "
             "lo aspetta li rilancia: il guasto arriva a chi ha chiesto il sigillo",

@@ -91,9 +91,15 @@ def scatto_dove_eri(archivio, gruppo: int | None) -> int | None:
 
 
 def _persone_per_la_pagina(connessione) -> list[dict]:
-    return [{"persona_id": v["id"], "nome": v["nome"], "volto": v["volto_copertina"],
-             "scatti": v["scatti"]}
-            for v in persone.elenco(connessione) if v["nome"]]
+    fuori = []
+    for voce in persone.elenco(connessione):
+        if not voce["nome"]:
+            continue
+        copertina = persone.copertina(connessione, voce["id"])
+        fuori.append({"persona_id": voce["id"], "nome": voce["nome"],
+                      "volto": copertina["id"] if copertina else None,
+                      "scatti": voce["scatti"]})
+    return fuori
 
 
 def _quante_proposte(archivio) -> int:

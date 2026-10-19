@@ -11,7 +11,7 @@ from officina import VERSIONE, registro
 from officina.archivio.accesso import Archivio
 from officina.archivio.database import tutti
 from officina.errori import ErroreOfficina, FileNonLeggibile, SpazioInsufficiente
-from officina.modello import file_media, telefoni
+from officina.modello import file_media, persone, telefoni
 from officina.telefono import cifratura, dati, formato, ritorno, selezione
 
 LATO_MINIATURA = 640
@@ -251,26 +251,27 @@ class Travaso:
             return []
         righe = tutti(
             connessione,
-            "SELECT p.id, v.riquadro, v.scatto_id, v.file_id "
-            "FROM persone p JOIN volti v ON v.id = p.volto_copertina "
-            "WHERE p.nome IS NOT NULL AND p.nome <> '' AND p.stato = 'attiva'")
+            "SELECT id FROM persone "
+            "WHERE nome IS NOT NULL AND nome <> '' AND stato = 'attiva' ORDER BY id")
         compiti = []
         for riga in righe:
-            if riga["scatto_id"] not in scelti:
+            copertina = persone.copertina(connessione, riga["id"])
+            if (copertina is None or copertina["scatto_id"] not in scelti
+                    or not copertina["file_id"]):
                 continue
-            percorso = (file_media.percorso_migliore(connessione, riga["file_id"])
-                        if riga["file_id"] else None)
+            percorso, mostrata = file_media.da_mostrare(connessione, copertina["file_id"])
             if percorso is None:
                 continue
-            impronta = f"volto:{riga['id']}:{riga['riquadro']}"
+            riquadro = json.dumps(copertina["riquadro"])
+            impronta = f"volto:{riga['id']}:{copertina['id']}:{mostrata or ''}:{riquadro}"
             compiti.append(Compito(
                 posto=_posto(riuso, presi, _per_il_riuso("volto", impronta),
                              formato.posto_del_volto),
                 genere="volto",
                 impronta=impronta,
-                riquadro=riga["riquadro"],
+                riquadro=riquadro,
                 dimensione=30 * 1024, sorgente=percorso,
-                persona_id=riga["id"], scatto_id=riga["scatto_id"]))
+                persona_id=riga["id"], scatto_id=copertina["scatto_id"]))
         return compiti
 
 

@@ -394,7 +394,9 @@ SCORCIATOIE = [
     {"nome": "Mentre etichetti", "voci": [
         ("da 0 a 9", "applica il nodo con quel numero"),
         ("frecce", "scatto precedente e successivo"),
-        ("barra spaziatrice", "salta: resta indeciso, che non è un «no»"),
+        ("barra spaziatrice", "fa partire o ferma il video"),
+        ("barra spaziatrice tenuta", "su uno scatto ritoccato mostra lo scatto vero, finché la tieni "
+                                     "(regola 562)"),
         ("L", "accende la live photo accanto allo scatto (regola 192)"),
         ("C", "cuore: lo mette fra i preferiti (regola 424)"),
         ("M", "lo mette da parte: esce dalla coda e va negli evidenziati"),

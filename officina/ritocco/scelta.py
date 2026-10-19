@@ -109,6 +109,9 @@ class Sceglitore:
         self._dispositivo: str | None = None
         self._tipo = None
         self._guardate: OrderedDict = OrderedDict()
+        self._chi_segue = None
+        self._filmato = None
+        self._chiave_del_filmato: str | None = None
 
     @property
     def dispositivo(self) -> str | None:
@@ -144,6 +147,8 @@ class Sceglitore:
         return voluto
 
     def spegni(self) -> None:
+        if self._chi_segue is not None:
+            self._chi_segue.spegni()
         if self._modello is None:
             return
         from officina.descrittori import torcia
@@ -154,39 +159,95 @@ class Sceglitore:
         self._guardate.clear()
         torcia.libera()
 
-    def _guardata(self, chiave: str, percorso: Path):
-        import torch
+    def prepara(self, chiave: str, percorso: Path, al_passo=None, fermati=None):
+        from officina.ritocco import filmato
 
+        if self._filmato is not None and self._chiave_del_filmato == chiave:
+            return self._filmato
+        self._filmato, self._chiave_del_filmato = None, None
+        self._guardate.clear()
+        pronto = filmato.Filmato(Path(percorso), fermati=fermati or filmato._mai,
+                                 al_passo=al_passo)
+        self._filmato, self._chiave_del_filmato = pronto, chiave
+        return pronto
+
+    def segui(self, chiave: str, percorso: Path, scelte: dict, tratti: list,
+              sulla_scheda: bool, al_fotogramma, al_passo=None, fermati=None) -> dict:
+        from officina.ritocco import segui
+
+        pronto = self.prepara(chiave, percorso, al_passo, fermati)
+        piene = {}
+        for indice, dati in scelte.items():
+            pezzo = maschere.apri(dati)
+            if pezzo is None:
+                raise ValueError
+            pezzo = maschere.per_misura(pezzo, pronto.larghezza, pronto.altezza)
+            piene[int(indice)] = maschere.intera(pezzo)
+        if self._modello is not None:
+            self._spegni_solo_l_immagine()
+        if self._chi_segue is None:
+            self._chi_segue = segui.Seguitore(self.cartella)
+        self._chi_segue.accendi(sulla_scheda)
+        fatti = self._chi_segue.segui(pronto, piene, list(tratti), al_fotogramma,
+                                      fermati or segui._mai)
+        return {"fatti": fatti, "dove": self._chi_segue.dove(), "quanti": pronto.quanti,
+                "larghezza": pronto.larghezza, "altezza": pronto.altezza}
+
+    def _spegni_solo_l_immagine(self) -> None:
+        from officina.descrittori import torcia
+
+        self._modello = None
+        self._preparatore = None
+        self._dispositivo = None
+        self._guardate.clear()
+        torcia.libera()
+
+    def _immagine(self, chiave: str, percorso: Path, fotogramma: int | None):
         from officina.miglioria import metadati
 
-        if chiave in self._guardate:
-            self._guardate.move_to_end(chiave)
-            return self._guardate[chiave]
-        immagine = metadati.apri(Path(percorso)).immagine
+        if fotogramma is None:
+            return metadati.apri(Path(percorso)).immagine
+        pronto = self.prepara(chiave, percorso)
+        if not 0 <= fotogramma < pronto.quanti:
+            raise ValueError
+        return pronto.quadro(fotogramma)
+
+    def _guardata(self, chiave: str, percorso: Path, fotogramma: int | None = None):
+        import torch
+
+        if self._chi_segue is not None:
+            self._chi_segue.spegni()
+        segno = chiave if fotogramma is None else f"{chiave}#{fotogramma}"
+        if segno in self._guardate:
+            self._guardate.move_to_end(segno)
+            return self._guardate[segno]
+        immagine = self._immagine(chiave, percorso, fotogramma)
         larga, alta = immagine.size
         ingresso = self._preparatore(images=immagine, return_tensors="pt")
         pixel = ingresso["pixel_values"].to(self._dispositivo, dtype=self._tipo)
         with torch.inference_mode():
             guardata = self._modello.get_image_embeddings(pixel)
-        self._guardate[chiave] = (guardata, larga, alta)
+        self._guardate[segno] = (guardata, larga, alta)
         while len(self._guardate) > QUANTE_GUARDATE:
             self._guardate.popitem(last=False)
-        return self._guardate[chiave]
+        return self._guardate[segno]
 
-    def guarda(self, chiave: str, percorso: Path, sulla_scheda: bool) -> tuple[int, int, str]:
+    def guarda(self, chiave: str, percorso: Path, sulla_scheda: bool,
+               fotogramma: int | None = None) -> tuple[int, int, str]:
         self.accendi(sulla_scheda)
-        _, larga, alta = self._guardata(chiave, percorso)
+        _, larga, alta = self._guardata(chiave, percorso, fotogramma)
         return larga, alta, self._dove()
 
     def _dove(self) -> str:
         return PROCESSORE if self._dispositivo == "cpu" else SCHEDA
 
     def scegli(self, chiave: str, percorso: Path, punti: list[Punto],
-               riquadro: Riquadro | None, sulla_scheda: bool) -> Scelta:
+               riquadro: Riquadro | None, sulla_scheda: bool,
+               fotogramma: int | None = None) -> Scelta:
         import torch
 
         self.accendi(sulla_scheda)
-        guardata, larga, alta = self._guardata(chiave, percorso)
+        guardata, larga, alta = self._guardata(chiave, percorso, fotogramma)
         coordinate, etichette, scatola = in_pixel(punti, riquadro, larga, alta)
         richiesta = {}
         if coordinate:

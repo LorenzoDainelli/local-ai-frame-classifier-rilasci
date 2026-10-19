@@ -1,0 +1,52 @@
+{% from "_icone.html" import icona %}
+{% macro tasto_ritocca(file_id, si_puo, numero='', classe='tasto-comando nudo piccolo') -%}
+<button class="{{ classe }}" type="button" data-apri-ritocca data-file="{{ file_id }}" data-numero="{{ numero }}" aria-haspopup="dialog" aria-controls="ritocca"
+        {% if si_puo %}title="Pixela un volto, una persona o una parte di questa foto"{% else %}disabled title="Per i video e le foto live arriva presto"{% endif %}>{{ icona('quadretti', 14) }} Ritocca</button>
+{%- endmacro %}
+
+{% macro finestra_ritocca() %}
+<dialog class="ritocca" id="ritocca" aria-labelledby="ritocca-titolo">
+    <div class="rt-intera">
+        <div class="rt-sopra">
+            <span class="rt-pillola"><b id="ritocca-titolo">Ritocca</b> · Esc per uscire<span data-rt-numero></span></span>
+            <div class="rt-scelte" role="list" aria-label="Le cose scelte" data-rt-scelte></div>
+            <button class="rt-tasto" type="button" data-rt-nuova title="Comincia una cosa nuova (Invio)">{{ icona('piu', 14) }} Nuova</button>
+            <button class="rt-tondo" type="button" data-rt-esci aria-label="Esci">{{ icona('x', 16) }}</button>
+        </div>
+        <div class="rt-tela" data-rt-tela>
+            <div class="rt-foglio" data-rt-foglio>
+                <img alt="" data-rt-foto>
+                <canvas data-rt-anteprima></canvas>
+                <canvas data-rt-segni></canvas>
+                <canvas data-rt-mano></canvas>
+            </div>
+            <p class="rt-stato" role="status" data-rt-stato>Preparo lo scatto…</p>
+            <div class="rt-barra" role="toolbar" aria-label="Gli attrezzi del ritocco" data-rt-barra>
+                <button class="rt-tondo" type="button" aria-pressed="true" data-rt-attrezzo="clic" aria-label="Clic" title="Clic: scegli una cosa (C)">{{ icona('puntatore', 19) }}</button>
+                <button class="rt-tondo" type="button" aria-pressed="false" data-rt-attrezzo="pennello" aria-label="Pennello" title="Pennello: aggiungi a mano (P)">{{ icona('pennello', 19) }}</button>
+                <button class="rt-tondo" type="button" aria-pressed="false" data-rt-attrezzo="gomma" aria-label="Gomma" title="Gomma: togli a mano (G)">{{ icona('gomma', 19) }}</button>
+                <button class="rt-tondo" type="button" data-rt-volti aria-label="Tutti i volti" title="Tutti i volti: ognuno un po' più grande, con capelli e mento">{{ icona('volto', 19) }}</button>
+                <button class="rt-tondo" type="button" data-rt-persona aria-label="Tutta la persona" title="Tutta la persona: scegli un contorno trovato dall'IA">{{ icona('persona', 19) }}</button>
+                <span class="rt-sbarra" aria-hidden="true"></span>
+                <button class="rt-tasto" type="button" aria-pressed="true" data-rt-pixela>Pixela</button>
+                <button class="rt-tasto" type="button" disabled title="Arriva dopo la gara">Togli</button>
+                <span class="rt-sbarra" aria-hidden="true"></span>
+                <label class="rt-cursore"><span data-rt-cursore-nome>Quadretti</span>
+                    <input type="range" min="1" max="4" step="1" value="1" data-rt-cursore>
+                    <output data-rt-cursore-valore>1×</output></label>
+                <span class="rt-sbarra" aria-hidden="true"></span>
+                <button class="rt-tondo" type="button" data-rt-annulla aria-label="Annulla" title="Annulla (Ctrl + Z)" disabled>{{ icona('annulla', 18) }}</button>
+                <button class="rt-tasto principale" type="button" data-rt-salva disabled>Salva</button>
+            </div>
+            <div class="rt-conferma" role="alertdialog" aria-labelledby="ritocca-conferma" data-rt-conferma hidden>
+                <p id="ritocca-conferma">Esci senza salvare? Le cose scelte si perdono, la foto resta com'è.</p>
+                <div class="rt-conferma-tasti">
+                    <button class="rt-tasto" type="button" data-rt-resta>Resta</button>
+                    <button class="rt-tasto" type="button" data-rt-esci-davvero>Esci senza salvare</button>
+                </div>
+            </div>
+        </div>
+        <p class="rt-aiuto">Clic per scegliere · Maiusc + clic per togliere un pezzo · Invio per una cosa nuova · tieni premuto Spazio per vedere sotto</p>
+    </div>
+</dialog>
+{% endmacro %}

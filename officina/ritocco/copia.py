@@ -361,7 +361,7 @@ def _ferma(archivio, file_id: int, perche: str) -> None:
     registro.errore("ritocco.scambio_fermo", file=file_id)
 
 
-def _e_una_live(archivio, file_id: int) -> bool:
+def e_una_live(archivio, file_id: int) -> bool:
     with archivio.lettura() as connessione:
         return uno(connessione,
                    "SELECT 1 FROM file_media f JOIN file_media m ON m.scatto_id = f.scatto_id "
@@ -383,7 +383,7 @@ def _prima_finisci(archivio, file_id: int) -> None:
 def metti(archivio, file_id: int, nuovi: list[dict]) -> Path | None:
     with _UNO_ALLA_VOLTA:
         _prima_finisci(archivio, file_id)
-        if _e_una_live(archivio, file_id):
+        if e_una_live(archivio, file_id):
             raise RitoccoFermato("Per ora le foto live non si ritoccano: il loro video "
                                  "resterebbe com'è. Lo scatto non è stato toccato.")
         pronti = [_con_le_misure_giuste(nuovo) for nuovo in nuovi]

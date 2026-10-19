@@ -11,6 +11,8 @@ on:
       - "officina/corpi/rilevatore.py"
       - "officina/corpi/scaricamento.py"
       - "officina/ritocco/scelta.py"
+      - "officina/ritocco/segui.py"
+      - "officina/ritocco/filmato.py"
   workflow_dispatch:
     inputs:
       quante:
@@ -18,9 +20,9 @@ on:
         type: number
         default: 40
       parte:
-        description: "tutto (SAM 3 e RTMW), solo i punti di RTMW, oppure i clic di SAM 3 per il ritocco"
+        description: "tutto (SAM 3 e RTMW), solo i punti di RTMW, i clic di SAM 3 per il ritocco, oppure SAM 3 che segue nei video"
         type: choice
-        options: [tutto, punti, clic]
+        options: [tutto, punti, clic, segui]
         default: tutto
 
 permissions:

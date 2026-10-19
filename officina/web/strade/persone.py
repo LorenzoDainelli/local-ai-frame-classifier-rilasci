@@ -112,7 +112,9 @@ def _dove_sta_il_volto(volto_id: int, tabella: str = "volti") -> tuple:
         if riga is None or riga["file"] is None:
             raise ErroreOfficina("Questo volto non c'è più." if tabella == "volti"
                                  else "Questa persona non c'è più nello scatto.")
-        percorso = file_media.percorso_migliore(connessione, riga["file"])
+        percorso, mostrata = file_media.da_mostrare(connessione, riga["file"])
+        if mostrata:
+            riga = {**dict(riga), "impronta": mostrata}
         istante = None
         if riga["genere"] == "video":
             trovato = uno(connessione,

@@ -1,7 +1,7 @@
 export async function chiedi(indirizzo, opzioni = {}) {
     const risposta = await fetch(indirizzo, {
-        headers: { "Accept": "application/json", ...(opzioni.headers || {}) },
         ...opzioni,
+        headers: { "Accept": "application/json", ...(opzioni.headers || {}) },
     });
     if (!risposta.ok) {
         let messaggio = "Qualcosa non ha funzionato.";

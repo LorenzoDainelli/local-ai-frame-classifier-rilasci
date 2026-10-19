@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_spiega.html" import spiega %}
 {% from "_icone.html" import icona %}
+{% from "_ritocca.html" import tasto_ritocca, finestra_ritocca %}
 {% block titolo %}Scatto — Local AI Frame Classifier{% endblock %}
 
 {% macro la_finestra_3d() %}
@@ -84,6 +85,11 @@
         </div>
         {% if movimento %}
         <button class="ft-live" type="button" id="accendi-la-live" aria-pressed="false" title="Guarda il movimento. Basta anche passarci sopra col mouse.">◎ LIVE</button>
+        {% endif %}
+        {% if ritocchi and principale %}
+        <span class="ft-ritoccata"><i aria-hidden="true"></i>Ritoccata · {{ ritocchi|numero }}</span>
+        <button class="ft-vedi-sotto" type="button" data-vedi-sotto data-file="{{ principale.id }}" aria-pressed="false"
+                title="Mentre tieni premuto si vede lo scatto vero, poi torna la copia ritoccata. Si può anche tenere premuto Spazio.">{{ icona('occhio', 15) }} Tieni premuto per vedere sotto</button>
         {% endif %}
         {% if volti_visti %}<script type="application/json" id="volti-dello-scatto">{{ volti_visti|tojson }}</script>{% endif %}
         {% if corpi_visti %}<script type="application/json" id="corpi-dello-scatto">{{ corpi_visti|tojson }}</script>{% endif %}
@@ -255,6 +261,7 @@
                     <button class="tasto-comando nudo piccolo" type="button" data-apri-nota aria-controls="ft-info">{{ icona('nota', 14) }} Nota{% if scatto.nota %} ·{% endif %}</button>
                     {% if corpi_visti %}<button class="tasto-comando nudo piccolo" type="button" data-mostra-corpi aria-pressed="false" title="Mostra il contorno e i punti del corpo di ogni persona">{{ icona('persona', 14) }} Corpi · {{ corpi_visti|length }}</button>{% endif %}
                     {% if in3d %}<button class="tasto-comando nudo piccolo" type="button" data-apri-3d aria-haspopup="dialog" aria-controls="in3d" title="Guarda le persone e il luogo di questa foto in 3D">{{ icona('cubo', 14) }} In 3D</button>{% endif %}
+                    {% if principale and not non_si_apre %}{{ tasto_ritocca(principale.id, scatto.genere != 'video' and not movimento, ('scatto ' ~ (vicini.posizione|numero) ~ ' di ' ~ vicini.totale) if vicini.posizione else '') }}{% endif %}
                     <span class="ft-tasti-destra in-fila">
                         {{ lo_stato_del_miglioramento() }}
                         {{ fuori_archivio() }}
@@ -268,6 +275,7 @@
                     <button class="tasto-comando nudo piccolo" type="button" data-chiudi-info aria-label="Chiudi le informazioni">{{ icona('x', 14) }}</button>
                 </div>
                 {{ i_dati() }}
+                {% if ritocchi and principale %}<section class="rc-elenco" data-ritocchi data-file="{{ principale.id }}" aria-label="Ritocchi" hidden></section>{% endif %}
                 {{ la_nota(True) }}
             </aside>
             <aside class="carta ft-scheda ft-nodi" id="ft-nodi" data-scatto="{{ scatto.id }}" aria-label="Nodi di questo scatto" hidden>
@@ -291,6 +299,7 @@
         </div>
     </div>
     {% if in3d %}{{ la_finestra_3d() }}{% endif %}
+    {% if principale and not non_si_apre %}{{ finestra_ritocca() }}{% endif %}
 </main>
 </div>
 {% endblock %}
@@ -304,6 +313,25 @@
     import("/statici/js/nodi_foto.js").then(({ preparaNodi }) => preparaNodi());
     if (document.querySelector("[data-apri-3d]")) {
         import("/statici/js/in3d.js").then(({ preparaIn3d }) => preparaIn3d());
+    }
+    if (document.querySelector("[data-apri-ritocca]")) {
+        import("/statici/js/ritocca.js").then(({ preparaRitocca }) => preparaRitocca({ quandoSalvato: () => location.reload() }));
+    }
+    if (document.querySelector("[data-vedi-sotto]")) {
+        import("/statici/js/ritocchi.js").then(({ vediSotto, leggiRitocchi, disegnaRitocchi }) => {
+            const tasto = document.querySelector("[data-vedi-sotto]");
+            const lastra = () => document.getElementById("lastra-principale");
+            vediSotto({
+                tasto,
+                immagine: lastra,
+                indirizzo: () => `/immagine/${tasto.dataset.file}?sotto=1`,
+                attivo: () => Boolean(lastra() && !lastra().hidden),
+            });
+            const dove = document.querySelector("[data-ritocchi]");
+            if (dove) leggiRitocchi(dove.dataset.file)
+                .then((elenco) => disegnaRitocchi(dove, elenco, { quandoTolto: () => location.reload() }))
+                .catch(() => {});
+        });
     }
     import { mandaModulo, quandoSiFerma } from "/statici/js/comune.js";
 

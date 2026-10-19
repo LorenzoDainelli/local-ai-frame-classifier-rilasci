@@ -20,8 +20,14 @@ TOLTO = "tolto"
 RIFIUTATO = "rifiutato"
 FALLITO = "fallito"
 
-CAMPI = {"stato", "guasto", "fatto_il", "tolto_il", "risultato",
-         "impronta_risultato", "traccia"}
+AGGIORNA = {
+    "guasto": "UPDATE ritocchi SET guasto = ? WHERE id = ?",
+    "fatto_il": "UPDATE ritocchi SET fatto_il = ? WHERE id = ?",
+    "tolto_il": "UPDATE ritocchi SET tolto_il = ? WHERE id = ?",
+    "risultato": "UPDATE ritocchi SET risultato = ? WHERE id = ?",
+    "impronta_risultato": "UPDATE ritocchi SET impronta_risultato = ? WHERE id = ?",
+    "traccia": "UPDATE ritocchi SET traccia = ? WHERE id = ?",
+}
 
 
 def aggiungi(connessione: sqlite3.Connection, file_id: int, *, genere: str, cosa: str,
@@ -48,11 +54,10 @@ def per_id(connessione: sqlite3.Connection, ritocco_id: int) -> sqlite3.Row | No
 
 
 def di_file(connessione: sqlite3.Connection, file_id: int,
-            stati: tuple[str, ...] = (FATTO,)) -> list[sqlite3.Row]:
-    segni = ",".join("?" * len(stati))
+            stato: str = FATTO) -> list[sqlite3.Row]:
     return tutti(connessione,
-                 f"SELECT * FROM ritocchi WHERE file_id = ? AND stato IN ({segni}) "
-                 "ORDER BY id", file_id, *stati)
+                 "SELECT * FROM ritocchi WHERE file_id = ? AND stato = ? ORDER BY id",
+                 file_id, stato)
 
 
 def ha_ritocchi(connessione: sqlite3.Connection, file_id: int) -> bool:
@@ -61,15 +66,22 @@ def ha_ritocchi(connessione: sqlite3.Connection, file_id: int) -> bool:
                file_id, FATTO) is not None
 
 
+def quanti_fatti(connessione: sqlite3.Connection, file_id: int | None) -> int:
+    if file_id is None:
+        return 0
+    return uno(connessione,
+               "SELECT count(*) AS quanti FROM ritocchi WHERE file_id = ? AND stato = ?",
+               file_id, FATTO)["quanti"]
+
+
 def segna(connessione: sqlite3.Connection, ritocco_id: int, stato: str,
           **campi) -> None:
-    sconosciuti = set(campi) - CAMPI
+    sconosciuti = set(campi) - set(AGGIORNA)
     if sconosciuti:
         raise ValueError(f"campi che non esistono: {sorted(sconosciuti)}")
-    campi["stato"] = stato
-    colonne = ", ".join(f"{nome} = ?" for nome in campi)
-    connessione.execute(f"UPDATE ritocchi SET {colonne} WHERE id = ?",
-                        (*campi.values(), ritocco_id))
+    connessione.execute("UPDATE ritocchi SET stato = ? WHERE id = ?", (stato, ritocco_id))
+    for nome, valore in campi.items():
+        connessione.execute(AGGIORNA[nome], (valore, ritocco_id))
 
 
 def ritoccata_di_impronta(connessione: sqlite3.Connection,

@@ -32,6 +32,12 @@
 .pagina-foto .lastra.ingrandita.trascina { cursor: grabbing; }
 .ft-live:focus-visible { outline: 2px solid var(--fill); outline-offset: 2px; }
 .ft-sotto-la-lastra { justify-self: center; padding: 14px 16px; margin-top: 10px; }
+.ft-ritoccata { position: absolute; left: 12px; top: 12px; z-index: 1; display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px; border-radius: var(--raggio-pillola); background: color-mix(in srgb, var(--fondo) 86%, transparent); border: 1px solid var(--linea-forte); color: var(--ink); font-size: 12.5px; pointer-events: none; }
+.ft-ritoccata i { width: 8px; height: 8px; border-radius: 50%; background: var(--accento); }
+.con-live .ft-ritoccata { top: 44px; }
+.ft-vedi-sotto { position: absolute; right: 12px; bottom: 12px; z-index: 1; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: var(--raggio-controllo); background: color-mix(in srgb, var(--fondo) 86%, transparent); border: 1px solid var(--linea-forte); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: none; }
+.ft-vedi-sotto[aria-pressed="true"] { border-color: var(--accento); color: var(--accento); }
+.ft-vedi-sotto:focus-visible { outline: 2px solid var(--fill); outline-offset: 2px; }
 
 .ft-tasti form { display: contents; }
 .ft-tasti-destra { margin-left: auto; }

@@ -9,6 +9,7 @@ from officina.modello import posti
 from officina.modello import etichette as magazzino
 from officina.modello import file_media, indizi_persone, nodi, nomi, scatti
 from officina.archivio.database import tutti
+from officina.ritocco import elenco as elenco_ritocchi
 
 TASTI = "123456789 0".replace(" ", "")
 
@@ -84,6 +85,8 @@ def stato_dello_scatto(connessione: sqlite3.Connection, bottega, scatto_id: int,
             "principale": principale["id"] if principale else None,
             "movimento": movimento["id"] if movimento else None,
             "formato": (principale["formato"] if principale else None),
+            "ritocchi": elenco_ritocchi.quanti_fatti(
+                connessione, principale["id"] if principale else None),
         },
         "confermate": confermate,
         "proposte": elenco_proposte,

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_ambito.html" import ambito %}
 {% from "_icone.html" import icona %}
+{% from "_ritocca.html" import finestra_ritocca %}
 {% block titolo %}Etichetta — Local AI Frame Classifier{% endblock %}
 
 {% block corpo %}
@@ -14,7 +15,7 @@
     <div class="et-ripasso" id="ripasso" hidden></div>
     <span class="et-guida">
         <kbd>↑</kbd><kbd>↓</kbd> nodi · <kbd>Tab</kbd> apre · <kbd>Invio</kbd> etichetta ·
-        <kbd>←</kbd><kbd>→</kbd> scatto · <kbd>Spazio</kbd> video · <kbd>Ctrl F</kbd> cerca ·
+        <kbd>←</kbd><kbd>→</kbd> scatto · <kbd>Spazio</kbd> video (tenuto: sotto il ritocco) · <kbd>Ctrl F</kbd> cerca ·
         <kbd>Ctrl C</kbd>/<kbd>V</kbd> · <kbd>Ctrl Z</kbd> · <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> parte ·
         <kbd>N</kbd> nessuna persona · <kbd>?</kbd> non so dove · <kbd>F</kbd> live ·
         <kbd>A</kbd> nodi · <kbd>P</kbd> persone · <kbd>L</kbd> luoghi
@@ -73,6 +74,8 @@
                 <button type="button" id="b-cuore" aria-pressed="false" title="Fra i preferiti (C)">&#9825;</button>
                 <button type="button" id="b-stella" aria-pressed="false" title="Mettilo da parte: esce dalla coda (M)">&#9734;</button>
                 <button type="button" id="b-info" aria-pressed="false" title="Informazioni">{{ icona('info', 16) }}</button>
+                <button type="button" id="b-ritocca" aria-haspopup="dialog" aria-controls="ritocca" title="Ritocca: pixela un volto, una persona o una parte" disabled>{{ icona('quadretti', 16) }}</button>
+                <button type="button" id="b-sotto" aria-pressed="false" aria-label="Tieni premuto per vedere sotto" title="Tieni premuto per vedere lo scatto vero, poi torna la copia ritoccata (anche Spazio)" hidden>{{ icona('occhio', 16) }}</button>
                 <button type="button" id="b-intero" aria-pressed="false" title="Tutto schermo (anche col clic della rotella)">&#10530;</button>
             </div>
             <span class="et-segno" id="segno" hidden></span>
@@ -88,6 +91,7 @@
                         <div class="et-risultati dentro" id="persone-trovate"></div>
                     </div>
                 </div>
+                <section class="et-info-blocco rc-elenco" id="ritocchi-qui" aria-label="Ritocchi" hidden></section>
                 <div class="et-info-blocco">
                     <p class="maiuscoletto">Nota</p>
                     <textarea class="campo" id="nota" rows="2" placeholder="Una riga per te, se serve"></textarea>
@@ -125,6 +129,7 @@
     </section>
 </div>
 
+{{ finestra_ritocca() }}
 </main>
 </div>
 {% endblock %}

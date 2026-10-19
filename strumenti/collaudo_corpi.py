@@ -37,6 +37,12 @@ MODI_DEL_CLIC = ("un_clic", "riquadro", "correzione")
 CLIC_ALMENO = {"un_clic": 0.55, "riquadro": 0.7}
 FOTO_PER_LA_VIA_DRITTA = 3
 UGUALE_ALLA_VIA_DRITTA = 0.98
+FOTOGRAMMI_DEL_VIDEO = 36
+AL_SECONDO = 10
+LARGHEZZA_DEL_VIDEO = 640
+FINESTRA = 0.72
+SEGUI_ALMENO = 0.7
+SEGUI_COME_LA_VIA_DRITTA = 0.9
 
 
 def _sha256(percorso: Path) -> str:
@@ -605,6 +611,171 @@ def prova_dei_clic(casa: Path, cartella: Path, quante: int) -> dict:
     }
 
 
+def _pari(numero: float) -> int:
+    return max(2, int(round(numero / 2)) * 2)
+
+
+def video_dalla_foto(percorso: Path, vera, dove: Path, quanti: int | None = None):
+    import av
+    import numpy as np
+    from PIL import Image
+
+    quanti = quanti or FOTOGRAMMI_DEL_VIDEO
+
+    with Image.open(percorso) as aperta:
+        foto = aperta.convert("RGB")
+    larga, alta = foto.size
+    finestra_x, finestra_y = larga * FINESTRA, alta * FINESTRA
+    uscita_x = _pari(LARGHEZZA_DEL_VIDEO)
+    uscita_y = _pari(LARGHEZZA_DEL_VIDEO * finestra_y / finestra_x)
+    maschera = Image.fromarray(np.asarray(vera, dtype=np.uint8) * 255, "L")
+    vere = []
+    dove.parent.mkdir(parents=True, exist_ok=True)
+    with av.open(str(dove), "w") as fuori:
+        traccia = fuori.add_stream("libx264", rate=AL_SECONDO)
+        traccia.width, traccia.height, traccia.pix_fmt = uscita_x, uscita_y, "yuv420p"
+        for numero in range(quanti):
+            quota = numero / max(1, quanti - 1)
+            zoom = 1.0 - 0.12 * math.sin(math.pi * quota)
+            w, h = finestra_x * zoom, finestra_y * zoom
+            x = (larga - w) * quota
+            y = (alta - h) * (0.5 + 0.5 * math.sin(2 * math.pi * quota)) * 0.9
+            scatola = (int(x), int(y), int(x + w), int(y + h))
+            quadro = foto.crop(scatola).resize((uscita_x, uscita_y), Image.Resampling.BICUBIC)
+            vere.append(np.asarray(maschera.crop(scatola).resize(
+                (uscita_x, uscita_y), Image.Resampling.NEAREST)) > 127)
+            for pacchetto in traccia.encode(av.VideoFrame.from_ndarray(np.asarray(quadro),
+                                                                      format="rgb24")):
+                fuori.mux(pacchetto)
+        for pacchetto in traccia.encode():
+            fuori.mux(pacchetto)
+    return dove, vere
+
+
+def _seguito_dritto(sceglitore, pronto, scelta_iniziale: int, maschera) -> dict:
+    import numpy as np
+    import torch
+
+    seguitore = sceglitore._chi_segue
+    preparatore, modello = seguitore._preparatore, seguitore._modello
+    quadri = [np.asarray(pronto.quadro(numero)) for numero in range(pronto.quanti)]
+    sessione = preparatore.init_video_session(video=quadri, inference_device="cpu",
+                                              dtype=seguitore._tipo)
+    preparatore.add_inputs_to_inference_session(
+        inference_session=sessione, frame_idx=scelta_iniziale, obj_ids=1,
+        input_masks=torch.from_numpy(np.asarray(maschera, dtype=bool)))
+    trovate = {}
+    for indietro in (False, True):
+        for uscita in modello.propagate_in_video_iterator(
+                sessione, start_frame_idx=scelta_iniziale, reverse=indietro):
+            piena = preparatore.post_process_masks(
+                [uscita.pred_masks.float()], original_sizes=[[pronto.altezza, pronto.larghezza]],
+                binarize=True)[0]
+            trovate[uscita.frame_idx] = piena[0, 0].cpu().numpy().astype(bool)
+    return trovate
+
+
+def prova_del_seguito(casa: Path, cartella: Path, quante: int) -> dict:
+    from officina.corpi import rilevatore
+    from officina.ritocco import maschere, scelta, segui
+
+    scelte_foto = scegli_gli_oggetti(_annotazioni(cartella, DENTRO_GLI_OGGETTI), quante)
+    sceglitore = scelta.Sceglitore(casa / rilevatore.CARTELLA_SAM3)
+    voti_prima: list[float] = []
+    voti_dopo: list[float] = []
+    al_punto_corretto: list[float] = []
+    come_la_via_dritta: list[float] = []
+    secondi_per_fotogramma: list[float] = []
+    per_video = []
+    for numero, (foto, oggetti) in enumerate(scelte_foto, start=1):
+        chiave = foto["file_name"]
+        percorso = _scarica(FOTO + chiave, cartella / "foto" / chiave)
+        from PIL import Image
+
+        with Image.open(percorso) as aperta:
+            larga, alta = aperta.size
+        vera = _maschera_vera(oggetti[0], alta, larga)
+        video, vere = video_dalla_foto(percorso, vera, cartella / "video" / f"{numero}.mp4")
+        pronto = sceglitore.prepara(chiave, video)
+        if pronto.quanti != len(vere) or (pronto.altezza, pronto.larghezza) != vere[0].shape:
+            raise SystemExit(f"il filmato non torna: {pronto.quanti} fotogrammi, "
+                             f"{pronto.larghezza}x{pronto.altezza}")
+        mezzo = pronto.quanti // 2
+        scelte = {mezzo: maschere.comprimi(vere[mezzo], (0, 0), pronto.larghezza, pronto.altezza)}
+        arrivati: dict[int, tuple[bytes, int]] = {}
+
+        def al_fotogramma(indice, da, maschera, sicurezza, arrivati=arrivati):
+            arrivati[indice] = (maschera, da)
+
+        inizio = time.monotonic()
+        sceglitore.segui(chiave, video, scelte, segui.regioni(scelte, pronto.quanti), False,
+                         al_fotogramma)
+        secondi_per_fotogramma.append((time.monotonic() - inizio) / pronto.quanti)
+
+        def voti_di(trovate) -> list[float]:
+            return [sovrapposizione(intera(maschere.apri(trovate[i][0]), pronto.larghezza,
+                                           pronto.altezza), vere[i])
+                    for i in range(pronto.quanti)]
+
+        prima = voti_di(arrivati)
+        peggiore = min((i for i in range(pronto.quanti) if abs(i - mezzo) > 2),
+                       key=lambda i: prima[i])
+        scelte[peggiore] = maschere.comprimi(vere[peggiore], (0, 0), pronto.larghezza,
+                                             pronto.altezza)
+        versioni = {mezzo: 1, peggiore: 2}
+        fatti = {i: (da, 1) for i, (_, da) in arrivati.items()}
+        tratti = segui.da_rifare(versioni, fatti, pronto.quanti)
+        sceglitore.segui(chiave, video, scelte, tratti, False, al_fotogramma)
+        dopo = voti_di(arrivati)
+        voti_prima.extend(prima)
+        voti_dopo.extend(dopo)
+        al_punto_corretto.append(dopo[peggiore])
+        if numero == 1:
+            dritte = _seguito_dritto(sceglitore, pronto, mezzo,
+                                     intera(maschere.apri(scelte[mezzo]), pronto.larghezza,
+                                            pronto.altezza))
+            chi = segui.da_chi(scelte, pronto.quanti)
+            for i in range(pronto.quanti):
+                if i in dritte and chi[i] == mezzo:
+                    mia = intera(maschere.apri(arrivati[i][0]), pronto.larghezza, pronto.altezza)
+                    come_la_via_dritta.append(sovrapposizione(mia, dritte[i]))
+        per_video.append({"foto": chiave, "fotogrammi": pronto.quanti,
+                          "misura": [pronto.larghezza, pronto.altezza],
+                          "prima": round(sum(prima) / len(prima), 3),
+                          "peggiore_prima": round(min(prima), 3),
+                          "corretto_al": peggiore, "dopo": round(sum(dopo) / len(dopo), 3),
+                          "tratti_rifatti": [[t.da, t.inizio, t.fine] for t in tratti]})
+        print(f"[{numero}/{len(scelte_foto)}] {chiave}: {per_video[-1]}", flush=True)
+    sceglitore.spegni()
+    return {
+        "video": len(per_video),
+        "seguito": {"prima": _media(voti_prima), "dopo": _media(voti_dopo),
+                    "al_punto_corretto": _media(al_punto_corretto)},
+        "come_la_via_dritta": _media(come_la_via_dritta),
+        "secondi_per_fotogramma": round(sum(secondi_per_fotogramma)
+                                        / max(1, len(secondi_per_fotogramma)), 2),
+        "per_video": per_video,
+    }
+
+
+def _controlla_il_seguito(prova_: dict) -> list[str]:
+    guai = []
+    seguito = prova_["seguito"]
+    if not prova_["video"]:
+        guai.append("nessun video provato")
+        return guai
+    if seguito["prima"]["media"] < SEGUI_ALMENO:
+        guai.append(f"SAM 3 segue male nei video: {seguito['prima']['media']}")
+    if seguito["dopo"]["media"] < seguito["prima"]["media"] - 0.01:
+        guai.append("la correzione peggiora il seguito invece di migliorarlo")
+    if seguito["al_punto_corretto"]["media"] < 0.9:
+        guai.append(f"dove correggi, la scelta non è la tua: {seguito['al_punto_corretto']['media']}")
+    if prova_["come_la_via_dritta"]["media"] < SEGUI_COME_LA_VIA_DRITTA:
+        guai.append("il seguito del programma non è come quello fatto dritto: "
+                    f"{prova_['come_la_via_dritta']['media']}")
+    return guai
+
+
 def _al_posto_giusto(segnati: dict) -> dict:
     return {nome: round(v["al_posto_giusto"] / v["segnati"], 4) if v["segnati"] else 0.0
             for nome, v in segnati.items()}
@@ -654,6 +825,10 @@ def riassunto(esito: dict) -> dict:
     from officina.corpi import rilevatore, sam3
 
     prova_ = esito["prova"]
+    if "seguito" in prova_:
+        return {"seguito": {nome: voti["media"] for nome, voti in prova_["seguito"].items()},
+                "come_la_via_dritta": prova_["come_la_via_dritta"]["media"],
+                "secondi_per_fotogramma": prova_["secondi_per_fotogramma"]}
     if "clic" in prova_:
         return {"clic": {modo: voti["media"] for modo, voti in prova_["clic"].items()},
                 "uguale_alla_via_dritta": prova_["uguale_alla_via_dritta"]["minimo"],
@@ -687,7 +862,9 @@ def controlla(esito: dict) -> list[str]:
 
     guai = []
     prova_ = esito["prova"]
-    if "clic" in prova_:
+    if "seguito" in prova_:
+        guai.extend(_controlla_il_seguito(prova_))
+    elif "clic" in prova_:
         guai.extend(_controlla_i_clic(prova_))
     elif "persone" in prova_:
         adesso = prova_["persone"][str(rilevatore.SICUREZZA_MINIMA)]
@@ -726,28 +903,31 @@ def main() -> int:
     parser.add_argument("--cartella", type=Path, required=True)
     parser.add_argument("--quante", type=int, default=60)
     parser.add_argument("--uscita", type=Path, required=True)
-    parser.add_argument("--parte", choices=("tutto", "punti", "clic"), default="tutto")
+    parser.add_argument("--parte", choices=("tutto", "punti", "clic", "segui"),
+                        default="tutto")
     argomenti = parser.parse_args()
     sys.path.insert(0, str(RADICE))
     from officina.descrittori import torcia
 
     torcia.con_la_rete_accesa()
     chiave = os.environ.get("HF_TOKEN") or None
-    if not chiave and argomenti.parte in ("tutto", "clic"):
+    if not chiave and argomenti.parte in ("tutto", "clic", "segui"):
         raise SystemExit("manca HF_TOKEN nei segreti del deposito")
     cartella = argomenti.cartella
     casa = cartella / "modelli" / "corpi"
     casa.mkdir(parents=True, exist_ok=True)
     esito: dict = {}
-    if argomenti.parte in ("tutto", "clic"):
+    if argomenti.parte in ("tutto", "clic", "segui"):
         esito["sam3"] = _sam3(casa, chiave)
-    if argomenti.parte != "clic":
+    if argomenti.parte in ("tutto", "punti"):
         esito["rtmw"] = _rtmw(casa, cartella, chiave)
     print(json.dumps({"sam3": esito.get("sam3"),
                       "rtmw": {k: v for k, v in esito.get("rtmw", {}).items()
                                if k != "testi_nello_zip"}}, indent=1), flush=True)
     if argomenti.parte == "clic":
         esito["prova"] = prova_dei_clic(casa, cartella, argomenti.quante)
+    elif argomenti.parte == "segui":
+        esito["prova"] = prova_del_seguito(casa, cartella, argomenti.quante)
     elif argomenti.parte == "tutto":
         esito["prova"] = prova(casa, cartella, argomenti.quante)
     else:

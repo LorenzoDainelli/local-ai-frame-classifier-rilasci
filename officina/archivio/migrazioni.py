@@ -1352,6 +1352,76 @@ def _versione_60(connessione: sqlite3.Connection) -> None:
     connessione.execute("CREATE INDEX ritoccate_per_stato ON ritoccate(stato)")
 
 
+def _versione_61(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS ritocchi_per_volto ON ritocchi(volto_id) "
+        "WHERE volto_id IS NOT NULL")
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS ritocchi_per_corpo ON ritocchi(corpo_id) "
+        "WHERE corpo_id IS NOT NULL")
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS ritocchi_per_scatto ON ritocchi(scatto_id) "
+        "WHERE scatto_id IS NOT NULL")
+
+
+
+def _versione_62(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE seguiti (
+            id           INTEGER PRIMARY KEY,
+            file_id      INTEGER NOT NULL REFERENCES file_media(id) ON DELETE CASCADE,
+            cosa         TEXT NOT NULL CHECK (cosa IN ('volto','persona','oggetto')),
+            stato        TEXT NOT NULL DEFAULT 'da_seguire'
+                         CHECK (stato IN ('da_seguire','in_coda','in_lavoro','seguito',
+                                          'fermato','fallito')),
+            impronta     TEXT NOT NULL,
+            larghezza    INTEGER NOT NULL,
+            altezza      INTEGER NOT NULL,
+            quanti       INTEGER NOT NULL,
+            istanti      BLOB,
+            dove         TEXT,
+            guasto       TEXT,
+            messo_il     TEXT NOT NULL,
+            seguito_il   TEXT
+        )
+        """
+    )
+    connessione.execute("CREATE INDEX seguiti_del_file ON seguiti(file_id, id)")
+    connessione.execute("CREATE INDEX seguiti_per_stato ON seguiti(stato, id)")
+    connessione.execute(
+        """
+        CREATE TABLE seguiti_scelte (
+            seguito_id   INTEGER NOT NULL REFERENCES seguiti(id) ON DELETE CASCADE,
+            fotogramma   INTEGER NOT NULL,
+            versione     INTEGER NOT NULL,
+            maschera     BLOB NOT NULL,
+            messa_il     TEXT NOT NULL,
+            PRIMARY KEY (seguito_id, fotogramma)
+        ) WITHOUT ROWID
+        """
+    )
+    connessione.execute(
+        """
+        CREATE TABLE seguiti_fotogrammi (
+            seguito_id   INTEGER NOT NULL REFERENCES seguiti(id) ON DELETE CASCADE,
+            fotogramma   INTEGER NOT NULL,
+            da           INTEGER NOT NULL,
+            versione     INTEGER NOT NULL,
+            maschera     BLOB,
+            sicurezza    REAL NOT NULL,
+            PRIMARY KEY (seguito_id, fotogramma)
+        ) WITHOUT ROWID
+        """
+    )
+    connessione.execute(
+        "ALTER TABLE ritocchi ADD COLUMN seguito_id INTEGER REFERENCES seguiti(id) "
+        "ON DELETE SET NULL")
+    connessione.execute(
+        "CREATE INDEX IF NOT EXISTS ritocchi_per_seguito ON ritocchi(seguito_id) "
+        "WHERE seguito_id IS NOT NULL")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1460,6 +1530,10 @@ MIGRAZIONI: list[Migrazione] = [
                "senza entrare nella galleria", _versione_59),
     Migrazione(60, "i ritocchi: volti pixelati e cose tolte, con la copia al posto dello "
                "scatto e l'originale in «Originali»", _versione_60),
+    Migrazione(61, "cancellare volti, corpi e scatti non rilegge più tutti i ritocchi",
+               _versione_61),
+    Migrazione(62, "nei video si segue la parte scelta, fotogramma per fotogramma",
+               _versione_62),
 ]
 
 

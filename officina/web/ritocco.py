@@ -10,7 +10,7 @@ from pathlib import Path
 from officina import registro
 from officina.descrittori import torcia
 from officina.errori import ErroreOfficina
-from officina.ritocco import scelta
+from officina.ritocco import filmato, scelta
 from officina.web import in_disparte, lavori
 
 A = "ritocco"
@@ -29,6 +29,16 @@ NON_RISPONDE = ("Lo strumento per scegliere non risponde. Lo scatto non è stato
                 "riprova.")
 NON_GUARDA = ("Non sono riuscito a guardare questo scatto per sceglierne una parte. Lo "
               "scatto non è stato toccato.")
+NON_SEGUE = ("Non sono riuscito a seguire la parte scelta nel video. Il video non è stato "
+             "toccato.")
+SCHEDA_OCCUPATA = "La scheda video è occupata: lo seguo appena si libera."
+OGNI_QUANTI = 8
+FERMATI = ("fermati", "ferma", "basta")
+
+
+class SchedaOccupata(ErroreOfficina):
+    codice = "ritocco_scheda_occupata"
+
 
 
 def _con_riserva(sceglitore, fai, sulla_scheda: bool):
@@ -42,29 +52,89 @@ def _con_riserva(sceglitore, fai, sulla_scheda: bool):
         return fai(False)
 
 
-def esegui(sceglitore, comando: tuple) -> tuple:
+def _sul_fotogramma(fotogramma) -> dict:
+    return {} if fotogramma is None else {"fotogramma": int(fotogramma)}
+
+
+def _mai() -> bool:
+    return False
+
+
+def _prepara(sceglitore, numero, chiave, percorso, notizia, fermati) -> tuple:
+    def al_passo(fatti: int, attesi: int) -> None:
+        if fatti % OGNI_QUANTI == 0:
+            notizia(("passo", numero, {"preparati": fatti, "attesi": attesi}))
+
+    pronto = sceglitore.prepara(chiave, Path(percorso), al_passo, fermati)
+    return ("fatto", numero, {"quanti": pronto.quanti, "larghezza": pronto.larghezza,
+                              "altezza": pronto.altezza, "istanti": list(pronto.istanti)})
+
+
+def _segui(sceglitore, numero, chiave, percorso, scelte, tratti, sulla_scheda, notizia,
+           fermati) -> tuple:
+    from officina.ritocco import segui
+
+    pila: list = []
+
+    def al_fotogramma(indice: int, da: int, maschera: bytes, sicurezza: float) -> None:
+        pila.append((int(indice), int(da), maschera, round(float(sicurezza), 4)))
+        if len(pila) >= OGNI_QUANTI:
+            notizia(("passo", numero, {"fotogrammi": list(pila)}))
+            pila.clear()
+
+    def al_passo(fatti: int, attesi: int) -> None:
+        if fatti % OGNI_QUANTI == 0:
+            notizia(("passo", numero, {"preparati": fatti, "attesi": attesi}))
+
+    pezzi = [segui.Tratto(*tratto) for tratto in tratti]
+    dati = _con_riserva(
+        sceglitore, lambda scheda: sceglitore.segui(chiave, Path(percorso), scelte, pezzi,
+                                                    scheda, al_fotogramma, al_passo, fermati),
+        sulla_scheda)
+    if pila:
+        notizia(("passo", numero, {"fotogrammi": list(pila)}))
+    return ("fatto", numero, {**dati, "fermato": bool(fermati())})
+
+
+def esegui(sceglitore, comando: tuple, notizia=None, fermati=None) -> tuple:
     tipo, numero, *resto = comando
+    notizia = notizia or (lambda _: None)
+    fermati = fermati or _mai
+    messaggio = NON_SEGUE if tipo in ("prepara", "segui") else NON_GUARDA
     try:
         if tipo == "guarda":
-            chiave, percorso, sulla_scheda = resto
+            chiave, percorso, fotogramma, sulla_scheda = resto
             larga, alta, dove = _con_riserva(
-                sceglitore, lambda scheda: sceglitore.guarda(chiave, Path(percorso), scheda),
+                sceglitore, lambda scheda: sceglitore.guarda(chiave, Path(percorso), scheda,
+                                                             **_sul_fotogramma(fotogramma)),
                 sulla_scheda)
             return ("fatto", numero, {"larghezza": larga, "altezza": alta, "dove": dove})
         if tipo == "scegli":
-            chiave, percorso, punti, riquadro, sulla_scheda = resto
+            chiave, percorso, punti, riquadro, fotogramma, sulla_scheda = resto
             fatta = _con_riserva(
                 sceglitore, lambda scheda: sceglitore.scegli(chiave, Path(percorso), punti,
-                                                             riquadro, scheda),
+                                                             riquadro, scheda,
+                                                             **_sul_fotogramma(fotogramma)),
                 sulla_scheda)
             return ("fatto", numero, {"maschera": fatta.maschera, "punteggio": fatta.punteggio,
                                       "larghezza": fatta.larghezza, "altezza": fatta.altezza,
                                       "dove": fatta.dove})
+        if tipo == "prepara":
+            chiave, percorso, _ = resto
+            return _prepara(sceglitore, numero, chiave, percorso, notizia, fermati)
+        if tipo == "segui":
+            chiave, percorso, scelte, tratti, sulla_scheda = resto
+            return _segui(sceglitore, numero, chiave, percorso, scelte, tratti, sulla_scheda,
+                          notizia, fermati)
+    except filmato.Fermato:
+        return ("fatto", numero, {"fermato": True})
+    except ErroreOfficina as guasto:
+        return ("guasto", numero, {"messaggio": guasto.messaggio, "dettaglio": ""})
     except Exception as guasto:
         registro.errore("ritocco.scelta_rotta", **registro.dove_si_e_rotto(guasto))
-        return ("guasto", numero, {"messaggio": NON_GUARDA,
+        return ("guasto", numero, {"messaggio": messaggio,
                                    "dettaglio": registro.passi_del_guasto(guasto)})
-    return ("guasto", numero, {"messaggio": NON_GUARDA, "dettaglio": ""})
+    return ("guasto", numero, {"messaggio": messaggio, "dettaglio": ""})
 
 
 def _figlio(cartella: str, fabbrica: str, dopo: float, dove_registro: str | None, comandi,
@@ -80,7 +150,23 @@ def _figlio(cartella: str, fabbrica: str, dopo: float, dove_registro: str | None
         return
     genitore = multiprocessing.parent_process()
     ultimo = time.monotonic()
-    while True:
+    chiudi = [False]
+    fermato = [False]
+
+    def fermati() -> bool:
+        while not fermato[0]:
+            try:
+                arrivato = comandi.get_nowait()
+            except queue.Empty:
+                break
+            if arrivato[0] in FERMATI:
+                fermato[0] = True
+                chiudi[0] = chiudi[0] or arrivato[0] != "fermati"
+        if genitore is not None and not genitore.is_alive():
+            fermato[0] = chiudi[0] = True
+        return fermato[0]
+
+    while not chiudi[0]:
         try:
             comando = comandi.get(timeout=OGNI_QUANTO)
         except queue.Empty:
@@ -91,7 +177,10 @@ def _figlio(cartella: str, fabbrica: str, dopo: float, dove_registro: str | None
             continue
         if comando[0] in ("ferma", "basta"):
             break
-        notizie.put(esegui(sceglitore, comando))
+        if comando[0] == "fermati":
+            continue
+        fermato[0] = False
+        notizie.put(esegui(sceglitore, comando, notizie.put, fermati))
         ultimo = time.monotonic()
     try:
         sceglitore.spegni()
@@ -113,6 +202,7 @@ class AlClic:
         self._scheda = False
         self._ultimo = 0.0
         self._sorvegliante: threading.Thread | None = None
+        self._fermo = threading.Event()
 
     @property
     def acceso(self) -> bool:
@@ -123,32 +213,56 @@ class AlClic:
     def ha_la_scheda(self) -> bool:
         return lavori.turno.chi is self.lavoro
 
-    def guarda(self, cartella: Path, chiave: str, percorso: Path) -> dict:
-        return self._chiedi(cartella, "guarda", chiave, str(percorso))
+    def guarda(self, cartella: Path, chiave: str, percorso: Path,
+               fotogramma: int | None = None) -> dict:
+        return self._chiedi(cartella, "guarda", chiave, str(percorso), fotogramma)
 
     def scegli(self, cartella: Path, chiave: str, percorso: Path, punti: list,
-               riquadro) -> dict:
-        return self._chiedi(cartella, "scegli", chiave, str(percorso), list(punti), riquadro)
+               riquadro, fotogramma: int | None = None) -> dict:
+        return self._chiedi(cartella, "scegli", chiave, str(percorso), list(punti), riquadro,
+                            fotogramma)
+
+    def prepara(self, cartella: Path, chiave: str, percorso: Path, al_passo=None) -> dict:
+        return self._chiedi(cartella, "prepara", chiave, str(percorso), al_passo=al_passo,
+                            scheda=False)
+
+    def segui(self, cartella: Path, chiave: str, percorso: Path, scelte: dict, tratti: list,
+              al_passo=None, scheda: bool | None = None) -> dict:
+        pezzi = [(tratto.da, tratto.inizio, tratto.fine) for tratto in tratti]
+        return self._chiedi(cartella, "segui", chiave, str(percorso), dict(scelte), pezzi,
+                            al_passo=al_passo, scheda=scheda)
+
+    def ferma(self) -> None:
+        self._fermo.set()
+        if self._processo is not None:
+            in_disparte.manda("fermati", a=A)
 
     def chiudi(self) -> None:
         with self._lucchetto:
             self._spegni_tutto()
 
-    def _chiedi(self, cartella: Path, tipo: str, *argomenti) -> dict:
+    def _chiedi(self, cartella: Path, tipo: str, *argomenti, al_passo=None,
+                scheda: bool | None = None) -> dict:
         with self._lucchetto:
             self._accendi(Path(cartella))
-            sulla_scheda = self._scheda and lavori.turno.prendi_se_libera(self.lavoro)
+            if scheda is None:
+                sulla_scheda = self._scheda and lavori.turno.prendi_se_libera(self.lavoro)
+                if tipo == "segui" and not sulla_scheda:
+                    raise SchedaOccupata(SCHEDA_OCCUPATA)
+            else:
+                sulla_scheda = bool(scheda) and self._scheda
             self._ultimo = time.monotonic()
+            self._fermo.clear()
             numero = next(self._numeri)
             try:
-                esito = self._manda((tipo, numero, *argomenti, sulla_scheda))
+                esito = self._manda((tipo, numero, *argomenti, sulla_scheda), al_passo)
             finally:
                 self._ultimo = time.monotonic()
             self._sorveglia()
-            tipo, _, dati = esito
-            if tipo != "fatto":
+            tipo_esito, _, dati = esito
+            if tipo_esito != "fatto":
                 raise ErroreOfficina(dati.get("messaggio") or NON_GUARDA, codice="ritocco_scelta")
-            if sulla_scheda and dati.get("dove") == scelta.PROCESSORE:
+            if scheda is None and sulla_scheda and dati.get("dove") == scelta.PROCESSORE:
                 lavori.turno.lascia(self.lavoro)
             return dati
 
@@ -176,13 +290,17 @@ class AlClic:
             raise ErroreOfficina(dati.get("messaggio") or NON_PARTE, codice="ritocco_non_parte")
         self._scheda = bool(dati.get("scheda"))
 
-    def _manda(self, comando: tuple) -> tuple:
+    def _manda(self, comando: tuple, al_passo=None) -> tuple:
         if self._in_casa is not None:
-            return esegui(self._in_casa, comando)
-        in_disparte.manda(*comando, a=A)
-        return self._aspetta(comando[1], PER_RISPONDERE)
+            def notizia(arrivata: tuple) -> None:
+                if al_passo is not None and arrivata[0] == "passo":
+                    al_passo(arrivata[2])
 
-    def _aspetta(self, numero: int | None, entro: float) -> tuple:
+            return esegui(self._in_casa, comando, notizia, self._fermo.is_set)
+        in_disparte.manda(*comando, a=A)
+        return self._aspetta(comando[1], PER_RISPONDERE, al_passo)
+
+    def _aspetta(self, numero: int | None, entro: float, al_passo=None) -> tuple:
         scadenza = time.monotonic() + entro
         while time.monotonic() < scadenza:
             try:
@@ -193,8 +311,15 @@ class AlClic:
                     registro.errore("ritocco.chiuso_da_solo")
                     raise ErroreOfficina(SI_E_CHIUSO, codice="ritocco_chiuso") from None
                 continue
-            if quale == numero:
-                return tipo, quale, dati
+            if quale != numero:
+                continue
+            if tipo == "passo":
+                scadenza = time.monotonic() + entro
+                self._ultimo = time.monotonic()
+                if al_passo is not None:
+                    al_passo(dati)
+                continue
+            return tipo, quale, dati
         self._spegni_tutto()
         registro.errore("ritocco.non_risponde")
         raise ErroreOfficina(NON_RISPONDE, codice="ritocco_lento")
@@ -241,6 +366,8 @@ class AlClic:
                     registro.evento("ritocco.scheda_liberata")
                     self._spegni_tutto()
                     return
+            except Exception as errore:
+                registro.errore("ritocco.sorvegliante", **registro.dove_si_e_rotto(errore))
             finally:
                 self._lucchetto.release()
 

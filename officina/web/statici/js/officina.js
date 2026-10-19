@@ -1,6 +1,7 @@
 import { chiedi, mandaModulo, leggiDatiIncorporati, qualcosaSopraLaPagina,
          siStaScrivendo }
     from "/statici/js/comune.js";
+import { disegnaRitocchi, leggiRitocchi, vediSotto } from "/statici/js/ritocchi.js";
 
 const dati = leggiDatiIncorporati("dati-officina") || {};
 const $ = (nome) => document.getElementById(nome);
@@ -635,18 +636,78 @@ function mostraPerche(voce) {
         `<img src="/miniatura/${simile.file_id}" alt="" loading="lazy"></a>`).join("");
 }
 
+const ritoccate = new Map();
+
+const sotto = vediSotto({
+    tasto: $("b-sotto"),
+    immagine: () => { const media = $("media"); return media && media.tagName === "IMG" ? media : null; },
+    indirizzo: () => {
+        const scatto = st.pezzo && st.pezzo.scatto;
+        return scatto && scatto.principale !== null ? `/immagine/${scatto.principale}?lato=1600&sotto=1` : null;
+    },
+    attivo: () => {
+        const scatto = st.pezzo && st.pezzo.scatto;
+        return Boolean(scatto && scatto.ritocchi && scatto.genere !== "video" && !qualcosaSopraLaPagina()
+            && !document.querySelector(".et-finestrina"));
+    },
+});
+
+let giroDeiRitocchi = 0;
+
+async function disegnaIRitocchi() {
+    const dove = $("ritocchi-qui");
+    const scatto = st.pezzo && st.pezzo.scatto;
+    const giro = ++giroDeiRitocchi;
+    if (!st.info || !scatto || !scatto.ritocchi || scatto.principale === null) {
+        dove.hidden = true;
+        dove.replaceChildren();
+        return;
+    }
+    const fileId = scatto.principale;
+    try {
+        const elenco = await leggiRitocchi(fileId);
+        if (giro !== giroDeiRitocchi) return;
+        disegnaRitocchi(dove, elenco, { quandoTolto: (restano) => ritoccoCambiato(fileId, restano.length) });
+    } catch (errore) {
+        if (giro === giroDeiRitocchi) dove.hidden = true;
+    }
+}
+
+function ritoccoCambiato(fileId, quanti) {
+    ritoccate.set(fileId, Date.now());
+    const scatto = st.pezzo && st.pezzo.scatto;
+    if (!scatto || scatto.principale !== fileId) return;
+    scatto.ritocchi = quanti;
+    disegnaFoto();
+    disegnaIRitocchi();
+}
+
+function statoDelRitocco(scatto) {
+    const tasto = $("b-ritocca");
+    const siPuo = scatto.principale !== null && scatto.genere !== "video" && scatto.movimento === null;
+    tasto.disabled = !siPuo;
+    tasto.title = siPuo ? "Ritocca: pixela un volto, una persona o una parte"
+        : scatto.principale === null ? "Di questo scatto non c'è un file da ritoccare"
+        : "Per i video e le foto live arriva presto";
+}
+
 function disegnaFoto(verso = 0) {
     const scorre = $("scorre");
     const pezzo = st.pezzo;
     const scatto = pezzo.scatto;
+    statoDelRitocco(scatto);
+    sotto.spegni();
     st.zoom = { k: 1, x: 0, y: 0 };
     scorre.className = "et-scorre" + (verso > 0 ? " entra-d" : verso < 0 ? " entra-s" : "");
     scorre.innerHTML = "";
 
+    const ritocchi = scatto.genere === "video" ? 0 : scatto.ritocchi || 0;
     const segno = $("segno");
-    segno.hidden = scatto.genere === "foto" && scatto.movimento === null;
+    segno.hidden = scatto.genere === "foto" && scatto.movimento === null && !ritocchi;
     segno.textContent = scatto.genere === "video" ? "Video"
-        : scatto.movimento !== null ? "Live · passa col mouse" : "";
+        : scatto.movimento !== null ? "Live · passa col mouse"
+        : ritocchi ? `Ritoccata · ${ritocchi}` : "";
+    $("b-sotto").hidden = !ritocchi || scatto.principale === null;
 
     if (scatto.principale === null) {
         scorre.innerHTML = '<p class="tenue piccolo">Di questo scatto non resta nessun file leggibile: le etichette però ci sono ancora.</p>';
@@ -675,7 +736,7 @@ function disegnaFoto(verso = 0) {
         if (fermo && fermo.istante) media.currentTime = fermo.istante / 1000;
     } else {
         media = document.createElement("img");
-        media.src = `/immagine/${scatto.principale}?lato=1600`;
+        media.src = `/immagine/${scatto.principale}?lato=1600` + (ritoccate.has(scatto.principale) ? `&ritocco=${ritoccate.get(scatto.principale)}` : "");
         media.alt = "";
         media.draggable = false;
         if (scatto.movimento !== null) {
@@ -683,6 +744,7 @@ function disegnaFoto(verso = 0) {
             media.addEventListener("mouseleave", () => { if (!st.live) spegniLive(); });
         }
         media.addEventListener("load", disegnaVolti);
+        if (ritocchi) media.addEventListener("load", sotto.precarica, { once: true });
     }
     media.id = "media";
     quadro.appendChild(media);
@@ -883,6 +945,7 @@ function disegnaInfo() {
         (chi.a_mano ? `<button class="tasto-comando nudo minuscolo" type="button" data-togli-persona="${chi.persona_id}" title="Togli ${scampa(chi.nome)}">×</button>` : ""))
         .join("") || '<span class="minuscolo tenue">Nessuno riconosciuto.</span>';
     $("nota").value = scatto.nota || "";
+    disegnaIRitocchi();
     mostraPerche(st.perche);
 }
 
@@ -1334,6 +1397,23 @@ $("mondo").addEventListener("mouseleave", () => accendiPercorso(null));
 
 $("b-info").addEventListener("click", () => { st.info = !st.info; disegnaInfo(); });
 $("b-intero").addEventListener("click", () => intero(!st.intero));
+$("b-ritocca").addEventListener("click", async () => {
+    const scatto = st.pezzo && st.pezzo.scatto;
+    if (!scatto || $("b-ritocca").disabled) return;
+    const fileId = scatto.principale;
+    const { apriRitocca } = await import("/statici/js/ritocca.js");
+    apriRitocca(fileId, {
+        numero: `scatto ${$("conta").textContent}`,
+        quandoSalvato: async () => {
+            try {
+                ritoccoCambiato(fileId, (await leggiRitocchi(fileId)).length);
+            } catch (errore) {
+                ritoccate.set(fileId, Date.now());
+                if (st.pezzo && st.pezzo.scatto.principale === fileId) disegnaFoto();
+            }
+        },
+    });
+});
 $("b-cuore").addEventListener("click", giraCuore);
 $("b-stella").addEventListener("click", giraStella);
 $("z-piu").addEventListener("click", () => { st.vista.k = Math.min(2, st.vista.k * 1.15); mettiVista(); });
@@ -1380,7 +1460,7 @@ function aCursore(id) {
 }
 
 document.addEventListener("keydown", (evento) => {
-    if (qualcosaSopraLaPagina() || document.querySelector(".et-finestrina")) return;
+    if (qualcosaSopraLaPagina() || document.querySelector(".et-finestrina, dialog[open]")) return;
     const ctrl = evento.ctrlKey || evento.metaKey;
     const tasto = evento.key.toLowerCase();
     const scrive = siStaScrivendo(evento.target);

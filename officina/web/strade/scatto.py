@@ -13,6 +13,7 @@ from officina.immagini import compatibile, consegna
 from officina.importazione import miniature, quicktime
 from officina.modello import file_media, scatti, segnalazioni
 from officina.miglioria import misura as miglioria_misura
+from officina.ritocco import elenco as elenco_ritocchi
 from officina.web import miglioramento as miglioramento_web
 from officina.web import vista
 from officina import istruzioni
@@ -114,6 +115,8 @@ def uno_scatto(richiesta: Request, scatto_id: int):
             percorso_video = file_media.percorso_da_mostrare(connessione, da_leggere["id"])
 
         miglioria = miglioramento_web.dello_scatto(connessione, scatto_id)
+        ritocchi = elenco_ritocchi.quanti_fatti(
+            connessione, principale["id"] if principale else None)
 
         volti_visti = []
         if scatto["genere"] != "video" and principale is not None:
@@ -175,6 +178,7 @@ def uno_scatto(richiesta: Request, scatto_id: int):
         "volti_visti": volti_visti,
         "corpi_visti": corpi_visti,
         "in3d": in3d,
+        "ritocchi": ritocchi,
         "si_puo_migliorare": bool(
             miglioria is None and scatto["larghezza"] and scatto["altezza"]
             and not miglioria_misura.e_gia_grande(scatto["larghezza"],
@@ -262,12 +266,13 @@ def da_ricontrollare(dati: bytes, tipo: str, atteso: str) -> Response:
                     headers={"ETag": atteso, "Cache-Control": DA_RICONTROLLARE})
 
 
-def _cosa_mostrare(file_id: int) -> tuple | None:
+def _cosa_mostrare(file_id: int, sotto: bool = False) -> tuple | None:
     with accesso.aperto().lettura() as connessione:
         riga = file_media.per_id(connessione, file_id)
         if riga is None:
             return None
-        percorso, migliorata = file_media.da_mostrare(connessione, riga["id"])
+        quale = file_media.da_mostrare_sotto if sotto else file_media.da_mostrare
+        percorso, migliorata = quale(connessione, riga["id"])
     if percorso is None:
         return None
     return riga, percorso, migliorata or riga["impronta"]
@@ -324,8 +329,9 @@ def _foto_per_browser(percorso: Path, lato: int | None) -> tuple[bytes, str]:
 
 
 @strada.get("/immagine/{file_id}")
-async def una_immagine(richiesta: Request, file_id: int, lato: int | None = None):
-    trovato = await consegna.subito(_cosa_mostrare, file_id)
+async def una_immagine(richiesta: Request, file_id: int, lato: int | None = None,
+                       sotto: int = 0):
+    trovato = await consegna.subito(_cosa_mostrare, file_id, bool(sotto))
     if trovato is None:
         return Response(status_code=404)
     riga, percorso, impronta = trovato

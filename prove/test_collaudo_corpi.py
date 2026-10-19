@@ -288,3 +288,75 @@ def test_la_prova_dei_clic_con_lo_sceglitore_finto(collaudo, monkeypatch, tmp_pa
     assert collaudo.riassunto(esito)["clic"]["riquadro"] == 1.0
     assert collaudo.controlla(esito) == [
         f"SAM 3 sceglie male con un_clic: {round(100 / 3200, 4)}"]
+
+
+def test_il_video_dalla_foto_sposta_la_cosa_e_la_sua_maschera(collaudo, tmp_path):
+    import numpy
+    from PIL import Image
+
+    from officina.ritocco import filmato
+
+    tela = numpy.zeros((300, 400, 3), dtype=numpy.uint8)
+    tela[100:180, 150:250] = 255
+    percorso = tmp_path / "foto.png"
+    Image.fromarray(tela).save(percorso)
+    vera = _rettangolo(300, 400, 150, 100, 250, 180)
+    video, vere = collaudo.video_dalla_foto(percorso, vera, tmp_path / "v.mp4", quanti=12)
+    assert len(vere) == 12 and vere[0].shape[1] == collaudo.LARGHEZZA_DEL_VIDEO
+    pronto = filmato.Filmato(video)
+    assert pronto.quanti == 12 and (pronto.altezza, pronto.larghezza) == vere[0].shape
+    for numero in (0, 6, 11):
+        quadro = numpy.asarray(pronto.quadro(numero).convert("L")) > 127
+        assert collaudo.sovrapposizione(quadro, vere[numero]) > 0.9
+    assert not numpy.array_equal(vere[0], vere[11])
+
+
+def test_la_prova_del_seguito_con_lo_sceglitore_finto(collaudo, monkeypatch, tmp_path):
+    import numpy
+    from PIL import Image
+
+    from officina.corpi import rilevatore
+    from officina.ritocco import maschere, scelta, segui
+    from prove import sceglitore_finto
+
+    (tmp_path / rilevatore.CARTELLA_SAM3).mkdir()
+    dati = {"images": [{"id": 1, "file_name": "uno.jpg"}],
+            "annotations": [{"image_id": 1, "iscrowd": 0, "area": 8000.0,
+                             "bbox": [150, 100, 100, 80]}]}
+
+    def scarica(url, dove):
+        dove.parent.mkdir(parents=True, exist_ok=True)
+        tela = numpy.zeros((300, 400, 3), dtype=numpy.uint8)
+        tela[100:180, 150:250] = 255
+        Image.fromarray(tela).save(dove)
+        return dove
+
+    def maschera_vera(annotazione, alta, larga):
+        x, y, w, h = annotazione["bbox"]
+        return _rettangolo(alta, larga, x, y, x + w, y + h)
+
+    def dritto(sceglitore, pronto, mezzo, maschera):
+        trovate = {}
+        scelte = {mezzo: maschere.comprimi(maschera, (0, 0), pronto.larghezza, pronto.altezza)}
+        sceglitore.segui("dritto", pronto.percorso, scelte, segui.regioni(scelte, pronto.quanti),
+                         False, lambda i, da, m, s: trovate.__setitem__(
+                             i, collaudo.intera(maschere.apri(m), pronto.larghezza,
+                                                pronto.altezza)))
+        return trovate
+
+    monkeypatch.setattr(collaudo, "_annotazioni", lambda cartella, dentro: dati)
+    monkeypatch.setattr(collaudo, "_scarica", scarica)
+    monkeypatch.setattr(collaudo, "_maschera_vera", maschera_vera)
+    monkeypatch.setattr(collaudo, "_seguito_dritto", dritto)
+    monkeypatch.setattr(collaudo, "FOTOGRAMMI_DEL_VIDEO", 12)
+    monkeypatch.setattr(scelta, "Sceglitore", sceglitore_finto.Finto)
+    esito = {"prova": collaudo.prova_del_seguito(tmp_path, tmp_path, 3)}
+    prova = esito["prova"]
+    assert prova["video"] == 1 and prova["per_video"][0]["fotogrammi"] == 12
+    assert prova["seguito"]["al_punto_corretto"]["media"] == 1.0
+    assert prova["come_la_via_dritta"]["media"] == 1.0
+    assert len(prova["per_video"][0]["tratti_rifatti"]) == 1
+    rifatti = [giro["tratti"] for giro in sceglitore_finto.seguiti(tmp_path / rilevatore.CARTELLA_SAM3)]
+    assert rifatti[0] == [[6, 0, 11]] and rifatti[1] == prova["per_video"][0]["tratti_rifatti"]
+    assert "seguito" in collaudo.riassunto(esito)
+    assert all("dritto" not in guaio for guaio in collaudo.controlla(esito))

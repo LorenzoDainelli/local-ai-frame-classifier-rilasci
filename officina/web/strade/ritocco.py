@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import importlib.util
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Request
 
 from officina.archivio import accesso
+from officina.archivio.database import tutti
 from officina.corpi import rilevatore
 from officina.errori import ErroreOfficina
 from officina.immagini import consegna
 from officina.modello import file_media
-from officina.ritocco import elenco, maschere, pixela, scelta
+from officina.ritocco import copia, elenco, maschere, pixela, racconto, scelta, strumento
 from officina.web import ritocco as ritocco_web
 
 strada = APIRouter()
@@ -25,6 +28,12 @@ NON_C_E = "Il file di questo scatto non si trova: non c'è niente da guardare."
 SCELTA_SBAGLIATA = "La scelta non si capisce: clicca sulla cosa e riprova."
 NIENTE = ("Qui non ho trovato niente da scegliere: prova a cliccare più al centro "
           "della cosa.")
+NON_ANCORA = ("Per i video e le foto live il ritocco arriva presto: per ora si ritoccano "
+              "le foto.")
+NIENTE_DA_SALVARE = "Non hai scelto niente da ritoccare."
+NON_TORNA = ("Lo scatto è cambiato mentre lo ritoccavi: chiudi lo strumento e riaprilo, "
+             "niente è stato toccato.")
+GIA_TOLTO = "Questo ritocco non c'è più: forse l'hai già tolto."
 
 COSE = (elenco.VOLTO, elenco.PERSONA, elenco.OGGETTO)
 LIBRERIE = ("torch", "transformers")
@@ -80,6 +89,179 @@ def _scegli(file_id: int, punti: list, riquadro, cosa: str) -> dict:
             "maschera": base64.b64encode(dati["maschera"]).decode("ascii"),
             "punteggio": round(float(dati["punteggio"]), 4), "dove": dati["dove"],
             "misura": misura, "quadretto": quadretto}
+
+
+def _si_ritocca(connessione, file_id: int):
+    riga = file_media.per_id(connessione, file_id)
+    if riga is None:
+        raise ErroreOfficina(NON_SI_SCEGLIE, codice="ritocco_non_si_sceglie")
+    if riga["genere"] != "immagine":
+        raise ErroreOfficina(NON_ANCORA, codice="ritocco_non_ancora")
+    return riga
+
+
+def _volti_del_file(connessione, riga) -> dict[int, tuple[float, float, float, float]]:
+    return {volto["id"]: tuple(json.loads(volto["riquadro"])) for volto in tutti(
+        connessione,
+        "SELECT id, riquadro FROM volti WHERE scatto_id = ? AND fotogramma = 0 "
+        "AND (file_id IS NULL OR file_id = ?) ORDER BY id", riga["scatto_id"], riga["id"])}
+
+
+def _corpi_del_file(connessione, riga) -> list:
+    return tutti(
+        connessione,
+        "SELECT id, riquadro, maschera, volto_id FROM corpi WHERE scatto_id = ? "
+        "AND fotogramma = 0 AND (file_id IS NULL OR file_id = ?) ORDER BY id",
+        riga["scatto_id"], riga["id"])
+
+
+def _pronto(file_id: int) -> dict:
+    archivio = accesso.aperto()
+    with archivio.lettura() as connessione:
+        riga = _si_ritocca(connessione, file_id)
+        volti = _volti_del_file(connessione, riga)
+        corpi = _corpi_del_file(connessione, riga)
+    if copia.e_una_live(archivio, file_id):
+        raise ErroreOfficina(NON_ANCORA, codice="ritocco_non_ancora")
+    fuori = []
+    for corpo in corpi:
+        png, riquadro = strumento.corpo_per_lo_strumento(
+            corpo["maschera"] or b"", json.loads(corpo["riquadro"]))
+        fuori.append({"id": corpo["id"], "riquadro": [round(v, 5) for v in riquadro],
+                      "png": base64.b64encode(png).decode("ascii"), "volto": corpo["volto_id"]})
+    return {"lato": strumento.LATO_DI_LAVORO, "massimo": strumento.PEZZI_AL_MASSIMO, "corpi": fuori,
+            "volti": [{"id": volto_id, "riquadro": strumento.volto_allargato(riquadro),
+                       "volto": [round(float(v), 5) for v in riquadro]}
+                      for volto_id, riquadro in volti.items()]}
+
+
+def _numero(valore, piu_grande: int) -> int:
+    if isinstance(valore, bool) or not isinstance(valore, int):
+        raise ValueError
+    if not 1 <= valore <= piu_grande:
+        raise ValueError
+    return valore
+
+
+def _identita(valore) -> int | None:
+    if valore is None:
+        return None
+    if isinstance(valore, bool) or not isinstance(valore, int) or valore < 1:
+        raise ValueError
+    return valore
+
+
+def leggi_i_pezzi(dati) -> tuple[int, int, list[dict]]:
+    if not isinstance(dati, dict):
+        raise ValueError
+    larga = _numero(dati.get("larghezza"), strumento.LATO_DI_LAVORO)
+    alta = _numero(dati.get("altezza"), strumento.LATO_DI_LAVORO)
+    pezzi = dati.get("pezzi")
+    if not isinstance(pezzi, list) or len(pezzi) > strumento.PEZZI_AL_MASSIMO:
+        raise ValueError
+    letti = []
+    for pezzo in pezzi:
+        if not isinstance(pezzo, dict) or pezzo.get("cosa") not in COSE:
+            raise ValueError
+        png = pezzo.get("png")
+        if not isinstance(png, str):
+            raise ValueError
+        quadretto = pezzo.get("quadretto")
+        if quadretto is not None:
+            quadretto = _numero(quadretto, strumento.LATO_DI_LAVORO)
+        punti = scelta.leggi_i_punti(pezzo.get("punti") or [])
+        riquadro = scelta.leggi_il_riquadro(pezzo.get("riquadro"))
+        letti.append({
+            "cosa": pezzo["cosa"], "png": base64.b64decode(png, validate=True),
+            "quadretto": quadretto, "volto": _identita(pezzo.get("volto")),
+            "corpo": _identita(pezzo.get("corpo")),
+            "scelta": ({"punti": [[p.x, p.y, p.dentro] for p in punti],
+                        "riquadro": ([riquadro.x1, riquadro.y1, riquadro.x2, riquadro.y2]
+                                     if riquadro else None)}
+                       if punti or riquadro else None)})
+    return larga, alta, letti
+
+
+def _salva(file_id: int, larga: int, alta: int, letti: list[dict]) -> dict:
+    archivio = accesso.aperto()
+    with archivio.lettura() as connessione:
+        riga = _si_ritocca(connessione, file_id)
+        volti = _volti_del_file(connessione, riga)
+        corpi = {corpo["id"]: corpo["volto_id"] for corpo in _corpi_del_file(connessione, riga)}
+    if copia.e_una_live(archivio, file_id):
+        raise ErroreOfficina(NON_ANCORA, codice="ritocco_non_ancora")
+    percorso, _ = _da_guardare(file_id)
+    base = strumento.misure_dritte(percorso)
+    if base is None:
+        raise ErroreOfficina(NON_C_E, codice="ritocco_senza_file")
+    if not strumento.stessa_forma(larga, alta, base):
+        raise ErroreOfficina(NON_TORNA, codice="ritocco_non_torna")
+    in_pixel = strumento.volti_in_pixel(volti, larga, alta)
+    nuovi = []
+    for letto in letti:
+        try:
+            maschera = strumento.dal_browser(letto["png"], larga, alta)
+        except Exception:
+            raise ErroreOfficina(SCELTA_SBAGLIATA, codice="ritocco_scelta_sbagliata") from None
+        if not maschera.any():
+            continue
+        volto_id, corpo_id = letto["volto"], letto["corpo"]
+        if (volto_id is not None and volto_id not in volti) or (
+                corpo_id is not None and corpo_id not in corpi):
+            raise ErroreOfficina(NON_TORNA, codice="ritocco_non_torna")
+        suo = corpi[corpo_id] if volto_id is None and corpo_id is not None else volto_id
+        nuovi.append(strumento.pezzo_per_la_copia(
+            maschera, letto["cosa"], larga, alta, in_pixel, quadretto=letto["quadretto"],
+            volto_id=volto_id, corpo_id=corpo_id, scelta=letto["scelta"], suo=suo))
+    if not nuovi:
+        raise ErroreOfficina(NIENTE_DA_SALVARE, codice="ritocco_niente")
+    copia.metti(archivio, file_id, nuovi)
+    return {"fatto": True, "quanti": len(nuovi)}
+
+
+def _ritocchi(file_id: int) -> dict:
+    with accesso.aperto().lettura() as connessione:
+        if file_media.per_id(connessione, file_id) is None:
+            raise ErroreOfficina(NON_SI_SCEGLIE, codice="ritocco_non_si_sceglie")
+        return {"ritocchi": racconto.di_file(connessione, file_id)}
+
+
+def _togli(ritocco_id: int) -> dict:
+    archivio = accesso.aperto()
+    with archivio.lettura() as connessione:
+        ritocco = elenco.per_id(connessione, ritocco_id)
+    if ritocco is None or ritocco["stato"] != elenco.FATTO:
+        raise ErroreOfficina(GIA_TOLTO, codice="ritocco_gia_tolto")
+    copia.togli(archivio, ritocco_id)
+    with archivio.lettura() as connessione:
+        restano = racconto.di_file(connessione, ritocco["file_id"])
+    return {"fatto": True, "ritocchi": restano}
+
+
+@strada.get("/api/ritocchi/{file_id}")
+async def api_ritocchi(file_id: int):
+    return await consegna.subito(_ritocchi, file_id)
+
+
+@strada.post("/api/ritocco/togli/{ritocco_id}")
+async def api_togli(ritocco_id: int):
+    return await consegna.subito(_togli, ritocco_id)
+
+
+@strada.get("/api/ritocco/{file_id}/pronto")
+async def api_pronto(file_id: int):
+    return await consegna.subito(_pronto, file_id)
+
+
+@strada.post("/api/ritocco/{file_id}/salva")
+async def api_salva(file_id: int, richiesta: Request):
+    try:
+        larga, alta, letti = leggi_i_pezzi(await richiesta.json())
+    except (ValueError, TypeError, KeyError, binascii.Error):
+        raise ErroreOfficina(SCELTA_SBAGLIATA, codice="ritocco_scelta_sbagliata") from None
+    if not letti:
+        raise ErroreOfficina(NIENTE_DA_SALVARE, codice="ritocco_niente")
+    return await consegna.subito(_salva, file_id, larga, alta, letti)
 
 
 @strada.post("/api/ritocco/{file_id}/guarda")

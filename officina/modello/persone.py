@@ -71,10 +71,15 @@ def _i_piu_lontani(righe: list[dict], quanti: int) -> list[dict]:
 
 
 def copertina(connessione: sqlite3.Connection, persona_id: int) -> dict | None:
-    riga = uno(connessione,
-               "SELECT id, scatto_id, file_id, fotogramma, riquadro, nitidezza "
-               "FROM volti WHERE persona_id = ? "
-               "ORDER BY nitidezza DESC, area DESC LIMIT 1", persona_id)
+    from officina.ritocco import volti as volti_ritoccati
+
+    domanda = ("SELECT id, scatto_id, file_id, fotogramma, riquadro, nitidezza "
+               "FROM volti WHERE persona_id = ? ORDER BY nitidezza DESC, area DESC")
+    if not volti_ritoccati.ci_sono_per_la_persona(connessione, persona_id):
+        riga = uno(connessione, domanda + " LIMIT 1", persona_id)
+    else:
+        riga = next((volto for volto in connessione.execute(domanda, (persona_id,))
+                     if not volti_ritoccati.pixelato(connessione, volto)), None)
     if riga is None:
         return None
     fuori = dict(riga)
