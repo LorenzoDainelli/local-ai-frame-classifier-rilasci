@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 RADICE = Path(__file__).resolve().parent.parent
+CON_CV2 = pytest.mark.skipif(importlib.util.find_spec("cv2") is None, reason="manca cv2")
 
 
 @pytest.fixture(scope="module")
@@ -201,12 +202,14 @@ def _rettangolo(alta, larga, x0, y0, x1, y1):
     return maschera
 
 
+@CON_CV2
 def test_il_clic_va_nel_punto_piu_dentro(collaudo):
     x, y = collaudo.punto_dentro(_rettangolo(50, 80, 10, 10, 41, 41))
     assert abs(x - 25.5) <= 1 and abs(y - 25.5) <= 1
     assert collaudo.punto_dentro(_rettangolo(50, 80, 0, 0, 0, 0)) is None
 
 
+@CON_CV2
 def test_la_correzione_clicca_dove_sbaglia_di_piu(collaudo):
     vera = _rettangolo(60, 60, 0, 0, 40, 40)
     poca = _rettangolo(60, 60, 0, 0, 10, 10)
@@ -245,6 +248,7 @@ def test_gli_oggetti_scelti_sono_grandi_e_non_folla(collaudo):
     assert [a["area"] for a in scelte[0][1]] == [9000.0, 5000.0, 3000.0]
 
 
+@CON_CV2
 def test_la_prova_dei_clic_con_lo_sceglitore_finto(collaudo, monkeypatch, tmp_path):
     from PIL import Image
 
@@ -290,6 +294,7 @@ def test_la_prova_dei_clic_con_lo_sceglitore_finto(collaudo, monkeypatch, tmp_pa
         f"SAM 3 sceglie male con un_clic: {round(100 / 3200, 4)}"]
 
 
+@CON_CV2
 def test_il_video_dalla_foto_sposta_la_cosa_e_la_sua_maschera(collaudo, tmp_path):
     import numpy
     from PIL import Image
@@ -311,6 +316,7 @@ def test_il_video_dalla_foto_sposta_la_cosa_e_la_sua_maschera(collaudo, tmp_path
     assert not numpy.array_equal(vere[0], vere[11])
 
 
+@CON_CV2
 def test_la_prova_del_seguito_con_lo_sceglitore_finto(collaudo, monkeypatch, tmp_path):
     import numpy
     from PIL import Image

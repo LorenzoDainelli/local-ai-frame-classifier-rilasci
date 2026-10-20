@@ -45,7 +45,7 @@ def _non_riuscito(archivio, cartella: Path) -> int:  # noqa: F811
 
 
 def _un_altro(da: Path, a: Path) -> None:
-    import av
+    av = pytest.importorskip("av")
 
     with av.open(str(da)) as dentro, av.open(str(a), "w") as fuori:
         fuori.metadata["title"] = a.stem

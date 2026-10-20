@@ -26,7 +26,7 @@ def _scatto_di(archivio, file_id: int) -> int:
 
 
 def _webm(dove: Path, grigio: int, secondi: int = 3) -> bytes:
-    import av
+    av = pytest.importorskip("av")
 
     with av.open(str(dove), "w") as fuori:
         traccia = fuori.add_stream("libvpx-vp9", rate=10)

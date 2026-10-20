@@ -45,7 +45,7 @@ def video_vero(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def attesi(video_vero):
-    import av
+    av = pytest.importorskip("av")
 
     with av.open(str(video_vero)) as contenitore:
         traccia = contenitore.streams.video[0]

@@ -22,7 +22,7 @@ LATO = 24
 
 
 def _video(dove: Path, quanti: int = QUANTI) -> Path:
-    import av
+    av = pytest.importorskip("av")
 
     dove.parent.mkdir(parents=True, exist_ok=True)
     with av.open(str(dove), "w") as fuori:

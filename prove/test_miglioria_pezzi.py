@@ -10,7 +10,7 @@ from prove.test_miglioria_seedvr2 import _motore_finto, finto  # noqa: F401
 
 
 def _filmato(dove: Path, quanti: int = 25) -> Path:
-    import av
+    av = pytest.importorskip("av")
 
     with av.open(str(dove), "w") as fuori:
         traccia = fuori.add_stream("libx264", rate=10)
@@ -47,6 +47,7 @@ def _lavoro(tmp_path: Path, originale: Path) -> dict:
 
 
 def test_i_pezzi_si_rileggono_identici_e_solo_di_fila(tmp_path):
+    pytest.importorskip("av")
     dove = tmp_path / ".in-revisione" / "1-a.mp4.parziale.pezzi"
     fatti = pezzi.Pezzi(dove, {"a": 1})
     primi = [np.random.default_rng(i).integers(0, 256, (24, 32, 3), dtype=np.uint8) for i in range(3)]

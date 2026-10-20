@@ -26,7 +26,7 @@ def _righe(tela, x: int) -> None:
 
 
 def _video(dove: Path, quanti: int = QUANTI) -> Path:
-    import av
+    av = pytest.importorskip("av")
 
     dove.parent.mkdir(parents=True, exist_ok=True)
     with av.open(str(dove), "w") as fuori:
@@ -59,7 +59,7 @@ def _strato(numeri, scala: int = 1, quanti: int = QUANTI,
 
 
 def _quadri(percorso: Path) -> list:
-    import av
+    av = pytest.importorskip("av")
 
     with av.open(str(percorso)) as dentro:
         return [quadro.to_ndarray(format="rgb24") for quadro in dentro.decode(video=0)]
