@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona, fotina_passa %}
+{% block titolo %}Rivedi il ritocco — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-rivedi pagina-rivedi-ritocco">
+
+    <div class="rv-testa">
+        <a class="ps-torna" href="/ritocco">{{ icona('indietro', 14) }} La coda</a>
+        {% if scelta %}
+        <h1 class="rv-titolo">Ritocco &rsaquo; Da rivedere <span class="tenue numeri">{{ scelta.posizione|numero }} di {{ scelta.quante|numero }}</span></h1>
+        <span class="minuscolo tenue rv-nome nome-di-file">
+            {% if scelta.scatto_id %}<a href="/scatto/{{ scelta.scatto_id }}">{{ scelta.nome }}</a>{% else %}{{ scelta.nome }}{% endif %}
+        </span>
+        {% if scelta.quante > 1 %}
+        <span class="rr-giro">
+            {% if scelta.precedente %}<a class="tasto-comando nudo piccolo" href="/ritocco/rivedi?lavoro={{ scelta.precedente }}" aria-label="Il precedente" data-va="precedente">&lsaquo;</a>{% else %}<span class="tasto-comando nudo piccolo" aria-disabled="true">&lsaquo;</span>{% endif %}
+            {% if scelta.successiva %}<a class="tasto-comando nudo piccolo" href="/ritocco/rivedi?lavoro={{ scelta.successiva }}" aria-label="Il successivo" data-va="successiva">&rsaquo;</a>{% else %}<span class="tasto-comando nudo piccolo" aria-disabled="true">&rsaquo;</span>{% endif %}
+        </span>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    {% if not scelta %}
+    <div class="carta rv-vuoto">
+        {{ fotina_passa() }}
+        <p><b>Non c'è niente da rivedere.</b> <span class="tenue">Quando un ritocco di un video o di una foto live è pronto, arriva qui.</span></p>
+        <a class="tasto-comando" href="/ritocco">Torna alla coda</a>
+    </div>
+    {% else %}
+
+    {% if scelta.file|length > 1 %}
+    <nav class="in-fila rr-file" aria-label="Le parti della foto live">
+        {% for voce in scelta.file %}
+        <a class="pillola {{ 'piena' if voce.qui }}" href="/ritocco/rivedi?lavoro={{ scelta.id }}&amp;file={{ voce.id }}"
+           {% if voce.qui %}aria-current="true"{% endif %}>{% if voce.genere == 'video' %}Il video{% if voce.durata %} &middot; {{ voce.durata }}{% endif %}{% else %}La foto{% endif %}</a>
+        {% endfor %}
+        <span class="minuscolo tenue">Si tengono o si scartano insieme.</span>
+    </nav>
+    {% endif %}
+
+    {% if scelta.guasto %}
+    <div class="avviso forte" role="alert">
+        <span>{{ scelta.guasto }}</span>
+    </div>
+    {% endif %}
+
+    {% if not scelta.ci_sono %}
+    <div class="avviso forte" role="alert">
+        <span>
+            Uno dei due file non è più dov'era, e questo ritocco non si può tenere.
+            Scartalo: lo scatto resta com'era.
+        </span>
+    </div>
+    {% elif scelta.mancano_copie %}
+    <div class="carta rv-copie" id="riquadro-copie">
+        <div class="rv-copie-t">
+            <span class="rv-copie-icona">{{ icona('video', 20) }}</span>
+            <div>
+                <h2>Preparo una copia da guardare{% call spiega("Perché") %}
+                    <p>Questo video è in un formato che la finestra del programma
+                    non sa far partire, come gli HEVC dell'iPhone. Il computer ne
+                    prepara una copia per il prima e una per il dopo, alla stessa
+                    misura, così li confronti bene.</p>
+                    <p>Le copie stanno nella cache dell'archivio, non nella cartella
+                    delle foto, e si cancellano quando decidi.</p>
+                {% endcall %}</h2>
+                <span class="minuscolo tenue">La finestra non sa far partire questo video: il computer ne prepara una copia, solo per guardarla.</span>
+            </div>
+            <button class="tasto-comando principale" type="button" id="fai-copie">Prepara la copia</button>
+        </div>
+        <span class="barretta" id="avanzamento-copie" aria-hidden="true" hidden><span id="fatto-copie" style="width:0%"></span></span>
+        <p class="minuscolo tenue" id="righe-copie"></p>
+    </div>
+    {% else %}
+
+    {% set video = scelta.genere == 'video' %}
+    <div class="rivedi-due" id="rivedi-due" style="--proporzione: {{ scelta.proporzione }}">
+        <figure class="rivedi-lato" data-lato="prima">
+            <div class="rivedi-quadro">
+                {% if video %}
+                <video preload="auto" playsinline
+                       src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/prima"></video>
+                {% else %}
+                <img src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/prima"
+                     alt="Com'era" draggable="false">
+                {% endif %}
+            </div>
+            <figcaption>
+                <span class="etichetta-rivedi">Prima</span>
+                <span class="etichetta-rivedi" data-audio-qui hidden>audio</span>
+            </figcaption>
+        </figure>
+        <figure class="rivedi-lato" data-lato="dopo">
+            <div class="rivedi-quadro">
+                {% if video %}
+                <video preload="auto" playsinline muted
+                       src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/dopo"></video>
+                {% else %}
+                <img src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/dopo"
+                     alt="Com'è venuta" draggable="false">
+                {% endif %}
+            </div>
+            <figcaption>
+                <span class="etichetta-rivedi">Dopo</span>
+                <span class="etichetta-rivedi" data-audio-qui hidden>audio</span>
+            </figcaption>
+        </figure>
+        <div class="rivedi-riga" hidden>
+            <span class="rivedi-maniglia" role="slider" tabindex="0" aria-valuemin="0"
+                  aria-valuemax="100" aria-valuenow="50"
+                  aria-label="Dove passa la riga fra prima e dopo"></span>
+        </div>
+    </div>
+
+    <div class="rivedi-comandi">
+        <span class="in-fila" role="group" aria-label="Come metterle">
+            <button class="pillola piena" type="button" data-modo="affiancate" aria-pressed="true">Affiancate</button>
+            <button class="pillola" type="button" data-modo="tendina" aria-pressed="false">Tendina</button>
+        </span>
+        <span class="rv-zoom">
+            <button class="tasto-comando nudo piccolo" type="button" data-zoom="meno"
+                    aria-label="Rimpicciolisci">&minus;</button>
+            <span class="minuscolo numeri quanto-zoom" id="quanto-zoom">intera</span>
+            <button class="tasto-comando nudo piccolo" type="button" data-zoom="piu"
+                    aria-label="Ingrandisci">+</button>
+            <button class="tasto-comando nudo piccolo" type="button" data-zoom="intera">Intera</button>
+        </span>
+        {% if video %}
+        <div class="rivedi-video">
+            <button class="tasto-comando" type="button" id="suona"
+                    aria-label="Fai partire">
+                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" data-icona="suona">
+                    <path d="M7 4.5v15l12-7.5z" fill="currentColor"></path></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" data-icona="pausa" hidden>
+                    <rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor"></rect>
+                    <rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor"></rect></svg>
+            </button>
+            <input class="tempo-rivedi" id="tempo" type="range" min="0" max="1"
+                   step="0.01" value="0" aria-label="Punto del video">
+            <span class="minuscolo numeri" id="quando">0:00</span>
+            <span class="in-fila">
+                <span class="minuscolo tenue">Audio da</span>
+                <button class="pillola piena" type="button" data-audio="prima">prima</button>
+                <button class="pillola" type="button" data-audio="dopo">dopo</button>
+            </span>
+        </div>
+        {% endif %}
+        <span class="minuscolo tenue spinge">
+            <span data-spiega-tendina hidden>Trascina la riga: a sinistra com'era, a destra com'è {{ 'venuto' if video else 'venuta' }}. </span>rotella per ingrandire, trascina per spostarti
+        </span>
+    </div>
+    {% endif %}
+
+    {% if scelta.parti %}
+    <ul class="rr-parti" aria-label="Cosa cambia">
+        {% for parte in scelta.parti %}
+        <li>{% if parte.si_toglie %}<span class="bollino">si toglie</span>{% else %}{{ icona('spunta', 13) }}{% endif %}
+            <b>{{ parte.titolo }}</b>{% if parte.dettaglio %} <span class="tenue">&middot; {{ parte.dettaglio }}</span>{% endif %}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% set fine = scelta.finale %}
+    <div class="rivedi-decidi">
+        {% if scelta.rifatto %}
+        <span class="minuscolo tenue numeri">Rifatto {{ "1 volta" if scelta.rifatto == 1 else scelta.rifatto|numero ~ " volte" }}</span>
+        {% endif %}
+        <button class="tasto-comando spinge" type="button" data-decidi="rifiuta">{{ icona('x', 15) }} No, scarta{{ 'l' ~ fine }} <kbd>R</kbd></button>
+        <button class="tasto-comando principale" type="button" data-decidi="approva" data-tasto-a
+                {% if not scelta.ci_sono %}disabled{% endif %}>{{ icona('spunta', 15) }} Sì, tieni{{ 'l' ~ fine }} <kbd>A</kbd></button>
+    </div>
+    <p class="minuscolo tenue rr-dopo">Se lo tieni, lo scatto vero va in &laquo;Originali&raquo; e il ritocco si toglie quando vuoi dal pannello &laquo;i&raquo;.</p>
+
+    {% endif %}
+    <p class="esito-rivedi" id="esito-rivedi" aria-live="polite"></p>
+</div>
+</main>
+</div>
+
+<script type="application/json" id="dati-rivedi">{{ dati|safe }}</script>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/ritocco_rivedi.js"></script>
+{% endblock %}

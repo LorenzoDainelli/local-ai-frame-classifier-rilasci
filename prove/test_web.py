@@ -248,7 +248,7 @@ def test_la_barra_ha_quattro_gruppi_e_niente_tendine(cliente):
     voci = re.findall(r'<span class="voce-nome">([^<]+)</span>', dentro)
     assert voci == ["Galleria", "Persone", "Luoghi", "Tempo e mappa", "Aggiungi scatti",
                     "Intelligenza artificiale", "Da sistemare", "Etichetta",
-                    "Miglioramento", "Albero dei nodi", "Stato", "Dispositivi"], voci
+                    "Miglioramento", "Ritocco", "Albero dei nodi", "Stato", "Dispositivi"], voci
     assert "<details" not in dentro
 
 

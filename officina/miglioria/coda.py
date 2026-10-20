@@ -34,6 +34,8 @@ class Esito:
     non_adatti: list[str] = field(default_factory=list)
     assenti: list[str] = field(default_factory=list)
     ritoccati: int = 0
+    con_ritocchi: int = 0
+    lasciati: int = 0
 
     def a_parole(self) -> str:
         pezzi = []
@@ -49,8 +51,16 @@ class Esito:
             pezzi.append(f"{len(self.non_adatti)} in un formato che non si migliora")
         if self.assenti:
             pezzi.append(f"{len(self.assenti)} non sono sul disco")
+        if self.con_ritocchi:
+            pezzi.append("1 ritoccato: il pixelato si rifà sopra quando lo tieni"
+                         if self.con_ritocchi == 1 else
+                         f"{self.con_ritocchi} ritoccati: il pixelato si rifà sopra quando li "
+                         "tieni")
+        if self.lasciati:
+            pezzi.append(f"{self.lasciati} ritoccati lasciati come sono")
         if self.ritoccati:
-            pezzi.append(f"{self.ritoccati} ritoccati: togli prima i ritocchi")
+            pezzi.append("1 ritoccato aspetta che tu dica sì" if self.ritoccati == 1 else
+                         f"{self.ritoccati} ritoccati aspettano che tu dica sì")
         return " · ".join(pezzi) if pezzi else "niente da mettere in coda"
 
 
@@ -71,29 +81,56 @@ def file_da_guardare(connessione: sqlite3.Connection,
             if riga["ruolo"] in ("principale", "movimento")]
 
 
-def metti(connessione: sqlite3.Connection, scatti: list[int]) -> Esito:
+def _gia(connessione: sqlite3.Connection, file_id: int) -> sqlite3.Row | None:
+    return uno(connessione,
+               "SELECT stato FROM migliorie WHERE file_id = ? AND stato IN "
+               "('in_coda','in_lavoro','da_rivedere','in_scambio','approvata')",
+               file_id)
+
+
+def e_ritoccato(connessione: sqlite3.Connection, file_id: int) -> bool:
+    return uno(connessione, "SELECT 1 FROM ritoccate WHERE file_id = ?",
+               file_id) is not None
+
+
+def ritoccati_da_chiedere(connessione: sqlite3.Connection, scatti) -> int:
+    return sum(1 for scatto_id in scatti
+               if any(_gia(connessione, riga["id"]) is None
+                      and e_ritoccato(connessione, riga["id"])
+                      for riga in file_da_guardare(connessione, scatto_id)))
+
+
+def metti(connessione: sqlite3.Connection, scatti: list[int],
+          ritoccati: bool | None = None) -> Esito:
     esito = Esito()
-    for scatto_id in dict.fromkeys(int(s) for s in scatti):
-        for riga in file_da_guardare(connessione, scatto_id):
+    scelti = list(dict.fromkeys(int(s) for s in scatti))
+    if ritoccati is None:
+        esito.ritoccati = ritoccati_da_chiedere(connessione, scelti)
+        if esito.ritoccati:
+            return esito
+    for scatto_id in scelti:
+        righe = file_da_guardare(connessione, scatto_id)
+        ritoccato = any(_gia(connessione, riga["id"]) is None
+                        and e_ritoccato(connessione, riga["id"]) for riga in righe)
+        if ritoccato and not ritoccati:
+            esito.lasciati += 1
+            continue
+        messi = esito.messi
+        for riga in righe:
             _metti_uno(connessione, riga, esito)
+        if ritoccato and esito.messi > messi:
+            esito.con_ritocchi += 1
     return esito
 
 
 def _metti_uno(connessione: sqlite3.Connection, riga: sqlite3.Row,
                esito: Esito) -> None:
-    gia = uno(connessione,
-              "SELECT stato FROM migliorie WHERE file_id = ? AND stato IN "
-              "('in_coda','in_lavoro','da_rivedere','in_scambio','approvata')",
-              riga["id"])
+    gia = _gia(connessione, riga["id"])
     if gia is not None:
         if gia["stato"] == APPROVATA:
             esito.gia_migliorati += 1
         else:
             esito.gia_in_coda += 1
-        return
-
-    if uno(connessione, "SELECT 1 FROM ritoccate WHERE file_id = ?", riga["id"]):
-        esito.ritoccati += 1
         return
 
     percorso = file_media.percorso_migliore(connessione, riga["id"])

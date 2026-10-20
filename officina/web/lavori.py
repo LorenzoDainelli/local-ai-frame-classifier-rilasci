@@ -18,7 +18,8 @@ GUASTO_IMPREVISTO = (
     "previsto. È un difetto del programma.")
 
 
-NOMI_NEL_TURNO = {"miglioramento": "il miglioramento", "ritocco": "lo strumento Ritocca"}
+NOMI_NEL_TURNO = {"miglioramento": "il miglioramento", "ritocco": "lo strumento Ritocca",
+                  "ritocchi": "la coda del ritocco"}
 
 
 class TurnoDellaScheda:
@@ -77,6 +78,14 @@ class TurnoDellaScheda:
             if self._chi is lavoro:
                 self._chi = None
             self._cambiato.notify_all()
+
+    def passa(self, da: Lavoro, a: Lavoro) -> bool:
+        with self._cambiato:
+            if self._chi is not da:
+                return False
+            self._chi = a
+            self._cambiato.notify_all()
+            return True
 
     def rinuncia(self, nome: str) -> None:
         with self._cambiato:

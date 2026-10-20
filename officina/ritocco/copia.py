@@ -27,6 +27,9 @@ MIGLIORATA = "migliorata"
 CARTELLA = ".ritocchi"
 PREFISSO = "ritocco"
 
+CAMBIATO = ("Lo scatto non è più quello che c'è in archivio: non lo ritocco. Nessun file "
+            "è stato toccato.")
+
 _UNO_ALLA_VOLTA = threading.RLock()
 
 
@@ -92,10 +95,16 @@ def disegna(immagine: Image.Image, ritocchi) -> Image.Image:
     return immagine
 
 
+def nome_in_attesa(file_id: int, copia: Path, lavoro_id: int | None = None) -> str:
+    if lavoro_id is None:
+        return f"{PREFISSO}-{int(file_id)}-{copia.name}"
+    return f"{PREFISSO}-{int(file_id)}-{int(lavoro_id)}-{copia.name}"
+
+
 def _prepara(file_id: int, sorgente: Path, copia: Path, formato: str, ritocchi,
-             dove: Path) -> Path:
+             dove: Path, lavoro_id: int | None = None) -> Path:
     attesa.prepara(dove)
-    pronta = dove / f"{PREFISSO}-{int(file_id)}-{copia.name}"
+    pronta = dove / nome_in_attesa(file_id, copia, lavoro_id)
     parziale = pronta.with_name(pronta.name + attesa.PARZIALE)
     for vecchio in (pronta, parziale):
         if vecchio.is_file() and attesa.e_dentro(vecchio):
@@ -160,8 +169,7 @@ def _rifai(archivio, file_id: int) -> Path | None:
         raise RitoccoFermato("Questo formato non si può ritoccare: lo scatto non è "
                              "stato toccato.") from errore
     if not sorgente.is_file() or impronta.del_file(sorgente) != impronta_base:
-        raise RitoccoFermato("Lo scatto non è più quello che c'è in archivio: non lo "
-                             "ritocco. Nessun file è stato toccato.")
+        raise RitoccoFermato(CAMBIATO)
 
     with archivio.lettura() as connessione:
         dove = attesa.cartella(connessione, copia)
@@ -338,11 +346,14 @@ def _finisci_il_ritorno(archivio, riga: sqlite3.Row) -> Path:
 
 
 def _togli_la_preparazione(riga: sqlite3.Row) -> None:
-    if not riga["in_preparazione"]:
-        return
-    pronta = Path(riga["in_preparazione"])
-    if pronta.is_file() and attesa.e_dentro(pronta) and pronta.name.startswith(PREFISSO):
-        pronta.unlink()
+    if riga["in_preparazione"]:
+        butta(Path(riga["in_preparazione"]))
+
+
+def butta(pronta: Path) -> None:
+    for file in (pronta, pronta.with_name(pronta.name + attesa.PARZIALE)):
+        if file.is_file() and attesa.e_dentro(file) and file.name.startswith(PREFISSO):
+            file.unlink()
 
 
 def _annulla(archivio, riga: sqlite3.Row) -> None:
@@ -434,6 +445,96 @@ def togli(archivio, ritocco_id: int) -> Path | None:
                 with archivio.scrittura() as connessione:
                     elenco.segna(connessione, ritocco_id, elenco.FATTO, tolto_il=None)
             raise
+
+
+@dataclass
+class Partenza:
+
+    sorgente: Path
+    impronta_base: str
+    copia: Path
+
+
+def partenza(archivio, file_id: int) -> Partenza:
+    with _UNO_ALLA_VOLTA:
+        _prima_finisci(archivio, file_id)
+        with archivio.lettura() as connessione:
+            riga = ritoccata(connessione, file_id)
+            base = base_di_adesso(connessione, file_id) if riga is None else None
+    if riga is not None:
+        return Partenza(Path(riga["percorso_base"]), riga["impronta_base"],
+                        Path(riga["percorso_copia"]))
+    if base is None:
+        raise RitoccoFermato("Lo scatto non si trova sul disco: non lo ritocco.")
+    return Partenza(base.percorso, base.impronta, base.percorso)
+
+
+def prepara_per_la_coda(archivio, file_id: int, lavoro_id: int, ritocchi,
+                        da: Partenza) -> Path:
+    try:
+        formato = metadati.formato_di(da.copia)
+    except ValueError as errore:
+        raise RitoccoFermato("Questo formato non si può ritoccare: lo scatto non è "
+                             "stato toccato.") from errore
+    if not da.sorgente.is_file() or impronta.del_file(da.sorgente) != da.impronta_base:
+        raise RitoccoFermato(CAMBIATO)
+    with archivio.lettura() as connessione:
+        dove = attesa.cartella(connessione, da.copia)
+    return _prepara(file_id, da.sorgente, da.copia, formato, ritocchi, dove, lavoro_id)
+
+
+def scambia(archivio, file_id: int, pronta: Path, impronta_pronta: str,
+            impronta_base: str) -> Path:
+    with _UNO_ALLA_VOLTA:
+        _prima_finisci(archivio, file_id)
+        with archivio.lettura() as connessione:
+            riga = ritoccata(connessione, file_id)
+            base = base_di_adesso(connessione, file_id) if riga is None else None
+        if riga is not None and riga["impronta_copia"] == impronta_pronta:
+            butta(pronta)
+            return Path(riga["percorso_copia"])
+        if not pronta.is_file() or impronta.del_file(pronta) != impronta_pronta:
+            raise RitoccoFermato("La copia ritoccata che aspettava di essere approvata è "
+                                 "sparita o è cambiata: va rifatta. Lo scatto non è stato "
+                                 "toccato.")
+        if riga is None:
+            if base is None:
+                raise RitoccoFermato("Lo scatto non si trova sul disco: non lo ritocco.")
+            if base.impronta != impronta_base:
+                raise RitoccoFermato(CAMBIATO)
+            verso_la_base = dove_va_la_base(base)
+            if verso_la_base.exists():
+                raise RitoccoFermato(
+                    "In «Originali» c'è già un file con lo stesso nome: non lo copro. "
+                    "Spostalo o rinominalo e riprova.")
+            with archivio.scrittura() as connessione:
+                connessione.execute(
+                    "INSERT INTO ritoccate (file_id, stato, percorso_copia, percorso_base, "
+                    "impronta_base, base_e, miglioria_id, in_preparazione, impronta_nuova) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    (file_id, IN_SCAMBIO, str(base.percorso), str(verso_la_base),
+                     impronta_base, base.e, base.miglioria_id, str(pronta),
+                     impronta_pronta))
+        else:
+            if riga["impronta_base"] != impronta_base:
+                raise RitoccoFermato(CAMBIATO)
+            with archivio.scrittura() as connessione:
+                connessione.execute(
+                    "UPDATE ritoccate SET stato = ?, in_preparazione = ?, "
+                    "impronta_nuova = ?, guasto = NULL WHERE file_id = ?",
+                    (IN_SCAMBIO, str(pronta), impronta_pronta, file_id))
+        registro.evento("ritocco.scambio_inizio", file=file_id)
+        return porta_a_termine(archivio, file_id)
+
+
+def torna(archivio, file_id: int) -> Path | None:
+    with _UNO_ALLA_VOLTA:
+        _prima_finisci(archivio, file_id)
+        with archivio.lettura() as connessione:
+            riga = ritoccata(connessione, file_id)
+        if riga is None:
+            return None
+        return _torna(archivio, file_id)
 
 
 def ripara(archivio) -> dict:

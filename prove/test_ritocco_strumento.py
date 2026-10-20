@@ -215,7 +215,7 @@ def test_pronto_da_i_volti_allargati_e_i_contorni(cliente, importato):
     file_id = _file_di(importato, "piccola.jpg")
     vuoto = cliente.get(f"/api/ritocco/{file_id}/pronto").json()
     assert vuoto == {"lato": strumento.LATO_DI_LAVORO, "massimo": strumento.PEZZI_AL_MASSIMO,
-                     "corpi": [], "volti": []}
+                     "corpi": [], "volti": [], "live": None}
     volto_id = _metti_un_volto(importato, file_id)
     corpo_id = _metti_un_corpo(importato, file_id, volto_id)
     dati = cliente.get(f"/api/ritocco/{file_id}/pronto").json()
@@ -230,22 +230,20 @@ def test_pronto_da_i_volti_allargati_e_i_contorni(cliente, importato):
         assert disegnata.size == (6, 6)
 
 
-def test_video_e_live_non_si_ritoccano_ancora(cliente, importato, cartella):
+def test_video_e_live_vanno_allo_strumento_dei_video(cliente, importato, cartella):
     foto_id, video_id = _con_una_live(importato, cartella)
     risposta = cliente.get(f"/api/ritocco/{video_id}/pronto", headers=JSON)
     assert risposta.status_code == 400
-    assert risposta.json()["messaggio"] == ritocco_strade.NON_ANCORA
+    assert risposta.json()["messaggio"] == ritocco_strade.NEL_VIDEO
+    assert cliente.get(f"/api/ritocco/{foto_id}/pronto").json()["live"] is None
     with importato.scrittura() as connessione:
         file_media.collega_a_scatto(connessione, video_id, _scatto_di(importato, foto_id),
                                     "movimento")
-    for strada in ("pronto", "salva"):
-        if strada == "pronto":
-            risposta = cliente.get(f"/api/ritocco/{foto_id}/pronto", headers=JSON)
-        else:
-            risposta = cliente.post(f"/api/ritocco/{foto_id}/salva", headers=JSON, json={
-                "larghezza": LARGA, "altezza": ALTA, "pezzi": [_pezzo(_maschera(ZONA_A))]})
-        assert risposta.status_code == 400
-        assert risposta.json()["messaggio"] == ritocco_strade.NON_ANCORA
+    assert cliente.get(f"/api/ritocco/{foto_id}/pronto").json()["live"] == {"video": video_id}
+    risposta = cliente.post(f"/api/ritocco/{foto_id}/salva", headers=JSON, json={
+        "larghezza": LARGA, "altezza": ALTA, "pezzi": [_pezzo(_maschera(ZONA_A))]})
+    assert risposta.status_code == 400
+    assert risposta.json()["messaggio"] == ritocco_strade.LIVE_INSIEME
     assert _ritocchi(importato, foto_id) == []
 
 
@@ -384,18 +382,24 @@ def test_nella_foto_aperta_c_e_il_tasto_ritocca(cliente, importato, cartella):
     tasto = pagina[pagina.index("data-apri-ritocca"):]
     tasto = tasto[:tasto.index("</button>")]
     assert "disabled" not in tasto and f'data-file="{foto_id}"' in tasto
+    assert 'data-video="1"' not in tasto
     video = cliente.get(f"/scatto/{_scatto_di(importato, video_id)}").text
+    assert 'id="ritocca-video"' in video
     tasto = video[video.index("data-apri-ritocca"):]
-    assert "disabled" in tasto[:tasto.index("</button>")]
+    tasto = tasto[:tasto.index("</button>")]
+    assert "disabled" not in tasto and 'data-video="1"' in tasto
+    assert f'data-file="{video_id}"' in tasto
     with importato.scrittura() as connessione:
         file_media.collega_a_scatto(connessione, video_id, _scatto_di(importato, foto_id),
                                     "movimento")
     live = cliente.get(f"/scatto/{_scatto_di(importato, foto_id)}").text
     tasto = live[live.index("data-apri-ritocca"):]
     tasto = tasto[:tasto.index("</button>")]
-    assert "disabled" in tasto and "arriva presto" in tasto
+    assert "disabled" not in tasto and f'data-file="{foto_id}"' in tasto
+    assert 'data-video="1"' not in tasto
 
 
 def test_in_etichetta_c_e_il_tasto_ritocca(cliente):
     pagina = cliente.get("/officina").text
     assert 'id="b-ritocca"' in pagina and '<dialog class="ritocca" id="ritocca"' in pagina
+    assert '<dialog class="ritocca rtv" id="ritocca-video"' in pagina

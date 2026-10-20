@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from officina.archivio.database import tutti, uno
-from officina.miglioria import attesa, coda, da_guardare, fedelta, misura, sfida
+from officina.miglioria import attesa, coda, da_guardare, fedelta, misura, ricomincia, sfida
 from officina.modello import scatti
 from officina.web.lavori import Lavoro
 
@@ -269,11 +269,12 @@ def la_sfida(archivio, pronti: bool) -> dict | None:
         salto = sfida.ultimo_salto(connessione)
         in_pausa = sfida.in_pausa(connessione)
         da_riprendere = len(sfida.da_riprendere(connessione)) if pronti else 0
+        da_ricominciare = ricomincia.quante(connessione) if pronti else 0
     if chiusa is not None or not (pronti or numeri["fatte"]):
         return None
     return {**numeri, "si_puo_chiudere": chiudibile, "salto": il_salto(salto),
             "in_pausa": in_pausa, "da_riprendere": da_riprendere,
-            "pausa_dopo": sfida.PAUSA_DOPO,
+            "pausa_dopo": sfida.PAUSA_DOPO, "da_ricominciare": da_ricominciare,
             "si_riprende": bool(da_riprendere) and not in_pausa,
             "percento": round(100 * numeri["votate"] / sfida.QUANTE)}
 

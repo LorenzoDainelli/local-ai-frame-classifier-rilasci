@@ -46,6 +46,7 @@ class Filmato:
         self.percorso = Path(percorso)
         self._quadri: list[bytes] = []
         self.istanti: list[int] = []
+        self.inizio = 0
         self.larghezza = 0
         self.altezza = 0
         self.lato = lato
@@ -95,5 +96,5 @@ class Filmato:
         if not self._quadri:
             raise ErroreOfficina(SENZA_FOTOGRAMMI, codice="ritocco_video_vuoto")
         if self.istanti and self.istanti[0]:
-            primo = self.istanti[0]
-            self.istanti = [istante - primo for istante in self.istanti]
+            self.inizio = self.istanti[0]
+            self.istanti = [istante - self.inizio for istante in self.istanti]

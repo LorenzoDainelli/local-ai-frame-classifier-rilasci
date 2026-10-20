@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Ritocco — Local AI Frame Classifier{% endblock %}
+
+{% macro comando() %}
+{% if lavoro.sta_lavorando %}
+<form method="post" action="/ritocco/ferma">
+    <button class="tasto-comando piccolo" type="submit">Ferma</button>
+</form>
+{% else %}
+<form method="post" action="/ritocco/avvia">
+    <button class="tasto-comando accento piccolo" type="submit" {% if not conti.in_coda %}disabled{% endif %}>Avvia</button>
+</form>
+{% endif %}
+{% endmacro %}
+
+{% macro nome(riga) %}{% if riga.scatto_id %}<a href="/scatto/{{ riga.scatto_id }}">{{ riga.nome }}</a>{% else %}<b>{{ riga.nome }}</b>{% endif %}{% endmacro %}
+
+{% macro miniatura(riga) %}{% if riga.file_id %}<img class="miniatura-coda" src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">{% else %}<span class="miniatura-coda" aria-hidden="true"></span>{% endif %}{% endmacro %}
+
+{% macro riga_in_coda(riga) %}
+<li data-lavoro="{{ riga.id }}">
+    {{ miniatura(riga) }}
+    <span class="nome">
+        {{ nome(riga) }}
+        <span class="minuscolo tenue numeri">{% if riga.stato == 'in_lavoro' %}lo sto facendo{% if riga.dettaglio %} &middot; {% endif %}{% endif %}{{ riga.dettaglio }}</span>
+    </span>
+    {% if riga.stato == 'in_coda' %}
+    <form method="post" action="/ritocco/{{ riga.id }}/togli">
+        <button class="tasto-comando nudo piccolo" type="submit">Togli</button>
+    </form>
+    {% endif %}
+</li>
+{% endmacro %}
+
+{% macro riga_non_riuscita(riga) %}
+<li data-lavoro="{{ riga.id }}">
+    {{ miniatura(riga) }}
+    <span class="nome">{{ nome(riga) }}
+        <span class="minuscolo tenue">{{ riga.guasto }}</span></span>
+    <form method="post" action="/ritocco/{{ riga.id }}/lascia">
+        <button class="tasto-comando nudo piccolo" type="submit">Lascia stare</button>
+    </form>
+    <form method="post" action="/ritocco/{{ riga.id }}/rimetti">
+        <button class="tasto-comando piccolo" type="submit">Rimetti in coda</button>
+    </form>
+</li>
+{% endmacro %}
+
+{% macro riga_ferma(riga) %}
+<li data-lavoro="{{ riga.id }}">
+    {{ miniatura(riga) }}
+    <span class="nome">{{ nome(riga) }}
+        <span class="minuscolo tenue">{{ riga.guasto or "in attesa di finire" }}</span></span>
+</li>
+{% endmacro %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-miglioramento pagina-ritocco">
+
+    <div class="mg-testa">
+        <div>
+            <h1 class="titolo-pagina">Ritocco{% call spiega("Cosa fa, e cosa non tocca") %}
+                <p>Qui aspettano i ritocchi dei video e delle foto live: le parti
+                che hai scelto con &laquo;Ritocca&raquo; e messo in coda. L'IA
+                segue la parte fotogramma per fotogramma e la pixela, qui sul
+                computer.</p>
+                <p><b>Lo scatto vero non si tocca.</b> La copia ritoccata aspetta
+                finché non la rivedi: se la tieni, si vede quella e lo scatto vero
+                va in &laquo;Originali&raquo;; se la scarti, si cancella e lo
+                scatto resta com'era.</p>
+                <p>Le foto da sole si pixelano subito, senza passare di qui.</p>
+            {% endcall %}</h1>
+            <p class="sottotitolo">Pixela video e foto live, qui sul computer. <b>Niente cambia</b> finché non dici di sì.</p>
+        </div>
+    </div>
+
+    {% if lavoro.guasto %}
+    <p class="avviso" role="alert">{{ lavoro.guasto }}</p>
+    {% endif %}
+
+    {% if conti.da_rivedere %}
+    <div class="carta mg-rivedi" data-da-rivedere>
+        <div class="mg-anteprime">
+            {% for riga in da_rivedere %}{% if riga.file_id %}<img src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">{% endif %}{% endfor %}
+        </div>
+        <div>
+            <h2>{{ conti.da_rivedere|numero }} da rivedere</h2>
+            <p class="piccolo attenuato">Pronti, in una cartella nascosta sullo stesso disco. Guardi prima e dopo e scegli se tenere il ritocco: <kbd>A</kbd> tieni, <kbd>R</kbd> scarta.</p>
+        </div>
+        <a class="tasto-comando accento" href="/ritocco/rivedi">Rivedi</a>
+    </div>
+    {% else %}
+    <div class="carta mg-niente">
+        <span class="bollino bene">Niente da rivedere</span>
+        <span class="piccolo tenue">Quando un ritocco è pronto, lo trovi qui per dire sì o no.</span>
+    </div>
+    {% endif %}
+
+    <div class="carta mg-motore" id="riquadro-ritocco">
+        <span class="bollino {{ 'bene' if lavoro.sta_lavorando }}">{{ "Al lavoro" if lavoro.sta_lavorando else "Fermo" }}</span>
+        <span class="mg-motore-cosa">{% if cosa_fa.nome %}<b>{{ cosa_fa.nome }}</b>{% else %}{{ cosa_fa.detto }}{% endif %}
+            <span class="minuscolo tenue numeri" id="numeri-ritocco"></span>
+            <span class="minuscolo tenue" id="righe-ritocco"></span>
+        </span>
+        {% if lavoro.sta_lavorando %}
+        <span class="barretta" aria-hidden="true"><span id="fatto-ritocco" style="width:{{ lavoro.percento or 0 }}%"></span></span>
+        {% endif %}
+        <span class="piccolo tenue numeri">{{ conti.in_coda|numero }} in coda</span>
+        {{ comando() }}
+    </div>
+
+    <div class="mg-tre">
+        <section class="carta mg-carta" data-in-coda>
+            <h2>In coda <span class="tenue numeri">{{ (conti.in_coda + conti.in_lavoro)|numero }}</span></h2>
+            {% if in_coda %}
+            <ul class="righe-coda">
+                {% for riga in in_coda[:5] %}{{ riga_in_coda(riga) }}{% endfor %}
+            </ul>
+            {% if in_coda|length > 5 %}
+            <details class="mg-tutte">
+                <summary class="tasto-comando nudo piccolo">Mostra tutti</summary>
+                <ul class="righe-coda">
+                    {% for riga in in_coda[5:] %}{{ riga_in_coda(riga) }}{% endfor %}
+                </ul>
+                {% if conti.in_coda + conti.in_lavoro > in_coda|length %}
+                <p class="minuscolo tenue">e altri {{ (conti.in_coda + conti.in_lavoro - in_coda|length)|numero }}</p>
+                {% endif %}
+            </details>
+            {% endif %}
+            {% else %}
+            <p class="piccolo tenue">Vuota.</p>
+            {% endif %}
+        </section>
+
+        <section class="carta mg-carta" data-non-riusciti>
+            <h2>Non riusciti <span class="tenue numeri">{{ quanti_non_riusciti|numero }}</span></h2>
+            {% if non_riusciti %}
+            <ul class="righe-coda">
+                {% for riga in non_riusciti %}{{ riga_non_riuscita(riga) }}{% endfor %}
+            </ul>
+            {% else %}
+            <p class="piccolo tenue">Nessuno.</p>
+            {% endif %}
+            {% if fermi %}
+            <h3 class="mg-sotto">Scambi fermi <span class="tenue numeri">{{ fermi|length }}</span>{% call spiega("Cosa vuol dire") %}
+                <p>Lo scambio fra lo scatto e la copia ritoccata si è fermato a
+                metà, di solito perché un file è sparito o è cambiato mentre lo si
+                spostava. Niente è perso: il programma riprova da solo alla
+                prossima partenza della coda, e dice qui cosa lo blocca.</p>
+            {% endcall %}</h3>
+            <ul class="righe-coda">
+                {% for riga in fermi %}{{ riga_ferma(riga) }}{% endfor %}
+            </ul>
+            {% else %}
+            <p class="minuscolo tenue">Scambi fermi: nessuno.</p>
+            {% endif %}
+        </section>
+    </div>
+</div>
+</main>
+</div>
+
+<script type="application/json" id="dati-ritocco">{{ dati|safe }}</script>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/ritocco_coda.js"></script>
+{% endblock %}

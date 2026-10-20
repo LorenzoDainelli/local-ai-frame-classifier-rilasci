@@ -638,18 +638,32 @@ function mostraPerche(voce) {
 
 const ritoccate = new Map();
 
+function fileSotto(elemento) {
+    const scatto = st.pezzo && st.pezzo.scatto;
+    if (!scatto || scatto.principale === null) return null;
+    return elemento === liveInCorso ? scatto.movimento : scatto.principale;
+}
+
 const sotto = vediSotto({
     tasto: $("b-sotto"),
-    immagine: () => { const media = $("media"); return media && media.tagName === "IMG" ? media : null; },
-    indirizzo: () => {
-        const scatto = st.pezzo && st.pezzo.scatto;
-        return scatto && scatto.principale !== null ? `/immagine/${scatto.principale}?lato=1600&sotto=1` : null;
+    media: () => liveInCorso || $("media"),
+    indirizzo: (elemento) => {
+        const file = fileSotto(elemento);
+        if (file === null) return null;
+        if (elemento.tagName === "VIDEO") return `/originale/${file}?sotto=1`;
+        if (st.pezzo.scatto.genere === "video") return `${elemento.getAttribute("src")}&sotto=1`;
+        return `/immagine/${file}?lato=1600&sotto=1`;
+    },
+    fotogramma: (elemento, istante) => {
+        const file = fileSotto(elemento);
+        return file === null ? null : `/fotogramma/${file}?istante=${istante}&lato=1600&sotto=1`;
     },
     attivo: () => {
         const scatto = st.pezzo && st.pezzo.scatto;
-        return Boolean(scatto && scatto.ritocchi && scatto.genere !== "video" && !qualcosaSopraLaPagina()
+        return Boolean(scatto && scatto.ritocchi && !qualcosaSopraLaPagina()
             && !document.querySelector(".et-finestrina"));
     },
+    spazio: () => !(st.pezzo && st.pezzo.scatto && st.pezzo.scatto.genere === "video"),
 });
 
 let giroDeiRitocchi = 0;
@@ -684,11 +698,12 @@ function ritoccoCambiato(fileId, quanti) {
 
 function statoDelRitocco(scatto) {
     const tasto = $("b-ritocca");
-    const siPuo = scatto.principale !== null && scatto.genere !== "video" && scatto.movimento === null;
+    const siPuo = scatto.principale !== null;
     tasto.disabled = !siPuo;
-    tasto.title = siPuo ? "Ritocca: pixela un volto, una persona o una parte"
-        : scatto.principale === null ? "Di questo scatto non c'è un file da ritoccare"
-        : "Per i video e le foto live arriva presto";
+    tasto.setAttribute("aria-controls", scatto.genere === "video" ? "ritocca-video" : "ritocca");
+    tasto.title = !siPuo ? "Di questo scatto non c'è un file da ritoccare"
+        : scatto.genere === "video" ? "Ritocca: pixela un volto, una persona o una parte del video"
+        : "Ritocca: pixela un volto, una persona o una parte";
 }
 
 function disegnaFoto(verso = 0) {
@@ -701,13 +716,17 @@ function disegnaFoto(verso = 0) {
     scorre.className = "et-scorre" + (verso > 0 ? " entra-d" : verso < 0 ? " entra-s" : "");
     scorre.innerHTML = "";
 
-    const ritocchi = scatto.genere === "video" ? 0 : scatto.ritocchi || 0;
+    const ritocchi = scatto.ritocchi || 0;
     const segno = $("segno");
     segno.hidden = scatto.genere === "foto" && scatto.movimento === null && !ritocchi;
-    segno.textContent = scatto.genere === "video" ? "Video"
+    segno.textContent = scatto.genere === "video" ? (ritocchi ? `Video ritoccato · ${ritocchi}` : "Video")
         : scatto.movimento !== null ? "Live · passa col mouse"
         : ritocchi ? `Ritoccata · ${ritocchi}` : "";
-    $("b-sotto").hidden = !ritocchi || scatto.principale === null;
+    const bottoneSotto = $("b-sotto");
+    bottoneSotto.hidden = !ritocchi || scatto.principale === null;
+    bottoneSotto.title = scatto.genere === "video"
+        ? "Tieni premuto per vedere il video vero allo stesso punto, poi torna la copia ritoccata"
+        : "Tieni premuto per vedere lo scatto vero, poi torna la copia ritoccata (anche Spazio)";
 
     if (scatto.principale === null) {
         scorre.innerHTML = '<p class="tenue piccolo">Di questo scatto non resta nessun file leggibile: le etichette però ci sono ancora.</p>';
@@ -776,6 +795,7 @@ function spegniLive() {
     if (liveInCorso) liveInCorso.remove();
     liveInCorso = null;
     st.live = false;
+    if (!sotto.tenuto()) sotto.spegni();
 }
 
 function disegnaVolti() {
@@ -1401,6 +1421,11 @@ $("b-ritocca").addEventListener("click", async () => {
     const scatto = st.pezzo && st.pezzo.scatto;
     if (!scatto || $("b-ritocca").disabled) return;
     const fileId = scatto.principale;
+    if (scatto.genere === "video") {
+        const { apriRitoccaVideo } = await import("/statici/js/ritocca_video.js");
+        apriRitoccaVideo(fileId);
+        return;
+    }
     const { apriRitocca } = await import("/statici/js/ritocca.js");
     apriRitocca(fileId, {
         numero: `scatto ${$("conta").textContent}`,

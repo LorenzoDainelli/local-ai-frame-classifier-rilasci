@@ -129,6 +129,7 @@ _DOVE_STA = {
     "elenchi": "officina",
     "doppioni": "officina",
     "miglioramento": "officina",
+    "ritocco": "officina",
     "senza-data": "officina",
     "albero": "archivio",
     "stato": "archivio",
@@ -169,6 +170,8 @@ def _conta_la_barra(connessione) -> dict:
         "senza_etichetta": etichette.quanti_senza_etichetta(connessione),
         "da_rivedere": quanti("SELECT count(*) AS q FROM migliorie "
                               "WHERE stato = 'da_rivedere'"),
+        "ritocchi_da_rivedere": quanti("SELECT count(*) AS q FROM ritocchi_lavori "
+                                       "WHERE stato = 'da_rivedere'"),
         "da_guardare": (non_importati + coppie + spariti + messi_da_parte
                         + scatti.conta(connessione, Filtro(senza_data=True))),
         "doppioni": doppioni_decisioni.il_conto(connessione)["restano"],
@@ -205,6 +208,8 @@ def barra_di_navigazione(qui: str, totale_scatti: int, conti: dict) -> list[dict
                chiama=True),
         stanza("/officina", "Etichetta", "etichetta", conti["senza_etichetta"]),
         stanza("/miglioramento", "Miglioramento", "migliora", conti["da_rivedere"] or None,
+               chiama=True),
+        stanza("/ritocco", "Ritocco", "quadretti", conti.get("ritocchi_da_rivedere") or None,
                chiama=True),
     ]
     archivio_stanze = [
@@ -259,7 +264,8 @@ DOVE_SI_PUO_TORNARE = (
     "/benvenuto/lavoro", "/benvenuto/pronto",
     "/impostazioni", "/impostazioni#c6", "/impostazioni#tasti",
     "/persone", "/stato", "/stato#salute", "/stato#misura",
-    "/sistemare", "/sistemare#doppioni", "/intelligenza", "/miglioramento", "/lavoro",
+    "/sistemare", "/sistemare#doppioni", "/intelligenza", "/miglioramento", "/ritocco",
+    "/lavoro",
 )
 
 

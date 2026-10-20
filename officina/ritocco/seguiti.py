@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import struct
 import zlib
 
 from officina.archivio.database import adesso, inserisci, tutti, uno
-from officina.ritocco import segui
+from officina.ritocco import maschere, segui
 
 DA_SEGUIRE = "da_seguire"
 IN_CODA = "in_coda"
@@ -45,6 +46,11 @@ def segna(connessione: sqlite3.Connection, seguito_id: int, stato: str, *,
         "UPDATE seguiti SET stato = ?, guasto = ?, dove = coalesce(?, dove), "
         "seguito_il = CASE WHEN ? = 'seguito' THEN ? ELSE seguito_il END WHERE id = ?",
         (stato, guasto, dove, stato, adesso(), seguito_id))
+
+
+def ferma_i_lasciati(connessione: sqlite3.Connection) -> int:
+    return connessione.execute("UPDATE seguiti SET stato = ? WHERE stato IN (?, ?)",
+                               (FERMATO, IN_CODA, IN_LAVORO)).rowcount
 
 
 def metti_scelta(connessione: sqlite3.Connection, seguito_id: int, fotogramma: int,
@@ -167,3 +173,56 @@ def come_sta(connessione: sqlite3.Connection, seguito_id: int) -> dict | None:
             "fatti": quanti_fatti(connessione, seguito_id),
             "scelte": sorted(scelte(connessione, seguito_id)),
             "presenze": presenze(connessione, seguito_id)}
+
+
+def maschere_fra(connessione: sqlite3.Connection, seguito_id: int, da: int,
+                 a: int) -> dict[int, bytes | None]:
+    fuori: dict[int, bytes | None] = {riga["fotogramma"]: riga["maschera"] for riga in tutti(
+        connessione,
+        "SELECT fotogramma, maschera FROM seguiti_fotogrammi WHERE seguito_id = ? "
+        "AND fotogramma BETWEEN ? AND ?", seguito_id, int(da), int(a))}
+    for riga in tutti(connessione,
+                      "SELECT fotogramma, maschera FROM seguiti_scelte WHERE seguito_id = ? "
+                      "AND fotogramma BETWEEN ? AND ?", seguito_id, int(da), int(a)):
+        fuori[riga["fotogramma"]] = riga["maschera"]
+    return fuori
+
+
+def e_una_bozza(connessione: sqlite3.Connection, seguito_id: int) -> bool:
+    return uno(connessione, "SELECT 1 AS c FROM ritocchi WHERE seguito_id = ? LIMIT 1",
+               seguito_id) is None
+
+
+def butta(connessione: sqlite3.Connection, seguito_id: int) -> bool:
+    return connessione.execute(
+        "DELETE FROM seguiti WHERE id = ? AND stato <> ? AND NOT EXISTS "
+        "(SELECT 1 FROM ritocchi WHERE seguito_id = seguiti.id)",
+        (seguito_id, IN_LAVORO)).rowcount > 0
+
+
+def bozze(connessione: sqlite3.Connection, file_id: int, impronta: str) -> list[int]:
+    return [riga["id"] for riga in tutti(
+        connessione,
+        "SELECT id FROM seguiti WHERE file_id = ? AND impronta = ? AND NOT EXISTS "
+        "(SELECT 1 FROM ritocchi WHERE seguito_id = seguiti.id) ORDER BY id",
+        file_id, impronta)]
+
+
+def misure(connessione: sqlite3.Connection, seguito_id: int) -> dict:
+    testa = struct.calcsize(maschere.TESTA)
+    larga = lato = 0
+    origine = None
+    for riga in tutti(
+            connessione,
+            "SELECT fotogramma, substr(maschera, 1, ?) AS testa FROM seguiti_fotogrammi "
+            "WHERE seguito_id = ? AND maschera IS NOT NULL UNION ALL "
+            "SELECT fotogramma, substr(maschera, 1, ?) AS testa FROM seguiti_scelte "
+            "WHERE seguito_id = ? ORDER BY fotogramma", testa, seguito_id, testa, seguito_id):
+        letto = maschere.riquadro(bytes(riga["testa"] or b""))
+        if letto is None or not letto[4] or not letto[5]:
+            continue
+        if origine is None:
+            origine = [letto[2], letto[3]]
+        larga = max(larga, letto[4])
+        lato = max(lato, min(letto[4], letto[5]))
+    return {"volto": larga, "altro": lato, "origine": origine}

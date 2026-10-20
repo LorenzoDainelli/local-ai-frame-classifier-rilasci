@@ -72,7 +72,7 @@ def test_ogni_tasto_sta_in_piedi(cliente, strada):
     dove = strada
     for pezzo in ("{scatto_id}", "{file_id}", "{nodo_id}", "{persona_id}",
                   "{volto_id}", "{coppia_id}", "{riferimento_id}",
-                  "{dispositivo_id}", "{telefono_id}", "{id}"):
+                  "{dispositivo_id}", "{telefono_id}", "{seguito_id}", "{id}"):
         dove = dove.replace(pezzo, "999999")
     if "{" in dove:
         pytest.skip(f"non so cosa mettere in {strada}")

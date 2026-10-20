@@ -2,6 +2,7 @@
 {% from "_ambito.html" import ambito %}
 {% from "_icone.html" import icona %}
 {% from "_ritocca.html" import finestra_ritocca %}
+{% from "_ritocca_video.html" import finestra_ritocca_video %}
 {% block titolo %}Etichetta — Local AI Frame Classifier{% endblock %}
 
 {% block corpo %}
@@ -130,6 +131,7 @@
 </div>
 
 {{ finestra_ritocca() }}
+{{ finestra_ritocca_video() }}
 </main>
 </div>
 {% endblock %}

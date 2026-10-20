@@ -14,7 +14,8 @@ from officina.corpi import rilevatore
 from officina.errori import ErroreOfficina
 from officina.immagini import consegna
 from officina.modello import file_media
-from officina.ritocco import copia, elenco, maschere, pixela, racconto, scelta, strumento
+from officina.ritocco import coda, copia, elenco, maschere, pixela, racconto, scelta, strumento
+from officina.web import coda_ritocco, rivedi_ritocco
 from officina.web import ritocco as ritocco_web
 
 strada = APIRouter()
@@ -28,12 +29,19 @@ NON_C_E = "Il file di questo scatto non si trova: non c'è niente da guardare."
 SCELTA_SBAGLIATA = "La scelta non si capisce: clicca sulla cosa e riprova."
 NIENTE = ("Qui non ho trovato niente da scegliere: prova a cliccare più al centro "
           "della cosa.")
-NON_ANCORA = ("Per i video e le foto live il ritocco arriva presto: per ora si ritoccano "
-              "le foto.")
+NEL_VIDEO = "I video si ritoccano nello strumento dei video: aprilo dal video."
+LIVE_INSIEME = ("Una foto live si ritocca insieme al suo video: vai avanti nello strumento "
+                "del video, poi mettila in coda.")
 NIENTE_DA_SALVARE = "Non hai scelto niente da ritoccare."
 NON_TORNA = ("Lo scatto è cambiato mentre lo ritoccavi: chiudi lo strumento e riaprilo, "
              "niente è stato toccato.")
 GIA_TOLTO = "Questo ritocco non c'è più: forse l'hai già tolto."
+TENUTO = ("Tenut{fine}: ora si vede col ritocco. Lo scatto vero resta in «Originali», e il "
+          "ritocco si toglie quando vuoi dal pannello «i».")
+SCARTATO = "Scartat{fine}: la copia è cancellata, e lo scatto resta com'era."
+RIMESSO = "Rimesso in coda: lo rifaccio da capo."
+
+QUANTI_IN_CODA = 500
 
 COSE = (elenco.VOLTO, elenco.PERSONA, elenco.OGGETTO)
 LIBRERIE = ("torch", "transformers")
@@ -96,8 +104,16 @@ def _si_ritocca(connessione, file_id: int):
     if riga is None:
         raise ErroreOfficina(NON_SI_SCEGLIE, codice="ritocco_non_si_sceglie")
     if riga["genere"] != "immagine":
-        raise ErroreOfficina(NON_ANCORA, codice="ritocco_non_ancora")
+        raise ErroreOfficina(NEL_VIDEO, codice="ritocco_nel_video")
     return riga
+
+
+def video_della_live(connessione, riga) -> int | None:
+    for altro in file_media.di_scatto(connessione, riga["scatto_id"]):
+        if altro["id"] != riga["id"] and altro["ruolo"] == "movimento" \
+                and altro["genere"] == "video":
+            return altro["id"]
+    return None
 
 
 def _volti_del_file(connessione, riga) -> dict[int, tuple[float, float, float, float]]:
@@ -121,8 +137,7 @@ def _pronto(file_id: int) -> dict:
         riga = _si_ritocca(connessione, file_id)
         volti = _volti_del_file(connessione, riga)
         corpi = _corpi_del_file(connessione, riga)
-    if copia.e_una_live(archivio, file_id):
-        raise ErroreOfficina(NON_ANCORA, codice="ritocco_non_ancora")
+        video = video_della_live(connessione, riga)
     fuori = []
     for corpo in corpi:
         png, riquadro = strumento.corpo_per_lo_strumento(
@@ -132,7 +147,8 @@ def _pronto(file_id: int) -> dict:
     return {"lato": strumento.LATO_DI_LAVORO, "massimo": strumento.PEZZI_AL_MASSIMO, "corpi": fuori,
             "volti": [{"id": volto_id, "riquadro": strumento.volto_allargato(riquadro),
                        "volto": [round(float(v), 5) for v in riquadro]}
-                      for volto_id, riquadro in volti.items()]}
+                      for volto_id, riquadro in volti.items()],
+            "live": {"video": video} if video is not None else None}
 
 
 def _numero(valore, piu_grande: int) -> int:
@@ -182,14 +198,12 @@ def leggi_i_pezzi(dati) -> tuple[int, int, list[dict]]:
     return larga, alta, letti
 
 
-def _salva(file_id: int, larga: int, alta: int, letti: list[dict]) -> dict:
-    archivio = accesso.aperto()
+def pezzi_della_foto(archivio, file_id: int, larga: int, alta: int,
+                     letti: list[dict]) -> list[dict | None]:
     with archivio.lettura() as connessione:
         riga = _si_ritocca(connessione, file_id)
         volti = _volti_del_file(connessione, riga)
         corpi = {corpo["id"]: corpo["volto_id"] for corpo in _corpi_del_file(connessione, riga)}
-    if copia.e_una_live(archivio, file_id):
-        raise ErroreOfficina(NON_ANCORA, codice="ritocco_non_ancora")
     percorso, _ = _da_guardare(file_id)
     base = strumento.misure_dritte(percorso)
     if base is None:
@@ -197,13 +211,14 @@ def _salva(file_id: int, larga: int, alta: int, letti: list[dict]) -> dict:
     if not strumento.stessa_forma(larga, alta, base):
         raise ErroreOfficina(NON_TORNA, codice="ritocco_non_torna")
     in_pixel = strumento.volti_in_pixel(volti, larga, alta)
-    nuovi = []
+    nuovi: list[dict | None] = []
     for letto in letti:
         try:
             maschera = strumento.dal_browser(letto["png"], larga, alta)
         except Exception:
             raise ErroreOfficina(SCELTA_SBAGLIATA, codice="ritocco_scelta_sbagliata") from None
         if not maschera.any():
+            nuovi.append(None)
             continue
         volto_id, corpo_id = letto["volto"], letto["corpo"]
         if (volto_id is not None and volto_id not in volti) or (
@@ -213,6 +228,15 @@ def _salva(file_id: int, larga: int, alta: int, letti: list[dict]) -> dict:
         nuovi.append(strumento.pezzo_per_la_copia(
             maschera, letto["cosa"], larga, alta, in_pixel, quadretto=letto["quadretto"],
             volto_id=volto_id, corpo_id=corpo_id, scelta=letto["scelta"], suo=suo))
+    return nuovi
+
+
+def _salva(file_id: int, larga: int, alta: int, letti: list[dict]) -> dict:
+    archivio = accesso.aperto()
+    if copia.e_una_live(archivio, file_id):
+        raise ErroreOfficina(LIVE_INSIEME, codice="ritocco_live_insieme")
+    nuovi = [pezzo for pezzo in pezzi_della_foto(archivio, file_id, larga, alta, letti)
+             if pezzo is not None]
     if not nuovi:
         raise ErroreOfficina(NIENTE_DA_SALVARE, codice="ritocco_niente")
     copia.metti(archivio, file_id, nuovi)
@@ -232,10 +256,53 @@ def _togli(ritocco_id: int) -> dict:
         ritocco = elenco.per_id(connessione, ritocco_id)
     if ritocco is None or ritocco["stato"] != elenco.FATTO:
         raise ErroreOfficina(GIA_TOLTO, codice="ritocco_gia_tolto")
-    copia.togli(archivio, ritocco_id)
+    lavoro_id = coda.togli(archivio, ritocco_id)
+    if lavoro_id is not None:
+        coda_ritocco.avvia(archivio)
     with archivio.lettura() as connessione:
         restano = racconto.di_file(connessione, ritocco["file_id"])
-    return {"fatto": True, "ritocchi": restano}
+    return {"fatto": True, "ritocchi": restano, "in_coda": lavoro_id is not None}
+
+
+def _la_coda() -> dict:
+    archivio = accesso.aperto()
+    ritoccatore = coda_ritocco.il_ritoccatore(archivio)
+    with archivio.lettura() as connessione:
+        conteggi = coda.conteggi(connessione)
+        righe = tutti(connessione,
+                      "SELECT * FROM ritocchi_lavori WHERE stato IN (?, ?, ?, ?) "
+                      "OR (stato = ? AND deciso_il IS NULL) ORDER BY id LIMIT ?",
+                      *coda.APERTI, coda.FALLITO, QUANTI_IN_CODA)
+        lavori = [coda.a_parole(connessione, riga) for riga in righe]
+    return {"lavoro": ritoccatore.come_va(), "conteggi": conteggi, "lavori": lavori}
+
+
+def _avvia() -> dict:
+    archivio = accesso.aperto()
+    coda_ritocco.avvia(archivio)
+    return _la_coda()
+
+
+def _ferma() -> dict:
+    coda_ritocco.ferma_dall_utente(accesso.aperto())
+    return _la_coda()
+
+
+def _decidi(lavoro_id: int, come: str) -> dict:
+    archivio = accesso.aperto()
+    fine = rivedi_ritocco.finale_del_lavoro(archivio, lavoro_id)
+    if come == "approva":
+        coda.approva(archivio, lavoro_id)
+        detto = TENUTO.format(fine=fine)
+    elif come == "rifiuta":
+        coda.rifiuta(archivio, lavoro_id)
+        detto = SCARTATO.format(fine=fine)
+    else:
+        coda.rimetti(archivio, lavoro_id)
+        coda_ritocco.avvia(archivio)
+        detto = RIMESSO
+    rivedi_ritocco.togli_le_copie(archivio, lavoro_id)
+    return {**_la_coda(), "detto": detto}
 
 
 @strada.get("/api/ritocchi/{file_id}")
@@ -246,6 +313,36 @@ async def api_ritocchi(file_id: int):
 @strada.post("/api/ritocco/togli/{ritocco_id}")
 async def api_togli(ritocco_id: int):
     return await consegna.subito(_togli, ritocco_id)
+
+
+@strada.get("/api/ritocco/coda")
+async def api_la_coda():
+    return await consegna.subito(_la_coda)
+
+
+@strada.post("/api/ritocco/coda/avvia")
+async def api_avvia_la_coda():
+    return await consegna.subito(_avvia)
+
+
+@strada.post("/api/ritocco/coda/ferma")
+async def api_ferma_la_coda():
+    return await consegna.subito(_ferma)
+
+
+@strada.post("/api/ritocco/coda/{lavoro_id}/approva")
+async def api_approva(lavoro_id: int):
+    return await consegna.subito(_decidi, lavoro_id, "approva")
+
+
+@strada.post("/api/ritocco/coda/{lavoro_id}/rifiuta")
+async def api_rifiuta(lavoro_id: int):
+    return await consegna.subito(_decidi, lavoro_id, "rifiuta")
+
+
+@strada.post("/api/ritocco/coda/{lavoro_id}/rimetti")
+async def api_rimetti(lavoro_id: int):
+    return await consegna.subito(_decidi, lavoro_id, "rimetti")
 
 
 @strada.get("/api/ritocco/{file_id}/pronto")

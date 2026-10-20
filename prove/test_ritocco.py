@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import io
 import os
 import struct
@@ -467,14 +468,19 @@ def test_dopo_il_ritocco_l_importazione_non_vede_doppioni(importato, cartella):
         assert uno(connessione, "SELECT count(*) AS q FROM file_media")["q"] == prima
 
 
-def test_uno_scatto_ritoccato_non_entra_nel_miglioramento(importato):
+def test_uno_scatto_ritoccato_aspetta_che_tu_dica_si_prima_del_miglioramento(importato):
     file_id = _file_di(importato, "piccola.jpg")
     copia.metti(importato, file_id, [_volto(ZONA_A)])
     with importato.scrittura() as connessione:
         scatto_id = file_media.per_id(connessione, file_id)["scatto_id"]
         esito = coda.metti(connessione, [scatto_id])
-    assert esito.messi == 0 and esito.ritoccati == 1
-    assert "ritoccati" in esito.a_parole()
+        assert esito.messi == 0 and esito.ritoccati == 1
+        assert "aspetta che tu dica sì" in esito.a_parole()
+        lasciato = coda.metti(connessione, [scatto_id], ritoccati=False)
+        assert lasciato.messi == 0 and lasciato.lasciati == 1
+        messo = coda.metti(connessione, [scatto_id], ritoccati=True)
+        assert messo.messi == 1 and messo.con_ritocchi == 1
+        assert "il pixelato si rifà sopra" in messo.a_parole()
 
 
 def test_il_ritocco_si_fa_sopra_la_migliorata(importato, cartella):
@@ -577,9 +583,26 @@ def test_il_browser_rivede_la_foto_appena_ritoccata(importato):
     assert _quanto_varia(pixel, (22, 12, 38, 28)) < 20
 
 
-def test_i_messaggi_del_ritocco_non_hanno_nomi_di_file():
-    sorgente = Path(copia.__file__).read_text(encoding="utf-8")
+def _scritta_fissa(modulo, pezzo) -> bool:
+    if isinstance(pezzo, ast.Constant):
+        return isinstance(pezzo.value, str)
+    if isinstance(pezzo, ast.Name):
+        return isinstance(getattr(modulo, pezzo.id, None), str)
+    if isinstance(pezzo, ast.Attribute) and isinstance(pezzo.value, ast.Name):
+        return isinstance(getattr(getattr(modulo, pezzo.value.id, None), pezzo.attr, None), str)
+    return False
+
+
+@pytest.mark.parametrize("nome", ["officina.ritocco.copia", "officina.ritocco.coda",
+                                  "officina.ritocco.lavoro", "officina.web.coda_ritocco"])
+def test_i_messaggi_del_ritocco_non_hanno_nomi_di_file(nome):
+    modulo = importlib.import_module(nome)
+    sorgente = Path(modulo.__file__).read_text(encoding="utf-8")
+    trovati = 0
     for nodo in ast.walk(ast.parse(sorgente)):
         if (isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Name)
                 and nodo.func.id == "RitoccoFermato"):
-            assert all(isinstance(pezzo, ast.Constant) for pezzo in nodo.args)
+            trovati += 1
+            assert nodo.args and all(_scritta_fissa(modulo, pezzo) for pezzo in nodo.args), \
+                ast.unparse(nodo)
+    assert trovati

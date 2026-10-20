@@ -586,9 +586,12 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
     def _ripara_i_ritocchi(self) -> None:
         from officina.archivio import accesso
         from officina.ritocco import copia
+        from officina.web import coda_ritocco
 
         try:
-            copia.ripara(accesso.aperto())
+            archivio = accesso.aperto()
+            copia.ripara(archivio)
+            coda_ritocco.ripara(archivio)
         except ErroreOfficina:
             return
         except Exception as guasto:

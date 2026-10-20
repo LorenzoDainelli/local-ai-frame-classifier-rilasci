@@ -88,7 +88,7 @@ document.addEventListener("keydown", (evento) => {
     if (albero_e_aperto()) return;
     const scheda = TASTI[evento.key.toLowerCase()];
     if (!scheda) return;
-    if (scheda === "luoghi" && document.querySelector("[data-tasto-l]")) return;
+    if (document.querySelector(`[data-tasto-${evento.key.toLowerCase()}]`)) return;
     evento.preventDefault();
 
     evento.stopImmediatePropagation();

@@ -56,28 +56,62 @@ def _chi_e(ritocco, nome: str | None, pezzo) -> str:
     return f"{chi} {dove}" if dove else chi
 
 
+SCELTA = (
+    "SELECT r.*, coalesce(pv.nome, pc.nome) AS nome, l.stato AS stato_lavoro FROM ritocchi r "
+    "LEFT JOIN volti v ON v.id = r.volto_id "
+    "LEFT JOIN persone pv ON pv.id = v.persona_id AND pv.stato = 'attiva' "
+    "LEFT JOIN corpi c ON c.id = r.corpo_id "
+    "LEFT JOIN volti vc ON vc.id = c.volto_id "
+    "LEFT JOIN persone pc ON pc.id = vc.persona_id AND pc.stato = 'attiva' "
+    "LEFT JOIN ritocchi_lavori l ON l.id = r.lavoro_id ")
+ATTESE = {
+    "in_coda": "in coda",
+    "in_lavoro": "lo sto facendo",
+    "da_rivedere": "da rivedere",
+    "in_scambio": "lo sto salvando",
+}
+
+
+def _voce(riga) -> dict:
+    pezzo = maschere.apri(riga["maschera"])
+    pezzi = [_chi_e(riga, riga["nome"], pezzo)]
+    if riga["genere"] == elenco.PIXELA:
+        quanti = quanti_quadretti(riga["misura"], riga["quadretto"])
+        if quanti:
+            pezzi.append(f"{quanti} quadretti di larghezza")
+    return {
+        "id": riga["id"],
+        "titolo": TITOLI.get((riga["genere"], riga["cosa"]), "Ritocco"),
+        "quando": giorno(riga["fatto_il"]),
+        "dettaglio": " · ".join(pezzi),
+    }
+
+
+def _in_attesa(riga) -> dict:
+    voce = _voce(riga)
+    attesa = ATTESE[riga["stato_lavoro"]]
+    if riga["stato"] == elenco.TOLTO:
+        attesa = f"si toglie, {attesa}"
+    return {**voce, "quando": attesa, "attesa": riga["stato_lavoro"],
+            "lavoro": riga["lavoro_id"]}
+
+
 def di_file(connessione: sqlite3.Connection, file_id: int) -> list[dict]:
-    righe = tutti(
+    fatti = tutti(connessione, SCELTA + "WHERE r.file_id = ? AND r.stato = ? ORDER BY r.id",
+                  file_id, elenco.FATTO)
+    aspettano = tutti(
         connessione,
-        "SELECT r.*, coalesce(pv.nome, pc.nome) AS nome FROM ritocchi r "
-        "LEFT JOIN volti v ON v.id = r.volto_id "
-        "LEFT JOIN persone pv ON pv.id = v.persona_id AND pv.stato = 'attiva' "
-        "LEFT JOIN corpi c ON c.id = r.corpo_id "
-        "LEFT JOIN volti vc ON vc.id = c.volto_id "
-        "LEFT JOIN persone pc ON pc.id = vc.persona_id AND pc.stato = 'attiva' "
-        "WHERE r.file_id = ? AND r.stato = ? ORDER BY r.id", file_id, elenco.FATTO)
+        SCELTA + "WHERE r.file_id = ? AND r.stato IN (?, ?) AND l.stato IN (?, ?, ?, ?) "
+        "ORDER BY r.id",
+        file_id, elenco.IN_CODA, elenco.TOLTO, *ATTESE)
+    return [_voce(riga) for riga in fatti] + [_in_attesa(riga) for riga in aspettano]
+
+
+def del_lavoro(connessione: sqlite3.Connection, lavoro_id: int, file_id: int) -> list[dict]:
     fuori = []
-    for riga in righe:
-        pezzo = maschere.apri(riga["maschera"])
-        pezzi = [_chi_e(riga, riga["nome"], pezzo)]
-        if riga["genere"] == elenco.PIXELA:
-            quanti = quanti_quadretti(riga["misura"], riga["quadretto"])
-            if quanti:
-                pezzi.append(f"{quanti} quadretti di larghezza")
-        fuori.append({
-            "id": riga["id"],
-            "titolo": TITOLI.get((riga["genere"], riga["cosa"]), "Ritocco"),
-            "quando": giorno(riga["fatto_il"]),
-            "dettaglio": " · ".join(pezzi),
-        })
+    for riga in tutti(connessione,
+                      SCELTA + "WHERE r.lavoro_id = ? AND r.file_id = ? AND r.stato IN (?, ?) "
+                      "ORDER BY r.id", lavoro_id, file_id, elenco.IN_CODA, elenco.TOLTO):
+        voce = _voce(riga)
+        fuori.append({**voce, "si_toglie": riga["stato"] == elenco.TOLTO})
     return fuori

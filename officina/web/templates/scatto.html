@@ -2,6 +2,7 @@
 {% from "_spiega.html" import spiega %}
 {% from "_icone.html" import icona %}
 {% from "_ritocca.html" import tasto_ritocca, finestra_ritocca %}
+{% from "_ritocca_video.html" import finestra_ritocca_video %}
 {% block titolo %}Scatto — Local AI Frame Classifier{% endblock %}
 
 {% macro la_finestra_3d() %}
@@ -89,7 +90,10 @@
         {% if ritocchi and principale %}
         <span class="ft-ritoccata"><i aria-hidden="true"></i>Ritoccata · {{ ritocchi|numero }}</span>
         <button class="ft-vedi-sotto" type="button" data-vedi-sotto data-file="{{ principale.id }}" aria-pressed="false"
-                title="Mentre tieni premuto si vede lo scatto vero, poi torna la copia ritoccata. Si può anche tenere premuto Spazio.">{{ icona('occhio', 15) }} Tieni premuto per vedere sotto</button>
+                {% if movimento %}data-movimento="{{ movimento.id }}"{% endif %}
+                {% if scatto.genere == 'video' %}data-video
+                title="Mentre tieni premuto si vede il video vero allo stesso punto, poi torna la copia ritoccata."
+                {% else %}title="Mentre tieni premuto si vede lo scatto vero, poi torna la copia ritoccata. Si può anche tenere premuto Spazio."{% endif %}>{{ icona('occhio', 15) }} Tieni premuto per vedere sotto</button>
         {% endif %}
         {% if volti_visti %}<script type="application/json" id="volti-dello-scatto">{{ volti_visti|tojson }}</script>{% endif %}
         {% if corpi_visti %}<script type="application/json" id="corpi-dello-scatto">{{ corpi_visti|tojson }}</script>{% endif %}
@@ -261,7 +265,7 @@
                     <button class="tasto-comando nudo piccolo" type="button" data-apri-nota aria-controls="ft-info">{{ icona('nota', 14) }} Nota{% if scatto.nota %} ·{% endif %}</button>
                     {% if corpi_visti %}<button class="tasto-comando nudo piccolo" type="button" data-mostra-corpi aria-pressed="false" title="Mostra il contorno e i punti del corpo di ogni persona">{{ icona('persona', 14) }} Corpi · {{ corpi_visti|length }}</button>{% endif %}
                     {% if in3d %}<button class="tasto-comando nudo piccolo" type="button" data-apri-3d aria-haspopup="dialog" aria-controls="in3d" title="Guarda le persone e il luogo di questa foto in 3D">{{ icona('cubo', 14) }} In 3D</button>{% endif %}
-                    {% if principale and not non_si_apre %}{{ tasto_ritocca(principale.id, scatto.genere != 'video' and not movimento, ('scatto ' ~ (vicini.posizione|numero) ~ ' di ' ~ vicini.totale) if vicini.posizione else '') }}{% endif %}
+                    {% if principale and not non_si_apre %}{{ tasto_ritocca(principale.id, ('scatto ' ~ (vicini.posizione|numero) ~ ' di ' ~ vicini.totale) if vicini.posizione else '', video=scatto.genere == 'video') }}{% endif %}
                     <span class="ft-tasti-destra in-fila">
                         {{ lo_stato_del_miglioramento() }}
                         {{ fuori_archivio() }}
@@ -299,7 +303,7 @@
         </div>
     </div>
     {% if in3d %}{{ la_finestra_3d() }}{% endif %}
-    {% if principale and not non_si_apre %}{{ finestra_ritocca() }}{% endif %}
+    {% if principale and not non_si_apre %}{{ finestra_ritocca() }}{{ finestra_ritocca_video() }}{% endif %}
 </main>
 </div>
 {% endblock %}
@@ -321,11 +325,18 @@
         import("/statici/js/ritocchi.js").then(({ vediSotto, leggiRitocchi, disegnaRitocchi }) => {
             const tasto = document.querySelector("[data-vedi-sotto]");
             const lastra = () => document.getElementById("lastra-principale");
+            const filmato = () => document.getElementById("lastra-video");
+            const visibile = (elemento) => elemento && !elemento.hidden ? elemento : null;
+            const live = () => document.querySelector(".lastra video.live-al-passaggio.pronta");
+            const fileDi = (elemento) => elemento === live() ? tasto.dataset.movimento : tasto.dataset.file;
             vediSotto({
                 tasto,
-                immagine: lastra,
-                indirizzo: () => `/immagine/${tasto.dataset.file}?sotto=1`,
-                attivo: () => Boolean(lastra() && !lastra().hidden),
+                media: () => live() || visibile(filmato()) || visibile(lastra()),
+                indirizzo: (elemento) => elemento.tagName === "VIDEO"
+                    ? `/originale/${fileDi(elemento)}?sotto=1` : `/immagine/${tasto.dataset.file}?sotto=1`,
+                fotogramma: (elemento, istante) => `/fotogramma/${fileDi(elemento)}?istante=${istante}&sotto=1`,
+                attivo: () => Boolean(live() || visibile(filmato()) || visibile(lastra())),
+                spazio: () => !("video" in tasto.dataset),
             });
             const dove = document.querySelector("[data-ritocchi]");
             if (dove) leggiRitocchi(dove.dataset.file)

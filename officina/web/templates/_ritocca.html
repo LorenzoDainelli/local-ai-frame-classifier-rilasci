@@ -1,7 +1,7 @@
 {% from "_icone.html" import icona %}
-{% macro tasto_ritocca(file_id, si_puo, numero='', classe='tasto-comando nudo piccolo') -%}
-<button class="{{ classe }}" type="button" data-apri-ritocca data-file="{{ file_id }}" data-numero="{{ numero }}" aria-haspopup="dialog" aria-controls="ritocca"
-        {% if si_puo %}title="Pixela un volto, una persona o una parte di questa foto"{% else %}disabled title="Per i video e le foto live arriva presto"{% endif %}>{{ icona('quadretti', 14) }} Ritocca</button>
+{% macro tasto_ritocca(file_id, numero='', classe='tasto-comando nudo piccolo', video=False) -%}
+<button class="{{ classe }}" type="button" data-apri-ritocca data-file="{{ file_id }}" data-numero="{{ numero }}" aria-haspopup="dialog"
+        {% if video %}data-video="1" aria-controls="ritocca-video" title="Pixela un volto, una persona o una parte di questo video: l'IA la segue fotogramma per fotogramma"{% else %}aria-controls="ritocca" title="Pixela un volto, una persona o una parte di questa foto"{% endif %}>{{ icona('quadretti', 14) }} Ritocca</button>
 {%- endmacro %}
 
 {% macro finestra_ritocca() %}

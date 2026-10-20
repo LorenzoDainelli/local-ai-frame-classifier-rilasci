@@ -44,10 +44,13 @@ class Finto:
     def foto(self, immagine: Image.Image, larghezza: int, altezza: int) -> Image.Image:
         return immagine.resize((larghezza, altezza), Image.Resampling.LANCZOS)
 
-    def video(self, quadri: Iterable, larghezza: int, altezza: int) -> Iterator:
+    def video(self, quadri: Iterable, larghezza: int, altezza: int, salta: int = 0,
+              al_pezzo=None) -> Iterator:
         import numpy as np
 
-        for quadro in quadri:
+        for visti, quadro in enumerate(quadri):
+            if visti < salta:
+                continue
             yield np.asarray(Image.fromarray(quadro).resize(
                 (larghezza, altezza), Image.Resampling.LANCZOS))
 

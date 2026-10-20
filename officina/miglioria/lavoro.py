@@ -12,13 +12,15 @@ from officina import registro
 from officina.archivio.database import adesso
 from officina.errori import ErroreOfficina
 from officina.importazione import impronta
-from officina.miglioria import (attesa, catena, coda, da_guardare, fedelta, motori, persone,
+from officina.miglioria import (attesa, catena, coda, da_guardare, fedelta, motori, persone, pezzi,
                                 scambio, sfida, video)
 from officina.modello import file_media
 from officina.web.lavori import Lavoro
 
 MARGINE_DI_SPAZIO = 512 * 1024 * 1024
 QUANTO_PUO_CRESCERE = 12
+BYTE_PER_PIXEL_DEI_PEZZI = 2
+DA_RIPRENDERE = {"memoria_scheda_finita", "memoria_finita", "stanza_caduta"}
 SCHEDA_FINITA = "memoria_scheda_finita"
 DI_FILA_SENZA_MEMORIA = 3
 SCHEDA_OCCUPATA = ("La scheda video ha finito la memoria su tre file di fila: di solito vuol dire "
@@ -39,6 +41,7 @@ MESSAGGI = {
     "solo_foto": "questo modello migliora solo le foto",
     "lavoro_illeggibile": "difetto del programma nel preparare il lavoro",
     "rotto": "difetto imprevisto: il dettaglio tecnico è nel registro",
+    "pezzi_rotti": "un pezzo già migliorato non si legge più: si rifà da capo",
     "torch_troppo_vecchio": ("il motore delle reti neurali è troppo vecchio per aprire "
                              "i pesi in sicurezza: aggiorna i motori"),
 }
@@ -80,6 +83,17 @@ def volti_da_soli(cartella_modelli: Path, senza_faceme: bool = False) -> str | N
     return motori.CODEFORMER
 
 
+def spazio_dei_pezzi(originale: Path) -> int:
+    from officina.miglioria import misura
+
+    try:
+        piano = video.guarda(originale)
+    except Exception:                                    # noqa: BLE001
+        return 0
+    larghezza, altezza = misura.di_arrivo(piano.larghezza, piano.altezza, pari=True)
+    return larghezza * altezza * BYTE_PER_PIXEL_DEI_PEZZI * max(piano.fotogrammi, 0)
+
+
 def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
                      ricorda: Callable[[subprocess.Popen], None]) -> dict:
     from officina.programma import librerie, scheda
@@ -99,6 +113,10 @@ def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
                 messaggio = json.loads(riga)
             except ValueError:
                 continue
+            if isinstance(messaggio.get("tempi"), dict):
+                registro.evento("miglioria.tempi", **{
+                    chiave: valore for chiave, valore in messaggio["tempi"].items()
+                    if isinstance(valore, (int, float))})
             if "fatti" in messaggio:
                 al_passo(int(messaggio["fatti"]), int(messaggio.get("totale") or 0))
             elif "fatto" in messaggio or "guasto" in messaggio:
@@ -248,12 +266,14 @@ class Miglioratore:
             return
 
         attesa.prepara(dove)
+        genere = file["genere"]
         serve = originale.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
+        if genere == "video":
+            serve += spazio_dei_pezzi(originale)
         if shutil.disk_usage(dove).free < serve:
             self._fallita(miglioria_id, "spazio")
             return
 
-        genere = file["genere"]
         suffisso = (originale.suffix if genere == "immagine"
                     else video.suffisso_di_arrivo(originale))
         finale = dove / attesa.nome_in_attesa(miglioria_id, originale, suffisso)
@@ -320,6 +340,8 @@ class Miglioratore:
         if self._fermati.is_set():
             parziale.unlink(missing_ok=True)
             return None
+        if "guasto" in esito and esito["guasto"] not in DA_RIPRENDERE:
+            pezzi.butta(pezzi.cartella(parziale))
         if "guasto" in esito or not parziale.is_file():
             parziale.unlink(missing_ok=True)
             return {"guasto": str(esito.get("guasto") or "stanza_muta"),
@@ -528,6 +550,10 @@ class Miglioratore:
 
     def _fallita(self, miglioria_id: int, codice: str) -> None:
         with self.archivio.scrittura() as connessione:
+            riga = coda.per_id(connessione, miglioria_id)
+            if riga is not None:
+                pezzi.butta_quelli_di(attesa.cartella(connessione, Path(riga["percorso_originale"])),
+                                      miglioria_id)
             coda.segna(connessione, miglioria_id, coda.FALLITA, guasto=codice,
                        finita_il=adesso())
         self.lavoro.di(f"non riuscito: {a_parole(codice)}")

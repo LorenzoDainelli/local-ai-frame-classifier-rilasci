@@ -1,4 +1,5 @@
 import { chiedi, leggiDatiIncorporati, numeroAParole } from "./comune.js";
+import { chiediSeSi } from "./finestrina.js";
 
 const OGNI_QUANTO = 1500;
 const CONTI_CHE_CONTANO = ["in_coda", "in_lavoro", "da_rivedere", "in_scambio", "fallita"];
@@ -89,4 +90,38 @@ if (scaricaModelli) {
         }
         ultimo = segno;
     }, 1500);
+}
+
+const ricomincia = document.getElementById("ricomincia-sfida");
+if (ricomincia) {
+    ricomincia.addEventListener("click", async () => {
+        const quante = Number(ricomincia.dataset.quante || 0);
+        const si = await chiediSeSi({
+            titolo: "Ricominciare la sfida con le foto già approvate?",
+            sotto: `${numeroAParole(quante)} ${quante === 1 ? "foto torna" : "foto tornano"} com'erano: `
+                + "l'originale esce da «Originali» e torna al suo posto, la versione migliorata "
+                + "di adesso si cancella. Poi SeedVR2 e LucidFlux le rifanno e tu voti.",
+            tasto: "Ricomincia",
+            pericolo: true,
+        });
+        if (!si) return;
+        ricomincia.disabled = true;
+        let esito;
+        try {
+            esito = await chiedi("/api/miglioramento/sfida/ricomincia", { method: "POST" });
+        } catch (errore) {
+            await chiediSeSi({ titolo: "Non sono riuscito a ricominciare", sotto: errore.message,
+                               tasto: "Va bene", annulla: "Chiudi" });
+            location.reload();
+            return;
+        }
+        if (esito.saltate && esito.saltate.length) {
+            await chiediSeSi({
+                titolo: `Rimesse in coda: ${numeroAParole(esito.rimesse)}`,
+                sotto: "Queste le ho lasciate com'erano: " + esito.saltate.join("; ") + ".",
+                tasto: "Va bene", annulla: "Chiudi",
+            });
+        }
+        location.reload();
+    });
 }

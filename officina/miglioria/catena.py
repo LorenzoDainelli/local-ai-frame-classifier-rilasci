@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Callable, Iterable, Iterator
 
 from officina.errori import ErroreOfficina
-from officina.miglioria import date, metadati, misura, motori, video
+from officina.miglioria import date, metadati, misura, motori, pezzi, video
 
 GIA_GRANDE = "gia_grande"
+PER_VOLTA = 41
 
 
 class TroppoGrande(ErroreOfficina):
@@ -39,10 +40,10 @@ def _col_freno(quadri: Iterator, frenato: Frenato) -> Iterator:
 
 
 def esegui(lavoro: dict, al_passo: Callable[[int, int], None] | None = None,
-           freno=None) -> dict:
+           freno=None, racconta: Callable[[dict], None] | None = None) -> dict:
     if lavoro["genere"] == "immagine":
         return foto(lavoro, al_passo, freno)
-    return filmato(lavoro, al_passo, freno)
+    return filmato(lavoro, al_passo, freno, racconta)
 
 
 def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
@@ -95,7 +96,7 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
             "motori": usati}
 
 
-def filmato(lavoro: dict, al_passo=None, freno=None) -> dict:
+def filmato(lavoro: dict, al_passo=None, freno=None, racconta=None) -> dict:
     originale = Path(lavoro["originale"])
     uscita = Path(lavoro["uscita"])
     piano = video.guarda(originale)
@@ -105,17 +106,69 @@ def filmato(lavoro: dict, al_passo=None, freno=None) -> dict:
 
     motore = motori.apri(motori.VIDEO, lavoro["motori"]["video"],
                          **lavoro.get("opzioni", {}))
-    frenato = Frenato(freno)
     try:
-        def trasforma(quadri: Iterable) -> Iterator:
-            return _col_freno(motore.video(quadri, larghezza, altezza), frenato)
-
-        video.lavora(originale, uscita, larghezza, altezza, trasforma, al_passo)
+        fatti = pezzi.Pezzi(pezzi.cartella(uscita), _firma(originale, motore, larghezza, altezza))
+        if not fatti.finito:
+            _fai_i_pezzi(originale, piano, motore, fatti, larghezza, altezza,
+                         Frenato(freno), al_passo, racconta)
     finally:
         motore.spegni()
+
+    def rifatti(quadri: Iterable) -> Iterator:
+        for _quadro, fatto in zip(quadri, fatti.rileggi(), strict=True):
+            yield fatto
+
+    video.lavora(originale, uscita, larghezza, altezza, rifatti)
     date.copia(originale, uscita)
+    pezzi.butta(fatti.dove)
     return {"larghezza": larghezza, "altezza": altezza,
             "motori": [{"nome": motore.nome, "versione": motore.versione}]}
+
+
+def _firma(originale: Path, motore, larghezza: int, altezza: int) -> dict:
+    stato = originale.stat()
+    proprie = getattr(motore, "firma", None)
+    return {"originale": str(originale), "byte": stato.st_size, "cambiato": stato.st_mtime_ns,
+            "larghezza": larghezza, "altezza": altezza,
+            "motore": proprie() if callable(proprie) else
+            {"nome": motore.nome, "versione": motore.versione}}
+
+
+def _fai_i_pezzi(originale: Path, piano, motore, fatti: pezzi.Pezzi, larghezza: int,
+                 altezza: int, frenato: Frenato, al_passo, racconta) -> None:
+    per_volta = int(getattr(motore, "quadri_per_volta", PER_VOLTA))
+    gia = fatti.fatti()
+    if gia % per_volta:
+        fatti.segna_finito()
+        return
+    totale = max(piano.fotogrammi, gia)
+    _passo(al_passo, gia, totale)
+    inizio = [gia]
+
+    def al_pezzo(frazione: float, quanti: int) -> None:
+        _passo(al_passo, inizio[0] + min(quanti - 1, int(frazione * quanti)),
+               max(totale, inizio[0] + quanti))
+
+    mucchio: list = []
+
+    def metti_via() -> None:
+        fatti.salva(inizio[0], mucchio)
+        inizio[0] += len(mucchio)
+        mucchio.clear()
+        _passo(al_passo, inizio[0], max(totale, inizio[0]))
+        tempi = getattr(motore, "tempi", None)
+        if racconta is not None and tempi:
+            racconta({"tempi": tempi[-1], "fatti": inizio[0], "totale": totale})
+
+    usciti = motore.video(video.dritti(originale), larghezza, altezza, salta=gia,
+                          al_pezzo=al_pezzo)
+    for quadro in _col_freno(usciti, frenato):
+        mucchio.append(quadro)
+        if len(mucchio) >= per_volta:
+            metti_via()
+    if mucchio:
+        metti_via()
+    fatti.segna_finito()
 
 
 def _passo(al_passo, fatti: int, totale: int) -> None:

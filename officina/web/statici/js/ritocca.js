@@ -398,7 +398,8 @@ function aggiornaTasti() {
     qui("[data-rt-annulla]").disabled = !pronto || !st.storia.length;
     qui("[data-rt-nuova]").disabled = !pronto || st.corrente < 0;
     qui("[data-rt-salva]").disabled = !pronto || !conMaschera().length;
-    qui("[data-rt-salva]").textContent = st.salvando ? "Salvo…" : "Salva";
+    qui("[data-rt-salva]").textContent = st.salvando ? (st.live ? "Apro il video…" : "Salvo…") : st.live ? "Avanti nel video" : "Salva";
+    qui("[data-rt-salva]").title = st.live ? "Foto live: la foto e il suo video si ritoccano insieme. Ora scegli nel video, poi metti in coda." : "";
     const foglio = qui("[data-rt-foglio]");
     foglio.classList.toggle("pennello", st.attrezzo === "pennello" && !st.sceltaPersona);
     foglio.classList.toggle("gomma", st.attrezzo === "gomma" && !st.sceltaPersona);
@@ -839,6 +840,10 @@ async function salva() {
                 punti: cosa.punti.length ? cosa.punti : null, riquadro: cosa.riquadro,
             });
         }
+        if (mio.live) {
+            await nelVideo(mio, pronte, pezzi);
+            return;
+        }
         await manda(`/api/ritocco/${mio.fileId}/salva`, { larghezza: mio.larga, altezza: mio.alta, pezzi });
         if (st !== mio) return;
         mio.salvato = true;
@@ -851,6 +856,19 @@ async function salva() {
         aggiornaTasti();
         avvisa(errore.message, true);
     }
+}
+
+async function nelVideo(mio, pronte, pezzi) {
+    const riquadri = pronte.map((cosa) => {
+        const p = cosa.maschera;
+        return { x1: p.x / mio.larga, y1: p.y / mio.alta, x2: (p.x + p.w) / mio.larga, y2: (p.y + p.h) / mio.alta };
+    });
+    const foto = { file: mio.fileId, larghezza: mio.larga, altezza: mio.alta, pezzi, riquadri };
+    const { apriRitoccaVideo } = await import("/statici/js/ritocca_video.js");
+    if (st !== mio) return;
+    mio.salvato = true;
+    await chiudi();
+    apriRitoccaVideo(mio.live.video, { foto });
 }
 
 function esci() {
@@ -884,7 +902,7 @@ function chiudi() {
     qui("[data-rt-conferma]").hidden = true;
     qui("[data-rt-foto]").removeAttribute("src");
     if (dialogo.open) dialogo.close();
-    manda("/api/ritocco/chiudi", {}).catch(() => {});
+    return manda("/api/ritocco/chiudi", {}).catch(() => {});
 }
 
 function vediSotto(si) {
@@ -960,6 +978,7 @@ async function prepara(mio) {
     if (st !== mio) return;
     mio.latoDiLavoro = pronto.lato;
     mio.massimo = pronto.massimo;
+    mio.live = pronto.live || null;
     const foto = await caricaLaFoto(mio);
     if (st !== mio) return;
     mio.larga = foto.naturalWidth;
@@ -995,7 +1014,8 @@ async function prepara(mio) {
     mio.osserva = new ResizeObserver(adatta);
     mio.osserva.observe(qui("[data-rt-tela]"));
     adatta();
-    avvisa(mio.sam === "attesa" ? "SAM 3 sta guardando lo scatto: intanto puoi usare il pennello o i volti." : "");
+    avvisa(mio.live ? "Foto live: scegli qui cosa pixelare, poi «Avanti nel video» e lo segui anche lì."
+        : mio.sam === "attesa" ? "SAM 3 sta guardando lo scatto: intanto puoi usare il pennello o i volti." : "");
     if (mio.sam !== "pronto") mio.attrezzo = "pennello";
     aggiornaTasti();
 }
@@ -1028,7 +1048,7 @@ export function apriRitocca(fileId, opzioni = {}) {
         sam: "attesa", samPerche: "", sceltaPersona: false, trascina: null, mano: null,
         puntatore: null, chiedendo: null, daChiedere: null, salvando: false, salvato: false,
         inArrivo: 0, daRifare: false, silenzio: 0, osserva: null, colore: coloreAccento(),
-        dettoProcessore: false,
+        dettoProcessore: false, live: null,
     };
     const mio = st;
     qui("[data-rt-numero]").textContent = opzioni.numero ? ` · ${opzioni.numero}` : "";
@@ -1111,8 +1131,13 @@ export function preparaRitocca(opzioni = {}) {
     document.querySelectorAll("[data-apri-ritocca]").forEach((tasto) => {
         if (tasto.dataset.legato) return;
         tasto.dataset.legato = "1";
-        tasto.addEventListener("click", () => {
+        tasto.addEventListener("click", async () => {
             if (tasto.disabled) return;
+            if (tasto.dataset.video) {
+                const { apriRitoccaVideo } = await import("/statici/js/ritocca_video.js");
+                apriRitoccaVideo(tasto.dataset.file);
+                return;
+            }
             apriRitocca(tasto.dataset.file, { numero: tasto.dataset.numero || "", quandoSalvato: opzioni.quandoSalvato });
         });
     });

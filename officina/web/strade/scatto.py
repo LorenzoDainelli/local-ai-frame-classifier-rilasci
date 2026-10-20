@@ -353,8 +353,8 @@ async def una_immagine(richiesta: Request, file_id: int, lato: int | None = None
 
 @strada.get("/fotogramma/{file_id}")
 async def un_fotogramma(richiesta: Request, file_id: int, numero: int = 0,
-                        istante: int | None = None, lato: int | None = None):
-    trovato = await consegna.subito(_cosa_mostrare, file_id)
+                        istante: int | None = None, lato: int | None = None, sotto: int = 0):
+    trovato = await consegna.subito(_cosa_mostrare, file_id, bool(sotto))
     if trovato is None:
         return Response(status_code=404)
     _, percorso, impronta = trovato
@@ -394,36 +394,42 @@ async def _manda_un_fotogramma(richiesta: Request, percorso: Path, impronta: str
 
 
 @strada.get("/originale/{file_id}")
-def un_originale(file_id: int):
+def un_originale(richiesta: Request, file_id: int, sotto: int = 0):
     archivio = accesso.aperto()
     with archivio.lettura() as connessione:
         riga = file_media.per_id(connessione, file_id)
         if riga is None:
             return Response(status_code=404)
-        percorso, migliorata = file_media.da_mostrare(connessione, riga["id"])
+        quale = file_media.da_mostrare_sotto if sotto else file_media.da_mostrare
+        percorso, migliorata = quale(connessione, riga["id"])
     if percorso is None:
         return Response(status_code=404)
 
-    copia = compatibile.gia_fatta(archivio, migliorata or riga["impronta"])
-    if copia is not None:
-        return FileResponse(copia, media_type="video/mp4",
-                            headers={"Cache-Control": "private, max-age=3600"})
-
+    impronta = migliorata or riga["impronta"]
+    copia = compatibile.gia_fatta(archivio, impronta)
     tipi = {"mov": "video/mp4", "mp4": "video/mp4", "m4v": "video/mp4"}
-    return FileResponse(percorso,
-                        media_type=tipi.get((riga["formato"] or "").lower(),
-                                            "application/octet-stream"),
-                        headers={"Cache-Control": "private, max-age=3600"})
+    da_mandare = copia or percorso
+    tipo = ("video/mp4" if copia is not None
+            else tipi.get((riga["formato"] or "").lower(), "application/octet-stream"))
+    try:
+        stato = da_mandare.stat()
+    except OSError:
+        return Response(status_code=404)
+    atteso = segno("originale", impronta, copia is not None, stato.st_size, stato.st_mtime_ns)
+    if gia_ce_l_ha(richiesta, atteso):
+        return non_e_cambiata(atteso)
+    return FileResponse(da_mandare, media_type=tipo,
+                        headers={"ETag": atteso, "Cache-Control": DA_RICONTROLLARE})
 
 
 @strada.get("/live/{scatto_id}")
-def la_live(scatto_id: int):
+def la_live(richiesta: Request, scatto_id: int, sotto: int = 0):
     with accesso.aperto().lettura() as connessione:
         movimento = next((f for f in file_media.di_scatto(connessione, scatto_id)
                           if f["ruolo"] == "movimento"), None)
     if movimento is None:
         return Response(status_code=404)
-    return un_originale(movimento["id"])
+    return un_originale(richiesta, movimento["id"], sotto)
 
 
 @strada.post("/scatto/copia-video/{file_id}")

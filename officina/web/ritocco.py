@@ -34,6 +34,8 @@ NON_SEGUE = ("Non sono riuscito a seguire la parte scelta nel video. Il video no
 SCHEDA_OCCUPATA = "La scheda video è occupata: lo seguo appena si libera."
 OGNI_QUANTI = 8
 FERMATI = ("fermati", "ferma", "basta")
+DI_MANO = ("guarda", "scegli", "prepara")
+PRIMA_DI_RIPRENDERE = 3.0
 
 
 class SchedaOccupata(ErroreOfficina):
@@ -67,7 +69,8 @@ def _prepara(sceglitore, numero, chiave, percorso, notizia, fermati) -> tuple:
 
     pronto = sceglitore.prepara(chiave, Path(percorso), al_passo, fermati)
     return ("fatto", numero, {"quanti": pronto.quanti, "larghezza": pronto.larghezza,
-                              "altezza": pronto.altezza, "istanti": list(pronto.istanti)})
+                              "altezza": pronto.altezza, "istanti": list(pronto.istanti),
+                              "inizio": int(getattr(pronto, "inizio", 0))})
 
 
 def _segui(sceglitore, numero, chiave, percorso, scelte, tratti, sulla_scheda, notizia,
@@ -203,6 +206,13 @@ class AlClic:
         self._ultimo = 0.0
         self._sorvegliante: threading.Thread | None = None
         self._fermo = threading.Event()
+        self._sfondo: lavori.Lavoro | None = None
+        self._in_sfondo = False
+        self._seguendo = False
+        self._ceduto = False
+        self._mani = 0
+        self._ultima_mano = 0.0
+        self._conta_le_mani = threading.Lock()
 
     @property
     def acceso(self) -> bool:
@@ -212,6 +222,10 @@ class AlClic:
     @property
     def ha_la_scheda(self) -> bool:
         return lavori.turno.chi is self.lavoro
+
+    @property
+    def ha_una_scheda(self) -> bool:
+        return self._scheda
 
     def guarda(self, cartella: Path, chiave: str, percorso: Path,
                fotogramma: int | None = None) -> dict:
@@ -227,44 +241,127 @@ class AlClic:
                             scheda=False)
 
     def segui(self, cartella: Path, chiave: str, percorso: Path, scelte: dict, tratti: list,
-              al_passo=None, scheda: bool | None = None) -> dict:
+              al_passo=None, scheda: bool | None = None, sfondo=None) -> dict:
         pezzi = [(tratto.da, tratto.inizio, tratto.fine) for tratto in tratti]
         return self._chiedi(cartella, "segui", chiave, str(percorso), dict(scelte), pezzi,
-                            al_passo=al_passo, scheda=scheda)
+                            al_passo=al_passo, scheda=scheda, sfondo=sfondo)
 
     def ferma(self) -> None:
         self._fermo.set()
         if self._processo is not None:
             in_disparte.manda("fermati", a=A)
 
+    def ferma_lo_sfondo(self) -> None:
+        if self._in_sfondo:
+            self.ferma()
+
+    def lascia_lo_sfondo(self, sfondo) -> None:
+        if lavori.turno.chi is not sfondo:
+            if self._sfondo is sfondo:
+                self._sfondo = None
+            return
+        with self._lucchetto:
+            if self._sfondo is sfondo:
+                self._sfondo = None
+            if lavori.turno.chi is sfondo:
+                if self._scheda:
+                    self._spegni_tutto()
+                lavori.turno.lascia(sfondo)
+
     def chiudi(self) -> None:
+        if self._in_sfondo:
+            return
+        if self._seguendo:
+            self.ferma()
         with self._lucchetto:
             self._spegni_tutto()
 
+    def ha_ceduto(self) -> bool:
+        ceduto, self._ceduto = self._ceduto, False
+        return ceduto
+
+    def lascia_passare(self, quanto: float | None = None, fermati=_mai) -> None:
+        quanto = PRIMA_DI_RIPRENDERE if quanto is None else quanto
+        while not fermati():
+            calma = time.monotonic() - self._ultima_mano
+            if self._mani == 0 and calma >= quanto:
+                return
+            time.sleep(min(OGNI_QUANTO, max(0.05, quanto - calma)))
+
+    def _fai_passare(self, sfondo) -> None:
+        if sfondo is not None:
+            return
+        if self._in_sfondo:
+            self.ferma()
+        elif self._seguendo:
+            self._ceduto = True
+            self.ferma()
+
+    def _entra(self, sfondo, di_mano: bool) -> None:
+        while not self._lucchetto.acquire(timeout=0.1):
+            if sfondo is None and (self._in_sfondo or (di_mano and self._seguendo)):
+                self._fai_passare(sfondo)
+
     def _chiedi(self, cartella: Path, tipo: str, *argomenti, al_passo=None,
-                scheda: bool | None = None) -> dict:
-        with self._lucchetto:
-            self._accendi(Path(cartella))
-            if scheda is None:
-                sulla_scheda = self._scheda and lavori.turno.prendi_se_libera(self.lavoro)
-                if tipo == "segui" and not sulla_scheda:
-                    raise SchedaOccupata(SCHEDA_OCCUPATA)
-            else:
-                sulla_scheda = bool(scheda) and self._scheda
-            self._ultimo = time.monotonic()
-            self._fermo.clear()
-            numero = next(self._numeri)
+                scheda: bool | None = None, sfondo=None) -> dict:
+        di_mano = sfondo is None and tipo in DI_MANO
+        if di_mano:
+            self._una_mano(1)
+        try:
+            if sfondo is None and (self._in_sfondo or (di_mano and self._seguendo)):
+                self._fai_passare(sfondo)
+            self._entra(sfondo, di_mano)
             try:
-                esito = self._manda((tipo, numero, *argomenti, sulla_scheda), al_passo)
+                return self._dentro(cartella, tipo, argomenti, al_passo, scheda, sfondo)
             finally:
-                self._ultimo = time.monotonic()
-            self._sorveglia()
-            tipo_esito, _, dati = esito
-            if tipo_esito != "fatto":
-                raise ErroreOfficina(dati.get("messaggio") or NON_GUARDA, codice="ritocco_scelta")
-            if scheda is None and sulla_scheda and dati.get("dove") == scelta.PROCESSORE:
-                lavori.turno.lascia(self.lavoro)
-            return dati
+                self._lucchetto.release()
+        finally:
+            if di_mano:
+                self._una_mano(-1)
+
+    def _una_mano(self, quante: int) -> None:
+        with self._conta_le_mani:
+            self._mani += quante
+            self._ultima_mano = time.monotonic()
+
+    def _dentro(self, cartella: Path, tipo: str, argomenti: tuple, al_passo,
+                scheda: bool | None, sfondo) -> dict:
+        if sfondo is not None:
+            if lavori.turno.chi is not sfondo:
+                raise SchedaOccupata(SCHEDA_OCCUPATA)
+            self._sfondo = sfondo
+        elif self._sfondo is not None:
+            lavori.turno.passa(self._sfondo, self.lavoro)
+        self._accendi(Path(cartella))
+        if sfondo is not None:
+            sulla_scheda = self._scheda
+        elif scheda is None:
+            sulla_scheda = self._scheda and lavori.turno.prendi_se_libera(self.lavoro)
+            if tipo == "segui" and not sulla_scheda:
+                raise SchedaOccupata(SCHEDA_OCCUPATA)
+        else:
+            sulla_scheda = bool(scheda) and self._scheda
+        self._ultimo = time.monotonic()
+        self._fermo.clear()
+        numero = next(self._numeri)
+        self._in_sfondo = sfondo is not None
+        self._seguendo = sfondo is None and tipo == "segui"
+        if self._seguendo:
+            self._ceduto = False
+        try:
+            esito = self._manda((tipo, numero, *argomenti, sulla_scheda), al_passo)
+        finally:
+            self._in_sfondo = False
+            self._seguendo = False
+            self._ultimo = time.monotonic()
+        self._sorveglia()
+        tipo_esito, _, dati = esito
+        if tipo_esito != "fatto":
+            raise ErroreOfficina(dati.get("messaggio") or NON_GUARDA, codice="ritocco_scelta")
+        if scheda is None and sfondo is None and sulla_scheda and \
+                dati.get("dove") == scelta.PROCESSORE:
+            lavori.turno.lascia(self.lavoro)
+        return dati
 
     def _accendi(self, cartella: Path) -> None:
         if self.acceso and cartella == self._cartella:

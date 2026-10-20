@@ -23,6 +23,14 @@ export async function leggiRitocchi(fileId) {
 
 function disegnaPiede(piede, voce, opzioni) {
     piede.replaceChildren();
+    if (voce.attesa) {
+        const vai = pezzo("a", "tasto-comando nudo piccolo",
+                          voce.attesa === "da_rivedere" ? "Rivedi" : "Vedi la coda");
+        vai.href = voce.attesa === "da_rivedere" ? `/ritocco/rivedi?lavoro=${encodeURIComponent(voce.lavoro)}` : "/ritocco";
+        vai.dataset.vaiAlRitocco = String(voce.id);
+        piede.append(vai);
+        return;
+    }
     const togli = tasto("Togli il ritocco", "tasto-comando nudo piccolo");
     togli.dataset.togliRitocco = String(voce.id);
     togli.addEventListener("click", () => chiediConferma(piede, voce, opzioni));
@@ -72,36 +80,162 @@ export function disegnaRitocchi(dove, elenco, opzioni = {}) {
     dove.append(testa, fila, pezzo("p", "minuscolo attenuato rc-nota", NOTA));
 }
 
-export function vediSotto({ tasto: bottone, immagine, indirizzo, attivo }) {
+const SCARTO_AMMESSO = 0.12;
+
+function mettiSopra(sotto, sopra) {
+    const stile = getComputedStyle(sotto);
+    Object.assign(sopra.style, {
+        position: "absolute", margin: "0", maxWidth: "none", maxHeight: "none", pointerEvents: "none",
+        left: `${sotto.offsetLeft}px`, top: `${sotto.offsetTop}px`,
+        width: `${sotto.offsetWidth}px`, height: `${sotto.offsetHeight}px`,
+        objectFit: stile.objectFit, transformOrigin: stile.transformOrigin, transform: sotto.style.transform,
+    });
+}
+
+function staFermo(video) {
+    return video.paused || video.ended;
+}
+
+export function vediSotto({ tasto: bottone, media, indirizzo, fotogramma, attivo, spazio = () => true }) {
     let tenuto = null;
+    let coperta = null;
+    let giro = 0;
     const pronto = new Set();
+
+    const butta = () => {
+        if (!coperta) return;
+        const { video } = coperta;
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+        video.remove();
+        coperta.fermo?.remove();
+        coperta = null;
+    };
+
+    const copri = (elemento, dove) => {
+        if (coperta && coperta.sotto === elemento && coperta.dove === dove && elemento.isConnected) return coperta;
+        butta();
+        const video = document.createElement("video");
+        video.className = "sotto-al-video";
+        video.muted = video.playsInline = true;
+        video.preload = "auto";
+        video.hidden = true;
+        video.setAttribute("aria-hidden", "true");
+        coperta = { sotto: elemento, dove, video, guasta: false, fermo: null };
+        const questa = coperta;
+        video.addEventListener("error", () => {
+            questa.guasta = true;
+            if (tenuto && tenuto.coperta === questa) mostraIlFermo(questa);
+        });
+        video.src = dove;
+        elemento.after(video);
+        return coperta;
+    };
+
+    const mostraIlFermo = (questa) => {
+        questa.video.hidden = true;
+        if (!fotogramma) return;
+        const istante = Math.round((questa.sotto.currentTime || 0) * 1000);
+        const dove = fotogramma(questa.sotto, istante);
+        if (!dove) return;
+        if (!questa.fermo) {
+            questa.fermo = document.createElement("img");
+            questa.fermo.className = "sotto-al-video";
+            questa.fermo.alt = "";
+            questa.fermo.draggable = false;
+            questa.fermo.hidden = true;
+            questa.fermo.addEventListener("load", () => {
+                if (tenuto && tenuto.coperta === questa) questa.fermo.hidden = false;
+            });
+            questa.sotto.after(questa.fermo);
+        }
+        mettiSopra(questa.sotto, questa.fermo);
+        questa.fermo.src = dove;
+    };
 
     const precarica = () => {
         if (!attivo()) return;
-        const dove = indirizzo();
-        if (!dove || pronto.has(dove)) return;
+        const elemento = media();
+        const dove = elemento && indirizzo(elemento);
+        if (!dove) return;
+        if (elemento.tagName === "VIDEO") {
+            copri(elemento, dove);
+            return;
+        }
+        if (pronto.has(dove)) return;
         pronto.add(dove);
         const prima = new Image();
         prima.src = dove;
     };
 
-    const accendi = () => {
-        const img = immagine();
-        const dove = indirizzo();
-        if (tenuto || !img || !dove || !attivo()) return;
-        tenuto = { img, src: img.getAttribute("src") };
-        img.src = dove;
-        img.dataset.vedeSotto = "1";
-        bottone?.setAttribute("aria-pressed", "true");
+    const segui = () => {
+        if (!tenuto) return;
+        if (media() !== tenuto.elemento) {
+            spegni(false);
+            accendi();
+            if (!tenuto) bottone?.setAttribute("aria-pressed", "false");
+            return;
+        }
+        const questa = tenuto.coperta;
+        if (questa && !questa.guasta) {
+            const { sotto, video } = questa;
+            mettiSopra(sotto, video);
+            if (video.readyState >= 1) {
+                if (video.playbackRate !== sotto.playbackRate) video.playbackRate = sotto.playbackRate;
+                if (!video.seeking && Math.abs(video.currentTime - sotto.currentTime) > SCARTO_AMMESSO) {
+                    video.currentTime = sotto.currentTime;
+                }
+                if (staFermo(sotto)) {
+                    if (!video.paused) video.pause();
+                } else if (video.paused && !video.seeking) {
+                    video.play().catch(() => {});
+                }
+                if (video.hidden && !video.seeking && video.readyState >= 2
+                        && Math.abs(video.currentTime - sotto.currentTime) <= SCARTO_AMMESSO) {
+                    video.hidden = false;
+                }
+            }
+        } else if (questa && questa.fermo && !questa.fermo.hidden) {
+            mettiSopra(questa.sotto, questa.fermo);
+        }
+        giro = requestAnimationFrame(segui);
     };
 
-    const spegni = () => {
+    const accendi = () => {
+        const elemento = media();
+        const dove = elemento && indirizzo(elemento);
+        if (tenuto || !elemento || !dove || !attivo()) return;
+        if (elemento.tagName === "VIDEO") {
+            const questa = copri(elemento, dove);
+            tenuto = { elemento, coperta: questa };
+            if (questa.guasta) mostraIlFermo(questa);
+            else if (questa.video.readyState >= 1) questa.video.currentTime = elemento.currentTime;
+        } else {
+            tenuto = { elemento, src: elemento.getAttribute("src") };
+            elemento.src = dove;
+        }
+        elemento.dataset.vedeSotto = "1";
+        bottone?.setAttribute("aria-pressed", "true");
+        cancelAnimationFrame(giro);
+        giro = requestAnimationFrame(segui);
+    };
+
+    const spegni = (avvisa = true) => {
+        cancelAnimationFrame(giro);
+        if (coperta && !coperta.sotto.isConnected) butta();
         if (!tenuto) return;
-        const { img, src } = tenuto;
+        const { elemento, src, coperta: questa } = tenuto;
         tenuto = null;
-        if (img.isConnected && img.dataset.vedeSotto) img.src = src;
-        delete img.dataset.vedeSotto;
-        bottone?.setAttribute("aria-pressed", "false");
+        if (questa) {
+            questa.video.hidden = true;
+            questa.video.pause();
+            if (questa.fermo) questa.fermo.hidden = true;
+        } else if (elemento.isConnected && elemento.dataset.vedeSotto) {
+            elemento.src = src;
+        }
+        delete elemento.dataset.vedeSotto;
+        if (avvisa) bottone?.setAttribute("aria-pressed", "false");
     };
 
     if (bottone) {
@@ -113,7 +247,7 @@ export function vediSotto({ tasto: bottone, immagine, indirizzo, attivo }) {
             bottone.setPointerCapture?.(evento.pointerId);
             accendi();
         });
-        for (const nome of ["pointerup", "pointercancel", "lostpointercapture"]) bottone.addEventListener(nome, spegni);
+        for (const nome of ["pointerup", "pointercancel", "lostpointercapture"]) bottone.addEventListener(nome, () => spegni());
         bottone.addEventListener("keydown", (evento) => {
             if (evento.key !== "Enter") return;
             evento.preventDefault();
@@ -126,7 +260,7 @@ export function vediSotto({ tasto: bottone, immagine, indirizzo, attivo }) {
     const libero = (evento) => !siStaScrivendo(evento.target) && !document.querySelector("dialog[open]");
     document.addEventListener("keydown", (evento) => {
         if (evento.key !== " " || evento.ctrlKey || evento.metaKey || evento.altKey) return;
-        if (!libero(evento) || !attivo()) return;
+        if (!libero(evento) || !attivo() || !spazio()) return;
         evento.preventDefault();
         if (!evento.repeat) accendi();
     });
@@ -135,8 +269,8 @@ export function vediSotto({ tasto: bottone, immagine, indirizzo, attivo }) {
         evento.preventDefault();
         spegni();
     });
-    window.addEventListener("blur", spegni);
+    window.addEventListener("blur", () => spegni());
     document.addEventListener("visibilitychange", () => { if (document.hidden) spegni(); });
 
-    return { precarica, spegni, tenuto: () => Boolean(tenuto) };
+    return { precarica, spegni: () => spegni(), tenuto: () => Boolean(tenuto) };
 }

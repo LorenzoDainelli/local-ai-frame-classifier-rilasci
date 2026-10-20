@@ -20,6 +20,8 @@ BLOCCHI_NORMALI = 16
 BLOCCHI_STRETTI = 36
 TESSERA = 1024
 SOVRAPPOSTA = 128
+FASI = {"encode": (0.0, 0.2), "upscale": (0.2, 0.8), "decode": (0.8, 0.97),
+        "postprocess": (0.97, 1.0)}
 TENUTI = ("dit_device", "vae_device", "dit_offload_device", "vae_offload_device",
           "tensor_offload_device", "compute_dtype")
 
@@ -56,6 +58,15 @@ class SeedVR2:
         self._ctx = None
         self._pronto = False
         self._s = None
+        self._avanza = None
+        self.tempi: list[dict] = []
+
+    quadri_per_volta = QUADRI_PER_VOLTA
+
+    def firma(self) -> dict:
+        return {"nome": NOME, "versione": self.versione, "dit": DIT, "vae": VAE, "seme": SEME,
+                "mucchio": MUCCHIO, "per_volta": QUADRI_PER_VOLTA, "contesto": CONTESTO,
+                "tessera": TESSERA, "sovrapposta": SOVRAPPOSTA}
 
     def _carica(self):
         if self._s is not None:
@@ -139,13 +150,44 @@ class SeedVR2:
         self._s["memoria"].clear_memory(debug=self._s["debug"], deep=True, force=True)
         return self._una_volta(quadri, larghezza, altezza)
 
+    def _fase(self, nome: str):
+        if self._avanza is None:
+            return None
+        inizio, fine = FASI[nome]
+        avanza = self._avanza
+
+        def passo(fatti, totale, *_resto) -> None:
+            try:
+                frazione = min(max(float(fatti) / float(totale), 0.0), 1.0)
+            except (TypeError, ValueError, ZeroDivisionError):
+                return
+            avanza(inizio + (fine - inizio) * frazione)
+        return passo
+
+    def _misura(self, torch, tempi: dict, nome: str, partito: float) -> float:
+        import time
+
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        adesso = time.monotonic()
+        tempi[nome] = round(adesso - partito, 2)
+        return adesso
+
     def _una_volta(self, quadri, larghezza: int, altezza: int):
+        import time
+
         import torch
 
         s = self._carica()
         utili, fasi, debug = s["utili"], s["fasi"], s["debug"]
         corto, lungo = lati(larghezza, altezza)
+        cuda = torch.cuda.is_available()
+        if cuda:
+            torch.cuda.reset_peak_memory_stats()
+        tempi: dict = {"quadri": int(len(quadri)), "stretto": self.stretto}
+        partito = time.monotonic()
         esecutore = self._prepara()
+        partito = self._misura(torch, tempi, "prepara", partito)
         tensore = torch.from_numpy(quadri).to(torch.float16).div_(255.0)
         tensore, _info = utili.compute_generation_info(
             ctx=self._ctx, images=tensore, resolution=corto, max_resolution=lungo,
@@ -153,17 +195,28 @@ class SeedVR2:
             prepend_frames=0, temporal_overlap=0, debug=debug)
         ctx = fasi.encode_all_batches(
             esecutore, ctx=self._ctx, images=tensore, debug=debug, batch_size=MUCCHIO,
-            uniform_batch_size=False, seed=SEME, progress_callback=None,
+            uniform_batch_size=False, seed=SEME, progress_callback=self._fase("encode"),
             temporal_overlap=0, resolution=corto, max_resolution=lungo,
             input_noise_scale=0.0, color_correction="lab")
+        partito = self._misura(torch, tempi, "encode", partito)
         ctx = fasi.upscale_all_batches(esecutore, ctx=ctx, debug=debug,
-                                       progress_callback=None, seed=SEME,
+                                       progress_callback=self._fase("upscale"), seed=SEME,
                                        latent_noise_scale=0.0, cache_model=True)
+        partito = self._misura(torch, tempi, "upscale", partito)
         ctx = fasi.decode_all_batches(esecutore, ctx=ctx, debug=debug,
-                                      progress_callback=None, cache_model=True)
-        ctx = fasi.postprocess_all_batches(ctx=ctx, debug=debug, progress_callback=None,
+                                      progress_callback=self._fase("decode"), cache_model=True)
+        partito = self._misura(torch, tempi, "decode", partito)
+        ctx = fasi.postprocess_all_batches(ctx=ctx, debug=debug,
+                                           progress_callback=self._fase("postprocess"),
                                            color_correction="lab", prepend_frames=0,
                                            temporal_overlap=0, batch_size=MUCCHIO)
+        self._misura(torch, tempi, "postprocess", partito)
+        if cuda:
+            libera, tutta = torch.cuda.mem_get_info()
+            tempi.update(picco_mb=torch.cuda.max_memory_allocated() // 2 ** 20,
+                         riservata_mb=torch.cuda.max_memory_reserved() // 2 ** 20,
+                         libera_mb=libera // 2 ** 20, scheda_mb=tutta // 2 ** 20)
+        self.tempi.append(tempi)
         uscita = ctx["final_video"].detach().to("cpu", torch.float32)
         uscita = uscita[..., :3].clamp_(0, 1).mul_(255).round_().to(torch.uint8).numpy()
         self._ctx = ctx
@@ -177,23 +230,34 @@ class SeedVR2:
         return Image.fromarray(grande).resize((larghezza, altezza), Image.Resampling.LANCZOS) \
             if grande.shape[1::-1] != (larghezza, altezza) else Image.fromarray(grande)
 
-    def video(self, quadri: Iterable, larghezza: int, altezza: int) -> Iterator:
+    def video(self, quadri: Iterable, larghezza: int, altezza: int, salta: int = 0,
+              al_pezzo=None) -> Iterator:
         import numpy as np
 
         prima: list = []
         nuovi: list = []
+        visti = 0
         for quadro in quadri:
+            if visti < salta:
+                visti += 1
+                prima = (prima + [np.asarray(quadro)])[-CONTESTO:]
+                continue
             nuovi.append(np.asarray(quadro))
             if len(nuovi) >= QUADRI_PER_VOLTA:
-                yield from self._pezzo(prima, nuovi, larghezza, altezza)
+                yield from self._pezzo(prima, nuovi, larghezza, altezza, al_pezzo)
                 prima, nuovi = (prima + nuovi)[-CONTESTO:], []
         if nuovi:
-            yield from self._pezzo(prima, nuovi, larghezza, altezza)
+            yield from self._pezzo(prima, nuovi, larghezza, altezza, al_pezzo)
 
-    def _pezzo(self, prima: list, nuovi: list, larghezza: int, altezza: int) -> Iterator:
+    def _pezzo(self, prima: list, nuovi: list, larghezza: int, altezza: int,
+               al_pezzo=None) -> Iterator:
         import numpy as np
 
-        fatti = self._ingrandisci(np.stack(prima + nuovi), larghezza, altezza)
+        self._avanza = None if al_pezzo is None else (lambda frazione: al_pezzo(frazione, len(nuovi)))
+        try:
+            fatti = self._ingrandisci(np.stack(prima + nuovi), larghezza, altezza)
+        finally:
+            self._avanza = None
         yield from fatti[len(prima):len(prima) + len(nuovi)]
 
     def spegni(self) -> None:

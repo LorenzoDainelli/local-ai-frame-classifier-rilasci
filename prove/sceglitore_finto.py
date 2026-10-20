@@ -151,6 +151,12 @@ class Lento(Finto):
         time.sleep(0.05)
 
 
+class Lentissimo(Finto):
+
+    def _aspetta_un_po(self) -> None:
+        time.sleep(0.2)
+
+
 class Piena(Finto):
 
     def scegli(self, chiave, percorso, punti, riquadro, sulla_scheda, fotogramma=None):

@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 
 from officina import registro
 from officina.archivio import accesso
-from officina.web import in_disparte
+from officina.web import coda_ritocco, in_disparte
 from officina.web import miglioramento as miglioramento_web
 from officina.web import sincronia as sincronia_web
 from officina.web import telefono as telefono_web
@@ -30,13 +30,17 @@ def scegli_l_ambito(zona: str, gruppo: str = Form(""), dove: str = Form("")):
 
 
 def _tutti_i_lavori() -> list:
-    return [comune.lavoro_impronte_passata, comune.lavoro_modelli, comune.lavoro_volti,
-            comune.lavoro_corpi, comune.lavoro_chi_e,
-            comune.lavoro_parole, comune.lavoro_riferimento, comune.lavoro_raccolta,
-            comune.lavoro_copia_video, comune.lavoro_doppioni, comune.lavoro_raddrizza,
-            comune.lavoro_date, comune.lavoro_macchine, comune.lavoro_misura,
-            telefono_web.in_corso.lavoro, sincronia_web.in_corso.lavoro,
-            comune.lavoro_qualita, comune.lavoro_ia]
+    fuori = [comune.lavoro_impronte_passata, comune.lavoro_modelli, comune.lavoro_volti,
+             comune.lavoro_corpi, comune.lavoro_chi_e,
+             comune.lavoro_parole, comune.lavoro_riferimento, comune.lavoro_raccolta,
+             comune.lavoro_copia_video, comune.lavoro_doppioni, comune.lavoro_raddrizza,
+             comune.lavoro_date, comune.lavoro_macchine, comune.lavoro_misura,
+             telefono_web.in_corso.lavoro, sincronia_web.in_corso.lavoro,
+             comune.lavoro_qualita, comune.lavoro_ia]
+    ritocchi = coda_ritocco.il_lavoro()
+    if ritocchi is not None:
+        fuori.append(ritocchi)
+    return fuori
 
 
 _DOVE_SI_GUARDA = {
@@ -45,11 +49,16 @@ _DOVE_SI_GUARDA = {
     "i doppioni": "/doppioni", "il travaso": "/telefono", "la sincronizzazione": "/sincronia",
     "le scritte nelle foto": "/intelligenza", "le facce insegnate": "/persone",
     "le foto raccolte in un posto solo": "/importazione", "la misura": "/stato#misura", "la copia del video": "/miglioramento",
-    "il controllo degli scatti": "/miglioramento#qualita",
+    "il controllo degli scatti": "/miglioramento#qualita", "ritocchi": "/ritocco",
 }
 
 
+_NOMI_BELLI = {"ritocchi": "Ritocco"}
+
+
 def _nome_bello(cosa: str) -> str:
+    if cosa in _NOMI_BELLI:
+        return _NOMI_BELLI[cosa]
     return (cosa[0].upper() + cosa[1:]) if cosa else cosa
 
 
@@ -108,6 +117,10 @@ def ferma_tutto(entro: float = 5.0) -> None:
     except Exception as guasto:
         registro.errore("chiusura.porta_non_chiusa", **registro.dove_si_e_rotto(guasto))
     comune.fila_ia["fermata"] = True
+    try:
+        coda_ritocco.ferma()
+    except Exception as guasto:
+        registro.errore("chiusura.ritocco_non_fermato", **registro.dove_si_e_rotto(guasto))
     in_disparte.ferma_tutti()
     for passata in (comune.coda_impronte, comune.passata_volti, comune.passata_corpi,
                     comune.passata_parole,

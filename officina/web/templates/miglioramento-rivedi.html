@@ -111,9 +111,18 @@
                 <span class="etichetta-rivedi" data-audio-qui hidden>audio</span>
             </figcaption>
         </figure>
+        <div class="rivedi-riga" hidden>
+            <span class="rivedi-maniglia" role="slider" tabindex="0" aria-valuemin="0"
+                  aria-valuemax="100" aria-valuenow="50"
+                  aria-label="Dove passa la riga fra l'originale e {{ 'il migliorato' if scelta.genere == 'video' else 'la migliorata' }}"></span>
+        </div>
     </div>
 
     <div class="rivedi-comandi">
+        <span class="in-fila" role="group" aria-label="Come metterle">
+            <button class="pillola piena" type="button" data-modo="affiancate" aria-pressed="true">Affiancate</button>
+            <button class="pillola" type="button" data-modo="tendina" aria-pressed="false">Tendina</button>
+        </span>
         <span class="rv-zoom">
             <button class="tasto-comando nudo piccolo" type="button" data-zoom="meno"
                     aria-label="Rimpicciolisci">&minus;</button>
@@ -142,12 +151,14 @@
             </span>
         </div>
         {% endif %}
-        <span class="minuscolo tenue spinge">rotella per ingrandire, trascina per spostarti</span>
+        <span class="minuscolo tenue spinge">
+            <span data-spiega-tendina hidden>Trascina la riga: a sinistra com'era, a destra com'è {{ 'venuto' if scelta.genere == 'video' else 'venuta' }}. </span>rotella per ingrandire, trascina per spostarti
+        </span>
     </div>
     {% endif %}
 
     <div class="rivedi-decidi">
-        <button class="tasto-comando principale" type="button" data-decidi="approva"
+        <button class="tasto-comando principale" type="button" data-decidi="approva" data-tasto-a
                 {% if not scelta.ci_sono %}disabled{% endif %}>{{ icona('spunta', 15) }} Approva <kbd>A</kbd></button>
         <button class="tasto-comando" type="button" data-decidi="rifiuta">{{ icona('x', 15) }} Rifiuta <kbd>R</kbd></button>
         {% if scelta.quante > 1 %}
@@ -155,9 +166,9 @@
         {% endif %}
         <span class="minuscolo tenue spinge">se approvi, l'originale va in <span class="nome-di-file">{{ scelta.va_in }}</span></span>
     </div>
-    <p class="esito-rivedi" id="esito-rivedi" aria-live="polite"></p>
 
     {% endif %}
+    <p class="esito-rivedi" id="esito-rivedi" aria-live="polite"></p>
 </div>
 </main>
 </div>

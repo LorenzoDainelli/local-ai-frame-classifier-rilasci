@@ -1,0 +1,77 @@
+{% from "_icone.html" import icona %}
+{% macro finestra_ritocca_video() %}
+<dialog class="ritocca rtv" id="ritocca-video" aria-labelledby="rtv-titolo">
+    <div class="rt-intera">
+        <div class="rt-sopra">
+            <span class="rt-pillola rtv-nome"><b id="rtv-titolo">Ritocco</b> › <span data-rv-nome></span><span data-rv-misure></span></span>
+            <span class="rtv-spazio"></span>
+            <span class="rtv-esc">Esc per tornare</span>
+            <button class="rt-tasto" type="button" data-rv-esci>Chiudi</button>
+        </div>
+        <div class="rtv-corpo">
+            <div class="rtv-sinistra">
+                <div class="rt-tela" data-rv-tela>
+                    <div class="rt-foglio" data-rv-foglio>
+                        <canvas data-rv-quadro></canvas>
+                        <video muted playsinline preload="auto" data-rv-video hidden></video>
+                        <canvas data-rv-anteprima></canvas>
+                        <canvas data-rv-segni></canvas>
+                        <canvas data-rv-mano></canvas>
+                    </div>
+                    <p class="rt-stato" role="status" data-rv-stato>Preparo il video…</p>
+                </div>
+                <div class="rtv-comandi">
+                    <button class="rt-tondo" type="button" data-rv-gira aria-label="Guarda il video" title="Guarda il video (K)" disabled>{{ icona('gioca', 18) }}</button>
+                    <button class="rt-tondo" type="button" data-rv-passo="-1" aria-label="Un fotogramma indietro" title="Un fotogramma indietro (←, con Maiusc 10)" disabled>{{ icona('indietro', 18) }}</button>
+                    <button class="rt-tondo" type="button" data-rv-passo="1" aria-label="Un fotogramma avanti" title="Un fotogramma avanti (→, con Maiusc 10)" disabled>{{ icona('avanti', 18) }}</button>
+                    <span class="rtv-tempo" data-rv-tempo>0:00 / 0:00</span>
+                    <span class="rtv-spiega" data-rv-spiega></span>
+                    <button class="rt-tasto rtv-piccolo" type="button" data-rv-togli-correzione hidden>Togli questa correzione</button>
+                </div>
+                <div class="rtv-linea" role="slider" tabindex="0" aria-label="Dove sei nel video" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" data-rv-linea>
+                    <div class="rtv-righe" data-rv-righe></div>
+                    <div class="rtv-testina" data-rv-testina></div>
+                </div>
+            </div>
+            <aside class="rtv-lato" aria-label="Il ritocco del video">
+                <section class="rtv-blocco">
+                    <h3>Cosa fare</h3>
+                    <div class="rtv-cosa">
+                        <button class="rt-tasto" type="button" aria-pressed="true">Pixela</button>
+                        <button class="rt-tasto" type="button" disabled title="Arriva dopo la gara">Togli</button>
+                    </div>
+                </section>
+                <section class="rtv-blocco rtv-scelto">
+                    <div class="rtv-testa"><h3>Scelto</h3>
+                        <button class="rt-tasto rtv-piccolo" type="button" data-rv-nuova title="Comincia una parte nuova (Invio)" disabled>{{ icona('piu', 13) }} Nuova</button></div>
+                    <ul class="rtv-parti" data-rv-parti></ul>
+                    <p class="rtv-nota" data-rv-vuoto>Clicca su quello che vuoi pixelare: l'IA lo segue in tutto il video.</p>
+                    <label class="rt-cursore" data-rv-quadretti><span>Quadretti</span>
+                        <input type="range" min="1" max="4" step="1" value="1" aria-label="Quanto sono grandi i quadretti della parte scelta" data-rv-cursore>
+                        <output data-rv-cursore-valore>1×</output></label>
+                </section>
+                <section class="rtv-blocco" data-rv-in-coda hidden>
+                    <h3>Il video va in coda</h3>
+                    <p class="rtv-nota" data-rv-stima></p>
+                </section>
+                <section class="rtv-blocco" data-rv-live hidden>
+                    <h3>Foto live</h3>
+                    <p class="rtv-nota">La foto e il suo video si ritoccano insieme e restano collegati.</p>
+                </section>
+                <div class="rtv-piede">
+                    <button class="rt-tasto" type="button" data-rv-annulla>Annulla</button>
+                    <button class="rt-tasto principale" type="button" data-rv-metti disabled>Metti in coda</button>
+                </div>
+            </aside>
+        </div>
+        <p class="rt-aiuto">Clic per scegliere · Maiusc + clic per togliere un pezzo · trascina per un riquadro · ← → un fotogramma · tieni premuto Spazio per vedere sotto</p>
+        <div class="rt-conferma" role="alertdialog" aria-labelledby="rtv-conferma" data-rv-conferma hidden>
+            <p id="rtv-conferma">Esci senza mettere in coda? Le parti scelte si perdono, il video resta com'è.</p>
+            <div class="rt-conferma-tasti">
+                <button class="rt-tasto" type="button" data-rv-resta>Resta</button>
+                <button class="rt-tasto" type="button" data-rv-esci-davvero>Esci senza salvare</button>
+            </div>
+        </div>
+    </div>
+</dialog>
+{% endmacro %}

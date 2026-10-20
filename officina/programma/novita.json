@@ -368,6 +368,34 @@
       [
         "avviso",
         "Se LucidFlux non può riprendere una foto già fatta da SeedVR2, la riga sotto dice perché: foto non trovata, foto cambiata o poco spazio sul disco"
+      ],
+      [
+        "occhio",
+        "Nella foto aperta e in Etichetta c'è lo strumento per pixelare: clicchi su un volto o disegni un riquadro e l'IA trova il contorno. L'originale resta intatto in «Originali»"
+      ],
+      [
+        "video",
+        "Si pixela anche nei video e nelle foto live: l'IA segue la parte scelta fotogramma per fotogramma, e la correggi avanti o indietro sulla linea del tempo"
+      ],
+      [
+        "pannello",
+        "In Lavoro c'è la pagina «Ritocco», come Miglioramento: Avvia, Ferma e revisione prima dello scambio. Fra ritocco e miglioramento la scheda video lavora a turno"
+      ],
+      [
+        "controlla",
+        "In revisione puoi scegliere fra «Affiancate» e «Tendina», anche in Miglioramento. «Mostra sotto» fa vedere la versione senza ritocchi, nei video allo stesso istante"
+      ],
+      [
+        "riprova",
+        "Un video lungo che si ferma, perché spegni il computer o manca memoria, riprende dal pezzo dove era arrivato e viene identico"
+      ],
+      [
+        "orologio",
+        "Il contatore dei video avanza anche dentro ogni pezzo, non più a salti"
+      ],
+      [
+        "sfida",
+        "Nella sfida alla cieca c'è «Ricomincia»: le foto già approvate tornano com'erano, con l'originale al suo posto, e le rifanno SeedVR2 e LucidFlux. Quelle ritoccate o cambiate restano com'erano"
       ]
     ],
     "tecnico": [
@@ -543,6 +571,14 @@
       [
         "sfida",
         "<code>Miglioratore.adesso</code> ha <code>sfidante</code>, <code>versione</code> e <code>versioni</code> durante <code>_due_versioni</code>; <code>miglioramento.js</code> li scrive prima del passo. <code>_riprendi_una</code> scrive il motivo quando salta e manda l'avviso <code>miglioria.sfida_non_ripresa</code>"
+      ],
+      [
+        "video",
+        "<code>miglioria/pezzi.py</code>: pezzi da 41 fotogrammi in FFV1 <code>bgr0</code> (senza perdita) dentro <code>.pezzi</code> accanto al parziale, con firma di originale e motore; SeedVR2 riceve <code>salta</code> e usa lo stesso contesto, quindi l'uscita non cambia. Tempi delle fasi in <code>miglioria.tempi</code>"
+      ],
+      [
+        "sfida",
+        "<code>miglioria/ricomincia.py</code>: per le approvate senza ritocco e senza riga in <code>sfide</code>, fino a 100, controlla le impronte, rimette l'originale da «Originali», cancella la migliorata e torna <code>in_coda</code>. Strada <code>POST /api/miglioramento/sfida/ricomincia</code>"
       ]
     ]
   },

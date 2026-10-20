@@ -44,7 +44,7 @@ def main() -> int:
         manda({"fatti": int(fatti), "totale": int(totale or 0)})
 
     try:
-        esito = catena.esegui(lavoro, al_passo, freno)
+        esito = catena.esegui(lavoro, al_passo, freno, manda)
     except ErroreOfficina as errore:
         messaggio = {"guasto": errore.codice}
         if getattr(errore, "senza_nomi", False):

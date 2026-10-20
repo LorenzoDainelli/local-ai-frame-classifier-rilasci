@@ -27,6 +27,8 @@ AGGIORNA = {
     "risultato": "UPDATE ritocchi SET risultato = ? WHERE id = ?",
     "impronta_risultato": "UPDATE ritocchi SET impronta_risultato = ? WHERE id = ?",
     "traccia": "UPDATE ritocchi SET traccia = ? WHERE id = ?",
+    "lavoro_id": "UPDATE ritocchi SET lavoro_id = ? WHERE id = ?",
+    "gemello_id": "UPDATE ritocchi SET gemello_id = ? WHERE id = ?",
 }
 
 
@@ -34,19 +36,23 @@ def aggiungi(connessione: sqlite3.Connection, file_id: int, *, genere: str, cosa
              larghezza: int, altezza: int, maschera: bytes, misura: float,
              quadretto: int | None = None, origine: tuple[int, int] | None = None,
              volto_id: int | None = None, corpo_id: int | None = None,
-             scelta: dict | None = None, stato: str = FATTO) -> int:
+             scelta: dict | None = None, stato: str = FATTO,
+             seguito_id: int | None = None, lavoro_id: int | None = None,
+             gemello_id: int | None = None, rifa_id: int | None = None) -> int:
     scatto = uno(connessione, "SELECT scatto_id FROM file_media WHERE id = ?", file_id)
     quando = adesso()
     return inserisci(
         connessione,
         "INSERT INTO ritocchi (file_id, scatto_id, genere, cosa, volto_id, corpo_id, "
         "larghezza, altezza, maschera, misura, quadretto, origine_x, origine_y, "
-        "scelta, stato, messo_il, fatto_il) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "scelta, stato, messo_il, fatto_il, seguito_id, lavoro_id, gemello_id, rifa_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         file_id, scatto["scatto_id"] if scatto else None, genere, cosa, volto_id,
         corpo_id, int(larghezza), int(altezza), maschera, float(misura), quadretto,
         origine[0] if origine else None, origine[1] if origine else None,
         json.dumps(scelta, ensure_ascii=False) if scelta is not None else None,
-        stato, quando, quando if stato == FATTO else None)
+        stato, quando, quando if stato == FATTO else None, seguito_id, lavoro_id,
+        gemello_id, rifa_id)
 
 
 def per_id(connessione: sqlite3.Connection, ritocco_id: int) -> sqlite3.Row | None:

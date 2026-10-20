@@ -50,6 +50,30 @@ def apri(dati: bytes) -> Pezzo | None:
     return Pezzo(larghezza, altezza, x, y, maschera)
 
 
+def riquadro(dati: bytes) -> tuple[int, int, int, int, int, int] | None:
+    misura = struct.calcsize(TESTA)
+    if not dati or len(dati) < misura:
+        return None
+    return struct.unpack_from(TESTA, dati)
+
+
+def unione(pezzi: list[Pezzo]) -> Pezzo | None:
+    if not pezzi:
+        return None
+    if len(pezzi) == 1:
+        return pezzi[0]
+    numpy = vettori.numpy_o_spiega()
+    x0 = min(pezzo.x for pezzo in pezzi)
+    y0 = min(pezzo.y for pezzo in pezzi)
+    x1 = max(pezzo.x + pezzo.maschera.shape[1] for pezzo in pezzi)
+    y1 = max(pezzo.y + pezzo.maschera.shape[0] for pezzo in pezzi)
+    tela = numpy.zeros((y1 - y0, x1 - x0), dtype=bool)
+    for pezzo in pezzi:
+        alta, larga = pezzo.maschera.shape
+        tela[pezzo.y - y0:pezzo.y - y0 + alta, pezzo.x - x0:pezzo.x - x0 + larga] |= pezzo.maschera
+    return Pezzo(pezzi[0].larghezza, pezzi[0].altezza, x0, y0, tela)
+
+
 def per_misura(pezzo: Pezzo, larghezza: int, altezza: int) -> Pezzo:
     if (pezzo.larghezza, pezzo.altezza) == (larghezza, altezza):
         return pezzo

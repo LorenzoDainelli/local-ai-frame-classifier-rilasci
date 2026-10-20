@@ -13,7 +13,7 @@ PAGINE = (
     "/officina", "/albero", "/doppioni", "/sistemare", "/senza-data", "/persone",
     "/persone/mazzo", "/persone/cassetto", "/luoghi", "/tempo", "/elenchi", "/importazione",
     "/misura/banco", "/novita", "/telefono", "/sincronia", "/volti/raddrizzamento",
-    "/scatto/1",
+    "/scatto/1", "/ritocco", "/ritocco/rivedi",
 )
 
 
@@ -112,6 +112,32 @@ def test_dalla_revisione_si_approva_e_si_rifiuta_senza_errori(navigatore, miglio
     with migliorati.lettura() as connessione:
         fatte = sorted(r["stato"] for r in connessione.execute("SELECT stato FROM migliorie"))
     assert fatte == sorted([coda.APPROVATA, coda.RIFIUTATA])
+
+
+def test_in_revisione_la_tendina_si_accende_e_si_ricorda(navigatore, migliorati):
+    from officina.web.server import app
+
+    cliente = TestClient(app, client=("127.0.0.1", 51000))
+
+    def tendina(pagina):
+        pagina.locator('[data-modo="tendina"]').click()
+        pagina.wait_for_selector("#rivedi-due.tendina")
+        assert pagina.locator(".rivedi-maniglia").is_visible()
+        pagina.reload()
+        pagina.wait_for_selector("#rivedi-due.tendina")
+        pagina.locator('[data-modo="affiancate"]').click()
+        pagina.wait_for_selector("#rivedi-due:not(.tendina)")
+        assert pagina.locator(".rivedi-maniglia").is_hidden()
+        pagina.wait_for_function(
+            "() => !document.querySelector('[data-decidi=\"approva\"]').disabled", timeout=10000)
+        with pagina.expect_navigation(timeout=20000):
+            pagina.keyboard.press("a")
+        assert pagina.evaluate("() => !document.body.classList.contains('con-albero-sopra')")
+
+    assert _guarda(navigatore, cliente, "/miglioramento/rivedi", tendina) == []
+    with migliorati.lettura() as connessione:
+        assert connessione.execute(
+            "SELECT count(*) FROM migliorie WHERE stato = 'approvata'").fetchone()[0] == 1
 
 
 def _decidi(pagina, come: str) -> None:

@@ -127,6 +127,19 @@ def miglioramento_sfida_riprova():
     return RedirectResponse("/miglioramento", status_code=303)
 
 
+@strada.post("/api/miglioramento/sfida/ricomincia")
+def miglioramento_sfida_ricomincia():
+    from officina.miglioria import ricomincia
+
+    archivio = accesso.aperto()
+    esito = ricomincia.tutte(archivio)
+    registro.evento("miglioria.sfida_ricominciata", rimesse=esito.rimesse,
+                    saltate=len(esito.saltate))
+    if esito.rimesse:
+        _avvia(archivio)
+    return JSONResponse({"rimesse": esito.rimesse, "saltate": esito.saltate})
+
+
 def _avvia(archivio) -> None:
     from officina.miglioria import preparazione
 
@@ -154,10 +167,16 @@ def miglioramento_ferma():
 
 @strada.post("/miglioramento/{miglioria_id}/togli")
 def miglioramento_togli(miglioria_id: int):
+    from pathlib import Path
+
+    from officina.miglioria import attesa, pezzi
     from officina.miglioria import coda as miglioria_coda
 
     with accesso.aperto().scrittura() as connessione:
-        miglioria_coda.togli(connessione, miglioria_id)
+        riga = miglioria_coda.per_id(connessione, miglioria_id)
+        if miglioria_coda.togli(connessione, miglioria_id) and riga is not None:
+            pezzi.butta_quelli_di(attesa.cartella(connessione, Path(riga["percorso_originale"])),
+                                  miglioria_id)
     return RedirectResponse("/miglioramento", status_code=303)
 
 

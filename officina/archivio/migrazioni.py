@@ -1422,6 +1422,67 @@ def _versione_62(connessione: sqlite3.Connection) -> None:
         "WHERE seguito_id IS NOT NULL")
 
 
+def _versione_63(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE ritocchi_lavori (
+            id           INTEGER PRIMARY KEY,
+            scatto_id    INTEGER NOT NULL REFERENCES scatti(id) ON DELETE CASCADE,
+            stato        TEXT NOT NULL DEFAULT 'in_coda'
+                         CHECK (stato IN ('in_coda','in_lavoro','da_rivedere','in_scambio',
+                                          'fatto','rifiutato','fallito')),
+            versione     INTEGER NOT NULL DEFAULT 1,
+            rifatto      INTEGER NOT NULL DEFAULT 0,
+            stima        INTEGER,
+            secondi      REAL,
+            guasto       TEXT,
+            messo_il     TEXT NOT NULL,
+            iniziato_il  TEXT,
+            finito_il    TEXT,
+            deciso_il    TEXT
+        )
+        """
+    )
+    connessione.execute("CREATE INDEX ritocchi_lavori_per_stato ON ritocchi_lavori(stato, id)")
+    connessione.execute(
+        "CREATE INDEX ritocchi_lavori_per_scatto ON ritocchi_lavori(scatto_id, stato)")
+    connessione.execute(
+        """
+        CREATE TABLE ritocchi_lavori_file (
+            lavoro_id        INTEGER NOT NULL
+                             REFERENCES ritocchi_lavori(id) ON DELETE CASCADE,
+            file_id          INTEGER NOT NULL REFERENCES file_media(id) ON DELETE CASCADE,
+            pronta           TEXT,
+            impronta_pronta  TEXT,
+            impronta_base    TEXT,
+            fotogrammi       INTEGER,
+            PRIMARY KEY (lavoro_id, file_id)
+        ) WITHOUT ROWID
+        """
+    )
+    connessione.execute(
+        "CREATE INDEX ritocchi_lavori_file_per_file ON ritocchi_lavori_file(file_id)")
+    connessione.execute(
+        "ALTER TABLE ritocchi ADD COLUMN lavoro_id INTEGER REFERENCES ritocchi_lavori(id) "
+        "ON DELETE SET NULL")
+    connessione.execute(
+        "ALTER TABLE ritocchi ADD COLUMN gemello_id INTEGER REFERENCES ritocchi(id) "
+        "ON DELETE SET NULL")
+    connessione.execute(
+        "CREATE INDEX ritocchi_per_lavoro ON ritocchi(lavoro_id, stato) "
+        "WHERE lavoro_id IS NOT NULL")
+    connessione.execute(
+        "CREATE INDEX ritocchi_per_gemello ON ritocchi(gemello_id) WHERE gemello_id IS NOT NULL")
+
+
+def _versione_64(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "ALTER TABLE ritocchi ADD COLUMN rifa_id INTEGER REFERENCES ritocchi(id) "
+        "ON DELETE SET NULL")
+    connessione.execute(
+        "CREATE INDEX ritocchi_per_rifatto ON ritocchi(rifa_id) WHERE rifa_id IS NOT NULL")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1534,6 +1595,10 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_61),
     Migrazione(62, "nei video si segue la parte scelta, fotogramma per fotogramma",
                _versione_62),
+    Migrazione(63, "la coda del ritocco: i video e le foto live si pixelano di notte e "
+               "poi li approvi", _versione_63),
+    Migrazione(64, "prima si migliora, poi si ritocca: il pixelato si rifà sopra la versione "
+               "migliorata", _versione_64),
 ]
 
 

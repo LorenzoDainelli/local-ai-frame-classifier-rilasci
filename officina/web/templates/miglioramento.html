@@ -115,6 +115,15 @@
         {{ 'foto già fatta' if sfida.da_riprendere == 1 else 'foto già fatte' }} da SeedVR2:
         le fa quando premi Avvia.
     </p>
+    {% elif sfida.da_ricominciare and not sfida.da_votare %}
+    <p class="piccolo" data-ricomincia-della-sfida>
+        Con &laquo;Ricomincia&raquo; <b class="numeri">{{ sfida.da_ricominciare|numero }}</b>
+        {{ 'foto approvata torna' if sfida.da_ricominciare == 1 else 'foto approvate tornano' }} nella sfida.{% call spiega("Cosa vuol dire") %}
+        <p>Le foto già approvate restano fuori dalla sfida. Con &laquo;Ricomincia&raquo;
+        tornano com'erano prima del miglioramento e si rifanno con tutti e due i modelli.</p>{% endcall %}
+    </p>
+    <button class="tasto-comando piccolo" type="button" id="ricomincia-sfida"
+            data-quante="{{ sfida.da_ricominciare }}" {% if not pronto %}disabled{% endif %}>Ricomincia</button>
     {% endif %}
     <span class="barretta" aria-hidden="true"><span style="width:{{ sfida.percento }}%"></span></span>
     {% if sfida.da_votare %}

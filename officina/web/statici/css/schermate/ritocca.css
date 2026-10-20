@@ -66,6 +66,55 @@ dialog.ritocca[open] { animation: entra var(--passo) var(--uscita); }
 .rc-errore { color: var(--male); }
 .rc-nota { margin: 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accento) 8%, var(--superficie)); border: 1px solid color-mix(in srgb, var(--accento) 30%, var(--linea-forte)); }
 
+.rtv .rt-foglio > video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: fill; }
+.rtv .rt-foglio [data-rv-mano] { cursor: crosshair; }
+.rtv .rt-foglio.sotto [data-rv-anteprima], .rtv .rt-foglio.sotto [data-rv-segni] { visibility: hidden; }
+.rtv-nome { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rtv-spazio { flex: 1 1 auto; }
+.rtv-esc { flex: none; font-size: 12.5px; color: var(--tenue); white-space: nowrap; }
+.rtv-corpo { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; }
+.rtv-sinistra { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; gap: 8px; }
+.rtv-comandi { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.rtv-comandi .rt-tondo { width: 34px; height: 34px; }
+.rtv-tempo { flex: none; margin: 0 8px 0 4px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.rtv-spiega { flex: 1 1 auto; min-width: 0; font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-tasto.rtv-piccolo { height: 28px; padding: 0 10px; font-size: 12px; }
+.rtv-linea { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 3px; min-height: 26px; max-height: 92px; padding: 6px 0; border-radius: var(--raggio-controllo); background: var(--laterale); cursor: pointer; overflow-y: auto; touch-action: none; }
+.rtv-linea:focus-visible { outline: 2px solid var(--accento); outline-offset: 2px; }
+.rtv-righe { display: flex; flex-direction: column; gap: 3px; }
+.rtv-riga { position: relative; height: 8px; margin: 0 6px; border-radius: 4px; background: color-mix(in srgb, var(--tenue) 18%, transparent); }
+.rtv-riga.qui { height: 12px; }
+.rtv-presenza { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: color-mix(in srgb, var(--accento) 55%, transparent); }
+.rtv-riga.qui .rtv-presenza { background: var(--accento); }
+.rtv-riga.bloccata .rtv-presenza { background: color-mix(in srgb, var(--tenue) 60%, transparent); }
+.rtv-punto { position: absolute; top: 50%; width: 11px; height: 11px; padding: 0; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid var(--carta); background: var(--ink); cursor: pointer; }
+.rtv-riga.qui .rtv-punto { width: 13px; height: 13px; }
+.rtv-testina { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink); pointer-events: none; }
+.rtv-lato { min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 14px; border-radius: var(--raggio-controllo); background: var(--carta); border: 0.5px solid var(--linea-forte); overflow-y: auto; }
+.rtv-blocco { display: flex; flex-direction: column; gap: 8px; }
+.rtv-blocco[hidden] { display: none; }
+.rtv-blocco h3 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--tenue); text-transform: uppercase; }
+.rtv-testa { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rtv-cosa { display: flex; gap: 6px; }
+.rtv-nota { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.rtv-nota[hidden] { display: none; }
+.rtv-parti { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rtv-parte { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 10px; border: 0.5px solid var(--linea-forte); }
+.rtv-parte.qui { border-color: var(--accento); background: var(--carta-sopra); }
+.rtv-parte.bloccata { opacity: .7; }
+.rtv-parte-testa { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rtv-parte-nome { display: inline-flex; align-items: center; gap: 7px; flex: 1 1 auto; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+span.rtv-parte-nome { cursor: default; }
+.rtv-parte-nome i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--tenue); }
+.rtv-parte.qui .rtv-parte-nome i { background: var(--accento); }
+.rtv-parte select { flex: none; height: 26px; border-radius: 8px; border: 0.5px solid var(--linea-forte); background: var(--carta); color: var(--ink); font: inherit; font-size: 12px; }
+.rtv-togli { flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--tenue); font-size: 16px; cursor: pointer; }
+.rtv-togli:hover { color: var(--ink); background: var(--carta-sopra); }
+.rtv-togli[disabled] { opacity: .4; cursor: default; }
+.rtv-parte-piede { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.rtv-come { min-width: 0; font-size: 12px; color: var(--tenue); }
+.rtv-piede { display: flex; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 4px; }
+
 @media (max-width: 720px) {
     .rt-intera { padding: 10px; gap: 8px; }
     .rt-sopra { flex-wrap: wrap; }
@@ -75,4 +124,16 @@ dialog.ritocca[open] { animation: entra var(--passo) var(--uscita); }
     .rt-barra { left: 8px; right: 8px; bottom: 8px; transform: none; width: auto; max-width: none; border-radius: 18px; padding: 6px; gap: 4px; }
     .rt-sbarra, .rt-aiuto { display: none; }
     .rt-cursore input { width: 80px; }
+    .rtv-corpo { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+    .rtv-lato { max-height: 40vh; }
+    .rtv-esc, .rtv-spiega { display: none; }
 }
+
+.rr-giro { display: inline-flex; gap: 2px; }
+.rr-giro [aria-disabled="true"] { opacity: .35; pointer-events: none; }
+.rr-file .pillola[aria-current="true"] { pointer-events: none; }
+.rr-parti { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 0; padding: 0; list-style: none; font-size: var(--testo-minore); }
+.rr-parti li { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.rr-parti .icona { color: var(--accento); flex: none; }
+.rr-dopo { margin: 6px 0 0; text-align: right; }
+.sotto-al-video[hidden] { display: none; }

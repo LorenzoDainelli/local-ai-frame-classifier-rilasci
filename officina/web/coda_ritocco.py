@@ -1,0 +1,139 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from officina import registro
+from officina.archivio.database import leggi_stato, scrivi_stato
+from officina.modello import file_media
+from officina.ritocco import coda, seguiti
+from officina.ritocco.copia import RitoccoFermato
+from officina.web import lavori
+
+ACCESA = "ritocco_coda_accesa"
+UN_ALTRO_LAVORO = "un altro lavoro"
+
+_ritoccatore = None
+
+
+class Seguitore:
+
+    def __init__(self, archivio, al_clic=None, cartella=None):
+        self.archivio = archivio
+        self._al_clic = al_clic
+        self._cartella = cartella
+
+    @property
+    def al_clic(self):
+        from officina.web import ritocco as ritocco_web
+
+        return self._al_clic or ritocco_web.al_clic
+
+    def _la_cartella(self) -> Path:
+        if self._cartella is not None:
+            return Path(self._cartella)
+        from officina.web.strade import ritocco as ritocco_strade
+
+        return ritocco_strade._cartella_di_sam3()
+
+    def _dove(self, seguito_id: int) -> tuple[Path, Path, str]:
+        with self.archivio.lettura() as connessione:
+            seguito = seguiti.per_id(connessione, seguito_id)
+            if seguito is None:
+                raise RitoccoFermato(coda.NON_SEGUITO)
+            media = file_media.per_id(connessione, seguito["file_id"])
+            if media is None:
+                raise RitoccoFermato(coda.NON_C_E)
+            percorso, chiave = file_media.da_mostrare_sotto(connessione, seguito["file_id"])
+        if percorso is None or not Path(percorso).is_file():
+            raise RitoccoFermato(coda.NON_C_E)
+        if (chiave or media["impronta"]) != seguito["impronta"]:
+            raise RitoccoFermato(coda.SEGUITO_VECCHIO)
+        return self._la_cartella(), Path(percorso), seguito["impronta"]
+
+    def _prendi(self, lavoro) -> bool:
+        turno = lavori.turno
+        if turno.chi is lavoro or turno.prendi_se_libera(lavoro):
+            if lavoro.numeri.pop("in_attesa_della_scheda", None):
+                lavoro.di("la scheda è libera: parto")
+            return True
+        if not lavoro.numeri.get("in_attesa_della_scheda"):
+            chi = turno.chi
+            nome = (lavori.NOMI_NEL_TURNO.get(chi.cosa, chi.cosa) if chi is not None
+                    else UN_ALTRO_LAVORO)
+            lavoro.numeri["in_attesa_della_scheda"] = chi.cosa if chi is not None else nome
+            lavoro.di(f"in attesa della scheda: la sta usando {nome}")
+        return False
+
+    def segui(self, seguito_id: int, lavoro) -> bool:
+        from officina.web import seguire
+
+        cartella, percorso, chiave = self._dove(seguito_id)
+        if not self._prendi(lavoro):
+            return False
+        lavoro.di("l'IA segue la parte scelta nel video")
+        esito = seguire.segui_ora(self.archivio, seguito_id, self.al_clic, cartella, percorso,
+                                  chiave, sfondo=lavoro)
+        return not esito.get("in_coda") and not esito.get("fermato")
+
+    def lascia(self, lavoro) -> None:
+        self.al_clic.lascia_lo_sfondo(lavoro)
+
+    def ferma(self) -> None:
+        self.al_clic.ferma_lo_sfondo()
+
+
+def il_ritoccatore(archivio):
+    global _ritoccatore
+    from officina.ritocco import lavoro
+
+    if archivio.di_prova:
+        if _ritoccatore is not None and _ritoccatore.archivio is archivio:
+            return _ritoccatore
+        return lavoro.Ritoccatore(archivio, Seguitore(archivio))
+    if _ritoccatore is not None and _ritoccatore.archivio is not archivio:
+        _ritoccatore.ferma()
+        _ritoccatore = None
+    if _ritoccatore is None:
+        _ritoccatore = lavoro.Ritoccatore(archivio, Seguitore(archivio))
+    return _ritoccatore
+
+
+def il_lavoro():
+    return None if _ritoccatore is None else _ritoccatore.lavoro
+
+
+def sta_lavorando() -> bool:
+    return _ritoccatore is not None and _ritoccatore.sta_lavorando
+
+
+def avvia(archivio) -> bool:
+    ritoccatore = il_ritoccatore(archivio)
+    with archivio.scrittura() as connessione:
+        scrivi_stato(connessione, ACCESA, True)
+    return ritoccatore.parti()
+
+
+def ferma_dall_utente(archivio, aspetta: float = 2.0) -> None:
+    with archivio.scrittura() as connessione:
+        scrivi_stato(connessione, ACCESA, False)
+    il_ritoccatore(archivio).ferma(aspetta)
+
+
+def ferma(aspetta: float = 0.0) -> None:
+    if _ritoccatore is not None:
+        _ritoccatore.ferma(aspetta)
+
+
+def ripara(archivio) -> dict:
+    with archivio.scrittura() as connessione:
+        lasciati = seguiti.ferma_i_lasciati(connessione)
+    fatto = coda.ripara(archivio)
+    with archivio.lettura() as connessione:
+        accesa = bool(leggi_stato(connessione, ACCESA, False))
+        in_coda = coda.conteggi(connessione)[coda.IN_CODA]
+    ripartita = False
+    if accesa and in_coda:
+        ripartita = il_ritoccatore(archivio).parti()
+    if lasciati or ripartita:
+        registro.evento("ritocco.coda_ripresa", seguiti=lasciati, ripartita=ripartita)
+    return {**fatto, "seguiti": lasciati, "ripartita": ripartita}

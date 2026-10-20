@@ -12,7 +12,7 @@ from officina.modello import scatti
 from officina.volti import rilevatore as volti_rilevatore
 from officina.corpi import rilevatore as corpi_rilevatore
 from officina.modello.scatti import Filtro
-from officina.web import vista
+from officina.web import coda_ritocco, vista
 
 from officina.web.strade import base, comune, intelligenza
 from officina.web.strade.etichetta import scatto_dove_eri
@@ -26,6 +26,7 @@ def casa_del_lavoro(richiesta: Request):
     from officina.descrittori import pronti
     from officina.importazione import gruppi, scansione
     from officina.miglioria import coda as miglioria_coda
+    from officina.ritocco import coda as ritocco_coda
 
     insieme = base.comune(richiesta, "lavoro")
     if insieme["aspetto"]["lavoro"] != "A":
@@ -36,6 +37,7 @@ def casa_del_lavoro(richiesta: Request):
         prossimi = scatti.pagina(
             connessione, Filtro(senza_etichetta=True, senza_evidenziati=True), 0, 16)
         conti = miglioria_coda.conteggi(connessione)
+        ritocchi = ritocco_coda.conteggi(connessione)
         cartelle = len(scansione.cartelle(connessione))
         ultima = uno(connessione,
                      "SELECT finita_il, nuovi_scatti FROM importazioni "
@@ -148,6 +150,18 @@ def casa_del_lavoro(richiesta: Request):
                          "Apri", "migliora")
 
     tappe = [aggiungi, ia, sistema, etichetta, migliora]
+    if ritocchi[ritocco_coda.DA_RIVEDERE]:
+        quanti = ritocchi[ritocco_coda.DA_RIVEDERE]
+        tappe.append(tappa("Ritocco", "/ritocco", "tocca",
+                           f"{quanti} {'ritocco pronto' if quanti == 1 else 'ritocchi pronti'} da rivedere.",
+                           "Rivedi", "quadretti", "/ritocco/rivedi"))
+    elif ritocchi[ritocco_coda.IN_CODA] or ritocchi[ritocco_coda.IN_LAVORO]:
+        quanti = ritocchi[ritocco_coda.IN_CODA] + ritocchi[ritocco_coda.IN_LAVORO]
+        corre = coda_ritocco.sta_lavorando()
+        tappe.append(tappa("Ritocco", "/ritocco", "gira" if corre else "tocca",
+                           f"{quanti} {'ritocco' if quanti == 1 else 'ritocchi'} in coda"
+                           + (", ci sta lavorando." if corre else ": premi Avvia."),
+                           "Guarda" if corre else "Apri", "quadretti"))
     prossimo = next((t for t in tappe if t["stato"] == "tocca"), None)
     if prossimo:
         prossimo["qui"] = True

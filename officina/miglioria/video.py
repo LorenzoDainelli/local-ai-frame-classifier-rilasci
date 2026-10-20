@@ -112,6 +112,19 @@ def _dritto(quadro, rotazione: int):
     return quadro
 
 
+def dritti(originale: Path) -> Iterator:
+    from officina.immagini import fotogrammi
+
+    av = fotogrammi.decodificatore()
+    with av.open(str(originale)) as dentro:
+        entrata = dentro.streams.video[0]
+        entrata.thread_type = "AUTO"
+        for pacchetto in dentro.demux(entrata):
+            for fotogramma in pacchetto.decode():
+                rotazione = int(getattr(fotogramma, "rotation", 0) or 0) % 360
+                yield _dritto(fotogramma.to_ndarray(format="rgb24"), rotazione)
+
+
 def lavora(originale: Path, verso: Path, larghezza: int, altezza: int,
            trasforma: Callable[[Iterable], Iterator],
            al_passo: Callable[[int, int], None] | None = None) -> Piano:
