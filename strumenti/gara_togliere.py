@@ -9,9 +9,9 @@ from pathlib import Path
 
 CANDIDATI = {
     "osor-flux": {"codice": "https://github.com/Zhouqm-Git/osor",
-                  "pesi": ["Zhouqm/OSOR-FLUX-Fill", "eerie-road/osor-flux"]},
+                  "pesi": ["QinmingZhou/OSOR", "black-forest-labs/FLUX.1-Fill-dev"]},
     "osor-sdxl": {"codice": "https://github.com/Zhouqm-Git/osor",
-                  "pesi": ["Zhouqm/OSOR-SDXL-Inpainting", "eerie-road/osor-sdxl"]},
+                  "pesi": ["QinmingZhou/OSOR", "diffusers/stable-diffusion-xl-1.0-inpainting-0.1"]},
     "objectclear": {"codice": "https://github.com/zjx0101/ObjectClear",
                     "pesi": ["jixin0101/ObjectClear"]},
     "omnieraser": {"codice": "https://github.com/PRIS-CV/Omnieraser",
@@ -28,9 +28,10 @@ CANDIDATI = {
                                    "black-forest-labs/FLUX.2-klein-4B"]},
 }
 INSIEMI = {
-    "removalbench": ["theSure/RemovalBench", "PRIS-CV/RemovalBench"],
+    "removalbench": ["BaiLing/RemovalBench"],
     "rord": ["https://github.com/Forty-lock/RORD"],
-    "ober": ["jixin0101/OBER", "jixin0101/ObjectClear-Bench"],
+    "ober": ["sczhou/OBERDataset_ObjectClear"],
+    "corne-val": ["QinmingZhou/CORNE-Val"],
 }
 CERCA = ("object removal", "object remover", "eraser", "remove object")
 
@@ -57,7 +58,7 @@ def _hf(api, nome: str, tipo: str) -> dict:
     return {"c_e": True, "commit": info.sha, "licenza": licenza,
             "chiuso": bool(getattr(info, "gated", False)),
             "gb": round(sum(f["byte"] for f in file) / 1e9, 2), "quanti_file": len(file),
-            "file": sorted(file, key=lambda f: -f["byte"])[:25]}
+            "file": sorted(file, key=lambda f: -f["byte"])[:12]}
 
 
 def _dove(api, nome: str) -> dict:
@@ -104,13 +105,17 @@ def riassunto(esiti: dict) -> str:
     for chi, voce in esiti["candidati"].items():
         codice = "—" if voce["codice"] is None else ("sì" if voce["codice"]["c_e"] else "no")
         for nome, pesi in voce["pesi"].items():
+            if nome == "QinmingZhou/OSOR" and chi == "osor-flux":
+                righe.append("| file | " + ", ".join(f["nome"] for f in pesi.get("file", [])) + " |")
             righe.append(f"| {chi} | {codice} | {nome}: {'sì' if pesi['c_e'] else 'no'} | "
                          f"{pesi.get('gb', '')} | {pesi.get('licenza') or ''} |")
     righe += ["", "## Foto con la risposta giusta", ""]
     for nome, posti in esiti["insiemi"].items():
         for posto, esito in posti.items():
             righe.append(f"- {nome} — {posto}: {'sì' if esito['c_e'] else 'no'} "
-                         f"{esito.get('gb', '')}")
+                         f"{esito.get('gb', '')} {esito.get('licenza') or ''} "
+                         f"{esito.get('perche', '')}")
+            righe += [f"  - {f['nome']} {round(f['byte'] / 1e6)} MB" for f in esito.get("file", [])]
     righe += ["", "## Altri modelli trovati", ""]
     righe += [f"- {n.get('id', n.get('errore'))} ({n.get('scaricati', '')})"
               for n in esiti["nuovi"][:60]]
