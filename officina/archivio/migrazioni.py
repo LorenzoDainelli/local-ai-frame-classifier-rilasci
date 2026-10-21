@@ -1483,6 +1483,11 @@ def _versione_64(connessione: sqlite3.Connection) -> None:
         "CREATE INDEX ritocchi_per_rifatto ON ritocchi(rifa_id) WHERE rifa_id IS NOT NULL")
 
 
+def _versione_65(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "ALTER TABLE ritoccate ADD COLUMN da_rifare INTEGER NOT NULL DEFAULT 0")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1599,6 +1604,8 @@ MIGRAZIONI: list[Migrazione] = [
                "poi li approvi", _versione_63),
     Migrazione(64, "prima si migliora, poi si ritocca: il pixelato si rifà sopra la versione "
                "migliorata", _versione_64),
+    Migrazione(65, "la foto ritoccata e poi migliorata si ripixela sopra la migliorata, "
+               "anche se il programma si spegne a metà", _versione_65),
 ]
 
 

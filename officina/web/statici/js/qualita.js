@@ -1,4 +1,5 @@
 import { chiedi, manda, numeroAParole } from "./comune.js";
+import { conIRitoccati } from "./migliora.js";
 
 const riquadro = document.getElementById("qualita");
 
@@ -278,7 +279,7 @@ if (riquadro) {
         tasto.disabled = true;
         const detto = trova("data-detto");
         try {
-            const esito = await manda("/api/miglioramento/qualita/metti", {
+            const esito = await conIRitoccati("/api/miglioramento/qualita/metti", {
                 fonti: [...scelta.fonti], voti: [...scelta.voti], tipo: scelta.tipo,
             });
             detto.textContent = esito.detto;

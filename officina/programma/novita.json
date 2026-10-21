@@ -396,6 +396,10 @@
       [
         "sfida",
         "Nella sfida alla cieca c'è «Ricomincia»: le foto già approvate tornano com'erano, con l'originale al suo posto, e le rifanno SeedVR2 e LucidFlux. Quelle ritoccate o cambiate restano com'erano"
+      ],
+      [
+        "migliora",
+        "Uno scatto ritoccato si può migliorare: prima ti chiedo se vuoi, poi si migliora quello senza ritocchi e il pixelato si rifà subito sopra la versione migliorata. Per ora i video ritoccati non si migliorano"
       ]
     ],
     "tecnico": [
@@ -579,6 +583,10 @@
       [
         "sfida",
         "<code>miglioria/ricomincia.py</code>: per le approvate senza ritocco e senza riga in <code>sfide</code>, fino a 100, controlla le impronte, rimette l'originale da «Originali», cancella la migliorata e torna <code>in_coda</code>. Strada <code>POST /api/miglioramento/sfida/ricomincia</code>"
+      ],
+      [
+        "migliora",
+        "La miglioria di uno scatto ritoccato parte dalla base in Originali; approvando, la migliorata va in .ritocchi e il ritocco si rifà sopra (colonna da_rifare, schema 65, ripreso all'avvio se si spegne a metà)"
       ]
     ]
   },

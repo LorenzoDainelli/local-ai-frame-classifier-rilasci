@@ -177,6 +177,10 @@ def _rifai(archivio, file_id: int) -> Path | None:
     nuova = impronta.del_file(pronta)
     if riga is not None and nuova == riga["impronta_copia"]:
         pronta.unlink()
+        if riga["da_rifare"]:
+            with archivio.scrittura() as connessione:
+                connessione.execute("UPDATE ritoccate SET da_rifare = 0 WHERE file_id = ?",
+                                    (file_id,))
         return copia
 
     with archivio.scrittura() as connessione:
@@ -273,13 +277,14 @@ def _finisci_lo_scambio(archivio, riga: sqlite3.Row) -> Path:
         if riga["base_e"] == ORIGINALE:
             if prima_volta:
                 cambia_il_percorso(connessione, file_id, copia, base)
+                _segui_in_miglioria(connessione, file_id, copia, base)
         elif riga["miglioria_id"]:
             connessione.execute("UPDATE migliorie SET percorso_migliorata = ? WHERE id = ?",
                                 (str(base), riga["miglioria_id"]))
         connessione.execute(
             "UPDATE ritoccate SET stato = ?, impronta_copia = impronta_nuova, "
-            "in_preparazione = NULL, impronta_nuova = NULL, fatta_il = ?, guasto = NULL "
-            "WHERE file_id = ?", (FATTA, adesso(), file_id))
+            "in_preparazione = NULL, impronta_nuova = NULL, fatta_il = ?, guasto = NULL, "
+            "da_rifare = 0 WHERE file_id = ?", (FATTA, adesso(), file_id))
         connessione.execute("UPDATE file_media SET miniatura = NULL WHERE id = ?",
                             (file_id,))
     _togli_la_preparazione(riga)
@@ -329,6 +334,7 @@ def _finisci_il_ritorno(archivio, riga: sqlite3.Row) -> Path:
     with archivio.scrittura() as connessione:
         if riga["base_e"] == ORIGINALE:
             cambia_il_percorso(connessione, file_id, base, copia)
+            _segui_in_miglioria(connessione, file_id, base, copia)
         elif riga["miglioria_id"]:
             connessione.execute("UPDATE migliorie SET percorso_migliorata = ? WHERE id = ?",
                                 (str(copia), riga["miglioria_id"]))
@@ -343,6 +349,14 @@ def _finisci_il_ritorno(archivio, riga: sqlite3.Row) -> Path:
             pass
     registro.evento("ritocco.tornato", file=file_id)
     return copia
+
+
+def _segui_in_miglioria(connessione: sqlite3.Connection, file_id: int, prima: Path,
+                        dopo: Path) -> None:
+    connessione.execute(
+        "UPDATE migliorie SET percorso_originale = ? WHERE file_id = ? "
+        "AND percorso_originale = ? AND stato IN ('in_coda','in_lavoro','da_rivedere')",
+        (str(dopo), file_id, str(prima)))
 
 
 def _togli_la_preparazione(riga: sqlite3.Row) -> None:

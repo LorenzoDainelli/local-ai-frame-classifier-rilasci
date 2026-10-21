@@ -55,6 +55,12 @@ def approva(archivio, miglioria_id: int) -> Path:
         return Path(riga["percorso_migliorata"])
     if riga["stato"] != coda.DA_RIVEDERE:
         raise ScambioFermato("Questo file non è in attesa di una decisione.")
+    from officina.miglioria import sopra
+
+    with archivio.lettura() as connessione:
+        ritoccata = sopra.di(connessione, riga)
+    if ritoccata is not None:
+        return sopra.approva(archivio, riga, ritoccata)
 
     originale = Path(riga["percorso_originale"])
     in_attesa = Path(riga["in_revisione"] or "")
@@ -104,6 +110,10 @@ def porta_a_termine(archivio, miglioria_id: int) -> Path:
         return Path(riga["percorso_migliorata"])
     if riga["stato"] != coda.IN_SCAMBIO:
         raise ScambioFermato("Questo scambio non è in corso.")
+    from officina.miglioria import sopra
+
+    if sopra.in_corso(riga):
+        return sopra.porta_a_termine(archivio, miglioria_id)
 
     originale = Path(riga["percorso_originale"])
     spostato = Path(riga["percorso_spostato"])

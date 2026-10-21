@@ -218,9 +218,14 @@ def _metti_in_coda(dati: dict, numeri: list[int]) -> dict:
     if not numeri:
         raise ErroreOfficina("Non hai selezionato niente.")
     with accesso.aperto().scrittura() as connessione:
-        esito = miglioria_coda.metti(connessione, numeri)
+        esito = miglioria_coda.metti(connessione, numeri, _ritoccati(dati))
     registro.evento("miglioria.messi", messi=esito.messi, scelti=len(numeri))
-    return {"messi": esito.messi, "detto": esito.a_parole()}
+    return {"messi": esito.messi, "detto": esito.a_parole(), "ritoccati": esito.ritoccati}
+
+
+def _ritoccati(dati: dict) -> bool | None:
+    scelta = dati.get("ritoccati")
+    return scelta if isinstance(scelta, bool) else None
 
 
 def _qualita_scelte(dati) -> tuple[list[str], list[str], str | None]:
@@ -330,10 +335,10 @@ def _metti_in_coda_per_qualita(dati: dict) -> dict:
     if not numeri:
         raise ErroreOfficina("Con questi filtri non c'è niente da mettere in coda.")
     with accesso.aperto().scrittura() as connessione:
-        esito = miglioria_coda.metti(connessione, numeri)
+        esito = miglioria_coda.metti(connessione, numeri, _ritoccati(dati))
     registro.evento("miglioria.messi_dalla_qualita", messi=esito.messi,
                     scelti=len(numeri))
-    return {"messi": esito.messi, "detto": esito.a_parole()}
+    return {"messi": esito.messi, "detto": esito.a_parole(), "ritoccati": esito.ritoccati}
 
 
 @strada.get("/miglioramento/rivedi", response_class=HTMLResponse)

@@ -164,7 +164,11 @@
         {% if scelta.quante > 1 %}
         <button class="tasto-comando nudo" type="button" data-decidi="dopo">Dopo <kbd>&rarr;</kbd></button>
         {% endif %}
+        {% if scelta.ritoccato %}
+        <span class="minuscolo tenue spinge" data-ritoccato>è ritoccato: se approvi, il pixelato si rifà subito sopra la versione migliorata</span>
+        {% else %}
         <span class="minuscolo tenue spinge">se approvi, l'originale va in <span class="nome-di-file">{{ scelta.va_in }}</span></span>
+        {% endif %}
     </div>
 
     {% endif %}

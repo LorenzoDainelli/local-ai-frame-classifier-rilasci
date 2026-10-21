@@ -193,7 +193,11 @@ def da_rivedere(archivio, saltate: set[int]) -> dict | None:
     riga = (restano or tutte)[0]
     posizione = next(numero for numero, altra in enumerate(tutte, start=1)
                      if altra["id"] == riga["id"])
+    from officina.miglioria import sopra
+
     originale = Path(riga["percorso_originale"])
+    with archivio.lettura() as connessione:
+        ritoccato = sopra.di(connessione, riga) is not None
     lati = _lati(riga)
     mancano = []
     if riga["genere"] == "video":
@@ -207,7 +211,9 @@ def da_rivedere(archivio, saltate: set[int]) -> dict | None:
         "ricominciato": ricominciato,
         "mancano_copie": mancano,
         "ci_sono": all(file.is_file() for file in lati.values()),
-        "va_in": str(Path(originale.parent.name) / attesa.ORIGINALI / originale.name),
+        "va_in": str(Path(originale.parent.name) / originale.name if ritoccato
+                     else Path(originale.parent.name) / attesa.ORIGINALI / originale.name),
+        "ritoccato": ritoccato,
         "proporzione": _proporzione(riga),
         "fedelta": fedelta.in_parole(riga["fedelta"]),
     }

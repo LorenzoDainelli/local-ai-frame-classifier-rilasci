@@ -36,6 +36,7 @@ class Esito:
     ritoccati: int = 0
     con_ritocchi: int = 0
     lasciati: int = 0
+    video_ritoccati: int = 0
 
     def a_parole(self) -> str:
         pezzi = []
@@ -58,6 +59,11 @@ class Esito:
                          "tieni")
         if self.lasciati:
             pezzi.append(f"{self.lasciati} ritoccati lasciati come sono")
+        if self.video_ritoccati:
+            pezzi.append("1 video ritoccato: per ora i video ritoccati non si migliorano"
+                         if self.video_ritoccati == 1 else
+                         f"{self.video_ritoccati} video ritoccati: per ora i video ritoccati "
+                         "non si migliorano")
         if self.ritoccati:
             pezzi.append("1 ritoccato aspetta che tu dica sì" if self.ritoccati == 1 else
                          f"{self.ritoccati} ritoccati aspettano che tu dica sì")
@@ -93,11 +99,22 @@ def e_ritoccato(connessione: sqlite3.Connection, file_id: int) -> bool:
                file_id) is not None
 
 
+def _ritoccati(connessione: sqlite3.Connection, righe) -> list[sqlite3.Row]:
+    return [riga for riga in righe
+            if _gia(connessione, riga["id"]) is None and e_ritoccato(connessione, riga["id"])]
+
+
+def video_ritoccato(connessione: sqlite3.Connection, righe) -> bool:
+    return any(riga["genere"] != "immagine" for riga in _ritoccati(connessione, righe))
+
+
 def ritoccati_da_chiedere(connessione: sqlite3.Connection, scatti) -> int:
-    return sum(1 for scatto_id in scatti
-               if any(_gia(connessione, riga["id"]) is None
-                      and e_ritoccato(connessione, riga["id"])
-                      for riga in file_da_guardare(connessione, scatto_id)))
+    conta = 0
+    for scatto_id in scatti:
+        righe = file_da_guardare(connessione, scatto_id)
+        if _ritoccati(connessione, righe) and not video_ritoccato(connessione, righe):
+            conta += 1
+    return conta
 
 
 def metti(connessione: sqlite3.Connection, scatti: list[int],
@@ -110,8 +127,10 @@ def metti(connessione: sqlite3.Connection, scatti: list[int],
             return esito
     for scatto_id in scelti:
         righe = file_da_guardare(connessione, scatto_id)
-        ritoccato = any(_gia(connessione, riga["id"]) is None
-                        and e_ritoccato(connessione, riga["id"]) for riga in righe)
+        ritoccato = bool(_ritoccati(connessione, righe))
+        if ritoccato and video_ritoccato(connessione, righe):
+            esito.video_ritoccati += 1
+            continue
         if ritoccato and not ritoccati:
             esito.lasciati += 1
             continue
