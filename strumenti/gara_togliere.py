@@ -127,6 +127,11 @@ def main(argomenti: list[str] | None = None) -> int:
         esiti = esplora(scelti.uscita)
         testo = riassunto(esiti)
         print(testo)
+        if os.environ.get("GITHUB_ACTIONS"):
+            righe = testo.splitlines()
+            for inizio in range(0, len(righe), 40):
+                pezzo = "%0A".join(righe[inizio:inizio + 40])
+                print(f"::notice title=esplora {inizio // 40}::{pezzo}")
         sommario = os.environ.get("GITHUB_STEP_SUMMARY")
         if sommario:
             with open(sommario, "a", encoding="utf-8") as uscita:
