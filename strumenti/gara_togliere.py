@@ -125,6 +125,15 @@ def guarda_dentro() -> str:
     return "\n".join(righe)
 
 
+def guarda_dentro_sicuro() -> str:
+    import traceback
+
+    try:
+        return guarda_dentro()
+    except Exception:
+        return traceback.format_exc()[-3000:]
+
+
 def riassunto(esiti: dict) -> str:
     righe = ["## Candidati", "", "| chi | codice | pesi | GB | licenza |", "|---|---|---|---|---|"]
     for chi, voce in esiti["candidati"].items():
@@ -155,7 +164,7 @@ def main(argomenti: list[str] | None = None) -> int:
     comandi.add_parser("dentro")
     scelti = lettore.parse_args(argomenti)
     if scelti.comando in ("esplora", "dentro"):
-        testo = guarda_dentro() if scelti.comando == "dentro" else riassunto(esplora(scelti.uscita))
+        testo = guarda_dentro_sicuro() if scelti.comando == "dentro" else riassunto(esplora(scelti.uscita))
         print(testo)
         if os.environ.get("GITHUB_ACTIONS"):
             righe = testo.splitlines()
