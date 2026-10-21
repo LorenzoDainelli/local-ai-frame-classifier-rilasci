@@ -105,8 +105,11 @@ export function confronta({ di = () => {} } = {}) {
         });
     });
 
-    const [prima, dopo] = figure;
-    const video = prima && dopo && prima.tagName === "VIDEO" ? [prima, dopo] : null;
+    const capo = quadri.findIndex((quadro) => quadro.closest(".rivedi-lato")?.dataset.lato === "prima");
+    const prima = figure[capo >= 0 ? capo : 0];
+    const altri = figure.filter((figura) => figura && figura !== prima);
+    const video = prima && altri.length && prima.tagName === "VIDEO" ? [prima, ...altri] : null;
+    const latoDi = (figura) => figura.closest(".rivedi-lato")?.dataset.lato;
     const tastoSuona = document.getElementById("suona");
     const tempo = document.getElementById("tempo");
     const quando = document.getElementById("quando");
@@ -124,7 +127,7 @@ export function confronta({ di = () => {} } = {}) {
     function suona(si) {
         if (!video) return;
         if (si) {
-            dopo.currentTime = prima.currentTime;
+            altri.forEach((uno) => { uno.currentTime = prima.currentTime; });
             Promise.all(video.map((uno) => uno.play())).catch((errore) => {
                 di(`Il video non parte: ${errore.message}`, true);
             });
@@ -143,8 +146,7 @@ export function confronta({ di = () => {} } = {}) {
 
     function scegliAudio(lato) {
         if (video) {
-            prima.muted = lato !== "prima";
-            dopo.muted = lato !== "dopo";
+            video.forEach((uno) => { uno.muted = latoDi(uno) !== lato; });
         }
         document.querySelectorAll("[data-audio]").forEach((tasto) => {
             tasto.classList.toggle("piena", tasto.dataset.audio === lato);
@@ -157,9 +159,11 @@ export function confronta({ di = () => {} } = {}) {
 
     function tieniInsieme() {
         if (!video) return;
-        if (!prima.paused && Math.abs(dopo.currentTime - prima.currentTime) > SCARTO_AMMESSO) {
-            dopo.currentTime = prima.currentTime;
-        }
+        altri.forEach((uno) => {
+            if (!prima.paused && Math.abs(uno.currentTime - prima.currentTime) > SCARTO_AMMESSO) {
+                uno.currentTime = prima.currentTime;
+            }
+        });
         scriviIlTempo();
         if (!prima.paused) requestAnimationFrame(tieniInsieme);
     }
@@ -168,18 +172,19 @@ export function confronta({ di = () => {} } = {}) {
         scegliAudio("prima");
         if (tastoSuona) tastoSuona.addEventListener("click", () => suona(prima.paused));
         prima.addEventListener("play", () => { scriviIlTasto(); requestAnimationFrame(tieniInsieme); });
-        prima.addEventListener("pause", () => { dopo.pause(); scriviIlTasto(); });
-        prima.addEventListener("ended", () => { dopo.pause(); scriviIlTasto(); });
+        prima.addEventListener("pause", () => { altri.forEach((uno) => uno.pause()); scriviIlTasto(); });
+        prima.addEventListener("ended", () => { altri.forEach((uno) => uno.pause()); scriviIlTasto(); });
         prima.addEventListener("loadedmetadata", scriviIlTempo);
         prima.addEventListener("seeked", () => {
-            if (Math.abs(dopo.currentTime - prima.currentTime) > 0.02) dopo.currentTime = prima.currentTime;
+            altri.forEach((uno) => {
+                if (Math.abs(uno.currentTime - prima.currentTime) > 0.02) uno.currentTime = prima.currentTime;
+            });
             scriviIlTempo();
         });
         if (tempo) {
             tempo.addEventListener("input", () => {
                 const dove = Number(tempo.value);
-                prima.currentTime = dove;
-                dopo.currentTime = dove;
+                video.forEach((uno) => { uno.currentTime = dove; });
                 scriviIlTempo();
             });
         }

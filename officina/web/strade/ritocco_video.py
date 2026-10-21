@@ -273,7 +273,7 @@ def _salva(file_id: int, parti: list[dict], foto: dict | None) -> dict:
     nuovi = []
     for parte in parti:
         nel_video = {"file_id": file_id, "seguito_id": parte["seguito"], "cosa": parte["cosa"],
-                     "quadretto": parte["quadretto"]}
+                     "quadretto": parte["quadretto"], "genere": parte.get("genere", elenco.PIXELA)}
         pezzo = pezzi[parte["foto"]] if parte["foto"] is not None else None
         if pezzo is None:
             nuovi.append(nel_video)
@@ -337,7 +337,12 @@ def _leggi_le_parti(dati) -> list[dict]:
             raise ValueError
         quadretto = parte.get("quadretto")
         legata = parte.get("foto")
+        genere = parte.get("genere") or elenco.PIXELA
+        if genere not in (elenco.PIXELA, elenco.TOGLI) or (
+                genere == elenco.TOGLI and legata is not None):
+            raise ValueError
         letti.append({
+            "genere": genere,
             "seguito": _intero(parte.get("seguito"), minimo=1),
             "cosa": parte.get("cosa", elenco.OGGETTO),
             "quadretto": None if quadretto is None else _intero(

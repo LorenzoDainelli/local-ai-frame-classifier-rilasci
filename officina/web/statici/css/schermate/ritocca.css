@@ -99,6 +99,7 @@ dialog.ritocca[open] { animation: entra var(--passo) var(--uscita); }
 .rtv-nota { margin: 0; font-size: 12.5px; color: var(--ink-2); }
 .rtv-nota[hidden] { display: none; }
 .rtv-parti { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rtv-genere { display: flex; gap: 6px; margin: 8px 0; }
 .rtv-parte { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 10px; border: 0.5px solid var(--linea-forte); }
 .rtv-parte.qui { border-color: var(--accento); background: var(--carta-sopra); }
 .rtv-parte.bloccata { opacity: .7; }

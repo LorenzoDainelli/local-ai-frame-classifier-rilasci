@@ -275,6 +275,21 @@
                            ("codeformer", "solo CodeFormer"),
                            ("nessuno", "nessuno")]) }}
                 {% endcall %}
+
+                <div class="riga" data-gara-video>
+                    <div class="lato">
+                        <div class="nome">La gara dei video per «Togli»</div>
+                        <p class="ds">Prova i modelli su video pubblici: <b>i tuoi non entrano mai</b>.{% call spiega("Come funziona") %}
+                            <p>Dura circa quattro-sei notti e occupa una cinquantina di GB solo
+                            finché dura. Si ferma con «Ferma» e riprende da dove era. Alla fine
+                            restano i primi due.</p>{% endcall %}</p>
+                        <p class="ds" data-gara-video-stato></p>
+                    </div>
+                    <div class="in-fila">
+                        <button class="tasto-comando" type="button" data-gara-video-avvia>Avvia la gara</button>
+                        <button class="tasto-comando nudo" type="button" data-gara-video-ferma hidden>Ferma</button>
+                    </div>
+                </div>
             </div>
 
             <p class="sd" style="margin-top:var(--s3)">
@@ -848,4 +863,5 @@
 <script type="module" src="/statici/js/impostazioni.js"></script>
 <script type="module" src="/statici/js/copia_esterna.js"></script>
 <script type="module" src="/statici/js/impostazioni_versioni.js"></script>
+<script type="module" src="/statici/js/gara_video.js"></script>
 {% endblock %}

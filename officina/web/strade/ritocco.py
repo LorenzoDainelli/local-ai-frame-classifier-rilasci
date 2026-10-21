@@ -14,7 +14,8 @@ from officina.corpi import rilevatore
 from officina.errori import ErroreOfficina
 from officina.immagini import consegna
 from officina.modello import file_media
-from officina.ritocco import coda, copia, elenco, maschere, pixela, racconto, scelta, strumento
+from officina.ritocco import (coda, copia, elenco, maschere, pixela, racconto, scelta,
+                              sfida_togli, strumento)
 from officina.web import coda_ritocco, rivedi_ritocco
 from officina.web import ritocco as ritocco_web
 
@@ -323,6 +324,37 @@ def _decidi(lavoro_id: int, come: str) -> dict:
     return {**_la_coda(), "detto": detto}
 
 
+def _la_gara() -> dict:
+    stato = coda_ritocco.la_gara(accesso.aperto()).come_va()
+    stato.pop("dettaglio", None)
+    return stato
+
+
+def _avvia_la_gara() -> dict:
+    coda_ritocco.la_gara(accesso.aperto()).parti()
+    return _la_gara()
+
+
+def _ferma_la_gara() -> dict:
+    coda_ritocco.la_gara(accesso.aperto()).ferma(2.0)
+    return _la_gara()
+
+
+@strada.get("/api/gara-video")
+async def api_la_gara():
+    return await consegna.subito(_la_gara)
+
+
+@strada.post("/api/gara-video/avvia")
+async def api_avvia_la_gara():
+    return await consegna.subito(_avvia_la_gara)
+
+
+@strada.post("/api/gara-video/ferma")
+async def api_ferma_la_gara():
+    return await consegna.subito(_ferma_la_gara)
+
+
 @strada.get("/api/ritocchi/{file_id}")
 async def api_ritocchi(file_id: int):
     return await consegna.subito(_ritocchi, file_id)
@@ -366,6 +398,52 @@ async def api_rimetti(lavoro_id: int):
 @strada.get("/api/ritocco/{file_id}/pronto")
 async def api_pronto(file_id: int):
     return await consegna.subito(_pronto, file_id)
+
+
+VOTATA = "Votato. Ora guarda {quale} accanto all'originale e decidi se tenerla."
+NESSUNA = ("Nessuna delle due: lo scatto resta com'era. Dalla coda puoi correggere la parte "
+           "da togliere e rimetterlo.")
+
+
+def _vota(lavoro_id: int, file_id: int, voto: str) -> dict:
+    archivio = accesso.aperto()
+    with archivio.scrittura() as connessione:
+        riga = sfida_togli.del_file(connessione, lavoro_id, file_id)
+        buttare = sfida_togli.vota(connessione, lavoro_id, file_id, voto)
+    sfida_togli.butta(buttare)
+    rivedi_ritocco.togli_le_copie(archivio, lavoro_id)
+    if voto == "nessuna":
+        coda.rifiuta(archivio, lavoro_id)
+        detto = NESSUNA
+    else:
+        detto = VOTATA.format(quale="quella scelta" if voto in ("A", "B") else "la «A»")
+    return {"fatto": True, "detto": detto, "fine": sfida_togli.fine(archivio, riga["genere"])}
+
+
+def _principale(genere: str, motore: str) -> dict:
+    sfida_togli.chiudi(accesso.aperto(), genere, motore)
+    return {"fatto": True, "detto": f"Da adesso «Togli» usa {motore}."}
+
+
+@strada.post("/api/ritocco/coda/{lavoro_id}/voto")
+async def api_vota(lavoro_id: int, richiesta: Request):
+    try:
+        dati = await richiesta.json()
+        file_id = int(dati["file_id"])
+        voto = str(dati["voto"])
+    except (ValueError, TypeError, KeyError):
+        raise sfida_togli.VotoRifiutato("Voto non valido.") from None
+    return await consegna.subito(_vota, lavoro_id, file_id, voto)
+
+
+@strada.post("/api/ritocco/sfida/principale")
+async def api_principale(richiesta: Request):
+    try:
+        dati = await richiesta.json()
+        genere, motore = str(dati["genere"]), str(dati["motore"])
+    except (ValueError, TypeError, KeyError):
+        raise sfida_togli.VotoRifiutato("Scelta non valida.") from None
+    return await consegna.subito(_principale, genere, motore)
 
 
 @strada.post("/api/ritocco/{file_id}/salva")

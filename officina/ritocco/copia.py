@@ -15,7 +15,7 @@ from officina.importazione import impronta
 from officina.miglioria import attesa, date, metadati
 from officina.miglioria.scambio import cambia_il_percorso, sposta, uguali
 from officina.modello import file_media
-from officina.ritocco import anteprime, elenco, maschere, pixela
+from officina.ritocco import anteprime, elenco, maschere, pixela, tolti
 
 IN_SCAMBIO = "in_scambio"
 FATTA = "fatta"
@@ -85,6 +85,10 @@ def nome_della_toppa(ritocco_id: int) -> str:
     return f"togli-{int(ritocco_id)}.png"
 
 
+def nome_della_toppa_video(ritocco_id: int) -> str:
+    return f"togli-{int(ritocco_id)}.mkv"
+
+
 def toppa_pronta(ritocco) -> bool:
     if not ritocco["risultato"] or ritocco["origine_x"] is None:
         return False
@@ -149,16 +153,24 @@ def disegna(immagine: Image.Image, ritocchi) -> Image.Image:
     return immagine
 
 
-def nome_in_attesa(file_id: int, copia: Path, lavoro_id: int | None = None) -> str:
+def nome_in_attesa(file_id: int, copia: Path, lavoro_id: int | None = None,
+                   variante: str = "") -> str:
     if lavoro_id is None:
         return f"{PREFISSO}-{int(file_id)}-{copia.name}"
+    if variante:
+        return f"{PREFISSO}-{int(file_id)}-{int(lavoro_id)}-{variante}-{copia.name}"
     return f"{PREFISSO}-{int(file_id)}-{int(lavoro_id)}-{copia.name}"
 
 
+def della_b(nome: str) -> str:
+    percorso = Path(nome)
+    return f"{percorso.stem}-b{percorso.suffix}"
+
+
 def _prepara(file_id: int, sorgente: Path, copia: Path, formato: str, ritocchi,
-             dove: Path, lavoro_id: int | None = None) -> Path:
+             dove: Path, lavoro_id: int | None = None, variante: str = "") -> Path:
     attesa.prepara(dove)
-    pronta = dove / nome_in_attesa(file_id, copia, lavoro_id)
+    pronta = dove / nome_in_attesa(file_id, copia, lavoro_id, variante)
     parziale = pronta.with_name(pronta.name + attesa.PARZIALE)
     for vecchio in (pronta, parziale):
         if vecchio.is_file() and attesa.e_dentro(vecchio):
@@ -507,7 +519,9 @@ def togli(archivio, ritocco_id: int) -> Path | None:
         with archivio.scrittura() as connessione:
             elenco.segna(connessione, ritocco_id, elenco.TOLTO, tolto_il=adesso())
         try:
-            return _rifai(archivio, ritocco["file_id"])
+            fatta = _rifai(archivio, ritocco["file_id"])
+            tolti.allinea_il_file(archivio, ritocco["file_id"])
+            return fatta
         except BaseException:
             if not _in_sospeso(archivio, ritocco["file_id"]):
                 with archivio.scrittura() as connessione:
@@ -538,7 +552,7 @@ def partenza(archivio, file_id: int) -> Partenza:
 
 
 def prepara_per_la_coda(archivio, file_id: int, lavoro_id: int, ritocchi,
-                        da: Partenza) -> Path:
+                        da: Partenza, variante: str = "") -> Path:
     try:
         formato = metadati.formato_di(da.copia)
     except ValueError as errore:
@@ -548,7 +562,8 @@ def prepara_per_la_coda(archivio, file_id: int, lavoro_id: int, ritocchi,
         raise RitoccoFermato(CAMBIATO)
     with archivio.lettura() as connessione:
         dove = attesa.cartella(connessione, da.copia)
-    return _prepara(file_id, da.sorgente, da.copia, formato, ritocchi, dove, lavoro_id)
+    return _prepara(file_id, da.sorgente, da.copia, formato, ritocchi, dove, lavoro_id,
+                    variante)
 
 
 def scambia(archivio, file_id: int, pronta: Path, impronta_pronta: str,

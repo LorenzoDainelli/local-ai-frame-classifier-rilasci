@@ -105,6 +105,20 @@ function quadrettoDi(parte) {
     return lato > minimo ? lato : null;
 }
 
+function scurisciQui(penna, pezzo) {
+    const tela = document.createElement("canvas");
+    tela.width = pezzo.w;
+    tela.height = pezzo.h;
+    const penna2 = tela.getContext("2d");
+    const dati = penna2.createImageData(pezzo.w, pezzo.h);
+    for (let i = 0; i < pezzo.dati.length; i++) {
+        if (!pezzo.dati[i]) continue;
+        dati.data[i * 4 + 3] = 170;
+    }
+    penna2.putImageData(dati, 0, 0);
+    penna.drawImage(tela, pezzo.x, pezzo.y);
+}
+
 function pixelaQui(penna, parte, pezzo) {
     const { lato } = latoDi(parte, pezzo);
     const [ox, oy] = parte.misure?.origine || [pezzo.x, pezzo.y];
@@ -214,7 +228,8 @@ function disegna() {
         caricaMaschere(parte, n);
         if (st.gira) caricaMaschere(parte, n + BLOCCO);
         const pezzo = parte.maschere.get(n);
-        if (pezzo && pronto) pixelaQui(anteprima, parte, pezzo);
+        if (pezzo && pronto && parte.genere === "togli") scurisciQui(anteprima, pezzo);
+        else if (pezzo && pronto) pixelaQui(anteprima, parte, pezzo);
     }
     const segni = qui("[data-rv-segni]").getContext("2d");
     segni.clearRect(0, 0, st.larga, st.alta);
@@ -459,7 +474,14 @@ function aggiornaTasti() {
     cursore.value = String(parte ? parte.per : 1);
     cursore.disabled = !parte || !pronto;
     qui("[data-rv-cursore-valore]").textContent = `${parte ? parte.per : 1}×`;
-    qui("[data-rv-quadretti]").classList.toggle("spento", !parte);
+    const togli = Boolean(parte) && parte.genere === "togli";
+    qui("[data-rv-quadretti]").classList.toggle("spento", !parte || togli);
+    if (togli) cursore.disabled = true;
+    finestra().querySelectorAll("[data-rv-genere]").forEach((tasto) => {
+        const suo = tasto.dataset.rvGenere;
+        tasto.setAttribute("aria-pressed", String((parte ? parte.genere || "pixela" : "pixela") === suo));
+        tasto.disabled = !parte || !pronto || parte.bloccata || (suo === "togli" && parte.foto != null);
+    });
     qui("[data-rv-live]").hidden = !st.live;
 }
 
@@ -495,7 +517,7 @@ function nuovaParte(cosa, foto = null) {
     const parte = {
         chiave: ++chiave, numero: st.contatore, nome: `${NOMI[cosa]} ${st.contatore}`, cosa, foto,
         seguito: null, stato: null, misure: null, segni: new Map(), maschere: new Map(),
-        blocchi: new Map(), tinta: null, giro: 0, per: 1, partita: 0, secondi: null, bloccata: false,
+        blocchi: new Map(), tinta: null, giro: 0, per: 1, genere: "pixela", partita: 0, secondi: null, bloccata: false,
         quadretto: null, perso: false,
     };
     st.parti.push(parte);
@@ -816,7 +838,7 @@ async function mettiInCoda() {
     aggiornaTasti();
     fermaIlVideo();
     const corpo = {
-        parti: daMettere().map((parte) => ({ seguito: parte.seguito, cosa: parte.cosa, quadretto: quadrettoDi(parte), foto: parte.foto })),
+        parti: daMettere().map((parte) => ({ seguito: parte.seguito, cosa: parte.cosa, quadretto: quadrettoDi(parte), foto: parte.foto, genere: parte.genere || "pixela" })),
     };
     if (mio.foto && mio.foto.pezzi.length) {
         corpo.foto = { file: mio.foto.file, larghezza: mio.foto.larghezza, altezza: mio.foto.altezza, pezzi: mio.foto.pezzi };
@@ -1011,7 +1033,7 @@ async function prepara(mio) {
     mio.gia = dati.gia.map((gia, i) => ({
         chiave: ++chiave, nome: `${NOMI[gia.cosa] || NOMI.oggetto} ${i + 1}`, cosa: gia.cosa, foto: null,
         seguito: gia.seguito, stato: null, fatta: gia.stato === "fatto", misure: null, segni: new Map(),
-        maschere: new Map(), blocchi: new Map(), tinta: null, giro: 0, per: 1, partita: 0, secondi: null,
+        maschere: new Map(), blocchi: new Map(), tinta: null, giro: 0, per: 1, genere: "pixela", partita: 0, secondi: null,
         bloccata: true, quadretto: gia.quadretto || null, perso: false,
     }));
     aggiornaTasti();
@@ -1151,6 +1173,15 @@ function leghi() {
         scriviParti();
         ridisegna();
     });
+    finestra().querySelectorAll("[data-rv-genere]").forEach((tasto) => tasto.addEventListener("click", () => {
+        if (!st) return;
+        const parte = st.parti[st.corrente];
+        if (!parte || parte.bloccata) return;
+        parte.genere = tasto.dataset.rvGenere;
+        aggiornaTasti();
+        aggiornaStima();
+        ridisegna();
+    }));
     qui("[data-rv-cursore]").addEventListener("input", (evento) => {
         if (!st) return;
         const parte = st.parti[st.corrente];

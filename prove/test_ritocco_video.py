@@ -353,3 +353,37 @@ def test_le_strade_dei_fotogrammi_sanno_mostrare_sotto(apri, importato):
     sotto = cliente.get(f"/fotogramma/{file_id}?numero=3&lato=160&sotto=1")
     assert sopra.status_code == sotto.status_code == 200
     assert cliente.get(f"/originale/{file_id}?sotto=1").status_code == 200
+
+
+def test_una_parte_da_togliere_va_in_coda_come_togli(apri, importato):
+    cliente = apri()
+    file_id = _file_di(importato, "giro.mp4")
+    _pronto(cliente, file_id)
+    seguito_id = _scegli(cliente, file_id)["seguito"]["id"]
+    assert _seguito_tutto(cliente, seguito_id)
+
+    strano = cliente.post(f"/api/ritocco-video/{file_id}/salva", headers=JSON, json={
+        "parti": [{"seguito": seguito_id, "cosa": elenco.OGGETTO, "genere": "colora"}]})
+    assert strano.status_code == 400
+    salvato = cliente.post(f"/api/ritocco-video/{file_id}/salva", json={
+        "parti": [{"seguito": seguito_id, "cosa": elenco.OGGETTO, "genere": elenco.TOGLI}]})
+    assert salvato.status_code == 200, salvato.text
+    with importato.lettura() as connessione:
+        [ritocco] = elenco.di_file(connessione, file_id, elenco.IN_CODA)
+    assert ritocco["genere"] == elenco.TOGLI and ritocco["seguito_id"] == seguito_id
+    cliente.post(f"/api/ritocco-video/{file_id}/chiudi", json={})
+    assert coda_ritocco.il_ritoccatore(importato).lavoro.aspetta_che_finisca(60)
+
+
+def test_la_gara_dei_video_si_avvia_e_senza_prove_lo_dice(apri, importato):
+    cliente = apri()
+    prima = cliente.get("/api/gara-video").json()
+    assert prima["sta_lavorando"] is False
+    cliente.post("/api/gara-video/avvia", json={})
+    gara = coda_ritocco.la_gara(importato)
+    assert gara.lavoro.aspetta_che_finisca(30)
+    dopo = cliente.get("/api/gara-video").json()
+    assert dopo["guasto"] and dopo["sta_lavorando"] is False
+    assert cliente.post("/api/gara-video/ferma", json={}).status_code == 200
+    pagina = cliente.get("/impostazioni")
+    assert "data-gara-video-avvia" in pagina.text

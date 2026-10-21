@@ -36,6 +36,8 @@ class Strato:
     cosa: str
     quadretto: int | None = None
     origine: tuple[int, int] | None = None
+    toppa: str | None = None
+    zona: tuple[int, int, int, int] | None = None
 
 
 def fonti(presenti: Iterable[int], quanti: int, vicini: int = VICINI,
@@ -99,6 +101,39 @@ class _Pronto:
         return maschere.per_misura(insieme, self.larghezza, self.altezza)
 
 
+class _Toppa:
+
+    def __init__(self, strato: Strato):
+        from officina.ritocco import togliere_video
+
+        self._togliere_video = togliere_video
+        self.x, self.y, self.larga, self.alta = strato.zona
+        self._quadri = togliere_video.leggi(Path(strato.toppa))
+
+    def prossimo(self):
+        rifatto = next(self._quadri, None)
+        if rifatto is None or rifatto.shape[:2] != (self.alta, self.larga):
+            raise ErroreOfficina(NON_TORNA, codice="ritocco_video_non_torna")
+        return rifatto
+
+    def metti(self, quadro, rifatto, pezzo: maschere.Pezzo) -> None:
+        numpy = vettori.numpy_o_spiega()
+        alta, larga = quadro.shape[:2]
+        buco = numpy.zeros((alta, larga), dtype=bool)
+        altezza, larghezza = pezzo.maschera.shape
+        x1, y1 = min(larga, pezzo.x + larghezza), min(alta, pezzo.y + altezza)
+        buco[pezzo.y:y1, pezzo.x:x1] = pezzo.maschera[:y1 - pezzo.y, :x1 - pezzo.x]
+        dentro = buco[self.y:self.y + self.alta, self.x:self.x + self.larga]
+        peso = self._togliere_video.alfa(dentro)[..., None]
+        zona = quadro[self.y:self.y + self.alta, self.x:self.x + self.larga].astype(numpy.float32)
+        misto = zona * (1.0 - peso) + rifatto.astype(numpy.float32) * peso
+        quadro[self.y:self.y + self.alta, self.x:self.x + self.larga] = numpy.clip(
+            misto + 0.5, 0, 255).astype(numpy.uint8)
+
+    def chiudi(self) -> None:
+        self._quadri.close()
+
+
 def pixela_il_video(sorgente: Path, verso: Path, strati: list[Strato],
                     al_passo: Callable[[int, int], None] | None = None,
                     fermati: Callable[[], bool] = _mai, freno=None):
@@ -112,6 +147,7 @@ def pixela_il_video(sorgente: Path, verso: Path, strati: list[Strato],
         raise ErroreOfficina(NON_TORNA, codice="ritocco_video_non_torna")
     attesi = quanti.pop()
     pronti = [_Pronto(strato, piano.larghezza, piano.altezza) for strato in strati]
+    toppe = [_Toppa(strato) if strato.toppa else None for strato in strati]
     contati = [0]
     frenato = Frenato(freno)
 
@@ -123,12 +159,16 @@ def pixela_il_video(sorgente: Path, verso: Path, strati: list[Strato],
             if numero >= attesi:
                 raise ErroreOfficina(NON_TORNA, codice="ritocco_video_non_torna")
             toccato = None
-            for pronto in pronti:
+            for pronto, toppa in zip(pronti, toppe, strict=True):
                 pezzo = pronto.al(numero)
+                rifatto = None if toppa is None else toppa.prossimo()
                 if pezzo is None:
                     continue
                 if toccato is None:
                     toccato = numpy.array(quadro, dtype=numpy.uint8, copy=True)
+                if toppa is not None:
+                    toppa.metti(toccato, rifatto, pezzo)
+                    continue
                 pixela.pixela_nei_pixel(toccato, pezzo.maschera, (pezzo.x, pezzo.y),
                                         pronto.lato, pronto.origine)
             yield quadro if toccato is None else toccato
@@ -140,8 +180,13 @@ def pixela_il_video(sorgente: Path, verso: Path, strati: list[Strato],
         if al_passo is not None:
             al_passo(fatti, attesi)
 
-    fatto = video.lavora(Path(sorgente), Path(verso), piano.larghezza, piano.altezza,
-                         trasforma, passo)
+    try:
+        fatto = video.lavora(Path(sorgente), Path(verso), piano.larghezza, piano.altezza,
+                             trasforma, passo)
+    finally:
+        for toppa in toppe:
+            if toppa is not None:
+                toppa.chiudi()
     if contati[0] != attesi:
         raise ErroreOfficina(NON_TORNA, codice="ritocco_video_non_torna")
     return fatto

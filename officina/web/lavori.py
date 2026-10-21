@@ -19,7 +19,7 @@ GUASTO_IMPREVISTO = (
 
 
 NOMI_NEL_TURNO = {"miglioramento": "il miglioramento", "ritocco": "lo strumento Ritocca",
-                  "ritocchi": "la coda del ritocco"}
+                  "ritocchi": "la coda del ritocco", "gara_video": "la gara dei video"}
 
 
 class TurnoDellaScheda:

@@ -72,6 +72,13 @@ def ritocco_lascia_stare(lavoro_id: int):
     return _alla_coda()
 
 
+def _fine_sfide(archivio) -> list[dict]:
+    from officina.ritocco import sfida_togli
+
+    return [fine for fine in (sfida_togli.fine(archivio, genere)
+                              for genere in (sfida_togli.FOTO, sfida_togli.VIDEO)) if fine]
+
+
 @strada.get("/ritocco/rivedi", response_class=HTMLResponse)
 def ritocco_rivedi(richiesta: Request, lavoro: str = "", file: str = ""):
     archivio = accesso.aperto()
@@ -79,6 +86,7 @@ def ritocco_rivedi(richiesta: Request, lavoro: str = "", file: str = ""):
     return base.pagine.TemplateResponse(richiesta, "ritocco-rivedi.html", {
         **base.comune(richiesta, "ritocco"),
         "scelta": scelta,
+        "fine_sfide": _fine_sfide(archivio),
         "dati": vista.json_per_la_pagina({
             "scelta": scelta,
             "copie": rivedi_ritocco.copie.come_va(),

@@ -6,7 +6,7 @@ from pathlib import Path
 from officina.archivio.database import tutti, uno
 from officina.miglioria import da_guardare
 from officina.modello import file_media, scatti
-from officina.ritocco import coda, elenco, racconto
+from officina.ritocco import coda, elenco, racconto, sfida_togli
 from officina.web import coda_ritocco, lavori
 from officina.web.lavori import Lavoro
 
@@ -17,7 +17,8 @@ QUANTI_A_VISTA = 4
 CARTELLA = "revisione-ritocco"
 PRIMA = da_guardare.PRIMA
 DOPO = da_guardare.DOPO
-LATI = da_guardare.LATI
+B = "b"
+LATI = (*da_guardare.LATI, B)
 PARZIALE = ".parziale.mp4"
 
 copie = Lavoro("le copie da guardare del ritocco")
@@ -180,6 +181,16 @@ def _copia(archivio, lavoro: sqlite3.Row, file_id: int, lato: str) -> Path:
 
 def _lati(connessione: sqlite3.Connection, file_id: int,
           pronto: sqlite3.Row | None) -> dict[str, Path | None]:
+    lati = _prima_e_dopo(connessione, file_id, pronto)
+    sfida = (sfida_togli.del_file(connessione, pronto["lavoro_id"], file_id)
+             if pronto is not None else None)
+    if sfida is not None and sfida["voto"] is None:
+        lati[B] = Path(sfida["pronta_b"]) if sfida["pronta_b"] else None
+    return lati
+
+
+def _prima_e_dopo(connessione: sqlite3.Connection, file_id: int,
+                  pronto: sqlite3.Row | None) -> dict[str, Path | None]:
     prima, _ = file_media.da_mostrare(connessione, file_id)
     if prima is None:
         prima = file_media.percorso_migliore(connessione, file_id)
@@ -241,13 +252,16 @@ def da_rivedere(archivio, lavoro_id: int | None, file_id: int | None) -> dict | 
         quale = next((voce for voce in file if voce["id"] == file_id), file[0])
         pronti = {riga["file_id"]: riga for riga in coda.pronti(connessione, scelto)}
         lati = _lati(connessione, quale["id"], pronti.get(quale["id"]))
+        sfida = sfida_togli.del_file(connessione, scelto, quale["id"])
+        da_votare = len(sfida_togli.da_votare(connessione, scelto))
+        votate = (sfida_togli.votate(connessione, sfida["genere"]) if sfida is not None else 0)
         parti = racconto.del_lavoro(connessione, scelto, quale["id"])
         proporzione = _proporzione(connessione, scelto, quale["id"])
     posizione = tutte.index(scelto)
     ci_sono = all(file_lato is not None and file_lato.is_file() for file_lato in lati.values())
     mancano = []
     if ci_sono and quale["genere"] == "video":
-        mancano = [lato for lato in LATI
+        mancano = [lato for lato in lati
                    if _da_vedere(archivio, lavoro, quale["id"], lato, lati[lato]) is None]
     return {
         "id": scelto,
@@ -267,7 +281,19 @@ def da_rivedere(archivio, lavoro_id: int | None, file_id: int | None) -> dict | 
         "mancano_copie": mancano,
         "parti": parti,
         "finale": finale(file),
+        "sfida": (_la_sfida(sfida, votate) if sfida is not None and B in lati else None),
+        "da_votare": da_votare,
     }
+
+
+def _la_sfida(sfida, votate: int) -> dict:
+    sinistra = sfida_togli.lettera_del_lato(sfida, "sinistra")
+    destra = sfida_togli.lettera_del_lato(sfida, "destra")
+    lato = {"A": DOPO, "B": B}
+    quante = sfida_togli.QUANTE[sfida["genere"]]
+    return {"sinistra": {"lettera": sinistra, "lato": lato[sinistra]},
+            "destra": {"lettera": destra, "lato": lato[destra]},
+            "quante": quante, "mancano": max(0, quante - votate)}
 
 
 def file_del_lato(archivio, lavoro_id: int, file_id: int, lato: str) -> tuple[str, Path] | None:
@@ -280,7 +306,7 @@ def file_del_lato(archivio, lavoro_id: int, file_id: int, lato: str) -> tuple[st
             return None
         pronti = {riga["file_id"]: riga for riga in coda.pronti(connessione, lavoro_id)}
         lati = _lati(connessione, file_id, pronti.get(file_id))
-    scelto = lati[lato]
+    scelto = lati.get(lato)
     if scelto is None or not scelto.is_file():
         return None
     if voce["genere"] == "video":
@@ -300,7 +326,7 @@ def fai_le_copie(archivio, lavoro_id: int) -> bool:
             if voce["genere"] != "video":
                 continue
             lati = _lati(connessione, voce["id"], pronti.get(voce["id"]))
-            for lato in LATI:
+            for lato in lati:
                 sorgente = lati[lato]
                 if (sorgente is not None and sorgente.is_file()
                         and _da_vedere(archivio, lavoro, voce["id"], lato, sorgente) is None):

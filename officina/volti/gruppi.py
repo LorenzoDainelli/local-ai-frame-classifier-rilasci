@@ -47,7 +47,8 @@ def raggruppa(connessione: sqlite3.Connection, insieme: float = INSIEME,
     liberi = [dict(riga) for riga in tutti(
         connessione,
         "SELECT id, impronta FROM volti "
-        "WHERE persona_id IS NULL AND impronta IS NOT NULL ORDER BY id")]
+        "WHERE persona_id IS NULL AND impronta IS NOT NULL "
+        "AND id NOT IN (SELECT riga_id FROM persone_tolte WHERE dove = 'volto') ORDER BY id")]
     if not liberi:
         return fuori
 

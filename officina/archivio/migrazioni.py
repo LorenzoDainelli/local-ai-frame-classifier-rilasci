@@ -1488,6 +1488,47 @@ def _versione_65(connessione: sqlite3.Connection) -> None:
         "ALTER TABLE ritoccate ADD COLUMN da_rifare INTEGER NOT NULL DEFAULT 0")
 
 
+def _versione_66(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE persone_tolte (
+            id          INTEGER PRIMARY KEY,
+            ritocco_id  INTEGER NOT NULL,
+            scatto_id   INTEGER NOT NULL REFERENCES scatti(id) ON DELETE CASCADE,
+            dove        TEXT NOT NULL CHECK (dove IN ('volto','corpo','scatto')),
+            riga_id     INTEGER NOT NULL,
+            persona_id  INTEGER REFERENCES persone(id) ON DELETE SET NULL,
+            com_era     TEXT NOT NULL DEFAULT '{}'
+        )
+        """
+    )
+    connessione.execute("CREATE INDEX persone_tolte_per_scatto ON persone_tolte(scatto_id)")
+    connessione.execute("CREATE INDEX persone_tolte_per_riga ON persone_tolte(dove, riga_id)")
+
+
+def _versione_67(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE sfide_togli (
+            lavoro_id   INTEGER NOT NULL REFERENCES ritocchi_lavori(id) ON DELETE CASCADE,
+            file_id     INTEGER NOT NULL,
+            genere      TEXT NOT NULL CHECK (genere IN ('foto','video')),
+            motore_a    TEXT NOT NULL,
+            motore_b    TEXT NOT NULL,
+            sinistra    TEXT NOT NULL CHECK (sinistra IN ('A','B')),
+            pronta_b    TEXT,
+            impronta_b  TEXT,
+            toppe_b     TEXT NOT NULL DEFAULT '{}',
+            voto        TEXT CHECK (voto IN ('A','B','pari','nessuna')),
+            messa_il    TEXT NOT NULL,
+            votata_il   TEXT,
+            PRIMARY KEY (lavoro_id, file_id)
+        )
+        """
+    )
+    connessione.execute("CREATE INDEX sfide_togli_per_genere ON sfide_togli(genere, voto)")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1606,6 +1647,10 @@ MIGRAZIONI: list[Migrazione] = [
                "migliorata", _versione_64),
     Migrazione(65, "la foto ritoccata e poi migliorata si ripixela sopra la migliorata, "
                "anche se il programma si spegne a metà", _versione_65),
+    Migrazione(66, "chi togli da uno scatto non conta più fra le sue foto, e torna se togli "
+               "il ritocco", _versione_66),
+    Migrazione(67, "i due migliori modelli per togliere si sfidano alla cieca sui tuoi scatti",
+               _versione_67),
 ]
 
 

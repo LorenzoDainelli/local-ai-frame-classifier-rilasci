@@ -24,6 +24,23 @@
         {% endif %}
     </div>
 
+    {% for fine in fine_sfide %}
+    <div class="carta rr-fine-sfida" data-fine-sfida>
+        <h2>La sfida alla cieca {{ 'dei video' if fine.genere == 'video' else 'delle foto' }} è finita</h2>
+        <ul class="rr-parti">
+            {% for nome in fine.due %}<li><b>{{ nome }}</b> <span class="numeri">{{ fine.conti.get(nome, 0)|numero }}</span> {{ 'volta' if fine.conti.get(nome, 0) == 1 else 'volte' }}</li>{% endfor %}
+            <li class="tenue">Pari <span class="numeri">{{ fine.conti.get('pari', 0)|numero }}</span> &middot; Nessuna delle due <span class="numeri">{{ fine.conti.get('nessuna', 0)|numero }}</span></li>
+        </ul>
+        <p class="minuscolo tenue">{% if fine.vincitore %}Ha vinto <b>{{ fine.vincitore }}</b>: te lo propongo come principale. {% else %}Sono pari: scegli tu. {% endif %}L'altro resta installato.</p>
+        <div class="in-fila">
+            {% for nome in fine.due %}
+            <button class="tasto-comando {{ 'principale' if nome == fine.vincitore }}" type="button"
+                    data-principale="{{ nome }}" data-genere="{{ fine.genere }}">Usa {{ nome }}</button>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
     {% if not scelta %}
     <div class="carta rv-vuoto">
         {{ fotina_passa() }}
@@ -78,6 +95,29 @@
     {% else %}
 
     {% set video = scelta.genere == 'video' %}
+    {% if scelta.sfida %}
+    {% set sfida = scelta.sfida %}
+    <p class="minuscolo tenue numeri rr-sfida-conto">Sfida alla cieca &middot; ne mancano {{ sfida.mancano|numero }} di {{ sfida.quante|numero }}</p>
+    <div class="rivedi-due rivedi-tre" id="rivedi-due" style="--proporzione: {{ scelta.proporzione }}">
+        {% for posto in [sfida.sinistra, {'lettera': 'Originale', 'lato': 'prima'}, sfida.destra] %}
+        <figure class="rivedi-lato" data-lato="{{ posto.lato }}">
+            <div class="rivedi-quadro">
+                {% if video %}
+                <video preload="auto" playsinline {% if posto.lato != 'prima' %}muted{% endif %}
+                       src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/{{ posto.lato }}"></video>
+                {% else %}
+                <img src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/{{ posto.lato }}"
+                     alt="{{ posto.lettera }}" draggable="false">
+                {% endif %}
+            </div>
+            <figcaption>
+                <span class="etichetta-rivedi">{{ posto.lettera }}</span>
+                <span class="etichetta-rivedi" data-audio-qui hidden>audio</span>
+            </figcaption>
+        </figure>
+        {% endfor %}
+    </div>
+    {% else %}
     <div class="rivedi-due" id="rivedi-due" style="--proporzione: {{ scelta.proporzione }}">
         <figure class="rivedi-lato" data-lato="prima">
             <div class="rivedi-quadro">
@@ -115,12 +155,15 @@
                   aria-label="Dove passa la riga fra prima e dopo"></span>
         </div>
     </div>
+    {% endif %}
 
     <div class="rivedi-comandi">
+        {% if not scelta.sfida %}
         <span class="in-fila" role="group" aria-label="Come metterle">
             <button class="pillola piena" type="button" data-modo="affiancate" aria-pressed="true">Affiancate</button>
             <button class="pillola" type="button" data-modo="tendina" aria-pressed="false">Tendina</button>
         </span>
+        {% endif %}
         <span class="rv-zoom">
             <button class="tasto-comando nudo piccolo" type="button" data-zoom="meno"
                     aria-label="Rimpicciolisci">&minus;</button>
@@ -144,8 +187,14 @@
             <span class="minuscolo numeri" id="quando">0:00</span>
             <span class="in-fila">
                 <span class="minuscolo tenue">Audio da</span>
+                {% if scelta.sfida %}
+                <button class="pillola" type="button" data-audio="{{ scelta.sfida.sinistra.lato }}">{{ scelta.sfida.sinistra.lettera }}</button>
+                <button class="pillola piena" type="button" data-audio="prima">originale</button>
+                <button class="pillola" type="button" data-audio="{{ scelta.sfida.destra.lato }}">{{ scelta.sfida.destra.lettera }}</button>
+                {% else %}
                 <button class="pillola piena" type="button" data-audio="prima">prima</button>
                 <button class="pillola" type="button" data-audio="dopo">dopo</button>
+                {% endif %}
             </span>
         </div>
         {% endif %}
@@ -166,6 +215,15 @@
     {% endif %}
 
     {% set fine = scelta.finale %}
+    {% if scelta.sfida %}
+    <div class="rivedi-decidi" role="group" aria-label="Quale è venuta meglio">
+        <span class="minuscolo tenue">Quale è venuta meglio? I nomi li vedi alla fine.</span>
+        <button class="tasto-comando spinge" type="button" data-vota="nessuna">Nessuna delle due</button>
+        <button class="tasto-comando" type="button" data-vota="pari">Pari</button>
+        <button class="tasto-comando principale" type="button" data-vota="{{ scelta.sfida.sinistra.lettera }}">{{ scelta.sfida.sinistra.lettera }}</button>
+        <button class="tasto-comando principale" type="button" data-vota="{{ scelta.sfida.destra.lettera }}">{{ scelta.sfida.destra.lettera }}</button>
+    </div>
+    {% else %}
     <div class="rivedi-decidi">
         {% if scelta.rifatto %}
         <span class="minuscolo tenue numeri">Rifatto {{ "1 volta" if scelta.rifatto == 1 else scelta.rifatto|numero ~ " volte" }}</span>
@@ -174,6 +232,7 @@
         <button class="tasto-comando principale" type="button" data-decidi="approva" data-tasto-a
                 {% if not scelta.ci_sono %}disabled{% endif %}>{{ icona('spunta', 15) }} Sì, tieni{{ 'l' ~ fine }} <kbd>A</kbd></button>
     </div>
+    {% endif %}
     <p class="minuscolo tenue rr-dopo">Se lo tieni, lo scatto vero va in &laquo;Originali&raquo; e il ritocco si toglie quando vuoi dal pannello &laquo;i&raquo;.</p>
 
     {% endif %}

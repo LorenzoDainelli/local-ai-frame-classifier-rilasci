@@ -183,6 +183,9 @@
     display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3);
     align-items: start;
 }
+.rivedi-due.rivedi-tre { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rivedi-tre .rivedi-quadro { width: min(100%, calc((100dvh - 330px) * var(--proporzione))); }
+@media (max-width: 800px) { .rivedi-due.rivedi-tre { grid-template-columns: minmax(0, 1fr); } }
 .rivedi-lato { margin: 0; position: relative; min-width: 0; }
 .rivedi-quadro {
     position: relative; overflow: hidden;

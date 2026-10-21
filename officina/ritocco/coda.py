@@ -8,7 +8,8 @@ from officina import registro
 from officina.archivio.database import adesso, inserisci, tutti, uno
 from officina.miglioria import video
 from officina.modello import file_media
-from officina.ritocco import copia, elenco, pellicola, pixela, seguiti
+from officina.ritocco import copia, elenco, pellicola, pixela, seguiti, sfida_togli
+from officina.ritocco import tolti as persone_tolte
 from officina.ritocco.copia import RitoccoFermato
 
 IN_CODA = "in_coda"
@@ -35,7 +36,8 @@ SI_SALVA = ("Sto ancora salvando il ritocco di prima di questo scatto: riprova f
             "secondo.")
 FORMATO = ("Questo video è in un formato che non so riscrivere tenendo tutto com'è: si "
            "ritoccano i video .mov, .mp4 e .m4v. Il video non è stato toccato.")
-SOLO_PIXELA = "Nei video per ora si può solo pixelare. Il video non è stato toccato."
+PRIMA_VOTA = "Prima scegli fra «A» e «B»: poi lo puoi tenere."
+SOLO_PIXELA = "Nei video si può solo pixelare o togliere. Il video non è stato toccato."
 NON_SEGUITO = ("La parte scelta non è stata seguita in questo video: sceglila di nuovo. Il "
                "video non è stato toccato.")
 SEGUITO_VECCHIO = ("Il video è cambiato da quando l'IA ha seguito la parte scelta: sceglila "
@@ -149,6 +151,7 @@ def scrivi_i_pronti(connessione: sqlite3.Connection, lavoro_id: int,
 def _togli_i_pronti(connessione: sqlite3.Connection, lavoro_id: int) -> list[Path]:
     buttare = [Path(riga["pronta"]) for riga in pronti(connessione, lavoro_id)
                if riga["pronta"]]
+    buttare += sfida_togli.lascia_il_lavoro(connessione, lavoro_id)
     connessione.execute("DELETE FROM ritocchi_lavori_file WHERE lavoro_id = ?", (lavoro_id,))
     return buttare
 
@@ -156,7 +159,7 @@ def _togli_i_pronti(connessione: sqlite3.Connection, lavoro_id: int) -> list[Pat
 def _butta(pronte: list[Path]) -> None:
     for pronta in pronte:
         try:
-            copia.butta(pronta)
+            sfida_togli.butta([pronta])
         except OSError as errore:
             registro.avviso("ritocco.pronta_non_tolta", **registro.dove_si_e_rotto(errore))
 
@@ -186,7 +189,8 @@ def _dal_seguito(connessione: sqlite3.Connection, media: sqlite3.Row, campi: dic
     percorso = file_media.percorso_migliore(connessione, file_id)
     if percorso is None or percorso.suffix.casefold() not in video.CONTENITORI_TENUTI:
         raise RitoccoFermato(FORMATO)
-    if campi.get("genere", elenco.PIXELA) != elenco.PIXELA:
+    genere = campi.get("genere") or elenco.PIXELA
+    if genere not in (elenco.PIXELA, elenco.TOGLI):
         raise RitoccoFermato(SOLO_PIXELA)
     seguito = seguiti.per_id(connessione, int(campi.get("seguito_id") or 0))
     if seguito is None or seguito["file_id"] != file_id:
@@ -205,11 +209,12 @@ def _dal_seguito(connessione: sqlite3.Connection, media: sqlite3.Row, campi: dic
         raise RitoccoFermato(pellicola.SENZA_NIENTE)
     origine = campi.get("origine")
     return {
-        "genere": elenco.PIXELA, "cosa": cosa,
+        "genere": genere, "cosa": cosa,
         "larghezza": seguito["larghezza"], "altezza": seguito["altezza"],
         "maschera": scelte[min(scelte)][1], "misura": misura,
         "quadretto": pixela.quadretto(misura, campi.get("quadretto")),
-        "origine": tuple(origine) if origine is not None else None,
+        "origine": (tuple(origine) if origine is not None and genere == elenco.PIXELA
+                    else None),
         "volto_id": campi.get("volto_id"), "corpo_id": campi.get("corpo_id"),
         "scelta": campi.get("scelta"), "seguito_id": seguito["id"],
     }
@@ -314,6 +319,7 @@ def togli(archivio, ritocco_id: int) -> int | None:
             for file_id in file_ids:
                 copia.torna(archivio, file_id)
                 fatti.add(file_id)
+                persone_tolte.allinea_il_file(archivio, file_id)
         except BaseException:
             with archivio.scrittura() as connessione:
                 for riga in tolti:
@@ -329,6 +335,8 @@ def approva(archivio, lavoro_id: int) -> None:
             lavoro = per_id(connessione, lavoro_id)
             if lavoro is None or lavoro["stato"] not in (DA_RIVEDERE, IN_SCAMBIO):
                 raise RitoccoFermato(NON_DA_RIVEDERE)
+            if sfida_togli.da_votare(connessione, lavoro_id):
+                raise RitoccoFermato(PRIMA_VOTA)
             prima_volta = lavoro["stato"] == DA_RIVEDERE
             segna(connessione, lavoro_id, IN_SCAMBIO, guasto=None,
                   deciso_il=lavoro["deciso_il"] or adesso())
@@ -356,6 +364,8 @@ def approva(archivio, lavoro_id: int) -> None:
                 "WHERE lavoro_id = ? AND stato = ?",
                 (elenco.FATTO, adesso(), lavoro_id, elenco.IN_CODA))
             segna(connessione, lavoro_id, FATTO, guasto=None)
+            if lavoro["scatto_id"]:
+                persone_tolte.allinea(connessione, lavoro["scatto_id"])
     registro.evento("ritocco.lavoro_approvato", lavoro=lavoro_id, file=cambiati)
 
 

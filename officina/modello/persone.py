@@ -160,6 +160,8 @@ def unisci(connessione: sqlite3.Connection, da_id: int, a_id: int) -> dict:
     spostati = connessione.execute(
         "UPDATE volti SET persona_id = ? WHERE persona_id = ?",
         (a_id, da_id)).rowcount
+    connessione.execute("UPDATE persone_tolte SET persona_id = ? WHERE persona_id = ?",
+                        (a_id, da_id))
     connessione.execute(
         "UPDATE OR IGNORE persone_negli_scatti SET persona_id = ? WHERE persona_id = ?",
         (a_id, da_id))

@@ -37,7 +37,7 @@ let staDecidendo = false;
 
 function sbloccaITasti() {
     document.querySelectorAll("[data-decidi]").forEach((tasto) => {
-        tasto.disabled = tasto.dataset.decidi === "approva" && !scelta.ci_sono;
+        tasto.disabled = tasto.dataset.decidi === "approva" && (!scelta.ci_sono || Boolean(scelta.da_votare));
     });
 }
 
@@ -63,14 +63,51 @@ document.querySelectorAll("[data-decidi]").forEach((tasto) => {
     tasto.addEventListener("click", () => decidi(tasto.dataset.decidi));
 });
 
+async function vota(voto) {
+    if (!scelta || staDecidendo) return;
+    staDecidendo = true;
+    const tasti = [...document.querySelectorAll("[data-vota]")];
+    tasti.forEach((tasto) => { tasto.disabled = true; });
+    confronto.suona(false);
+    di("Segno il voto...");
+    try {
+        const risposta = await manda(`/api/ritocco/coda/${scelta.id}/voto`,
+            { file_id: scelta.file_id, voto });
+        ricorda(risposta.detto || "");
+        vaiA(scelta.id);
+    } catch (errore) {
+        di(errore.message, true);
+        staDecidendo = false;
+        tasti.forEach((tasto) => { tasto.disabled = false; });
+    }
+}
+
+document.querySelectorAll("[data-vota]").forEach((tasto) => {
+    tasto.addEventListener("click", () => vota(tasto.dataset.vota));
+});
+
+document.querySelectorAll("[data-principale]").forEach((tasto) => {
+    tasto.addEventListener("click", async () => {
+        document.querySelectorAll("[data-principale]").forEach((uno) => { uno.disabled = true; });
+        try {
+            await manda("/api/ritocco/sfida/principale",
+                { genere: tasto.dataset.genere, motore: tasto.dataset.principale });
+            window.location.reload();
+        } catch (errore) {
+            di(errore.message, true);
+            document.querySelectorAll("[data-principale]").forEach((uno) => { uno.disabled = false; });
+        }
+    });
+});
+
 document.addEventListener("keydown", (evento) => {
     if (evento.ctrlKey || evento.metaKey || evento.altKey) return;
     if (siStaScrivendo(evento.target)) return;
     const tasto = evento.key;
     if (tasto === "a" || tasto === "A") {
-        if (scelta && scelta.ci_sono) { evento.preventDefault(); decidi("approva"); }
+        if (scelta && scelta.ci_sono && !scelta.sfida) { evento.preventDefault(); decidi("approva"); }
     } else if (tasto === "r" || tasto === "R") {
-        if (scelta) { evento.preventDefault(); decidi("rifiuta"); }
+        if (scelta && !scelta.sfida) { evento.preventDefault(); decidi("rifiuta"); }
     } else if (tasto === "ArrowRight" || tasto === "ArrowLeft") {
         if (!scelta || suUnCursore(evento.target)) return;
         const dove = tasto === "ArrowRight" ? scelta.successiva : scelta.precedente;

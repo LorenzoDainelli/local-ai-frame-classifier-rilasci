@@ -18,7 +18,7 @@ def _in_pixel(riquadro, larga: int, alta: int) -> tuple[int, int, int, int] | No
     return x1, y1, x2, y2
 
 
-def coperto_da(pezzo: maschere.Pezzo, riquadro) -> bool:
+def coperto_da(pezzo: maschere.Pezzo, riquadro, quanto: float = COPERTO) -> bool:
     scatola = _in_pixel(riquadro, pezzo.larghezza, pezzo.altezza)
     if scatola is None:
         return False
@@ -29,7 +29,7 @@ def coperto_da(pezzo: maschere.Pezzo, riquadro) -> bool:
     if dx2 <= dx1 or dy2 <= dy1:
         return False
     dentro = int(pezzo.maschera[dy1 - pezzo.y:dy2 - pezzo.y, dx1 - pezzo.x:dx2 - pezzo.x].sum())
-    return dentro >= COPERTO * (x2 - x1) * (y2 - y1)
+    return dentro >= quanto * (x2 - x1) * (y2 - y1)
 
 
 def _ritocchi_sul_volto(connessione: sqlite3.Connection, volto) -> list[sqlite3.Row]:

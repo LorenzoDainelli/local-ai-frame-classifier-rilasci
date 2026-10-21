@@ -13,6 +13,7 @@ ACCESA = "ritocco_coda_accesa"
 UN_ALTRO_LAVORO = "un altro lavoro"
 
 _ritoccatore = None
+_gara = None
 
 
 class Seguitore:
@@ -154,6 +155,21 @@ def ferma_dall_utente(archivio, aspetta: float = 2.0) -> None:
 def ferma(aspetta: float = 0.0) -> None:
     if _ritoccatore is not None:
         _ritoccatore.ferma(aspetta)
+    if _gara is not None:
+        _gara.ferma(aspetta)
+
+
+def la_gara(archivio):
+    global _gara
+    from officina.ritocco import gara_video
+
+    if _gara is not None and _gara.archivio is archivio:
+        return _gara
+    if _gara is not None:
+        _gara.ferma()
+    _gara = gara_video.Gara(archivio)
+    _gara.cerca = Seguitore(archivio).cerca(_gara.lavoro)
+    return _gara
 
 
 def ripara(archivio) -> dict:

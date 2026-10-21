@@ -125,7 +125,9 @@ def uno_scatto(richiesta: Request, scatto_id: int):
                     "SELECT v.riquadro, p.nome FROM volti v "
                     "LEFT JOIN persone p ON p.id = v.persona_id AND p.stato = 'attiva' "
                     "WHERE v.scatto_id = ? AND v.fotogramma = 0 "
-                    "AND (v.file_id IS NULL OR v.file_id = ?) ORDER BY v.id",
+                    "AND (v.file_id IS NULL OR v.file_id = ?) "
+                    "AND v.id NOT IN (SELECT riga_id FROM persone_tolte WHERE dove = 'volto') "
+                    "ORDER BY v.id",
                     scatto_id, principale["id"]):
                 try:
                     volti_visti.append({"riquadro": json.loads(riga["riquadro"]), "nome": riga["nome"]})

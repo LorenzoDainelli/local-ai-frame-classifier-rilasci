@@ -344,7 +344,8 @@ SQL_DEGLI_IGNOTI = (
     "LEFT JOIN volti v ON v.id = c.volto_id "
     "LEFT JOIN persone pv ON pv.id = v.persona_id AND pv.stato = 'attiva' "
     "WHERE pv.id IS NULL AND NOT EXISTS (SELECT 1 FROM corpi_delle_persone d "
-    "WHERE d.corpo_id = c.id AND d.risposta = 'si') ORDER BY c.id")
+    "WHERE d.corpo_id = c.id AND d.risposta = 'si') "
+    "AND c.id NOT IN (SELECT riga_id FROM persone_tolte WHERE dove = 'corpo') ORDER BY c.id")
 
 
 def noti(connessione: sqlite3.Connection) -> list:
@@ -877,7 +878,8 @@ def quanti_mancano(connessione: sqlite3.Connection) -> int:
         "LEFT JOIN volti v ON v.id = c.volto_id "
         "LEFT JOIN persone pv ON pv.id = v.persona_id AND pv.stato = 'attiva' "
         "WHERE pv.id IS NULL AND NOT EXISTS (SELECT 1 FROM corpi_delle_persone d "
-        "WHERE d.corpo_id = c.id AND d.risposta = 'si')").fetchone()[0]
+        "WHERE d.corpo_id = c.id AND d.risposta = 'si') "
+        "AND c.id NOT IN (SELECT riga_id FROM persone_tolte WHERE dove = 'corpo')").fetchone()[0]
 
 
 def rispondi(connessione: sqlite3.Connection, corpo_id: int, persona_id: int,

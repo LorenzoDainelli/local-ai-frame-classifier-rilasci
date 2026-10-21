@@ -34,6 +34,40 @@ def _ingrandisci(lavoro: dict, freno):
     return ingrandisci
 
 
+def strato_in_json(strato) -> dict:
+    import base64
+
+    return {"larghezza": strato.larghezza, "altezza": strato.altezza, "quanti": strato.quanti,
+            "cosa": strato.cosa,
+            "maschere": {str(numero): base64.b64encode(dati).decode("ascii")
+                         for numero, dati in strato.maschere.items()}}
+
+
+def strato_da_json(dati: dict):
+    import base64
+
+    from officina.ritocco import pellicola
+
+    return pellicola.Strato(int(dati["larghezza"]), int(dati["altezza"]), int(dati["quanti"]),
+                            {int(numero): base64.b64decode(valore)
+                             for numero, valore in dati["maschere"].items()}, dati["cosa"])
+
+
+def esegui_video(lavoro: dict, freno, manda) -> dict:
+    from officina.ritocco import togliere, togliere_video
+
+    strato = strato_da_json(json.loads(Path(lavoro["strato"]).read_text(encoding="utf-8")))
+    motore = togliere.apri(lavoro["motore"], **lavoro.get("opzioni", {}))
+    try:
+        fatto = togliere_video.togli_nel_video(
+            Path(lavoro["video"]), strato, motore, Path(lavoro["uscita"]),
+            float(lavoro.get("margine") or togliere.MARGINI[0]),
+            lambda fatti, totale: manda({"fatti": fatti, "totale": totale}), freno=freno)
+    finally:
+        motore.spegni()
+    return {**fatto, "motore": {"nome": motore.nome, "versione": motore.versione}}
+
+
 def esegui(lavoro: dict, freno) -> dict:
     import time
 
@@ -90,7 +124,8 @@ def main() -> int:
 
     freno = torcia.Freno(int(lavoro.get("intensita", 100)))
     try:
-        esito = esegui(lavoro, freno)
+        esito = (esegui_video(lavoro, freno, manda) if lavoro.get("video")
+                 else esegui(lavoro, freno))
     except ErroreOfficina as errore:
         manda({"guasto": errore.codice, "spiegazione": str(errore)})
         return 1

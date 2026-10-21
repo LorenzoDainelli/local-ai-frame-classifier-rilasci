@@ -46,6 +46,9 @@
                         <button class="rt-tasto rtv-piccolo" type="button" data-rv-nuova title="Comincia una parte nuova (Invio)" disabled>{{ icona('piu', 13) }} Nuova</button></div>
                     <ul class="rtv-parti" data-rv-parti></ul>
                     <p class="rtv-nota" data-rv-vuoto>Clicca su quello che vuoi pixelare: l'IA lo segue in tutto il video.</p>
+                    <div class="rtv-genere" role="group" aria-label="Cosa fare della parte scelta">
+                        <button class="rt-tasto rtv-piccolo" type="button" aria-pressed="true" data-rv-genere="pixela">Pixela</button>
+                        <button class="rt-tasto rtv-piccolo" type="button" aria-pressed="false" data-rv-genere="togli" title="Toglie la cosa da tutto il video e rifà lo sfondo">Togli</button></div>
                     <label class="rt-cursore" data-rv-quadretti><span>Quadretti</span>
                         <input type="range" min="1" max="4" step="1" value="1" aria-label="Quanto sono grandi i quadretti della parte scelta" data-rv-cursore>
                         <output data-rv-cursore-valore>1×</output></label>
