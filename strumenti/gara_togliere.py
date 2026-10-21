@@ -139,11 +139,11 @@ def _da_removalbench(quante: int, cartella: Path, scelta) -> list[dict]:
     from huggingface_hub import HfApi, hf_hub_download
 
     file = set(HfApi(token=_token()).list_repo_files("BaiLing/RemovalBench", repo_type="dataset"))
-    numeri = sorted(int(Path(f).stem) for f in file if f.startswith("gt/") and
+    numeri = sorted(Path(f).stem for f in file if f.startswith("gt/") and f.endswith(".png") and
                     f"images/{Path(f).name}" in file and f"masks/{Path(f).name}" in file)
     presi = []
     for numero in sorted(scelta.sample(numeri, min(quante, len(numeri)))):
-        nome = f"removalbench-{numero:03d}"
+        nome = f"removalbench-{numero}"
         dove = cartella / nome
         dove.mkdir(parents=True, exist_ok=True)
         for cartella_hf, mia, grigia in (("images", "ingresso", False), ("masks", "maschera", True),
@@ -153,6 +153,29 @@ def _da_removalbench(quante: int, cartella: Path, scelta) -> list[dict]:
             _salva_coppia(Path(scaricato), dove / f"{mia}.png", grigia)
         presi.append({"id": nome, "insieme": "removalbench", "origine": f"{numero}.png"})
     return presi
+
+
+def _da_google(gdown, codice: str, grezzo: Path) -> None:
+    import urllib.request
+
+    for tentativo in range(5):
+        try:
+            if gdown.download(id=codice, output=str(grezzo), quiet=True):
+                return
+        except Exception:
+            pass
+        try:
+            indirizzo = ("https://drive.usercontent.google.com/download?export=download&confirm=t"
+                         f"&id={codice}")
+            with urllib.request.urlopen(indirizzo, timeout=120) as risposta:
+                dati = risposta.read()
+            if dati[:4] == b"\x89PNG" or dati[:2] == b"\xff\xd8":
+                grezzo.write_bytes(dati)
+                return
+        except Exception:
+            pass
+        time.sleep(2 ** (tentativo + 3))
+    raise RuntimeError(f"Drive non dà il file {codice}")
 
 
 def _da_drive(cartella: Path, quante: dict, scelta) -> list[dict]:
@@ -174,19 +197,20 @@ def _da_drive(cartella: Path, quante: dict, scelta) -> list[dict]:
             nome = f"{chiave}-{nome_file}"
             dove = cartella / nome
             dove.mkdir(parents=True, exist_ok=True)
-            for cartella_drive, mia, grigia in (("input", "ingresso", False),
-                                                ("object_mask", "maschera", True),
-                                                ("object_effect_mask", "effetto", True),
-                                                ("gt", "vera", False)):
-                if cartella_drive not in parti:
-                    continue
-                grezzo = dove / f"grezzo-{mia}"
-                for tentativo in range(4):
-                    if gdown.download(id=parti[cartella_drive], output=str(grezzo), quiet=True):
-                        break
-                    time.sleep(2 ** (tentativo + 2))
-                _salva_coppia(grezzo, dove / f"{mia}.png", grigia)
-                grezzo.unlink()
+            try:
+                for cartella_drive, mia, grigia in (("input", "ingresso", False),
+                                                    ("object_mask", "maschera", True),
+                                                    ("object_effect_mask", "effetto", True),
+                                                    ("gt", "vera", False)):
+                    if cartella_drive not in parti:
+                        continue
+                    grezzo = dove / f"grezzo-{mia}"
+                    _da_google(gdown, parti[cartella_drive], grezzo)
+                    _salva_coppia(grezzo, dove / f"{mia}.png", grigia)
+                    grezzo.unlink()
+            except RuntimeError:
+                shutil.rmtree(dove, ignore_errors=True)
+                continue
             presi.append({"id": nome, "insieme": chiave, "origine": nome_file})
     return presi
 
