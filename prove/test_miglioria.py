@@ -15,7 +15,7 @@ from PIL import Image
 from officina.archivio.database import tutti, uno
 from officina.importazione import impronta, metadati as leggi_metadati
 from officina.importazione.motore import Motore
-from officina.miglioria import attesa, coda, lavoro, misura, scambio
+from officina.miglioria import attesa, coda, lavoro, misura, pezzi, scambio
 
 pytest.importorskip("av")
 
@@ -336,6 +336,28 @@ def test_un_modello_che_si_rompe_non_tocca_niente(importato, cartella):
     assert "scheda video" in lavoro.a_parole(riga["guasto"])
     assert impronta.del_file(originale) == prima
     assert not list((cartella / attesa.NOME).glob("*"))
+
+
+@pytest.mark.parametrize("guasto, restano", [("memoria_scheda_finita", True),
+                                             ("stanza_caduta", True),
+                                             ("difetto", False)])
+def test_i_pezzi_gia_fatti_restano_se_si_puo_riprendere(importato, cartella, guasto, restano):
+    _metti(importato, "piccola.jpg")
+    cantieri = []
+
+    def lancia(lavoro_da_fare, al_passo, ricorda):
+        cantiere = pezzi.cartella(Path(lavoro_da_fare["uscita"]))
+        pezzi.Pezzi(cantiere, {"prova": 1})
+        (cantiere / "00000000-00041.mkv").write_bytes(b"pezzo")
+        cantieri.append(cantiere)
+        return {"guasto": guasto}
+
+    miglioratore = lavoro.Miglioratore(importato, lancia=lancia, motori_scelti=SCELTI)
+    miglioratore.parti()
+    assert miglioratore.lavoro.aspetta_che_finisca(30)
+
+    [cantiere] = cantieri
+    assert (cantiere / "00000000-00041.mkv").exists() is restano
 
 
 def test_la_cartella_di_attesa_non_si_importa(tmp_path):

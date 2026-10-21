@@ -551,7 +551,7 @@ class Miglioratore:
     def _fallita(self, miglioria_id: int, codice: str) -> None:
         with self.archivio.scrittura() as connessione:
             riga = coda.per_id(connessione, miglioria_id)
-            if riga is not None:
+            if riga is not None and codice not in DA_RIPRENDERE:
                 pezzi.butta_quelli_di(attesa.cartella(connessione, Path(riga["percorso_originale"])),
                                       miglioria_id)
             coda.segna(connessione, miglioria_id, coda.FALLITA, guasto=codice,

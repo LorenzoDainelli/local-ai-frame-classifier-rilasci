@@ -128,8 +128,7 @@ def filmato(lavoro: dict, al_passo=None, freno=None, racconta=None) -> dict:
 def _firma(originale: Path, motore, larghezza: int, altezza: int) -> dict:
     stato = originale.stat()
     proprie = getattr(motore, "firma", None)
-    return {"originale": str(originale), "byte": stato.st_size, "cambiato": stato.st_mtime_ns,
-            "larghezza": larghezza, "altezza": altezza,
+    return {"originale": str(originale), "byte": stato.st_size, "larghezza": larghezza, "altezza": altezza,
             "motore": proprie() if callable(proprie) else
             {"nome": motore.nome, "versione": motore.versione}}
 

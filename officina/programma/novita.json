@@ -404,6 +404,10 @@
       [
         "sfida",
         "LucidFlux non si ferma più con «difetto imprevisto» appena parte: ora lavora di nuovo accanto a SeedVR2"
+      ],
+      [
+        "migliora",
+        "Un video fermato a metà, anche chiudendo il programma, riparte dai fotogrammi già fatti: non li butto più quando la scheda video è piena o il lavoro si interrompe"
       ]
     ],
     "tecnico": [
