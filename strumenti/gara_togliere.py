@@ -100,28 +100,42 @@ def esplora(uscita: Path) -> dict:
     return esiti
 
 
-def guarda_dentro() -> str:
+DRIVE_OBJECTCLEAR = "https://drive.google.com/drive/folders/12LA53ZPAG1uxdVXsn90L2qe6zCcp6aGF"
+DRIVE_RORD = "https://drive.google.com/drive/folders/1-aCLHMWvb-8Hwv82v17wl4rVuDutwAv6"
+
+
+def _removalbench() -> str:
     from collections import Counter
 
-    from huggingface_hub import HfApi, hf_hub_download
+    from huggingface_hub import HfApi
 
-    api = HfApi(token=os.environ.get("HF_TOKEN") or None)
-    righe = []
-    file = api.list_repo_files("BaiLing/RemovalBench", repo_type="dataset")
+    file = HfApi(token=os.environ.get("HF_TOKEN") or None).list_repo_files(
+        "BaiLing/RemovalBench", repo_type="dataset")
     cartelle = Counter(f.split("/")[0] if "/" in f else "." for f in file)
-    righe.append(f"RemovalBench: {dict(cartelle)} esempi {sorted(file)[:8]}")
-    file = api.list_repo_files("sczhou/OBERDataset_ObjectClear", repo_type="dataset")
-    righe.append("OBER non train: " + ", ".join(f for f in file if "train" not in f))
-    for nome in [f for f in file if "test" in f or "val" in f][:3]:
-        import pyarrow.parquet as pq
+    return f"RemovalBench: {dict(cartelle)} esempi {sorted(file)[:12]}"
 
-        percorso = hf_hub_download("sczhou/OBERDataset_ObjectClear", nome, repo_type="dataset")
-        tabella = pq.read_table(percorso)
-        righe.append(f"{nome}: {tabella.num_rows} righe, colonne {tabella.schema}")
-        for colonna in tabella.column_names:
-            valori = tabella.column(colonna).to_pylist()
-            if valori and isinstance(valori[0], (str, int, float)):
-                righe.append(f"  {colonna}: {Counter(valori).most_common(6)}")
+
+def _drive(indirizzo: str) -> str:
+    import gdown
+
+    voci = gdown.download_folder(indirizzo, skip_download=True, quiet=True,
+                                 remaining_ok=True) or []
+    from collections import Counter
+
+    cartelle = Counter(str(Path(v.path).parent) for v in voci)
+    return f"{indirizzo}: {len(voci)} file; cartelle {cartelle.most_common(30)}; " \
+           f"esempi {[v.path for v in voci[:10]]}"
+
+
+def guarda_dentro() -> str:
+    import traceback
+
+    righe = []
+    for parte in (_removalbench, lambda: _drive(DRIVE_OBJECTCLEAR), lambda: _drive(DRIVE_RORD)):
+        try:
+            righe.append(parte())
+        except Exception:
+            righe.append(traceback.format_exc()[-1200:])
     return "\n".join(righe)
 
 
