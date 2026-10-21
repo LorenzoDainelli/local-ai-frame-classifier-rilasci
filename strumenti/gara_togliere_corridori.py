@@ -90,13 +90,19 @@ def _con_la_memoria(cartella: Path, otto: bool) -> dict:
     return ambiente
 
 
+def _pulisci(testo: str) -> str:
+    righe = [r for r in testo.replace("\r", "\n").splitlines()
+             if r.strip() and "it/s]" not in r and "s/it]" not in r and "Warning" not in r]
+    return "\n".join(righe)
+
+
 def _lancia(comando: list[str], cartella: Path, otto: bool, fino: float) -> dict:
     resta = max(60, fino - time.time())
     inizio = time.time()
     try:
         uscita = subprocess.run(comando, cwd=cartella, env=_con_la_memoria(cartella, otto),
                                 capture_output=True, text=True, timeout=resta)
-        coda = (uscita.stdout[-3000:] + "\n" + uscita.stderr[-6000:]).strip()
+        coda = (_pulisci(uscita.stdout)[-3000:] + "\n" + _pulisci(uscita.stderr)[-6000:]).strip()
         return {"codice": uscita.returncode, "secondi": round(time.time() - inizio),
                 "coda": coda}
     except subprocess.TimeoutExpired as scaduto:
@@ -165,10 +171,8 @@ def corri_osor(chi: str, codice: Path, foto: Path, maschere: Path, uscita: Path,
     else:
         base = _scarica("diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
                         allow_patterns=["*.json", "*.txt", "unet/*.fp16.safetensors",
-                                        "text_encoder/*.fp16.safetensors",
-                                        "text_encoder_2/*.fp16.safetensors", "tokenizer/*",
-                                        "tokenizer_2/*", "vae/*.fp16.safetensors",
-                                        "scheduler/*"])
+                                        "text_encoder/*", "text_encoder_2/*", "tokenizer/*",
+                                        "tokenizer_2/*", "vae/*", "scheduler/*"])
         _yaml(cartella / "configs" / "phase2.yaml", {"model.sdxl_base": base})
         if not frase.exists():
             prima = _lancia([sys.executable, "scripts/cache_prompts.py", "--config",
@@ -370,7 +374,13 @@ def corri_klein(foto: Path, maschere: Path, uscita: Path, fino: float) -> dict:
 
     pipe = DiffusionPipeline.from_pretrained(_scarica("black-forest-labs/FLUX.2-klein-4B"),
                                              torch_dtype=torch.bfloat16)
-    pipe.load_lora_weights(_scarica("fal/flux-2-klein-4B-object-remove-lora"))
+    try:
+        pipe.load_lora_weights(_scarica("fal/flux-2-klein-4B-object-remove-lora"),
+                               weight_name="flux-object-remove-lora.safetensors")
+    except OSError:
+        pipe.load_lora_weights(_scarica("fal/flux-2-klein-4B-object-remove-lora",
+                                        force_download=True),
+                               weight_name="flux-object-remove-lora.safetensors")
     pipe.fuse_lora()
     pipe.unload_lora_weights()
     for nome in ("transformer", "text_encoder"):

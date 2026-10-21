@@ -69,14 +69,23 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           sudo mkdir -p /mnt/hf && sudo chown "$USER" /mnt/hf
+          sudo rm -rf /usr/local/share/boost /usr/local/.ghcup /usr/share/swift /usr/local/lib/node_modules
+          sudo docker image prune -af > /dev/null || true
           sudo swapoff -a || true
-          sudo fallocate -l 24G /mnt/scambio && sudo chmod 600 /mnt/scambio
-          sudo mkswap /mnt/scambio && sudo swapon /mnt/scambio
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 40G /scambio && sudo chmod 600 /scambio
+          sudo mkswap /scambio && sudo swapon /scambio
           df -h / /mnt && free -g
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install $TORCIA && python -m pip install $ATTREZZI
+      - name: Librerie
+        run: |
+          python -m pip install $TORCIA
+          case "${{ matrix.chi }}" in
+            omnipaint) python -m pip install diffusers==0.31.0 transformers==4.46.3 peft==0.13.2 accelerate==1.1.1 optimum-quanto==0.2.6 safetensors sentencepiece protobuf einops omegaconf opencv-python-headless pillow numpy huggingface_hub==0.26.5 ;;
+            *) python -m pip install $ATTREZZI imageio ;;
+          esac
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: foto-gara
