@@ -9,7 +9,7 @@
 fastapi==0.141.1          # server web
 uvicorn==0.52.4           # motore che fa girare il server
 jinja2==3.1.6             # pagine HTML scritte a mano
-pillow==12.3.0            # lettura immagini, miniature, AVIF (regola 327)
+pillow==13.0.0            # lettura immagini, miniature, AVIF (regola 327)
 pillow-heif==1.5.0        # lettura HEIC senza conversioni (regola 51)
 python-multipart==0.0.32  # legge i moduli delle pagine (note, date, scelte)
 numpy==2.4.6              # i conti sulle impronte e sul classificatore
