@@ -27,4 +27,4 @@ jobs:
       - name: Candidati e foto
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: python strumenti/gara_togliere.py dentro
+        run: python strumenti/gara_togliere.py leggi

@@ -138,6 +138,39 @@ def guarda_dentro() -> str:
     return "\n".join(righe)
 
 
+LEGGERE = [("prithivMLmods/QIE-2511-Object-Remover-v2", "model", "README.md"),
+           ("fal/flux-2-klein-4B-object-remove-lora", "model", "README.md"),
+           ("buxiangzhiren/GeoRemover", "space", "README.md"),
+           ("buxiangzhiren/GeoRemover", "space", "app.py"),
+           ("LetsThink/RORem", "model", "README.md")]
+ELENCHI = [("LetsThink/RORem", "model"), ("buxiangzhiren/GeoRemover", "space"),
+           ("buxiangzhiren/GeoRemover", "model"), ("jixin0101/ObjectClear", "model"),
+           ("yeates/OmniPaint", "model"), ("theSure/Omnieraser", "model")]
+
+
+def leggi() -> list[str]:
+    import traceback
+
+    from huggingface_hub import HfApi, hf_hub_download
+
+    api = HfApi(token=os.environ.get("HF_TOKEN") or None)
+    pezzi = []
+    for nome, tipo, file in LEGGERE:
+        try:
+            testo = Path(hf_hub_download(nome, file, repo_type=tipo)).read_text(
+                encoding="utf-8", errors="replace")
+            pezzi.append(f"### {nome} {file}\n{testo[:6000]}")
+        except Exception:
+            pezzi.append(f"### {nome} {file}\n{traceback.format_exc()[-400:]}")
+    for nome, tipo in ELENCHI:
+        try:
+            file = api.list_repo_files(nome, repo_type=tipo)
+            pezzi.append(f"### {nome} ({tipo})\n" + "\n".join(file[:150]))
+        except Exception as errore:
+            pezzi.append(f"### {nome} ({tipo})\n{str(errore)[:200]}")
+    return pezzi
+
+
 def guarda_dentro_sicuro() -> str:
     import traceback
 
@@ -175,7 +208,15 @@ def main(argomenti: list[str] | None = None) -> int:
     giro = comandi.add_parser("esplora")
     giro.add_argument("--uscita", type=Path, default=Path("esplora-togliere/esito.json"))
     comandi.add_parser("dentro")
+    comandi.add_parser("leggi")
     scelti = lettore.parse_args(argomenti)
+    if scelti.comando == "leggi":
+        for numero, pezzo in enumerate(leggi()):
+            print(pezzo)
+            if os.environ.get("GITHUB_ACTIONS"):
+                print(f"::notice title=leggi {numero}::" + pezzo.replace("%", "%25")
+                      .replace("\r", "").replace("\n", "%0A"))
+        return 0
     if scelti.comando in ("esplora", "dentro"):
         testo = guarda_dentro_sicuro() if scelti.comando == "dentro" else riassunto(esplora(scelti.uscita))
         print(testo)
