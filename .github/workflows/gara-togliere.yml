@@ -1,6 +1,11 @@
 name: Gara del togliere
 
 on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/gara_togliere.py"
+      - ".github/workflows/gara-togliere.yml"
   workflow_dispatch:
 
 permissions:
