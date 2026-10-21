@@ -330,6 +330,21 @@ def _lato_per_mega(immagine, mega: float = 1.0, passo: int = 16) -> tuple[int, i
             max(passo, int(alta * scala) // passo * passo))
 
 
+def _qwen_disegna(radice: str):
+    import torch
+    from diffusers import QwenImageTransformer2DModel, TorchAoConfig
+
+    try:
+        from torchao.quantization import Int8WeightOnlyConfig
+
+        regola = TorchAoConfig(Int8WeightOnlyConfig())
+    except ImportError:
+        regola = TorchAoConfig("int8wo")
+    return QwenImageTransformer2DModel.from_pretrained(radice, subfolder="transformer",
+                                                       quantization_config=regola,
+                                                       torch_dtype=torch.bfloat16)
+
+
 def corri_qwen(foto: Path, maschere: Path, uscita: Path, fino: float) -> dict:
     import gc
 
@@ -389,6 +404,7 @@ def corri_qwen(foto: Path, maschere: Path, uscita: Path, fino: float) -> dict:
     gc.collect()
 
     pipe = DiffusionPipeline.from_pretrained(radice, text_encoder=None, tokenizer=None,
+                                             transformer=_qwen_disegna(radice),
                                              torch_dtype=torch.bfloat16)
     pipe.load_lora_weights(_scarica("prithivMLmods/QIE-2511-Object-Remover-v2"),
                            adapter_name="togli")
@@ -399,7 +415,6 @@ def corri_qwen(foto: Path, maschere: Path, uscita: Path, fino: float) -> dict:
         pipe.set_adapters(["togli", "veloce"], adapter_weights=[1.0, 1.0])
     pipe.fuse_lora()
     pipe.unload_lora_weights()
-    otto_bit(pipe.transformer)
     gc.collect()
     print(f"Qwen: {passi} passi, forza {forza}", flush=True)
     nomi = iter(ordine)

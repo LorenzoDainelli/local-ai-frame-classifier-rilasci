@@ -84,6 +84,7 @@ jobs:
           python -m pip install $TORCIA
           case "${{ matrix.chi }}" in
             omnipaint) python -m pip install diffusers==0.31.0 transformers==4.46.3 peft==0.13.2 accelerate==1.1.1 optimum-quanto==0.2.6 safetensors sentencepiece protobuf einops omegaconf opencv-python-headless pillow numpy huggingface_hub==0.26.5 ;;
+            qwen-edit-2511-togli) python -m pip install $ATTREZZI imageio torchao ;;
             *) python -m pip install $ATTREZZI imageio ;;
           esac
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
