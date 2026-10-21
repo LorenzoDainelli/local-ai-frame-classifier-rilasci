@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 CANDIDATI = {
@@ -101,83 +102,276 @@ def esplora(uscita: Path) -> dict:
 
 
 DRIVE_OBJECTCLEAR = "https://drive.google.com/drive/folders/12LA53ZPAG1uxdVXsn90L2qe6zCcp6aGF"
-DRIVE_RORD = "https://drive.google.com/drive/folders/1-aCLHMWvb-8Hwv82v17wl4rVuDutwAv6"
+SEME = 7
+QUANTE = {"removalbench": 69, "ober-test": 40, "rord-val": 41}
+MINUTI_PER_FOTO = {"osor-sdxl": 2, "osor-flux": 8, "objectclear": 5, "rorem": 12,
+                   "omnieraser": 75, "omnipaint": 90, "qwen-edit-2511-togli": 45,
+                   "flux2-klein-togli": 25}
+PYTHON = {"osor-sdxl": "3.10", "osor-flux": "3.10", "objectclear": "3.10", "rorem": "3.10",
+          "omnieraser": "3.10", "omnipaint": "3.10", "qwen-edit-2511-togli": "3.11",
+          "flux2-klein-togli": "3.11"}
+MINUTI_DI_LAVORO = 290
 
 
-def _removalbench() -> str:
-    from collections import Counter
-
-    from huggingface_hub import HfApi
-
-    file = HfApi(token=os.environ.get("HF_TOKEN") or None).list_repo_files(
-        "BaiLing/RemovalBench", repo_type="dataset")
-    cartelle = Counter(f.split("/")[0] if "/" in f else "." for f in file)
-    return f"RemovalBench: {dict(cartelle)} esempi {sorted(file)[:12]}"
+def _token() -> str | None:
+    return os.environ.get("HF_TOKEN") or None
 
 
-def _drive(indirizzo: str) -> str:
-    import gdown
-
-    voci = gdown.download_folder(indirizzo, skip_download=True, quiet=True) or []
-    from collections import Counter
-
-    cartelle = Counter(str(Path(v.path).parent) for v in voci)
-    return f"{indirizzo}: {len(voci)} file; cartelle {cartelle.most_common(30)}; " \
-           f"esempi {[v.path for v in voci[:10]]}"
+def _quante(totale: int) -> dict:
+    tutte = sum(QUANTE.values())
+    if totale >= tutte:
+        return dict(QUANTE)
+    scelte = {nome: max(1, round(n * totale / tutte)) for nome, n in QUANTE.items()}
+    return scelte
 
 
-def guarda_dentro() -> str:
-    import traceback
+def _salva_coppia(sorgente: Path, destinazione: Path, grigia: bool = False) -> None:
+    from PIL import Image
 
-    righe = []
-    for parte in (_removalbench, lambda: _drive(DRIVE_OBJECTCLEAR), lambda: _drive(DRIVE_RORD)):
-        try:
-            righe.append(parte())
-        except Exception:
-            righe.append(traceback.format_exc()[-1200:])
-    return "\n".join(righe)
+    with Image.open(sorgente) as immagine:
+        immagine = immagine.convert("L" if grigia else "RGB")
+        if grigia:
+            immagine = immagine.point(lambda v: 255 if v > 127 else 0)
+        immagine.save(destinazione)
 
 
-LEGGERE = [("prithivMLmods/QIE-2511-Object-Remover-v2", "model", "README.md"),
-           ("fal/flux-2-klein-4B-object-remove-lora", "model", "README.md"),
-           ("buxiangzhiren/GeoRemover", "space", "README.md"),
-           ("buxiangzhiren/GeoRemover", "space", "app.py"),
-           ("LetsThink/RORem", "model", "README.md")]
-ELENCHI = [("LetsThink/RORem", "model"), ("buxiangzhiren/GeoRemover", "space"),
-           ("buxiangzhiren/GeoRemover", "model"), ("jixin0101/ObjectClear", "model"),
-           ("yeates/OmniPaint", "model"), ("theSure/Omnieraser", "model")]
-
-
-def leggi() -> list[str]:
-    import traceback
-
+def _da_removalbench(quante: int, cartella: Path, scelta) -> list[dict]:
     from huggingface_hub import HfApi, hf_hub_download
 
-    api = HfApi(token=os.environ.get("HF_TOKEN") or None)
-    pezzi = []
-    for nome, tipo, file in LEGGERE:
-        try:
-            testo = Path(hf_hub_download(nome, file, repo_type=tipo)).read_text(
-                encoding="utf-8", errors="replace")
-            pezzi.append(f"### {nome} {file}\n{testo[:6000]}")
-        except Exception:
-            pezzi.append(f"### {nome} {file}\n{traceback.format_exc()[-400:]}")
-    for nome, tipo in ELENCHI:
-        try:
-            file = api.list_repo_files(nome, repo_type=tipo)
-            pezzi.append(f"### {nome} ({tipo})\n" + "\n".join(file[:150]))
-        except Exception as errore:
-            pezzi.append(f"### {nome} ({tipo})\n{str(errore)[:200]}")
-    return pezzi
+    file = set(HfApi(token=_token()).list_repo_files("BaiLing/RemovalBench", repo_type="dataset"))
+    numeri = sorted(int(Path(f).stem) for f in file if f.startswith("gt/") and
+                    f"images/{Path(f).name}" in file and f"masks/{Path(f).name}" in file)
+    presi = []
+    for numero in sorted(scelta.sample(numeri, min(quante, len(numeri)))):
+        nome = f"removalbench-{numero:03d}"
+        dove = cartella / nome
+        dove.mkdir(parents=True, exist_ok=True)
+        for cartella_hf, mia, grigia in (("images", "ingresso", False), ("masks", "maschera", True),
+                                         ("gt", "vera", False)):
+            scaricato = hf_hub_download("BaiLing/RemovalBench", f"{cartella_hf}/{numero}.png",
+                                        repo_type="dataset", token=_token())
+            _salva_coppia(Path(scaricato), dove / f"{mia}.png", grigia)
+        presi.append({"id": nome, "insieme": "removalbench", "origine": f"{numero}.png"})
+    return presi
 
 
-def guarda_dentro_sicuro() -> str:
-    import traceback
+def _da_drive(cartella: Path, quante: dict, scelta) -> list[dict]:
+    import gdown
 
+    voci = gdown.download_folder(DRIVE_OBJECTCLEAR, skip_download=True, quiet=True) or []
+    per_insieme: dict = {}
+    for voce in voci:
+        parti = Path(voce.path).parts
+        if len(parti) < 3:
+            continue
+        per_insieme.setdefault(parti[0], {}).setdefault(Path(parti[2]).stem, {})[parti[1]] = voce.id
+    presi = []
+    for insieme, chiave in (("OBER-Test", "ober-test"), ("RORD-Val-343", "rord-val")):
+        complete = {n: v for n, v in per_insieme.get(insieme, {}).items()
+                    if {"input", "gt", "object_mask"} <= set(v)}
+        for nome_file in sorted(scelta.sample(sorted(complete), min(quante[chiave], len(complete)))):
+            parti = complete[nome_file]
+            nome = f"{chiave}-{nome_file}"
+            dove = cartella / nome
+            dove.mkdir(parents=True, exist_ok=True)
+            for cartella_drive, mia, grigia in (("input", "ingresso", False),
+                                                ("object_mask", "maschera", True),
+                                                ("object_effect_mask", "effetto", True),
+                                                ("gt", "vera", False)):
+                if cartella_drive not in parti:
+                    continue
+                grezzo = dove / f"grezzo-{mia}"
+                for tentativo in range(4):
+                    if gdown.download(id=parti[cartella_drive], output=str(grezzo), quiet=True):
+                        break
+                    time.sleep(2 ** (tentativo + 2))
+                _salva_coppia(grezzo, dove / f"{mia}.png", grigia)
+                grezzo.unlink()
+            presi.append({"id": nome, "insieme": chiave, "origine": nome_file})
+    return presi
+
+
+def foto(cartella: Path, totale: int) -> dict:
+    import random
+
+    scelta = random.Random(SEME)
+    quante = _quante(totale)
+    cartella.mkdir(parents=True, exist_ok=True)
+    elenco, problemi = [], []
     try:
-        return guarda_dentro()
+        elenco += _da_removalbench(quante["removalbench"], cartella, scelta)
+    except Exception as errore:
+        problemi.append(f"RemovalBench: {type(errore).__name__}: {str(errore)[:300]}")
+    try:
+        elenco += _da_drive(cartella, quante, scelta)
+    except Exception as errore:
+        problemi.append(f"OBER e RORD: {type(errore).__name__}: {str(errore)[:300]}")
+
+    from gara_togliere_voti import Cercatore, basi
+
+    cercatore = Cercatore()
+    for voce in elenco:
+        try:
+            voce["base"] = basi(cartella / voce["id"], cercatore)
+        except Exception as errore:
+            problemi.append(f"{voce['id']}: SAM 3 {type(errore).__name__}: {str(errore)[:200]}")
+    dati = {"foto": elenco, "problemi": problemi, "quante": quante}
+    (cartella / "elenco.json").write_text(json.dumps(dati, indent=2, ensure_ascii=False),
+                                          encoding="utf-8")
+    return dati
+
+
+def piano(totale: int, solo: str) -> list[dict]:
+    import math
+
+    scelti = [c for c in MINUTI_PER_FOTO if solo in ("", "tutti") or c in solo.split(",")]
+    righe = []
+    for chi in scelti:
+        parti = max(1, math.ceil(totale * MINUTI_PER_FOTO[chi] / MINUTI_DI_LAVORO))
+        righe += [{"chi": chi, "parte": parte, "parti": parti, "python": PYTHON[chi]}
+                  for parte in range(parti)]
+    return righe
+
+
+def _mie(elenco: list[dict], parte: int, parti: int) -> list[dict]:
+    buone = [v for v in elenco if "base" in v]
+    return [v for indice, v in enumerate(buone) if indice % parti == parte]
+
+
+def corri(chi: str, cartella: Path, uscita: Path, parte: int, parti: int, minuti: int) -> dict:
+    import shutil
+
+    import gara_togliere_corridori as corridori
+
+    fino = time.time() + minuti * 60
+    elenco = json.loads((cartella / "elenco.json").read_text(encoding="utf-8"))["foto"]
+    mie = _mie(elenco, parte, parti)
+    fatte = uscita / "fatte"
+    fatte.mkdir(parents=True, exist_ok=True)
+    da_fare = [v for v in mie if not (fatte / f"{v['id']}.png").exists()]
+    lavoro = Path("lavoro-gara")
+    shutil.rmtree(lavoro, ignore_errors=True)
+    for nome in ("foto", "maschere", "uscita"):
+        (lavoro / nome).mkdir(parents=True)
+    for voce in da_fare:
+        shutil.copy(cartella / voce["id"] / "ingresso.png", lavoro / "foto" / f"{voce['id']}.png")
+        shutil.copy(cartella / voce["id"] / "maschera.png",
+                    lavoro / "maschere" / f"{voce['id']}.png")
+    esito = {"chi": chi, "parte": parte, "parti": parti, "mie": len(mie),
+             "gia_fatte": len(mie) - len(da_fare), "licenza": corridori.LICENZE.get(chi)}
+    if da_fare:
+        inizio = time.time()
+        try:
+            codice = corridori.prendi_il_codice(chi, Path("concorrenti").resolve())
+            esito["giro"] = corridori.corri(chi, codice, (lavoro / "foto").resolve(),
+                                            (lavoro / "maschere").resolve(),
+                                            (lavoro / "uscita").resolve(), fino)
+        except Exception:
+            import traceback
+
+            esito["giro"] = {"codice": "errore", "coda": traceback.format_exc()[-4000:]}
+        esito["secondi"] = round(time.time() - inizio)
+    for prodotta in (lavoro / "uscita").rglob("*.png"):
+        nome = prodotta.stem.removesuffix("_removed")
+        if any(v["id"] == nome for v in da_fare):
+            shutil.copy(prodotta, fatte / f"{nome}.png")
+    esito["fatte_ora"] = sum(1 for v in da_fare if (fatte / f"{v['id']}.png").exists())
+    esito["fatte"] = sum(1 for v in mie if (fatte / f"{v['id']}.png").exists())
+    if esito.get("secondi") and esito["fatte_ora"]:
+        esito["minuti_per_foto"] = round(esito["secondi"] / 60 / esito["fatte_ora"], 1)
+    try:
+        import importlib.metadata as metadati
+
+        esito["librerie"] = {n: metadati.version(n) for n in
+                             ("torch", "diffusers", "transformers", "optimum-quanto", "peft")
+                             if _c_e(metadati, n)}
     except Exception:
-        return traceback.format_exc()[-3000:]
+        pass
+    (uscita / "esito.json").write_text(json.dumps(esito, indent=2, ensure_ascii=False),
+                                       encoding="utf-8")
+    return esito
+
+
+def _c_e(metadati, nome: str) -> bool:
+    try:
+        metadati.version(nome)
+        return True
+    except Exception:
+        return False
+
+
+def vota(chi: str, cartella: Path, esiti: Path, uscita: Path, minuti: int) -> dict:
+    import gara_togliere_voti as voti
+
+    fino = time.time() + minuti * 60
+    elenco = json.loads((cartella / "elenco.json").read_text(encoding="utf-8"))["foto"]
+    buone = [v for v in elenco if "base" in v]
+    gia = {}
+    if (uscita / "voti.json").exists():
+        gia = json.loads((uscita / "voti.json").read_text(encoding="utf-8")).get("voti", {})
+    cercatore, somiglianza = voti.Cercatore(), voti.Somiglianza()
+    problemi = []
+    for voce in buone:
+        if voce["id"] in gia or time.time() > fino:
+            continue
+        fatta = next(iter(esiti.glob(f"esiti-{chi}-*/fatte/{voce['id']}.png")), None)
+        if fatta is None:
+            continue
+        try:
+            gia[voce["id"]] = voti.voto(cartella / voce["id"], fatta, voce["base"], cercatore,
+                                        somiglianza) | {"insieme": voce["insieme"]}
+        except Exception as errore:
+            problemi.append(f"{voce['id']}: {type(errore).__name__}: {str(errore)[:200]}")
+    tempi = []
+    for file in esiti.glob(f"esiti-{chi}-*/esito.json"):
+        dati = json.loads(file.read_text(encoding="utf-8"))
+        if dati.get("minuti_per_foto"):
+            tempi.append(dati["minuti_per_foto"])
+    riassunto_chi = voti.riassumi(chi, gia, len(buone))
+    riassunto_chi["minuti_per_foto"] = round(sum(tempi) / len(tempi), 1) if tempi else None
+    per_insieme = {}
+    for insieme in sorted({v["insieme"] for v in buone}):
+        scelti = {k: v for k, v in gia.items() if v["insieme"] == insieme}
+        per_insieme[insieme] = voti.riassumi(chi, scelti,
+                                             sum(1 for v in buone if v["insieme"] == insieme))
+    dati = {"riassunto": riassunto_chi, "per_insieme": per_insieme, "voti": gia,
+            "problemi": problemi}
+    voti.scrivi(uscita / "voti.json", dati)
+    return dati
+
+
+def somma(tutti: Path) -> str:
+    import gara_togliere_voti as voti
+
+    righe_dati = []
+    for file in sorted(tutti.glob("*/voti.json")):
+        righe_dati.append(json.loads(file.read_text(encoding="utf-8"))["riassunto"])
+    righe_dati.sort(key=voti.ordine)
+    righe = ["## Gara del togliere", "",
+             "| posto | chi | fatte | avanzi % | LPIPS zona | PSNR zona | PSNR fuori | bordo | min/foto |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    for posto, r in enumerate(righe_dati, 1):
+        righe.append(f"| {posto} | {r['chi']} | {r['fatte']}/{r['su']} | {r['avanzi_percento']} | "
+                     f"{r['lpips_zona']} | {r['psnr_zona']} | {r['psnr_fuori']} | {r['bordo']} | "
+                     f"{r.get('minuti_per_foto')} |")
+    righe += ["", "Ordine: prima chi lascia meno avanzi (SAM 3 non ritrova la cosa), poi chi ha "
+              "fatto tutte le foto, poi chi è più vicino alla foto vera (LPIPS), poi chi tocca "
+              "meno il resto, poi chi lascia meno bordo."]
+    voti.scrivi(tutti / "classifica.json", righe_dati)
+    return "\n".join(righe) + "\n"
+
+
+def _note(testo: str, titolo: str) -> None:
+    if not os.environ.get("GITHUB_ACTIONS"):
+        return
+    righe = testo.splitlines()
+    for inizio in range(0, len(righe), 40):
+        pezzo = "%0A".join(r.replace("%", "%25") for r in righe[inizio:inizio + 40])
+        print(f"::notice title={titolo} {inizio // 40}::{pezzo}")
+    sommario = os.environ.get("GITHUB_STEP_SUMMARY")
+    if sommario:
+        with open(sommario, "a", encoding="utf-8") as uscita:
+            uscita.write(testo + "\n")
 
 
 def riassunto(esiti: dict) -> str:
@@ -207,28 +401,59 @@ def main(argomenti: list[str] | None = None) -> int:
     comandi = lettore.add_subparsers(dest="comando", required=True)
     giro = comandi.add_parser("esplora")
     giro.add_argument("--uscita", type=Path, default=Path("esplora-togliere/esito.json"))
-    comandi.add_parser("dentro")
-    comandi.add_parser("leggi")
+    prese = comandi.add_parser("foto")
+    prese.add_argument("--cartella", type=Path, required=True)
+    prese.add_argument("--quante", type=int, default=150)
+    progetto = comandi.add_parser("piano")
+    progetto.add_argument("--quante", type=int, default=150)
+    progetto.add_argument("--solo", default="tutti")
+    corsa = comandi.add_parser("corri")
+    corsa.add_argument("--chi", required=True)
+    corsa.add_argument("--cartella", type=Path, required=True)
+    corsa.add_argument("--uscita", type=Path, required=True)
+    corsa.add_argument("--parte", type=int, default=0)
+    corsa.add_argument("--parti", type=int, default=1)
+    corsa.add_argument("--minuti", type=int, default=MINUTI_DI_LAVORO)
+    giudizio = comandi.add_parser("vota")
+    giudizio.add_argument("--chi", required=True)
+    giudizio.add_argument("--cartella", type=Path, required=True)
+    giudizio.add_argument("--esiti", type=Path, required=True)
+    giudizio.add_argument("--uscita", type=Path, required=True)
+    giudizio.add_argument("--minuti", type=int, default=MINUTI_DI_LAVORO)
+    totale = comandi.add_parser("somma")
+    totale.add_argument("--tutti", type=Path, required=True)
     scelti = lettore.parse_args(argomenti)
-    if scelti.comando == "leggi":
-        for numero, pezzo in enumerate(leggi()):
-            print(pezzo)
-            if os.environ.get("GITHUB_ACTIONS"):
-                print(f"::notice title=leggi {numero}::" + pezzo.replace("%", "%25")
-                      .replace("\r", "").replace("\n", "%0A"))
-        return 0
-    if scelti.comando in ("esplora", "dentro"):
-        testo = guarda_dentro_sicuro() if scelti.comando == "dentro" else riassunto(esplora(scelti.uscita))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+    if scelti.comando == "esplora":
+        testo = riassunto(esplora(scelti.uscita))
         print(testo)
-        if os.environ.get("GITHUB_ACTIONS"):
-            righe = testo.splitlines()
-            for inizio in range(0, len(righe), 40):
-                pezzo = "%0A".join(righe[inizio:inizio + 40])
-                print(f"::notice title=esplora {inizio // 40}::{pezzo}")
-        sommario = os.environ.get("GITHUB_STEP_SUMMARY")
-        if sommario:
-            with open(sommario, "a", encoding="utf-8") as uscita:
-                uscita.write(testo)
+        _note(testo, "esplora")
+    elif scelti.comando == "foto":
+        dati = foto(scelti.cartella, scelti.quante)
+        testo = f"{len(dati['foto'])} foto {dati['quante']}; problemi: {dati['problemi']}"
+        print(testo)
+        _note(testo, "foto")
+        return 0 if dati["foto"] else 1
+    elif scelti.comando == "piano":
+        righe = piano(scelti.quante, scelti.solo)
+        print(json.dumps({"include": righe}))
+    elif scelti.comando == "corri":
+        esito = corri(scelti.chi, scelti.cartella, scelti.uscita, scelti.parte, scelti.parti,
+                      scelti.minuti)
+        testo = json.dumps(esito, indent=1, ensure_ascii=False)
+        print(testo)
+        _note(testo, f"{scelti.chi} {scelti.parte}")
+    elif scelti.comando == "vota":
+        dati = vota(scelti.chi, scelti.cartella, scelti.esiti, scelti.uscita, scelti.minuti)
+        testo = json.dumps({"riassunto": dati["riassunto"], "per_insieme": dati["per_insieme"],
+                            "problemi": dati["problemi"][:10]}, indent=1, ensure_ascii=False)
+        print(testo)
+        _note(testo, f"voti {scelti.chi}")
+    elif scelti.comando == "somma":
+        testo = somma(scelti.tutti)
+        print(testo)
+        _note(testo, "classifica")
     return 0
 
 

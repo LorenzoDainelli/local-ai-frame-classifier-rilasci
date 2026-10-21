@@ -4,18 +4,32 @@ on:
   push:
     branches: [prove]
     paths:
-      - "strumenti/gara_togliere.py"
+      - "strumenti/gara_togliere*.py"
+      - "strumenti/gara_togliere_cpu/**"
       - ".github/workflows/gara-togliere.yml"
   workflow_dispatch:
+    inputs:
+      quante:
+        default: "150"
+      solo:
+        default: "tutti"
 
 permissions:
   contents: read
 
+env:
+  QUANTE: ${{ inputs.quante || '6' }}
+  SOLO: ${{ inputs.solo || 'tutti' }}
+  TORCIA: --index-url https://download.pytorch.org/whl/cpu torch torchvision
+  ATTREZZI: diffusers transformers==5.18.0 accelerate peft optimum-quanto safetensors sentencepiece protobuf einops omegaconf opencv-python-headless pillow numpy huggingface_hub gdown lpips scipy
+
 jobs:
-  esplora:
-    name: Cosa c'è davvero
+  foto:
+    name: Foto
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 120
+    outputs:
+      piano: ${{ steps.piano.outputs.piano }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -23,8 +37,111 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-      - run: python -m pip install huggingface_hub pyarrow gdown
-      - name: Candidati e foto
+      - run: python -m pip install $TORCIA && python -m pip install $ATTREZZI
+      - name: Prendi le foto
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: python strumenti/gara_togliere.py leggi
+        run: python strumenti/gara_togliere.py foto --cartella foto-gara --quante "$QUANTE"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: foto-gara
+          key: gara-togliere-foto-${{ github.run_id }}
+      - id: piano
+        run: echo "piano=$(python strumenti/gara_togliere.py piano --quante "$QUANTE" --solo "$SOLO")" >> "$GITHUB_OUTPUT"
+
+  concorrente:
+    name: ${{ matrix.chi }} ${{ matrix.parte }}
+    needs: foto
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix: ${{ fromJSON(needs.foto.outputs.piano) }}
+    env:
+      HF_HOME: /mnt/hf
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Spazio e memoria
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo mkdir -p /mnt/hf && sudo chown "$USER" /mnt/hf
+          sudo swapoff -a || true
+          sudo fallocate -l 24G /mnt/scambio && sudo chmod 600 /mnt/scambio
+          sudo mkswap /mnt/scambio && sudo swapon /mnt/scambio
+          df -h / /mnt && free -g
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install $TORCIA && python -m pip install $ATTREZZI
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: foto-gara
+          key: gara-togliere-foto-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esito
+          key: gara-togliere-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ matrix.parti }}-${{ env.QUANTE }}-x
+          restore-keys: gara-togliere-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ matrix.parti }}-${{ env.QUANTE }}-
+      - name: Corri
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >-
+          python strumenti/gara_togliere.py corri --chi "${{ matrix.chi }}" --cartella foto-gara
+          --uscita esito --parte "${{ matrix.parte }}" --parti "${{ matrix.parti }}"
+      - if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esito
+          key: gara-togliere-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ matrix.parti }}-${{ env.QUANTE }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: esiti-${{ matrix.chi }}-${{ matrix.parte }}
+          path: esito
+          if-no-files-found: ignore
+          retention-days: 14
+
+  vota:
+    name: Voti
+    needs: [foto, concorrente]
+    if: always() && needs.foto.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - run: python -m pip install $TORCIA && python -m pip install $ATTREZZI
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: foto-gara
+          key: gara-togliere-foto-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: esiti-*
+          path: tutti-esiti
+      - name: Vota
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          ls tutti-esiti || true
+          mkdir -p voti
+          for chi in $(ls tutti-esiti | sed -E 's/^esiti-(.*)-[0-9]+$/\1/' | sort -u); do
+            python strumenti/gara_togliere.py vota --chi "$chi" --cartella foto-gara --esiti tutti-esiti --uscita "voti/$chi" || true
+          done
+          python strumenti/gara_togliere.py somma --tutti voti
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: classifica
+          path: voti
+          if-no-files-found: ignore
