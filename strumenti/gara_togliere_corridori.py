@@ -331,39 +331,90 @@ def _lato_per_mega(immagine, mega: float = 1.0, passo: int = 16) -> tuple[int, i
 
 
 def corri_qwen(foto: Path, maschere: Path, uscita: Path, fino: float) -> dict:
+    import gc
+
     import torch
     from diffusers import DiffusionPipeline
     from huggingface_hub import HfApi
+    from PIL import Image
 
-    pipe = DiffusionPipeline.from_pretrained(_scarica("Qwen/Qwen-Image-Edit-2511"),
-                                             torch_dtype=torch.bfloat16)
-    pipe.load_lora_weights(_scarica("prithivMLmods/QIE-2511-Object-Remover-v2"),
-                           adapter_name="togli")
-    passi, forza = 40, 4.0
+    radice = _scarica("Qwen/Qwen-Image-Edit-2511")
+    domanda = "Remove the red highlighted object from the scene."
+    passi, forza, scelto = 40, 4.0, None
     try:
         file = HfApi().list_repo_files("lightx2v/Qwen-Image-Edit-2511-Lightning")
         scelto = next(f for f in file if "8step" in f.lower() and f.endswith(".safetensors")
                       and "fp8" not in f.lower())
+        passi, forza = 8, 1.0
+    except Exception as errore:
+        print(f"senza Lightning: {errore}", flush=True)
+
+    def segnata(immagine, maschera):
+        lato = _lato_per_mega(immagine)
+        return evidenzia(immagine, maschera).resize(lato), lato
+
+    class Letta(Exception):
+        pass
+
+    ordine = [f.name for f in sorted(foto.glob("*.png")) if not (uscita / f.name).exists()]
+    lettore = DiffusionPipeline.from_pretrained(radice, transformer=None,
+                                                torch_dtype=torch.bfloat16)
+    otto_bit(lettore.text_encoder)
+    originale = lettore.encode_prompt
+    raccolti: list = []
+    serve = 2 if forza > 1 else 1
+
+    def registra(*argomenti, **chiavi):
+        raccolti.append(originale(*argomenti, **chiavi))
+        if len(raccolti) >= serve:
+            raise Letta()
+        return raccolti[-1]
+
+    lettore.encode_prompt = registra
+    letture = {}
+    for nome in ordine:
+        raccolti.clear()
+        try:
+            with Image.open(foto / nome) as aperta, Image.open(maschere / nome) as m:
+                pronta, lato = segnata(aperta.convert("RGB"), m.convert("L"))
+            lettore(image=[pronta], prompt=domanda, negative_prompt=" ",
+                    num_inference_steps=passi, true_cfg_scale=forza,
+                    height=lato[1], width=lato[0])
+        except Letta:
+            letture[nome] = list(raccolti)
+        except Exception as errore:
+            print(f"{nome}: lettura non riuscita: {type(errore).__name__}: {errore}", flush=True)
+    print(f"Qwen: lette {len(letture)} richieste su {len(ordine)}", flush=True)
+    del lettore, originale, registra
+    gc.collect()
+
+    pipe = DiffusionPipeline.from_pretrained(radice, text_encoder=None, tokenizer=None,
+                                             torch_dtype=torch.bfloat16)
+    pipe.load_lora_weights(_scarica("prithivMLmods/QIE-2511-Object-Remover-v2"),
+                           adapter_name="togli")
+    if scelto:
         pipe.load_lora_weights(_scarica("lightx2v/Qwen-Image-Edit-2511-Lightning",
                                         allow_patterns=[scelto]),
                                weight_name=scelto, adapter_name="veloce")
         pipe.set_adapters(["togli", "veloce"], adapter_weights=[1.0, 1.0])
-        passi, forza = 8, 1.0
-    except Exception as errore:
-        print(f"senza Lightning: {errore}", flush=True)
     pipe.fuse_lora()
     pipe.unload_lora_weights()
     otto_bit(pipe.transformer)
-    otto_bit(pipe.text_encoder)
+    gc.collect()
     print(f"Qwen: {passi} passi, forza {forza}", flush=True)
+    nomi = iter(ordine)
 
     def fai(immagine, maschera):
-        lato = _lato_per_mega(immagine)
-        segnata = evidenzia(immagine, maschera).resize(lato)
-        return pipe(image=[segnata], prompt="Remove the red highlighted object from the scene.",
-                    negative_prompt=" ", num_inference_steps=passi, true_cfg_scale=forza,
+        lette = letture.pop(next(nomi))
+        pronta, lato = segnata(immagine, maschera)
+        altro = {}
+        if len(lette) > 1:
+            altro = {"negative_prompt_embeds": lette[1][0],
+                     "negative_prompt_embeds_mask": lette[1][1]}
+        return pipe(image=[pronta], prompt_embeds=lette[0][0], prompt_embeds_mask=lette[0][1],
+                    num_inference_steps=passi, true_cfg_scale=forza,
                     height=lato[1], width=lato[0],
-                    generator=torch.Generator("cpu").manual_seed(42)).images[0]
+                    generator=torch.Generator("cpu").manual_seed(42), **altro).images[0]
 
     return _uno_alla_volta(fai, foto, maschere, uscita, fino, 3600)
 
