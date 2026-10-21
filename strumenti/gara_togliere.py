@@ -100,6 +100,31 @@ def esplora(uscita: Path) -> dict:
     return esiti
 
 
+def guarda_dentro() -> str:
+    from collections import Counter
+
+    from huggingface_hub import HfApi, hf_hub_download
+
+    api = HfApi(token=os.environ.get("HF_TOKEN") or None)
+    righe = []
+    file = api.list_repo_files("BaiLing/RemovalBench", repo_type="dataset")
+    cartelle = Counter(f.split("/")[0] if "/" in f else "." for f in file)
+    righe.append(f"RemovalBench: {dict(cartelle)} esempi {sorted(file)[:8]}")
+    file = api.list_repo_files("sczhou/OBERDataset_ObjectClear", repo_type="dataset")
+    righe.append("OBER non train: " + ", ".join(f for f in file if "train" not in f))
+    for nome in [f for f in file if "test" in f or "val" in f][:3]:
+        import pyarrow.parquet as pq
+
+        percorso = hf_hub_download("sczhou/OBERDataset_ObjectClear", nome, repo_type="dataset")
+        tabella = pq.read_table(percorso)
+        righe.append(f"{nome}: {tabella.num_rows} righe, colonne {tabella.schema}")
+        for colonna in tabella.column_names:
+            valori = tabella.column(colonna).to_pylist()
+            if valori and isinstance(valori[0], (str, int, float)):
+                righe.append(f"  {colonna}: {Counter(valori).most_common(6)}")
+    return "\n".join(righe)
+
+
 def riassunto(esiti: dict) -> str:
     righe = ["## Candidati", "", "| chi | codice | pesi | GB | licenza |", "|---|---|---|---|---|"]
     for chi, voce in esiti["candidati"].items():
@@ -127,10 +152,10 @@ def main(argomenti: list[str] | None = None) -> int:
     comandi = lettore.add_subparsers(dest="comando", required=True)
     giro = comandi.add_parser("esplora")
     giro.add_argument("--uscita", type=Path, default=Path("esplora-togliere/esito.json"))
+    comandi.add_parser("dentro")
     scelti = lettore.parse_args(argomenti)
-    if scelti.comando == "esplora":
-        esiti = esplora(scelti.uscita)
-        testo = riassunto(esiti)
+    if scelti.comando in ("esplora", "dentro"):
+        testo = guarda_dentro() if scelti.comando == "dentro" else riassunto(esplora(scelti.uscita))
         print(testo)
         if os.environ.get("GITHUB_ACTIONS"):
             righe = testo.splitlines()
