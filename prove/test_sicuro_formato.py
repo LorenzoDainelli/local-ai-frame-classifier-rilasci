@@ -745,3 +745,71 @@ def test_il_peso_previsto_e_quello_vero(chiave, grandezza):
                                       "sha256": formato.VUOTA}, informazioni))
     assert formato.peso_previsto(grandezza, meta=vere) == scritto.peso
     assert formato.peso_previsto(grandezza) >= scritto.peso
+
+
+@pytest.mark.parametrize("grandezza", [0, 1, 4080, 4081, 100000, 250000])
+def test_la_rilettura_da_i_pezzi_e_poi_il_controllo(chiave, grandezza):
+    dati = _dati(grandezza)
+    blob, scritto = _scrivi(chiave, dati)
+    impronte = {"blake2b": scritto.blake2b, "sha256": scritto.sha256}
+    rilettura = formato.Rilettura(io.BytesIO(blob), chiave,
+                                  numero=bytes.fromhex(scritto.numero),
+                                  testa=scritto.testa, impronte=impronte)
+    assert rilettura.controllo is None
+    pezzi = list(rilettura)
+    assert b"".join(pezzi) == dati
+    assert rilettura.controllo == formato.controlla(io.BytesIO(blob), chiave)
+    assert rilettura.controllo.buono and rilettura.controllo.impronte_tornano
+    assert list(rilettura) == []
+    assert rilettura.controllo.buono
+
+
+def test_una_rilettura_lasciata_a_meta_non_ha_controllo(chiave):
+    dati = _dati(100000)
+    blob, _ = _scrivi(chiave, dati)
+    rilettura = formato.Rilettura(io.BytesIO(blob), chiave)
+    pezzi = iter(rilettura)
+    primo = next(pezzi)
+    assert primo and dati.startswith(primo) and len(primo) < len(dati)
+    assert rilettura.controllo is None
+    pezzi.close()
+    assert rilettura.controllo is None
+    assert list(rilettura) == []
+    assert rilettura.controllo is None
+
+
+@pytest.mark.parametrize("rovina", [0, 3, formato.TESTA.size - 1])
+def test_una_rilettura_senza_testa_buona_non_da_niente(chiave, rovina):
+    blob, _ = _scrivi(chiave, _dati(30000))
+    rotto = bytearray(blob)
+    rotto[rovina] ^= 0x20
+    rotto[-formato.TESTA.size + rovina] ^= 0x20
+    rilettura = formato.Rilettura(io.BytesIO(bytes(rotto)), chiave)
+    assert rilettura.controllo is not None
+    assert not rilettura.controllo.leggibile and rilettura.controllo.testa_rovinata
+    assert list(rilettura) == []
+    assert not rilettura.controllo.buono
+
+
+def test_una_rilettura_con_le_impronte_sbagliate_non_e_leggibile(chiave):
+    dati = _dati(30000)
+    blob, scritto = _scrivi(chiave, dati)
+    altre = {"blake2b": "1" * 64, "sha256": scritto.sha256}
+    rilettura = formato.Rilettura(io.BytesIO(blob), chiave, impronte=altre)
+    assert b"".join(rilettura) == dati
+    assert not rilettura.controllo.leggibile and not rilettura.controllo.buono
+    assert not rilettura.controllo.impronte_tornano
+
+
+def test_una_rilettura_con_un_pezzo_riparato_e_leggibile_ma_non_buona(chiave):
+    dati = _dati(100000, 3)
+    blob, scritto = _scrivi(chiave, dati)
+    forma = formato.Forma.da_testa(blob[:formato.TESTA.size])
+    rotto = bytearray(blob)
+    rotto[forma.dove_blocco(1) + 9] ^= 0x01
+    rilettura = formato.Rilettura(io.BytesIO(bytes(rotto)), chiave,
+                                  impronte={"blake2b": scritto.blake2b,
+                                            "sha256": scritto.sha256})
+    assert b"".join(rilettura) == dati
+    assert rilettura.controllo.leggibile and not rilettura.controllo.buono
+    assert rilettura.controllo.blocchi_rovinati

@@ -27,6 +27,7 @@ VELOCITA = 100 * 1024 * 1024
 SPAZIO_IN_PIU = 1.10
 DA_SALTARE = frozenset({"$recycle.bin", "system volume information"})
 SEGNI_DA_RIFARE = frozenset({"in_uso", "incompleto"})
+CUSTODITO = "custodito"
 STATI_BUONI = ("buono", "riparato")
 BLOCCATO = (32, 33)
 PROVVISORI = (".nuovo", ".tenuto")
@@ -344,7 +345,8 @@ class Copiatore:
         fatti = [registro.fatto_sparito(posto.chiave, self._adesso())
                  for posto in self.elenco.dentro(radice)
                  if posto.percorso not in visti
-                 and not _sotto(posto.percorso, illeggibili)]
+                 and not _sotto(posto.percorso, illeggibili)
+                 and CUSTODITO not in posto.segni]
         if fatti:
             giro.conta("spariti", len(fatti))
             self._registra(fatti)

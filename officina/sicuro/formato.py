@@ -805,44 +805,67 @@ def _confronta(impronte: dict | None, blake: str, sha: str) -> bool:
             and impronte.get("sha256") == sha)
 
 
+class Rilettura:
+
+    def __init__(self, file, chiave, numero: bytes | None = None,
+                 testa: bytes | None = None, impronte: dict | None = None):
+        self.controllo: Controllo | None = None
+        self._impronte = impronte
+        try:
+            self._contenuto: Contenuto | None = Contenuto(file, chiave, numero=numero,
+                                                          testa=testa)
+        except ContenutoRovinato:
+            self._contenuto = None
+            self.controllo = Controllo(buono=False, leggibile=False,
+                                       testa_rovinata=True)
+
+    def __iter__(self):
+        contenuto, self._contenuto = self._contenuto, None
+        if contenuto is None:
+            return
+        impronte = self._impronte
+        attese = impronte or contenuto.impronte
+        blake = hashlib.blake2b(digest_size=IMPRONTA)
+        sha = hashlib.sha256()
+        rovinati: list[int] = []
+        persi: list[int] = []
+        riserve_rovinate = False
+        for numero_fascia in range(contenuto.forma.fasce):
+            esito = contenuto._sistema(contenuto._leggi_fascia(numero_fascia))
+            rovinati += esito.rovinati
+            persi += esito.persi
+            riserve_rovinate |= not esito.parita_giusta
+            if not persi:
+                for blocco in contenuto.forma.blocchi_in(numero_fascia):
+                    pezzo = esito.chiari[blocco]
+                    blake.update(pezzo)
+                    sha.update(pezzo)
+                    yield pezzo
+        tornano = not persi and _confronta(attese, blake.hexdigest(),
+                                           sha.hexdigest())
+        if impronte is not None and contenuto.impronte is not None:
+            tornano = tornano and _confronta(contenuto.impronte, impronte["blake2b"],
+                                             impronte["sha256"])
+        buono = (tornano and not rovinati and not riserve_rovinate
+                 and not contenuto.testa_rovinata and not contenuto.meta_rovinata
+                 and not contenuto.tagliato)
+        self.controllo = Controllo(
+            buono=buono, leggibile=tornano, blocchi_rovinati=rovinati,
+            blocchi_persi=persi, riserve_rovinate=riserve_rovinate,
+            testa_rovinata=contenuto.testa_rovinata,
+            meta_rovinata=contenuto.meta_rovinata,
+            tagliato=contenuto.tagliato, impronte_tornano=tornano)
+
+
 def controlla(file, chiave, numero: bytes | None = None,
               testa: bytes | None = None,
               impronte: dict | None = None, ogni_pezzo=None) -> Controllo:
-    try:
-        contenuto = Contenuto(file, chiave, numero=numero, testa=testa)
-    except ContenutoRovinato:
-        return Controllo(buono=False, leggibile=False, testa_rovinata=True)
-    attese = impronte or contenuto.impronte
-    blake = hashlib.blake2b(digest_size=IMPRONTA)
-    sha = hashlib.sha256()
-    rovinati: list[int] = []
-    persi: list[int] = []
-    riserve_rovinate = False
-    for numero_fascia in range(contenuto.forma.fasce):
-        esito = contenuto._sistema(contenuto._leggi_fascia(numero_fascia))
-        rovinati += esito.rovinati
-        persi += esito.persi
-        riserve_rovinate |= not esito.parita_giusta
-        if not persi:
-            for blocco in contenuto.forma.blocchi_in(numero_fascia):
-                pezzo = esito.chiari[blocco]
-                blake.update(pezzo)
-                sha.update(pezzo)
-                if ogni_pezzo is not None:
-                    ogni_pezzo(pezzo)
-    tornano = not persi and _confronta(attese, blake.hexdigest(),
-                                       sha.hexdigest())
-    if impronte is not None and contenuto.impronte is not None:
-        tornano = tornano and _confronta(contenuto.impronte, impronte["blake2b"],
-                                         impronte["sha256"])
-    buono = (tornano and not rovinati and not riserve_rovinate
-             and not contenuto.testa_rovinata and not contenuto.meta_rovinata
-             and not contenuto.tagliato)
-    return Controllo(buono=buono, leggibile=tornano, blocchi_rovinati=rovinati,
-                     blocchi_persi=persi, riserve_rovinate=riserve_rovinate,
-                     testa_rovinata=contenuto.testa_rovinata,
-                     meta_rovinata=contenuto.meta_rovinata,
-                     tagliato=contenuto.tagliato, impronte_tornano=tornano)
+    rilettura = Rilettura(file, chiave, numero=numero, testa=testa,
+                          impronte=impronte)
+    for pezzo in rilettura:
+        if ogni_pezzo is not None:
+            ogni_pezzo(pezzo)
+    return rilettura.controllo
 
 
 def ripara(file, fuori, chiave, numero: bytes | None = None,

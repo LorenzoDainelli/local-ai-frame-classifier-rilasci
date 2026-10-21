@@ -454,6 +454,37 @@ class Chiavetta:
     def ultima(self) -> float | None:
         return self._stato.finito
 
+    @property
+    def identita(self) -> str | None:
+        with self._serratura:
+            return self._stato.chiavetta
+
+    def posto_sbagliato(self, radice) -> tuple[str, str] | None:
+        return self._problema_di_posto(Path(radice))
+
+    def chiave_uguale(self, radice) -> bool:
+        dove = Path(radice) / CARTELLA
+        sul_pc = next((documento for documento in
+                       (self._documento(self.cartella / nome)
+                        for nome in (chiavi.FILE, chiavi.RISERVA))
+                       if documento is not None), None)
+        if sul_pc is None:
+            return False
+        dati = chiavi._in_byte(sul_pc)
+        return all(documento is not None and chiavi._in_byte(documento) == dati
+                   for documento in (self._documento(dove / nome)
+                                     for nome in (chiavi.FILE, chiavi.RISERVA)))
+
+    def rileggi_presto(self, numeri) -> None:
+        cambiati = False
+        with self._serratura:
+            for numero in numeri:
+                if self._stato.sopra.get(numero, 0.0) > 0.0:
+                    self._stato.sopra[numero] = 0.0
+                    cambiati = True
+        if cambiati:
+            self._salva_stato()
+
     def _carica_stato(self) -> _Stato:
         trovati = []
         esistono = False
