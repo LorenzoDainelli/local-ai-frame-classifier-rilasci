@@ -118,8 +118,7 @@ def _removalbench() -> str:
 def _drive(indirizzo: str) -> str:
     import gdown
 
-    voci = gdown.download_folder(indirizzo, skip_download=True, quiet=True,
-                                 remaining_ok=True) or []
+    voci = gdown.download_folder(indirizzo, skip_download=True, quiet=True) or []
     from collections import Counter
 
     cartelle = Counter(str(Path(v.path).parent) for v in voci)
