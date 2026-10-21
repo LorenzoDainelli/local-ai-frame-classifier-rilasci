@@ -4,6 +4,8 @@ import hashlib
 import json
 import shutil
 
+import sys
+
 import pytest
 
 from officina.miglioria import codeformer_pesi, lucidflux, lucidflux_pesi, motori, scaricamento
@@ -238,6 +240,17 @@ def test_timm_finto_basta_a_swinir():
     from timm.models.layers import to_2tuple
 
     assert to_2tuple(8) == (8, 8)
+
+
+def test_timm_finto_non_rompe_chi_cerca_le_librerie(monkeypatch):
+    import importlib.util
+
+    for nome in ("timm", "timm.models", "timm.models.layers"):
+        monkeypatch.delitem(sys.modules, nome, raising=False)
+    pytest.importorskip("torch")
+    lucidflux.finto_timm()
+    assert importlib.util.find_spec("timm") is not None
+    assert importlib.util.find_spec("timm.models.layers") is not None
 
 
 def test_uno_scaricamento_interrotto_riparte_da_quello_che_era_arrivato(finto):

@@ -121,6 +121,11 @@ def finto_timm() -> None:
     modelli.layers = livelli
     radice = types.ModuleType("timm")
     radice.models = modelli
+    import importlib.machinery
+
+    for nome, modulo in (("timm", radice), ("timm.models", modelli),
+                         ("timm.models.layers", livelli)):
+        modulo.__spec__ = importlib.machinery.ModuleSpec(nome, None)
     sys.modules.update({"timm": radice, "timm.models": modelli,
                         "timm.models.layers": livelli})
 
