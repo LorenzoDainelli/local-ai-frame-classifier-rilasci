@@ -99,9 +99,17 @@ jobs:
       - name: Corri
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: >-
-          python strumenti/gara_togliere.py corri --chi "${{ matrix.chi }}" --cartella foto-gara
-          --uscita esito --parte "${{ matrix.parte }}" --parti "${{ matrix.parti }}"
+        run: |
+          set -o pipefail
+          ( while sleep 30; do free -m | awk '/Mem|Swap/ {print $1, $3}' | tr '\n' ' '; echo; done ) > memoria.txt &
+          python -X faulthandler strumenti/gara_togliere.py corri --chi "${{ matrix.chi }}" --cartella foto-gara \
+            --uscita esito --parte "${{ matrix.parte }}" --parti "${{ matrix.parti }}" 2>&1 | tee corsa.txt || {
+            codice=$?
+            coda=$(grep -v -e 'it/s]' -e 's/it]' corsa.txt | tail -25 | tr '\n' '|' | cut -c1-3500)
+            echo "::error title=Corsa caduta ($codice)::${coda}"
+            echo "::error title=Memoria usata::$(tail -8 memoria.txt | tr '\n' '|')"
+            exit $codice
+          }
       - if: always()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
