@@ -69,10 +69,10 @@ def sulla_cpu(cartella: Path) -> None:
             file.write_text(nuovo, encoding="utf-8")
 
 
-def otto_bit(modulo) -> None:
+def otto_bit(modulo, fuori: list[str] | None = None) -> None:
     from optimum.quanto import freeze, qint8, quantize
 
-    quantize(modulo, weights=qint8)
+    quantize(modulo, weights=qint8, exclude=fuori)
     freeze(modulo)
 
 
@@ -359,7 +359,7 @@ def corri_qwen(foto: Path, maschere: Path, uscita: Path, fino: float) -> dict:
     ordine = [f.name for f in sorted(foto.glob("*.png")) if not (uscita / f.name).exists()]
     lettore = DiffusionPipeline.from_pretrained(radice, transformer=None,
                                                 torch_dtype=torch.bfloat16)
-    otto_bit(lettore.text_encoder)
+    otto_bit(lettore.text_encoder, fuori=["*visual*"])
     originale = lettore.encode_prompt
     raccolti: list = []
     serve = 2 if forza > 1 else 1
