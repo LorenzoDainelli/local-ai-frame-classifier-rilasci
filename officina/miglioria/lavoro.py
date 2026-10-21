@@ -95,10 +95,11 @@ def spazio_dei_pezzi(originale: Path) -> int:
 
 
 def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
-                     ricorda: Callable[[subprocess.Popen], None]) -> dict:
+                     ricorda: Callable[[subprocess.Popen], None],
+                     modulo: str = "officina.miglioria.stanza") -> dict:
     from officina.programma import librerie, scheda
 
-    comando = [librerie.python_per_i_comandi(), "-m", "officina.miglioria.stanza"]
+    comando = [librerie.python_per_i_comandi(), "-m", modulo]
     processo = subprocess.Popen(
         comando, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL, cwd=str(librerie.RADICE), text=True,

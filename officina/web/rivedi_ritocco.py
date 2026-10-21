@@ -72,19 +72,24 @@ def _nome(file: list[dict]) -> str:
     return file[0]["nome"]
 
 
-def _quanti_per_file(connessione: sqlite3.Connection, lavoro_id: int, stato: str) -> int:
+def _quanti_per_file(connessione: sqlite3.Connection, lavoro_id: int, stato: str,
+                     genere: str | None = None) -> int:
     riga = uno(connessione,
                "SELECT max(quanti) AS quanti FROM (SELECT count(*) AS quanti FROM ritocchi "
-               "WHERE lavoro_id = ? AND stato = ? GROUP BY file_id)", lavoro_id, stato)
+               "WHERE lavoro_id = ? AND stato = ? AND (? IS NULL OR genere = ?) "
+               "GROUP BY file_id)", lavoro_id, stato, genere, genere)
     return int(riga["quanti"] or 0) if riga is not None else 0
 
 
 def _dettaglio(connessione: sqlite3.Connection, riga: sqlite3.Row) -> str:
     pezzi = []
-    nuovi = _quanti_per_file(connessione, riga["id"], elenco.IN_CODA)
+    nuovi = _quanti_per_file(connessione, riga["id"], elenco.IN_CODA, elenco.PIXELA)
+    via = _quanti_per_file(connessione, riga["id"], elenco.IN_CODA, elenco.TOGLI)
     tolti = _quanti_per_file(connessione, riga["id"], elenco.TOLTO)
     if nuovi:
         pezzi.append("1 parte da pixelare" if nuovi == 1 else f"{nuovi} parti da pixelare")
+    if via:
+        pezzi.append("1 cosa da togliere" if via == 1 else f"{via} cose da togliere")
     if tolti:
         pezzi.append("1 ritocco da togliere" if tolti == 1 else f"{tolti} ritocchi da togliere")
     if riga["stato"] in (coda.IN_CODA, coda.IN_LAVORO) and quanto(riga["stima"]):

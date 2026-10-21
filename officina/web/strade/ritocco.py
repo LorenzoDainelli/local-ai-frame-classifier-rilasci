@@ -40,10 +40,13 @@ TENUTO = ("Tenut{fine}: ora si vede col ritocco. Lo scatto vero resta in «Origi
           "ritocco si toglie quando vuoi dal pannello «i».")
 SCARTATO = "Scartat{fine}: la copia è cancellata, e lo scatto resta com'era."
 RIMESSO = "Rimesso in coda: lo rifaccio da capo."
+TOGLI_IN_CODA = ("{quante} da togliere in coda: le tolgo con calma, anche di notte, e poi le "
+                 "rivedi prima che lo scatto cambi.")
 
 QUANTI_IN_CODA = 500
 
 COSE = (elenco.VOLTO, elenco.PERSONA, elenco.OGGETTO)
+GENERI = (elenco.PIXELA, elenco.TOGLI)
 LIBRERIE = ("torch", "transformers")
 
 
@@ -179,6 +182,9 @@ def leggi_i_pezzi(dati) -> tuple[int, int, list[dict]]:
     for pezzo in pezzi:
         if not isinstance(pezzo, dict) or pezzo.get("cosa") not in COSE:
             raise ValueError
+        genere = pezzo.get("genere") or elenco.PIXELA
+        if genere not in GENERI:
+            raise ValueError
         png = pezzo.get("png")
         if not isinstance(png, str):
             raise ValueError
@@ -188,7 +194,7 @@ def leggi_i_pezzi(dati) -> tuple[int, int, list[dict]]:
         punti = scelta.leggi_i_punti(pezzo.get("punti") or [])
         riquadro = scelta.leggi_il_riquadro(pezzo.get("riquadro"))
         letti.append({
-            "cosa": pezzo["cosa"], "png": base64.b64decode(png, validate=True),
+            "cosa": pezzo["cosa"], "genere": genere, "png": base64.b64decode(png, validate=True),
             "quadretto": quadretto, "volto": _identita(pezzo.get("volto")),
             "corpo": _identita(pezzo.get("corpo")),
             "scelta": ({"punti": [[p.x, p.y, p.dentro] for p in punti],
@@ -225,9 +231,12 @@ def pezzi_della_foto(archivio, file_id: int, larga: int, alta: int,
                 corpo_id is not None and corpo_id not in corpi):
             raise ErroreOfficina(NON_TORNA, codice="ritocco_non_torna")
         suo = corpi[corpo_id] if volto_id is None and corpo_id is not None else volto_id
-        nuovi.append(strumento.pezzo_per_la_copia(
+        nuovo = strumento.pezzo_per_la_copia(
             maschera, letto["cosa"], larga, alta, in_pixel, quadretto=letto["quadretto"],
-            volto_id=volto_id, corpo_id=corpo_id, scelta=letto["scelta"], suo=suo))
+            volto_id=volto_id, corpo_id=corpo_id, scelta=letto["scelta"], suo=suo)
+        if letto.get("genere", elenco.PIXELA) == elenco.TOGLI:
+            nuovo["genere"] = elenco.TOGLI
+        nuovi.append(nuovo)
     return nuovi
 
 
@@ -239,8 +248,17 @@ def _salva(file_id: int, larga: int, alta: int, letti: list[dict]) -> dict:
              if pezzo is not None]
     if not nuovi:
         raise ErroreOfficina(NIENTE_DA_SALVARE, codice="ritocco_niente")
-    copia.metti(archivio, file_id, nuovi)
-    return {"fatto": True, "quanti": len(nuovi)}
+    da_togliere = [pezzo for pezzo in nuovi if pezzo.get("genere") == elenco.TOGLI]
+    da_pixelare = [pezzo for pezzo in nuovi if pezzo.get("genere") != elenco.TOGLI]
+    if da_pixelare:
+        copia.metti(archivio, file_id, da_pixelare)
+    if not da_togliere:
+        return {"fatto": True, "quanti": len(nuovi)}
+    lavoro_id = coda.metti(archivio, [{"file_id": file_id, **pezzo} for pezzo in da_togliere])
+    coda_ritocco.avvia(archivio)
+    quante = len(da_togliere)
+    return {"fatto": True, "quanti": len(nuovi), "in_coda": lavoro_id,
+            "detto": TOGLI_IN_CODA.format(quante="Una cosa" if quante == 1 else f"{quante} cose")}
 
 
 def _ritocchi(file_id: int) -> dict:

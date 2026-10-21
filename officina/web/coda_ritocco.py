@@ -75,6 +75,38 @@ class Seguitore:
                                   chiave, sfondo=lavoro)
         return not esito.get("in_coda") and not esito.get("fermato")
 
+    def prendi_la_scheda(self, lavoro) -> bool:
+        return self._prendi(lavoro)
+
+    def cerca(self, lavoro):
+        from officina.errori import ErroreOfficina
+        from officina.importazione import impronta
+
+        def cerca(percorso: Path, punti: list, riquadro):
+            try:
+                cartella = self._la_cartella()
+            except ErroreOfficina:
+                return None
+            if lavori.turno.chi is not lavoro:
+                return None
+            chiave = f"ricontrollo-{impronta.del_file(Path(percorso))}"
+            try:
+                dati = self.al_clic._chiedi(cartella, "scegli", chiave, str(percorso),
+                                            list(punti), riquadro, None, sfondo=lavoro)
+            except ErroreOfficina as errore:
+                registro.avviso("ritocco.ricontrollo_saltato", guasto=errore.codice)
+                return None
+            finally:
+                self.spegni_sam3()
+            return dati["maschera"], float(dati["punteggio"])
+
+        return cerca
+
+    def spegni_sam3(self) -> None:
+        al_clic = self.al_clic
+        with al_clic._lucchetto:
+            al_clic._spegni_tutto()
+
     def lascia(self, lavoro) -> None:
         self.al_clic.lascia_lo_sfondo(lavoro)
 

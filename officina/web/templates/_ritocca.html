@@ -1,7 +1,7 @@
 {% from "_icone.html" import icona %}
 {% macro tasto_ritocca(file_id, numero='', classe='tasto-comando nudo piccolo', video=False) -%}
 <button class="{{ classe }}" type="button" data-apri-ritocca data-file="{{ file_id }}" data-numero="{{ numero }}" aria-haspopup="dialog"
-        {% if video %}data-video="1" aria-controls="ritocca-video" title="Pixela un volto, una persona o una parte di questo video: l'IA la segue fotogramma per fotogramma"{% else %}aria-controls="ritocca" title="Pixela un volto, una persona o una parte di questa foto"{% endif %}>{{ icona('quadretti', 14) }} Ritocca</button>
+        {% if video %}data-video="1" aria-controls="ritocca-video" title="Pixela un volto, una persona o una parte di questo video: l'IA la segue fotogramma per fotogramma"{% else %}aria-controls="ritocca" title="Pixela o togli un volto, una persona o una parte di questa foto"{% endif %}>{{ icona('quadretti', 14) }} Ritocca</button>
 {%- endmacro %}
 
 {% macro finestra_ritocca() %}
@@ -29,7 +29,7 @@
                 <button class="rt-tondo" type="button" data-rt-persona aria-label="Tutta la persona" title="Tutta la persona: scegli un contorno trovato dall'IA">{{ icona('persona', 19) }}</button>
                 <span class="rt-sbarra" aria-hidden="true"></span>
                 <button class="rt-tasto" type="button" aria-pressed="true" data-rt-pixela>Pixela</button>
-                <button class="rt-tasto" type="button" disabled title="Arriva dopo la gara">Togli</button>
+                <button class="rt-tasto" type="button" aria-pressed="false" data-rt-genere-togli>Togli</button>
                 <span class="rt-sbarra" aria-hidden="true"></span>
                 <label class="rt-cursore"><span data-rt-cursore-nome>Quadretti</span>
                     <input type="range" min="1" max="4" step="1" value="1" data-rt-cursore>

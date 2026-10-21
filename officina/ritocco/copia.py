@@ -73,9 +73,63 @@ def dove_va_la_base(base: Base) -> Path:
     return base.percorso.parent / attesa.ORIGINALI / CARTELLA / base.percorso.name
 
 
+TOPPA_PERSA = ("Il risultato di una cosa tolta non si trova più o è cambiato: va rifatto. "
+               "Lo scatto non è stato toccato.")
+
+
+def dove_le_toppe(copia: Path) -> Path:
+    return copia.parent / attesa.ORIGINALI / CARTELLA
+
+
+def nome_della_toppa(ritocco_id: int) -> str:
+    return f"togli-{int(ritocco_id)}.png"
+
+
+def toppa_pronta(ritocco) -> bool:
+    if not ritocco["risultato"] or ritocco["origine_x"] is None:
+        return False
+    percorso = Path(ritocco["risultato"])
+    return percorso.is_file() and impronta.del_file(percorso) == ritocco["impronta_risultato"]
+
+
+def _metti_la_toppa(immagine: Image.Image, ritocco) -> Image.Image:
+    from officina.ritocco import togliere
+
+    if not toppa_pronta(ritocco):
+        raise RitoccoFermato(TOPPA_PERSA)
+    toppa = togliere.Toppa.da_png(Path(ritocco["risultato"]).read_bytes(),
+                                  ritocco["origine_x"], ritocco["origine_y"])
+    larga, alta = immagine.size
+    if (larga, alta) != (ritocco["larghezza"], ritocco["altezza"]):
+        scala_x = larga / ritocco["larghezza"]
+        scala_y = alta / ritocco["altezza"]
+        toppa = togliere.Toppa(
+            round(toppa.x * scala_x), round(toppa.y * scala_y),
+            toppa.immagine.resize((max(1, round(toppa.immagine.width * scala_x)),
+                                   max(1, round(toppa.immagine.height * scala_y))),
+                                  Image.Resampling.LANCZOS), toppa.rimpicciolita)
+    return toppa.metti(immagine)
+
+
+def butta_le_toppe(righe) -> None:
+    for riga in righe:
+        if riga["genere"] != elenco.TOGLI or not riga["risultato"]:
+            continue
+        percorso = Path(riga["risultato"])
+        if (percorso.name == nome_della_toppa(riga["id"]) and percorso.parent.name == CARTELLA
+                and percorso.is_file()):
+            try:
+                percorso.unlink()
+            except OSError as errore:
+                registro.avviso("ritocco.toppa_non_tolta", **registro.dove_si_e_rotto(errore))
+
+
 def disegna(immagine: Image.Image, ritocchi) -> Image.Image:
     larga, alta = immagine.size
     for ritocco in ritocchi:
+        if ritocco["genere"] == elenco.TOGLI:
+            immagine = _metti_la_toppa(immagine, ritocco)
+            continue
         if ritocco["genere"] != elenco.PIXELA:
             raise RitoccoFermato("Questo ritocco non si può ancora rifare: lo scatto "
                                  "non è stato toccato.")

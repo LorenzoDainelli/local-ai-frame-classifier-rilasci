@@ -159,7 +159,8 @@
     <ul class="rr-parti" aria-label="Cosa cambia">
         {% for parte in scelta.parti %}
         <li>{% if parte.si_toglie %}<span class="bollino">si toglie</span>{% else %}{{ icona('spunta', 13) }}{% endif %}
-            <b>{{ parte.titolo }}</b>{% if parte.dettaglio %} <span class="tenue">&middot; {{ parte.dettaglio }}</span>{% endif %}</li>
+            <b>{{ parte.titolo }}</b>{% if parte.dettaglio %} <span class="tenue">&middot; {{ parte.dettaglio }}</span>{% endif %}
+            {% if parte.avviso %}<span class="bollino">{{ parte.avviso }}</span>{% endif %}</li>
         {% endfor %}
     </ul>
     {% endif %}

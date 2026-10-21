@@ -403,3 +403,40 @@ def test_in_etichetta_c_e_il_tasto_ritocca(cliente):
     pagina = cliente.get("/officina").text
     assert 'id="b-ritocca"' in pagina and '<dialog class="ritocca" id="ritocca"' in pagina
     assert '<dialog class="ritocca rtv" id="ritocca-video"' in pagina
+
+
+def test_togli_va_in_coda_e_la_foto_resta_com_e(cliente, importato, cartella, monkeypatch):
+    from officina.importazione import impronta
+    from officina.ritocco import coda
+    from officina.web import coda_ritocco
+
+    partite = []
+    monkeypatch.setattr(coda_ritocco, "avvia", lambda archivio: partite.append(1) or True)
+    scatto = cartella / "2016" / "piccola.jpg"
+    prima = impronta.del_file(scatto)
+    file_id = _file_di(importato, "piccola.jpg")
+    risposta = cliente.post(f"/api/ritocco/{file_id}/salva", json={
+        "larghezza": LARGA, "altezza": ALTA,
+        "pezzi": [_pezzo(_maschera(ZONA_A), genere=elenco.TOGLI),
+                  _pezzo(_maschera(ZONA_B))]})
+    assert risposta.status_code == 200
+    detto = risposta.json()
+    assert detto["in_coda"] and "coda" in detto["detto"] and partite
+    from officina.miglioria import attesa
+
+    with importato.lettura() as connessione:
+        righe = {riga["genere"]: riga for riga in connessione.execute(
+            "SELECT genere, stato FROM ritocchi WHERE file_id = ?", (file_id,))}
+        assert coda.per_id(connessione, detto["in_coda"])["stato"] == coda.IN_CODA
+    assert righe[elenco.PIXELA]["stato"] == elenco.FATTO
+    assert righe[elenco.TOGLI]["stato"] == elenco.IN_CODA
+    assert impronta.del_file(cartella / "2016" / attesa.ORIGINALI / "piccola.jpg") == prima
+
+
+def test_un_genere_sconosciuto_non_si_salva(cliente, importato):
+    file_id = _file_di(importato, "piccola.jpg")
+    risposta = cliente.post(f"/api/ritocco/{file_id}/salva", headers=JSON, json={
+        "larghezza": LARGA, "altezza": ALTA,
+        "pezzi": [_pezzo(_maschera(ZONA_A), genere="brucia")]})
+    assert risposta.status_code >= 400
+    assert not _ritocchi(importato, file_id)

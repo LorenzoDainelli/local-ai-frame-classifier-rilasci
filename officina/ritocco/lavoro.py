@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json
 import multiprocessing
 import os
 import queue
 import shutil
+import subprocess
 import threading
 import time
 from pathlib import Path
+from typing import Callable
+
+from PIL import Image
 
 from officina import registro
 from officina.archivio.database import adesso
@@ -15,7 +20,8 @@ from officina.errori import ErroreOfficina
 from officina.importazione import impronta
 from officina.miglioria import attesa, date, video
 from officina.modello import file_media
-from officina.ritocco import coda, copia, elenco, pellicola, seguiti
+from officina.ritocco import (coda, copia, elenco, maschere, pellicola, ricontrollo, seguiti,
+                              togliere)
 from officina.ritocco.copia import RitoccoFermato
 from officina.web import in_disparte
 from officina.web.lavori import GUASTO_IMPREVISTO, Lavoro
@@ -32,6 +38,16 @@ SPAZIO = ("Sul disco delle foto non c'è abbastanza spazio per la copia ritoccat
           "Il video non è stato toccato.")
 SENZA_SEGUIRE = ("Per seguire la parte scelta nel video serve SAM 3, che adesso non è "
                  "pronto. Il video non è stato toccato.")
+NON_TOLTO = "Il modello per togliere non è riuscito: {perche}. Lo scatto non è stato toccato."
+TOGLI_A_PAROLE = {
+    "togli_motore_sconosciuto": "non è installato",
+    "togli_niente": "la parte scelta è vuota",
+    "memoria_scheda_finita": "la memoria della scheda video è finita",
+    "memoria_finita": "la memoria del computer è finita",
+    "stanza_caduta": "si è fermato di colpo",
+    "stanza_muta": "non ha detto com'è andata",
+}
+DA_RIPRENDERE = {"memoria_scheda_finita", "memoria_finita", "stanza_caduta"}
 SI_E_CHIUSO = ("Il pixelato del video si è chiuso da solo. Il video non è stato toccato: "
                "rimettilo in coda.")
 
@@ -42,10 +58,15 @@ class _Rimanda(Exception):
 
 class Ritoccatore:
 
-    def __init__(self, archivio, seguitore=None, a_parte: bool | None = None):
+    def __init__(self, archivio, seguitore=None, a_parte: bool | None = None,
+                 toglie: Callable[..., dict] | None = None,
+                 cerca: ricontrollo.Cerca | None = None):
         self.archivio = archivio
         self.seguitore = seguitore
         self._a_parte = a_parte
+        self._toglie = toglie or _lancia_togli
+        self._cerca = cerca
+        self._processo: subprocess.Popen | None = None
         self.lavoro = Lavoro(COSA)
         self._fermati = threading.Event()
         self.adesso: dict = {}
@@ -63,6 +84,9 @@ class Ritoccatore:
     def ferma(self, aspetta: float = 0.0) -> None:
         self._fermati.set()
         in_disparte.manda("ferma", a=A)
+        processo = self._processo
+        if processo is not None and processo.poll() is None:
+            processo.kill()
         if self.seguitore is not None:
             self.seguitore.ferma()
         if aspetta:
@@ -207,6 +231,14 @@ class Ritoccatore:
         self.adesso.update(nome=da.copia.name, fatti=0, totale=0)
         self.lavoro.di(f"ritocco «{da.copia.name}»")
         if media["genere"] != "video":
+            if any(ritocco["genere"] == elenco.TOGLI for ritocco in ritocchi):
+                try:
+                    self._togli_le_cose(lavoro_id, file_id, ritocchi, da)
+                finally:
+                    if self.seguitore is not None:
+                        self.seguitore.lascia(self.lavoro)
+                with self.archivio.lettura() as connessione:
+                    ritocchi = coda.da_disegnare(connessione, file_id, lavoro_id)
             pronta = copia.prepara_per_la_coda(self.archivio, file_id, lavoro_id, ritocchi, da)
             return {**fatto, "pronta": str(pronta), "impronta_pronta": impronta.del_file(pronta)}
 
@@ -234,6 +266,127 @@ class Ritoccatore:
             raise
         return {**fatto, "pronta": str(pronta), "impronta_pronta": segno,
                 "fotogrammi": strati[0].quanti}
+
+    def _togli_le_cose(self, lavoro_id: int, file_id: int, ritocchi, da) -> None:
+        from officina.miglioria import metadati
+
+        with self.archivio.lettura() as connessione:
+            dove = attesa.cartella(connessione, da.copia)
+        attesa.prepara(dove)
+        toppe = copia.dove_le_toppe(da.copia)
+        for indice, ritocco in enumerate(ritocchi):
+            if (ritocco["genere"] != elenco.TOGLI or ritocco["stato"] != elenco.IN_CODA
+                    or copia.toppa_pronta(ritocco)):
+                continue
+            if self._fermati.is_set():
+                raise pellicola.Fermato()
+            if not da.sorgente.is_file() or impronta.del_file(da.sorgente) != da.impronta_base:
+                raise RitoccoFermato(copia.CAMBIATO)
+            sotto = copia.disegna(metadati.apri(da.sorgente).immagine, ritocchi[:indice])
+            pezzo = maschere.apri(ritocco["maschera"])
+            if pezzo is None:
+                raise RitoccoFermato(coda.NIENTE)
+            buco = maschere.intera(maschere.per_misura(pezzo, *sotto.size))
+            base = dove / f"{copia.PREFISSO}-{int(file_id)}-{int(lavoro_id)}-sotto.png"
+            forma = base.with_name(base.name.replace("-sotto", "-buco"))
+            toppe.mkdir(parents=True, exist_ok=True)
+            uscita = toppe / copia.nome_della_toppa(ritocco["id"])
+            sotto.convert("RGB").save(base)
+            Image.fromarray(buco.astype("uint8") * 255, "L").save(forma)
+            self.adesso.update(nome=da.copia.name, fatti=indice, totale=len(ritocchi))
+            self.lavoro.di(f"tolgo una cosa da «{da.copia.name}»")
+            try:
+                esito, traccia = self._togli_e_ricontrolla(base, forma, uscita, sotto, buco)
+            finally:
+                self._processo = None
+                base.unlink(missing_ok=True)
+                forma.unlink(missing_ok=True)
+            if self._fermati.is_set():
+                uscita.unlink(missing_ok=True)
+                raise pellicola.Fermato()
+            if "guasto" in esito or not uscita.is_file():
+                uscita.unlink(missing_ok=True)
+                codice = str(esito.get("guasto") or "stanza_muta")
+                registro.errore("ritocco.togli_non_riuscito", guasto=codice,
+                                **{chiave: esito[chiave] for chiave in ("dove", "riga", "tipo")
+                                   if chiave in esito})
+                if codice in DA_RIPRENDERE:
+                    self._fermati.wait(ASPETTA_IL_SEGUITO)
+                    raise _Rimanda()
+                raise ErroreOfficina(NON_TOLTO.format(
+                    perche=TOGLI_A_PAROLE.get(codice, "difetto imprevisto")),
+                    codice="ritocco_togli_non_riuscito")
+            fatto = esito["fatto"]
+            with self.archivio.scrittura() as connessione:
+                connessione.execute(
+                    "UPDATE ritocchi SET risultato = ?, impronta_risultato = ?, origine_x = ?, "
+                    "origine_y = ?, larghezza = ?, altezza = ?, traccia = ? WHERE id = ?",
+                    (str(uscita), impronta.del_file(uscita), int(fatto["x"]), int(fatto["y"]),
+                     sotto.width, sotto.height, json.dumps(traccia), ritocco["id"]))
+            with self.archivio.lettura() as connessione:
+                ritocchi[indice] = elenco.per_id(connessione, ritocco["id"])
+
+    def _togli_e_ricontrolla(self, base: Path, forma: Path, uscita: Path, sotto, buco):
+        traccia: dict = {"rifatto": 0}
+        esito: dict = {}
+        for volta, margine in enumerate(togliere.MARGINI):
+            if volta:
+                self.lavoro.di("la cosa si vede ancora, riprovo più largo")
+            self._prendi_la_scheda()
+            esito = self._toglie(self._lavoro_togli(base, forma, uscita, margine),
+                                 self._ricorda)
+            if self._fermati.is_set() or "guasto" in esito or not uscita.is_file():
+                return esito, traccia
+            fatto = esito["fatto"]
+            toppa = togliere.Toppa.da_png(uscita.read_bytes(), int(fatto["x"]), int(fatto["y"]))
+            dopo = toppa.metti(sotto.convert("RGB"))
+            guardata = base.with_name(base.name.replace("-sotto", "-dopo"))
+            try:
+                dopo.save(guardata)
+                visto = ricontrollo.controlla(dopo, toppa, buco, self._chi_cerca(), guardata)
+            finally:
+                guardata.unlink(missing_ok=True)
+            traccia = {"rifatto": volta, "resta": visto.resta, "bordo": visto.bordo,
+                       "dove": visto.dove}
+            if visto.pulito:
+                break
+        return esito, traccia
+
+    def _chi_cerca(self):
+        if self._cerca is not None:
+            return self._cerca
+        if self.seguitore is not None and hasattr(self.seguitore, "cerca"):
+            return self.seguitore.cerca(self.lavoro)
+        return None
+
+    def _prendi_la_scheda(self) -> None:
+        if self.seguitore is None or not hasattr(self.seguitore, "prendi_la_scheda"):
+            return
+        if not self.seguitore.prendi_la_scheda(self.lavoro):
+            self._fermati.wait(ASPETTA_IL_SEGUITO)
+            raise _Rimanda()
+
+    def _lavoro_togli(self, base: Path, forma: Path, uscita: Path,
+                      margine: float = togliere.MARGINI[0]) -> dict:
+        from officina.miglioria import motori, preparazione
+        from officina.miglioria.lavoro import percorsi_della_stanza
+
+        modelli = self.archivio.dove.modelli
+        return {
+            "immagine": str(base), "maschera": str(forma), "uscita": str(uscita),
+            "margine": margine,
+            "motore": self.archivio.impostazione("togli_motore") or togliere.FINTO,
+            "ingrandisci": (motori.SEEDVR2 if preparazione.e_pronto(modelli, motori.SEEDVR2)
+                            else None),
+            "intensita": self._intensita(),
+            "percorsi": percorsi_della_stanza(),
+            "opzioni": {"cartella_modelli": str(modelli)},
+        }
+
+    def _ricorda(self, processo: subprocess.Popen) -> None:
+        self._processo = processo
+        if self._fermati.is_set():
+            processo.kill()
 
     def _strati(self, ritocchi, impronta_base: str) -> list[pellicola.Strato]:
         strati = []
@@ -306,6 +459,12 @@ class Ritoccatore:
             if processo.is_alive():
                 processo.terminate()
                 processo.join(timeout=2.0)
+
+
+def _lancia_togli(lavoro: dict, ricorda) -> dict:
+    from officina.miglioria.lavoro import lancia_la_stanza
+
+    return lancia_la_stanza(lavoro, lambda *_: None, ricorda, "officina.ritocco.togli_stanza")
 
 
 def _figlio(sorgente: str, verso: str, strati: list, intensita: int,

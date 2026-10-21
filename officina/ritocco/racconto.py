@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
 
@@ -72,6 +73,40 @@ ATTESE = {
 }
 
 
+def _ricontrollo(riga) -> tuple[list[str], str]:
+    try:
+        traccia = json.loads(riga["traccia"] or "{}")
+    except (TypeError, ValueError):
+        return [], ""
+    if not isinstance(traccia, dict) or "rifatto" not in traccia:
+        return [], ""
+    rifatto = int(traccia.get("rifatto") or 0)
+    pezzi = ["ricontrollato, al primo colpo" if not rifatto else
+             f"ricontrollato e rifatto {'1 volta' if rifatto == 1 else f'{rifatto} volte'}"]
+    avviso = ""
+    if traccia.get("resta"):
+        avviso = "dopo tre volte si vede ancora un pezzo"
+    elif traccia.get("bordo"):
+        avviso = "dopo tre volte si vede ancora un bordo intorno"
+    return pezzi, avviso
+
+
+def _dove_resta(riga) -> str:
+    try:
+        x0, y0, x1, y1 = json.loads(riga["traccia"])["dove"]
+    except (TypeError, ValueError, KeyError):
+        return ""
+    larga, alta = riga["larghezza"] or 0, riga["altezza"] or 0
+    if not larga or not alta:
+        return ""
+    cx, cy = (x0 + x1) / 2 / larga, (y0 + y1) / 2 / alta
+    alto = "in alto" if cy < SINISTRA else "in basso" if cy > DESTRA else ""
+    lato = "a sinistra" if cx < SINISTRA else "a destra" if cx > DESTRA else ""
+    if not alto and not lato:
+        return "al centro"
+    return " ".join(parola for parola in (alto, lato) if parola)
+
+
 def _voce(riga) -> dict:
     pezzo = maschere.apri(riga["maschera"])
     pezzi = [_chi_e(riga, riga["nome"], pezzo)]
@@ -79,7 +114,16 @@ def _voce(riga) -> dict:
         quanti = quanti_quadretti(riga["misura"], riga["quadretto"])
         if quanti:
             pezzi.append(f"{quanti} quadretti di larghezza")
+    avviso = ""
+    if riga["genere"] == elenco.TOGLI:
+        detti, avviso = _ricontrollo(riga)
+        pezzi.extend(detti)
+        if avviso:
+            dove = _dove_resta(riga)
+            if dove:
+                avviso = f"{avviso}, {dove}"
     return {
+        "avviso": avviso,
         "id": riga["id"],
         "titolo": TITOLI.get((riga["genere"], riga["cosa"]), "Ritocco"),
         "quando": giorno(riga["fatto_il"]),

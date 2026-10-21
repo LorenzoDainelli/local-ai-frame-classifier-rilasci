@@ -221,6 +221,7 @@ function lato(cosa, v, bordi) {
 }
 
 function pixelaQui(penna, cosa) {
+    if (cosa.genere === "togli") return;
     const v = vista(cosa);
     if (!v) return;
     const bordi = confini(v);
@@ -284,6 +285,11 @@ function ridisegnaAnteprima() {
     const penna = qui("[data-rt-anteprima]").getContext("2d");
     penna.clearRect(0, 0, st.larga, st.alta);
     for (const cosa of st.cose) pixelaQui(penna, cosa);
+    for (const cosa of st.cose) {
+        if (cosa.genere !== "togli") continue;
+        const v = vista(cosa);
+        if (v) penna.drawImage(tinta(v, [20, 20, 19], 120, 200, 1), v.x, v.y);
+    }
 }
 
 function ridisegnaSegni() {
@@ -395,6 +401,14 @@ function aggiornaTasti() {
     qui("[data-rt-persona]").title = st.corpi.length ? "Tutta la persona: scegli un contorno trovato dall'IA"
         : "In questo scatto l'IA non ha trovato persone intere";
     qui("[data-rt-persona]").setAttribute("aria-pressed", st.sceltaPersona ? "true" : "false");
+    const genere = st.cose[st.corrente]?.genere || st.genere;
+    qui("[data-rt-pixela]").setAttribute("aria-pressed", genere === "pixela" ? "true" : "false");
+    qui("[data-rt-pixela]").disabled = !pronto;
+    const togli = qui("[data-rt-genere-togli]");
+    togli.setAttribute("aria-pressed", genere === "togli" ? "true" : "false");
+    togli.disabled = !pronto || Boolean(st.live);
+    togli.title = st.live ? "Nelle foto live e nei video «Togli» arriva più avanti"
+        : "Togli: la cosa sparisce e l'IA rifà quello che c'era dietro. Va in coda, poi la rivedi";
     qui("[data-rt-annulla]").disabled = !pronto || !st.storia.length;
     qui("[data-rt-nuova]").disabled = !pronto || st.corrente < 0;
     qui("[data-rt-salva]").disabled = !pronto || !conMaschera().length;
@@ -429,10 +443,10 @@ function aggiornaCursore() {
     cursore.max = "4";
     cursore.step = "1";
     cursore.value = String(cosa ? cosa.per : 1);
-    cursore.disabled = !cosa || Boolean(st.salvando);
+    cursore.disabled = !cosa || cosa.genere === "togli" || Boolean(st.salvando);
     cursore.setAttribute("aria-label", "Quanto sono grandi i quadretti della cosa scelta");
     valore.textContent = `${cosa ? cosa.per : 1}×`;
-    etichetta.classList.toggle("spento", !cosa);
+    etichetta.classList.toggle("spento", !cosa || cosa.genere === "togli");
 }
 
 function scriviScelte() {
@@ -482,11 +496,23 @@ function nuovaCosa(cosa, origine) {
     const nuova = {
         chiave: ++chiave, nome: `${NOMI[cosa]} ${st.contatori[cosa]}`, cosa, origine,
         volto: null, corpo: null, punti: [], riquadro: null, base: null, buona: null,
-        tratti: [], maschera: vuoto(), per: 1,
+        tratti: [], maschera: vuoto(), per: 1, genere: st.live ? "pixela" : st.genere,
     };
     st.cose.push(nuova);
     st.corrente = st.cose.length - 1;
     return nuova;
+}
+
+function scegliGenere(genere) {
+    st.genere = genere;
+    const cosa = st.cose[st.corrente];
+    if (cosa && cosa.genere !== genere) {
+        ricorda();
+        cosa.genere = genere;
+    }
+    avvisa(genere === "togli" ? "Togli: la cosa sparisce e l'IA rifà quello che c'era dietro. Va in coda, poi la rivedi prima che lo scatto cambi." : "");
+    aggiornaTasti();
+    ridisegna();
 }
 
 function finisciLaCosa() {
@@ -835,7 +861,7 @@ async function salva() {
             const bordi = confini(v);
             const { minimo, lato: passo } = lato(cosa, v, bordi);
             pezzi.push({
-                cosa: cosa.cosa, png: await inPng(cosa), quadretto: passo > minimo ? passo : null,
+                cosa: cosa.cosa, genere: cosa.genere, png: await inPng(cosa), quadretto: passo > minimo ? passo : null,
                 volto: cosa.volto, corpo: cosa.corpo,
                 punti: cosa.punti.length ? cosa.punti : null, riquadro: cosa.riquadro,
             });
@@ -844,8 +870,13 @@ async function salva() {
             await nelVideo(mio, pronte, pezzi);
             return;
         }
-        await manda(`/api/ritocco/${mio.fileId}/salva`, { larghezza: mio.larga, altezza: mio.alta, pezzi });
+        const fatto = await manda(`/api/ritocco/${mio.fileId}/salva`, { larghezza: mio.larga, altezza: mio.alta, pezzi });
         if (st !== mio) return;
+        if (fatto && fatto.detto) {
+            avvisa(fatto.detto, true);
+            await new Promise((fine) => setTimeout(fine, MESSAGGIO_PER));
+            if (st !== mio) return;
+        }
         mio.salvato = true;
         const dopo = mio.opzioni.quandoSalvato;
         chiudi();
@@ -1048,7 +1079,7 @@ export function apriRitocca(fileId, opzioni = {}) {
         sam: "attesa", samPerche: "", sceltaPersona: false, trascina: null, mano: null,
         puntatore: null, chiedendo: null, daChiedere: null, salvando: false, salvato: false,
         inArrivo: 0, daRifare: false, silenzio: 0, osserva: null, colore: coloreAccento(),
-        dettoProcessore: false, live: null,
+        dettoProcessore: false, live: null, genere: "pixela",
     };
     const mio = st;
     qui("[data-rt-numero]").textContent = opzioni.numero ? ` · ${opzioni.numero}` : "";
@@ -1098,6 +1129,8 @@ function leghi() {
         else if (tasto.hasAttribute("data-rt-nuova")) finisciLaCosa();
         else if (tasto.hasAttribute("data-rt-annulla")) annulla();
         else if (tasto.hasAttribute("data-rt-salva")) salva();
+        else if (tasto.hasAttribute("data-rt-pixela")) scegliGenere("pixela");
+        else if (tasto.hasAttribute("data-rt-genere-togli")) scegliGenere("togli");
         else if (tasto.hasAttribute("data-rt-esci")) esci();
         else if (tasto.hasAttribute("data-rt-resta")) qui("[data-rt-conferma]").hidden = true;
         else if (tasto.hasAttribute("data-rt-esci-davvero")) chiudi();

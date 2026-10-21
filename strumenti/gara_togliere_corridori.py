@@ -413,8 +413,6 @@ def corri_qwen(foto: Path, maschere: Path, uscita: Path, fino: float) -> dict:
                                         allow_patterns=[scelto]),
                                weight_name=scelto, adapter_name="veloce")
         pipe.set_adapters(["togli", "veloce"], adapter_weights=[1.0, 1.0])
-    pipe.fuse_lora()
-    pipe.unload_lora_weights()
     gc.collect()
     print(f"Qwen: {passi} passi, forza {forza}", flush=True)
     nomi = iter(ordine)

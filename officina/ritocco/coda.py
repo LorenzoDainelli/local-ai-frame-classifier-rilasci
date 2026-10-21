@@ -373,11 +373,17 @@ def _scarta(archivio, lavoro_id: int, da: str) -> None:
                 raise RitoccoFermato(NON_IN_CODA)
             raise RitoccoFermato(NON_DA_RIVEDERE)
         buttare = _togli_i_pronti(connessione, lavoro_id)
+        toppe = nuovi(connessione, lavoro_id)
+        connessione.execute("UPDATE ritocchi SET stato = ?, risultato = NULL, "
+                            "impronta_risultato = NULL WHERE lavoro_id = ? AND stato = ? "
+                            "AND genere = ?", (elenco.RIFIUTATO, lavoro_id, elenco.IN_CODA,
+                                               elenco.TOGLI))
         connessione.execute("UPDATE ritocchi SET stato = ? WHERE lavoro_id = ? AND stato = ?",
                             (elenco.RIFIUTATO, lavoro_id, elenco.IN_CODA))
         _rimetti_i_tolti(connessione, lavoro_id)
         segna(connessione, lavoro_id, RIFIUTATO, deciso_il=adesso())
     _butta(buttare)
+    copia.butta_le_toppe(toppe)
 
 
 def rifiuta(archivio, lavoro_id: int) -> None:
