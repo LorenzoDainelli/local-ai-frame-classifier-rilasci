@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 
@@ -9,6 +10,7 @@ from officina.sicuro.copia import DiscoArchivioGuasto, Fermato
 
 
 PAUSA_SE_USI = 0.05
+SEGUI = 0.05
 
 FERMO = "fermo"
 IN_CORSO = "in_corso"
@@ -38,6 +40,7 @@ class Sottofondo:
         self.stato = FERMO
         self.errore: str | None = None
         self.codice: str | None = None
+        self.turno = None
 
     @property
     def acceso(self) -> bool:
@@ -142,6 +145,26 @@ class Sottofondo:
                 self._senza_spazio = False
                 self._metti_stato()
 
+    def segui(self, altro, basta=None) -> None:
+        while altro.acceso:
+            with self._cambio:
+                if self._fermo:
+                    raise Fermato
+                in_pausa = self._in_pausa
+            if in_pausa:
+                altro.pausa()
+            else:
+                altro.riprendi()
+            if basta is not None and basta():
+                return
+            self._dormi_fermabile(SEGUI)
+
+    def _col_turno(self):
+        turno = self.turno
+        if turno is None:
+            return contextlib.nullcontext()
+        return turno()
+
     def _lavora(self, *argomenti) -> None:
         raise NotImplementedError
 
@@ -151,7 +174,7 @@ class Sottofondo:
     def _gira(self, *argomenti) -> None:
         esito, errore = FINITO, None
         try:
-            with self._sveglio():
+            with self._sveglio(), self._col_turno():
                 self._lavora(*argomenti)
         except Fermato:
             esito = FERMATO

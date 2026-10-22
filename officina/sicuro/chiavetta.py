@@ -1485,6 +1485,11 @@ class Guardiano:
         else:
             self._metti(PROBLEMA, codice, self.lavoro.errore)
 
+    def ricomincia(self) -> None:
+        with self._serratura:
+            self._partito = False
+            self._esito = None
+
     def _da_rifare(self) -> bool:
         stato, codice = self._esito
         if codice == ChiavettaStaccata.codice:
@@ -1510,8 +1515,12 @@ class Guardiano:
                messaggio: str | None = None) -> None:
         self.stato, self.codice, self.messaggio = stato, codice, messaggio
 
+    @property
+    def acceso(self) -> bool:
+        return self._filo is not None and self._filo.is_alive()
+
     def avvia(self) -> None:
-        if self._filo is not None and self._filo.is_alive():
+        if self.acceso:
             return
         self._fermo.clear()
         self._filo = threading.Thread(target=self._gira, name="archivio-sicuro-guardiano",
