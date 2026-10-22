@@ -178,7 +178,8 @@ def test_dopo_l_inattivita_un_sigillo_rotto_si_rifa_con_la_password(porte, monke
     hello, _ = porte
     sigillo.sigilla("reale", PAROLA)
     hello.chiavi.clear()
-    monkeypatch.setattr(accesso, "aperto", lambda: SimpleNamespace(dove="finto"))
+    monkeypatch.setattr(accesso, "aperto",
+                        lambda: SimpleNamespace(dove=SimpleNamespace(nome="reale")))
     monkeypatch.setattr(blocco.guardia, "sblocca", lambda chi, dove, parola: True)
     programma, _ = _programma()
     ponte = ponti.PontePrincipale(programma)

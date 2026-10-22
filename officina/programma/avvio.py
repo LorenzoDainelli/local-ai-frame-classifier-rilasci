@@ -119,6 +119,8 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         self._torch_rifatto_da_solo = False
         self._entra_col_torch_vecchio = False
         self._lucchetto = threading.RLock()
+        self._lucchetto_sicuro = threading.Lock()
+        self.sicuro = None
         self.ponte = None
         from officina import modelli_in_casa
         from officina.web import lavori
@@ -307,9 +309,12 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             dati["modelli"] = self.i_modelli_per_la_finestrina()
         elif passo == "password":
             from officina.impostazioni import REALE
-            from officina.programma import sigillo
+            from officina.programma import archivio_sicuro, sigillo
 
-            dati["sigillo"] = sigillo.modo(REALE)
+            del_mese = self._password_del_mese()
+            dati["sigillo"] = None if del_mese else sigillo.modo(REALE)
+            dati["password_del_mese"] = del_mese
+            dati["cambio_lasciato"] = archivio_sicuro.cambio_lasciato()
         elif passo == "guasto":
             dati["guasto"] = self.guasto
         elif passo == "sparito":
@@ -437,15 +442,24 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         carta.aggiorna(chiave_chiesta=True)
 
     def apri_il_forziere(self, password: str) -> dict:
+        return self._apri_il_forziere(password, scritta=True)
+
+    def _apri_il_forziere(self, password: str, scritta: bool) -> dict:
         from officina import forziere
         from officina.impostazioni import REALE, posizione
+        from officina.programma import sigillo
 
         cassa = forziere.per(posizione(REALE))
         if not password:
             raise ErroreOfficina("Scrivi la password.")
         if not cassa.la_password_e_giusta(password):
+            if not scritta:
+                registro.avviso("programma.sigillo_vecchio")
+                self._sigillo_da_rifare = True
+                raise ErroreOfficina(sigillo.ROTTO, codice="sigillo_rotto")
             registro.avviso("programma.password_sbagliata")
             raise ErroreOfficina("La password non è giusta.")
+        self._ricorda_la_password(scritta)
         self._lega_a_windows(password)
         self.apertura = {"titolo": "Apro il forziere",
                          "detto": "Con un archivio grande ci vuole qualche secondo."}
@@ -457,14 +471,38 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
 
     def apri_con_windows(self) -> dict:
         from officina.impostazioni import REALE
-        from officina.programma import sigillo
+        from officina.programma import archivio_sicuro, sigillo
 
+        if self._password_del_mese():
+            raise ErroreOfficina(archivio_sicuro.OGGI_NIENTE_HELLO,
+                                 codice="password_del_mese")
         try:
             password = sigillo.apri(REALE)
         except sigillo.SigilloRotto as errore:
             self._sigillo_da_rifare = True
             raise ErroreOfficina(errore.messaggio, codice=errore.codice) from errore
-        return self.apri_il_forziere(password)
+        return self._apri_il_forziere(password, scritta=False)
+
+    def _ricorda_la_password(self, scritta: bool) -> None:
+        from officina.programma import archivio_sicuro
+
+        try:
+            if scritta:
+                archivio_sicuro.password_scritta()
+            archivio_sicuro.dimentica_il_cambio()
+        except Exception as guasto:
+            registro.avviso("programma.password_non_ricordata",
+                            **registro.dove_si_e_rotto(guasto))
+
+    def _password_del_mese(self) -> bool:
+        from officina.impostazioni import REALE, posizione
+        from officina.programma import archivio_sicuro
+
+        try:
+            return archivio_sicuro.serve_la_password_scritta(posizione(REALE))
+        except Exception as guasto:
+            registro.avviso("programma.mese_non_contato", **registro.dove_si_e_rotto(guasto))
+            return True
 
     def _lega_a_windows(self, password: str) -> None:
         from officina.impostazioni import REALE
@@ -478,7 +516,8 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             sigillo.sigilla(REALE, password)
             self._sigillo_da_rifare = False
         except ErroreOfficina as errore:
-            registro.avviso("programma.sigillo_non_fatto", codice=registro.Parola(errore.codice))
+            registro.avviso("programma.sigillo_non_fatto",
+                            motivo=registro.Parola(errore.codice))
         except Exception as guasto:
             registro.errore("programma.sigillo_rotto", **registro.dove_si_e_rotto(guasto))
 
@@ -544,6 +583,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             except Exception as guasto:
                 registro.errore("schermo.porta_non_riaperta", **registro.dove_si_e_rotto(guasto))
         self.fase_apertura = 3
+        self._apri_l_archivio_sicuro_in_sottofondo(password)
         self._parti_le_copie_in_sottofondo()
         self._parti_la_salute_in_sottofondo()
         threading.Thread(target=self._prepara_i_conti, name="preparazione", daemon=True).start()
@@ -554,6 +594,133 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         from officina.web import origine
 
         return origine.indirizzo_per_entrare(self.servitore.indirizzo)
+
+    def _il_sicuro(self):
+        with self._lucchetto_sicuro:
+            if self.sicuro is None:
+                from officina.impostazioni import REALE, posizione
+                from officina.programma import archivio_sicuro
+
+                self.sicuro = archivio_sicuro.Collegamento(posizione(REALE))
+            return self.sicuro
+
+    def _apri_l_archivio_sicuro_in_sottofondo(self, password: str | None) -> None:
+        try:
+            self._il_sicuro().apri_in_sottofondo(password)
+        except Exception as guasto:
+            registro.errore("programma.sicuro_non_aperto",
+                            **registro.dove_si_e_rotto(guasto))
+
+    def _parola_del_forziere(self) -> str | None:
+        from officina.archivio import accesso
+        from officina.impostazioni import REALE
+
+        try:
+            archivio = accesso.vero()
+        except ErroreOfficina:
+            return None
+        return archivio.parola_del_forziere if archivio.dove.nome == REALE else None
+
+    def _nell_archivio_vero(self) -> None:
+        from officina.archivio import accesso
+        from officina.impostazioni import REALE
+        from officina.programma import archivio_sicuro
+
+        try:
+            nome = accesso.vero().dove.nome
+        except ErroreOfficina:
+            nome = None
+        if nome != REALE:
+            raise ErroreOfficina(archivio_sicuro.SOLO_NEL_VERO, codice="non_nel_vero")
+
+    def _niente_in_corso(self) -> None:
+        in_corso = self.lavori_in_corso() + self._lavori_dell_archivio()
+        if in_corso or self._disco_occupato():
+            altro = f": {', '.join(in_corso)}" if in_corso else ""
+            raise ErroreOfficina(
+                f"Il programma sta ancora lavorando{altro}. Aspetta che finisca, poi "
+                "riprova: non ho toccato niente.", codice="occupato")
+
+    def apri_l_archivio_sicuro(self, password: str) -> dict:
+        problemi = self._il_sicuro().apri_con_la_password(password or "",
+                                                          self._parola_del_forziere())
+        return {"aperto": True, "problemi": problemi}
+
+    def riprova_l_archivio_sicuro(self) -> dict:
+        return {"stato": self._il_sicuro().riprova(self._parola_del_forziere())}
+
+    def crea_l_archivio_sicuro(self, password: str, ancora: str, ho_capito: bool) -> dict:
+        from officina import forziere
+        from officina.impostazioni import REALE, posizione
+
+        self._nell_archivio_vero()
+        if not forziere.per(posizione(REALE)).acceso:
+            self._niente_in_corso()
+        self._il_sicuro().crea(password or "", ancora or "", bool(ho_capito),
+                               accendi_il_forziere=self._accendi_per_l_archivio)
+        return {"creato": True}
+
+    def _accendi_per_l_archivio(self, password: str) -> None:
+        self.accendi_il_forziere(password, password, True)
+
+    def cambia_la_password(self, vecchia: str, nuova: str, ancora: str) -> dict:
+        self._nell_archivio_vero()
+        self._niente_in_corso()
+        avvisi = self._il_sicuro().cambia_la_password(
+            vecchia or "", nuova or "", ancora or "", richiudi=self._richiudi_il_forziere,
+            rimetti=self._rimetti_la_vecchia, sigilla=self._rilega_windows)
+        return {"cambiata": True, "avvisi": avvisi, "chiavetta": self._c_e_l_archivio()}
+
+    def _c_e_l_archivio(self) -> bool:
+        from officina.impostazioni import REALE, posizione
+        from officina.programma import archivio_sicuro
+
+        return archivio_sicuro.c_e(posizione(REALE))
+
+    def _richiudi_il_forziere(self, nuova: str) -> None:
+        from officina.archivio import accesso
+        from officina.impostazioni import REALE
+        from officina.web import telefono
+
+        accesso.vero()._parola = nuova
+        accesso.chiudi(con_copia=False)
+        accesso.apri(REALE, nuova)
+        telefono.dimentica_le_cartelle()
+
+    def _rimetti_la_vecchia(self, vecchia: str) -> None:
+        from officina.archivio import accesso
+        from officina.impostazioni import REALE
+
+        try:
+            archivio = accesso.vero()
+        except ErroreOfficina:
+            archivio = None
+        if archivio is not None and archivio.dove.nome == REALE:
+            archivio._parola = vecchia
+        else:
+            accesso.apri(REALE, vecchia)
+
+    def _rilega_windows(self, nuova: str) -> None:
+        from officina.impostazioni import REALE
+        from officina.programma import sigillo
+
+        if not sigillo.c_e(REALE):
+            self._lega_a_windows(nuova)
+            return
+        self._sigillo_da_rifare = True
+        sigillo.sigilla(REALE, nuova)
+        self._sigillo_da_rifare = False
+
+    def _lavori_dell_archivio(self) -> list[str]:
+        sicuro = self.sicuro
+        if sicuro is None:
+            return []
+        try:
+            return sicuro.lavori_tuoi()
+        except Exception as guasto:
+            registro.avviso("programma.lavori_dell_archivio_non_contati",
+                            **registro.dove_si_e_rotto(guasto))
+            return []
 
     def _apri_alla_rete(self) -> None:
         from officina.web import origine
@@ -709,10 +876,19 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
 
     def domanda_prima_di_chiudere(self) -> str | None:
         in_corso = self.lavori_in_corso()
-        if not in_corso:
+        dell_archivio = self._lavori_dell_archivio()
+        if not in_corso and not dell_archivio:
             return None
-        return (f"Sta ancora lavorando: {', '.join(in_corso)}. Se chiudi adesso "
-                "si ferma, e la prossima volta riprende da dove era.\n\nChiudo?")
+        frasi = []
+        if in_corso:
+            frasi.append(f"Sta ancora lavorando: {', '.join(in_corso)}. Se chiudi adesso "
+                         "si ferma, e la prossima volta riprende da dove era.")
+        if dell_archivio:
+            frasi.append("Nell'Archivio sicuro è ancora in corso: "
+                         f"{', '.join(dell_archivio)}. Se chiudi adesso si ferma senza "
+                         "rovinare niente: la prima copia riprende da sola, il resto lo "
+                         "rifai quando vuoi.")
+        return "\n\n".join(frasi) + "\n\nChiudo?"
 
     def _chiudi_con_calma(self, senza_chiedere: bool = False) -> None:
         if self.ponte is not None:
@@ -836,6 +1012,12 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         if self.servitore is not None:
             self.servitore.ferma()
         avanza(1)
+        if self.sicuro is not None:
+            try:
+                self.sicuro.chiudi()
+            except Exception as guasto:
+                registro.errore("programma.sicuro_non_chiuso",
+                                **registro.dove_si_e_rotto(guasto))
         try:
             from officina.archivio import accesso
 
@@ -894,37 +1076,48 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
 
     def rientra(self, password: str) -> dict:
         from officina.archivio import accesso
+        from officina.impostazioni import REALE
         from officina.web import blocco
 
-        if not blocco.guardia.sblocca("qui", accesso.aperto().dove, password or ""):
+        dove = accesso.aperto().dove
+        if not blocco.guardia.sblocca("qui", dove, password or ""):
             raise ErroreOfficina("La password non è giusta.")
-        self._lega_a_windows(password or "")
+        if dove.nome == REALE:
+            self._ricorda_la_password(True)
+            self._lega_a_windows(password or "")
         return {"vai": "/"}
 
     def rientra_con_windows(self) -> dict:
         from officina.archivio import accesso
         from officina.impostazioni import REALE
-        from officina.programma import sigillo
+        from officina.programma import archivio_sicuro, sigillo
         from officina.web import blocco
 
+        if self._password_del_mese():
+            raise ErroreOfficina(archivio_sicuro.OGGI_NIENTE_HELLO,
+                                 codice="password_del_mese")
         try:
             password = sigillo.apri(REALE)
         except sigillo.SigilloRotto as errore:
             self._sigillo_da_rifare = True
             raise ErroreOfficina(errore.messaggio, codice=errore.codice) from errore
         if not blocco.guardia.sblocca("qui", accesso.aperto().dove, password):
-            sigillo.togli(REALE)
+            registro.avviso("programma.sigillo_vecchio")
+            self._sigillo_da_rifare = True
             raise ErroreOfficina(sigillo.ROTTO, codice="sigillo_rotto")
         return {"vai": "/"}
 
     def spegni_il_forziere(self, password: str) -> dict:
         from officina import forziere
         from officina.archivio import accesso
+        from officina.programma import archivio_sicuro
 
         archivio = accesso.aperto()
         cassa = forziere.per(archivio.dove)
         if not cassa.acceso:
             raise ErroreOfficina("Su questo archivio non c'è un forziere da spegnere.")
+        if archivio_sicuro.c_e(archivio.dove):
+            raise ErroreOfficina(archivio_sicuro.SERVE_IL_FORZIERE, codice="forziere_serve")
         if not cassa.la_password_e_giusta(password or ""):
             raise ErroreOfficina("La password non è giusta.")
         cassa.spegni(password)

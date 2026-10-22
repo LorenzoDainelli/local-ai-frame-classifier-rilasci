@@ -267,6 +267,10 @@ def test_nessun_filo_puo_morire_in_silenzio():
             "`Custode._gira` passa solo da `comincia` e `giro`, che prendono "
             "dentro qualunque errore e lo tengono in `problema` per la pagina: "
             "il giro dopo riprova",
+        "officina/programma/archivio_sicuro.py":
+            "`Collegamento._apri` prende dentro qualunque errore e lo tiene in "
+            "`stato` e `messaggio` per la striscia rossa: l'archivio resta "
+            "chiuso e non si tocca niente",
     }
 
     radice = Path(__file__).resolve().parent.parent

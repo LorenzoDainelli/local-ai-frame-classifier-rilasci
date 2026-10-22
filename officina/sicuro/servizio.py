@@ -16,7 +16,7 @@ from officina.sicuro.custode import Custode
 from officina.sicuro.dentro import Verifica, _resto, _uguali, _vero
 from officina.sicuro.disco import fissa_cartella
 from officina.sicuro.estrai import Estrazione
-from officina.sicuro.lavoro import Lavoro
+from officina.sicuro.lavoro import Lavoro, da_riprendere
 from officina.sicuro.via_libera import ControlloFresco
 
 
@@ -244,6 +244,10 @@ class ArchivioSicuro:
         return self._aperto is not None
 
     @property
+    def ha_qualcosa(self) -> bool:
+        return self._c_e_qualcosa()
+
+    @property
     def si_chiude(self) -> bool:
         chiusura = self._chiusura
         return chiusura is not None and not chiusura.fermo
@@ -441,6 +445,21 @@ class ArchivioSicuro:
 
     def controlla_ora(self) -> None:
         self._di_ora().custode.controlla_ora()
+
+    def tuoi_accesi(self) -> list[str]:
+        aperto = self._aperto
+        if aperto is None:
+            return []
+        return [nome for nome, lavoro in aperto.tuoi().items() if lavoro.acceso]
+
+    def da_finire(self) -> set[str] | None:
+        aperto = self._aperto
+        if aperto is None:
+            return None
+        with aperto._registra:
+            if aperto._elenco_chiuso:
+                return None
+            return {radice["id"] for radice in da_riprendere(aperto.elenco)}
 
     def istantanea(self) -> dict:
         aperto = self._aperto

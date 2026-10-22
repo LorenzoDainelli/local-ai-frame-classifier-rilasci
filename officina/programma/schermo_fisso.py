@@ -101,7 +101,8 @@ class ColFisso:
                 return
             sigillo.sigilla(SIGILLO_DEL_FISSO, password)
         except ErroreOfficina as errore:
-            registro.avviso("schermo.sigillo_non_fatto", codice=registro.Parola(errore.codice))
+            registro.avviso("schermo.sigillo_non_fatto",
+                            motivo=registro.Parola(errore.codice))
         except Exception as guasto:
             registro.errore("schermo.sigillo_rotto", **registro.dove_si_e_rotto(guasto))
 

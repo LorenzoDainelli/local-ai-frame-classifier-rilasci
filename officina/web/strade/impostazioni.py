@@ -256,10 +256,28 @@ def pagina_blocco(richiesta: Request):
 
 
 def _c_e_il_sigillo() -> bool:
-    from officina.impostazioni import REALE
-    from officina.programma import sigillo
+    from officina.impostazioni import REALE, posizione
+    from officina.programma import archivio_sicuro, sigillo
 
+    try:
+        if archivio_sicuro.serve_la_password_scritta(posizione(REALE)):
+            return False
+    except Exception as guasto:
+        registro.avviso("blocco.mese_non_contato", **registro.dove_si_e_rotto(guasto))
+        return False
     return sigillo.c_e(REALE)
+
+
+def _password_scritta(dove) -> None:
+    from officina.impostazioni import REALE
+    from officina.programma import archivio_sicuro
+
+    if dove.nome != REALE:
+        return
+    try:
+        archivio_sicuro.password_scritta()
+    except Exception as guasto:
+        registro.avviso("blocco.password_non_segnata", **registro.dove_si_e_rotto(guasto))
 
 
 @strada.post("/blocco/apri")
@@ -272,6 +290,7 @@ def apri_il_blocco(richiesta: Request, password: str = Form("")):
         return RedirectResponse("/blocco?sbagliata=1&occupato=1", status_code=303)
     if not giusta:
         return RedirectResponse("/blocco?sbagliata=1", status_code=303)
+    _password_scritta(dove)
     return RedirectResponse("/", status_code=303)
 
 

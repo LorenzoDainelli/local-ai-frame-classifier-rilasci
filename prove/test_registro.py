@@ -105,6 +105,35 @@ def test_nessuno_scrive_nel_registro_una_parola_che_verrebbe_omessa():
         "programma. " + "; ".join(fuori_vocabolario))
 
 
+def test_nessuno_passa_al_registro_un_nome_che_e_gia_suo():
+    import ast
+    from pathlib import Path
+
+    gia_suoi = {"evento": {"codice"}, "avviso": {"codice", "livello"},
+                "errore": {"codice", "livello"}}
+    radice = Path(registro.__file__).resolve().parent
+    doppioni = []
+    for sorgente in sorted(radice.rglob("*.py")):
+        albero = ast.parse(sorgente.read_text(encoding="utf-8"))
+        for nodo in ast.walk(albero):
+            if not isinstance(nodo, ast.Call):
+                continue
+            chiamata = nodo.func
+            if not (isinstance(chiamata, ast.Attribute)
+                    and isinstance(chiamata.value, ast.Name)
+                    and chiamata.value.id == "registro"
+                    and chiamata.attr in gia_suoi):
+                continue
+            for parola_chiave in nodo.keywords:
+                if parola_chiave.arg in gia_suoi[chiamata.attr]:
+                    doppioni.append(f"{sorgente.name}:{nodo.lineno} {parola_chiave.arg}=")
+
+    assert not doppioni, (
+        "il registro userebbe quel nome due volte e salterebbe con un TypeError "
+        "proprio mentre deve scrivere un avviso: va chiamato motivo=. "
+        + "; ".join(doppioni))
+
+
 def test_dopo_un_file_rovinato_il_registro_dice_cos_era(tmp_path):
     from officina.errori import FileNonLeggibile
     from officina.immagini import lettura
