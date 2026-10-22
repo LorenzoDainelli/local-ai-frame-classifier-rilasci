@@ -132,6 +132,12 @@ def _segno_firmato(segno: dict, chiave) -> bool:
     return hmac.compare_digest(segno["firma"], _firma(chiave, corpo))
 
 
+def _tutte_uguali(documenti: list[dict | None]) -> bool:
+    if any(documento is None for documento in documenti):
+        return False
+    return len({chiavi._in_byte(documento) for documento in documenti}) == 1
+
+
 def _dentro(percorso: Path, cartella: Path) -> bool:
     try:
         vero = os.path.normcase(os.path.realpath(percorso))
@@ -462,18 +468,15 @@ class Chiavetta:
     def posto_sbagliato(self, radice) -> tuple[str, str] | None:
         return self._problema_di_posto(Path(radice))
 
+    def chiave_del_pc_a_posto(self) -> bool:
+        return _tutte_uguali([self._documento(self.cartella / nome)
+                              for nome in (chiavi.FILE, chiavi.RISERVA)])
+
     def chiave_uguale(self, radice) -> bool:
         dove = Path(radice) / CARTELLA
-        sul_pc = next((documento for documento in
-                       (self._documento(self.cartella / nome)
-                        for nome in (chiavi.FILE, chiavi.RISERVA))
-                       if documento is not None), None)
-        if sul_pc is None:
-            return False
-        dati = chiavi._in_byte(sul_pc)
-        return all(documento is not None and chiavi._in_byte(documento) == dati
-                   for documento in (self._documento(dove / nome)
-                                     for nome in (chiavi.FILE, chiavi.RISERVA)))
+        return _tutte_uguali([self._documento(cartella / nome)
+                              for cartella in (self.cartella, dove)
+                              for nome in (chiavi.FILE, chiavi.RISERVA)])
 
     def rileggi_presto(self, numeri) -> None:
         cambiati = False
@@ -1091,22 +1094,27 @@ class Chiavetta:
         buono = next((documento for documento in sul_pc if documento is not None),
                      None)
         if buono is None:
-            buono = next((documento for documento in sopra if documento is not None),
-                         None)
-            if buono is None:
+            leggibili = [documento for documento in sopra if documento is not None]
+            if not leggibili:
                 self.resoconto.problema("chiave_non_copiata")
                 return
-            dati = chiavi._in_byte(buono)
             try:
-                for nome in (chiavi.FILE, chiavi.RISERVA):
+                for nome, documento in zip((chiavi.FILE, chiavi.RISERVA), sopra,
+                                           strict=True):
                     if self._illeggibile(self.cartella / nome):
-                        scrivi_tutto(self.cartella / nome, dati)
+                        scrivi_tutto(self.cartella / nome, chiavi._in_byte(
+                            leggibili[0] if documento is None else documento))
                         self.resoconto.chiave_rimessa_sul_pc = True
             except OSError:
                 self._archivio_c_e()
                 self.resoconto.problema("chiave_non_rimessa")
             return
         dati = chiavi._in_byte(buono)
+        if not _tutte_uguali(sul_pc):
+            self.resoconto.problema("chiave_diversa_sul_pc")
+            if any(documento is not None and chiavi._in_byte(documento) != dati
+                   for documento in sopra):
+                return
         for nome, documento in zip((chiavi.FILE, chiavi.RISERVA), sopra, strict=True):
             if documento is not None and chiavi._in_byte(documento) == dati:
                 continue

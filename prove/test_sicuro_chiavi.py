@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -160,6 +161,70 @@ def test_un_nome_scambiato_viene_scoperto(cassetto):
         chiavi.apri(cassetto, PAROLA)
 
 
+@pytest.mark.parametrize("storta", [chiavi.FILE, chiavi.RISERVA])
+def test_se_il_nome_e_storto_in_una_copia_si_apre_dall_altra_e_si_rimette(
+        cassetto, storta):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    buono = (cassetto / chiavi.FILE).read_bytes()
+    (cassetto / storta).write_bytes(_guasta(buono, "nome"))
+    assert chiavi.apri(cassetto, PAROLA).nome == chiave.nome
+    assert [(cassetto / nome).read_bytes()
+            for nome in (chiavi.FILE, chiavi.RISERVA)] == [buono, buono]
+
+
+def _chiave_di_un_altro(cassetto, tmp_path, dove: str, parola: str,
+                        col_nostro_nome: bool = False) -> list[bytes]:
+    altro = tmp_path / "altro"
+    chiavi.crea(altro, parola, costo=LEGGERO)
+    documento = json.loads((altro / chiavi.FILE).read_text("utf-8"))
+    if col_nostro_nome:
+        documento["nome"] = json.loads((cassetto / dove).read_text("utf-8"))["nome"]
+    (cassetto / dove).write_bytes(chiavi._in_byte(documento))
+    return [(cassetto / nome).read_bytes() for nome in (chiavi.FILE, chiavi.RISERVA)]
+
+
+@pytest.mark.parametrize("col_nostro_nome", [False, True])
+@pytest.mark.parametrize("dove", [chiavi.FILE, chiavi.RISERVA])
+def test_la_chiave_di_un_altro_archivio_con_la_stessa_password_non_apre_e_non_si_tocca(
+        cassetto, tmp_path, dove, col_nostro_nome):
+    chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    prima = _chiave_di_un_altro(cassetto, tmp_path, dove, PAROLA, col_nostro_nome)
+    with pytest.raises(chiavi.ChiaveRovinata, match="mescolato") as scoppio:
+        chiavi.apri(cassetto, PAROLA)
+    assert scoppio.value.codice == "chiave_mescolata"
+    assert [(cassetto / nome).read_bytes()
+            for nome in (chiavi.FILE, chiavi.RISERVA)] == prima
+
+
+@pytest.mark.parametrize("dove", [chiavi.FILE, chiavi.RISERVA])
+def test_la_chiave_di_un_altro_archivio_con_un_altra_password_resta_dov_e(
+        cassetto, tmp_path, dove):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    altra = "la password dell'altro archivio"
+    prima = _chiave_di_un_altro(cassetto, tmp_path, dove, altra)
+    assert chiavi.apri(cassetto, PAROLA).nome == chiave.nome
+    assert chiavi.apri(cassetto, altra).nome != chiave.nome
+    assert [(cassetto / nome).read_bytes()
+            for nome in (chiavi.FILE, chiavi.RISERVA)] == prima
+
+
+@pytest.mark.parametrize("dove", [chiavi.FILE, chiavi.RISERVA])
+def test_una_porta_di_un_altra_chiave_nella_stessa_copia_non_apre(
+        cassetto, tmp_path, dove):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    chiavi.crea(tmp_path / "altro", NUOVA, costo=LEGGERO)
+    estranea = json.loads((tmp_path / "altro" / chiavi.FILE).read_text("utf-8"))
+    documento = json.loads((cassetto / dove).read_text("utf-8"))
+    documento["porte"].append(estranea["porte"][0])
+    (cassetto / dove).write_bytes(chiavi._in_byte(documento))
+    prima = [(cassetto / nome).read_bytes() for nome in (chiavi.FILE, chiavi.RISERVA)]
+    with pytest.raises(chiavi.ChiaveRovinata, match="mescolato"):
+        chiavi.apri(cassetto, NUOVA)
+    assert [(cassetto / nome).read_bytes()
+            for nome in (chiavi.FILE, chiavi.RISERVA)] == prima
+    assert chiavi.apri(cassetto, PAROLA, ripara=False).nome == chiave.nome
+
+
 @pytest.mark.parametrize("campo, valore", [
     ("n", 2 ** 30), ("n", 3), ("n", "1024"), ("r", 1), ("p", 4), ("kdf", "pbkdf2"),
     ("sale", "zz"), ("nonce", "00"), ("chiusa", ""), ("numero", 7),
@@ -270,6 +335,332 @@ def test_la_vecchia_vale_finche_la_nuova_non_e_provata(cassetto, monkeypatch):
         chiavi.cambia_password(cassetto, chiave, NUOVA)
     monkeypatch.setattr(chiavi, "_prova", vera)
     assert chiavi.apri(cassetto, PAROLA).nome == chiave.nome
+
+
+def _apre(cartella, parola, chiave) -> bool:
+    try:
+        return chiavi.apri(cartella, parola, ripara=False).nome == chiave.nome
+    except PasswordSbagliata:
+        return False
+
+
+def _porte_nei_file(cartella) -> list[int]:
+    return [len(json.loads((cartella / nome).read_text("utf-8"))["porte"])
+            for nome in (chiavi.FILE, chiavi.RISERVA)]
+
+
+def test_aggiungere_una_password_tiene_aperte_tutte_e_due(cassetto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    assert _apre(cassetto, PAROLA, chiave) and _apre(cassetto, NUOVA, chiave)
+    assert _segreto(chiavi.apri(cassetto, NUOVA)) == _segreto(chiave)
+    assert chiavi.porte(cassetto) == 2 and _porte_nei_file(cassetto) == [2, 2]
+
+
+def test_aggiungere_una_password_corta_non_scrive_niente(cassetto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    prima = [(cassetto / nome).read_bytes() for nome in (chiavi.FILE, chiavi.RISERVA)]
+    with pytest.raises(ErroreOfficina) as scoppio:
+        chiavi.aggiungi_password(cassetto, chiave, "corta")
+    assert scoppio.value.codice == "password_corta"
+    assert [(cassetto / nome).read_bytes()
+            for nome in (chiavi.FILE, chiavi.RISERVA)] == prima
+
+
+def test_aggiungere_non_perde_le_porte_che_sono_solo_nella_riserva(cassetto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    documento = json.loads((cassetto / chiavi.RISERVA).read_text("utf-8"))
+    documento["porte"] = documento["porte"][:1]
+    (cassetto / chiavi.FILE).write_text(json.dumps(documento), "utf-8")
+    chiavi.aggiungi_password(cassetto, chiave, "la terza password lunga")
+    for parola in (PAROLA, NUOVA, "la terza password lunga"):
+        assert _apre(cassetto, parola, chiave)
+    assert chiavi.porte(cassetto) == 3
+
+
+def test_tenere_solo_una_password_chiude_le_altre(cassetto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    chiavi.tieni_solo(cassetto, chiave, NUOVA)
+    assert not _apre(cassetto, PAROLA, chiave) and _apre(cassetto, NUOVA, chiave)
+    assert chiavi.porte(cassetto) == 1 and _porte_nei_file(cassetto) == [1, 1]
+
+
+def test_tenere_solo_la_vecchia_chiude_la_nuova(cassetto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    chiavi.tieni_solo(cassetto, chiave, PAROLA)
+    assert _apre(cassetto, PAROLA, chiave) and not _apre(cassetto, NUOVA, chiave)
+    assert chiavi.porte(cassetto) == 1
+
+
+@pytest.mark.parametrize("sbagliata", ["", "un'altra password lunga", PAROLA + " "])
+def test_tenere_solo_una_password_sbagliata_non_tocca_niente(cassetto, sbagliata):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    prima = [(cassetto / nome).read_bytes() for nome in (chiavi.FILE, chiavi.RISERVA)]
+    with pytest.raises(PasswordSbagliata):
+        chiavi.tieni_solo(cassetto, chiave, sbagliata)
+    assert [(cassetto / nome).read_bytes()
+            for nome in (chiavi.FILE, chiavi.RISERVA)] == prima
+    assert _apre(cassetto, PAROLA, chiave) and _apre(cassetto, NUOVA, chiave)
+
+
+def test_tenere_solo_la_porta_che_e_rimasta_solo_nella_riserva(cassetto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    documento = json.loads((cassetto / chiavi.RISERVA).read_text("utf-8"))
+    documento["porte"] = documento["porte"][1:]
+    (cassetto / chiavi.FILE).write_text(json.dumps(documento), "utf-8")
+    chiavi.tieni_solo(cassetto, chiave, PAROLA)
+    assert _apre(cassetto, PAROLA, chiave) and not _apre(cassetto, NUOVA, chiave)
+
+
+@pytest.mark.parametrize("funzione", ["aggiungi_password", "tieni_solo"])
+def test_con_la_chiave_di_un_altro_archivio_non_si_tocca_niente(
+        cassetto, tmp_path, funzione):
+    chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    altra = chiavi.crea(tmp_path / "altro", PAROLA, costo=LEGGERO)
+    prima = (cassetto / chiavi.FILE).read_bytes()
+    with pytest.raises(chiavi.ChiaveRovinata):
+        getattr(chiavi, funzione)(cassetto, altra, NUOVA if funzione ==
+                                  "aggiungi_password" else PAROLA)
+    assert (cassetto / chiavi.FILE).read_bytes() == prima
+
+
+def test_se_la_riserva_e_di_un_altro_archivio_non_si_tocca_niente(cassetto, tmp_path):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    chiavi.crea(tmp_path / "altro", PAROLA, costo=LEGGERO)
+    (cassetto / chiavi.RISERVA).write_bytes(
+        (tmp_path / "altro" / chiavi.RISERVA).read_bytes())
+    prima = (cassetto / chiavi.FILE).read_bytes()
+    for funzione, parola in ((chiavi.aggiungi_password, NUOVA),
+                             (chiavi.tieni_solo, PAROLA)):
+        with pytest.raises(chiavi.ChiaveRovinata):
+            funzione(cassetto, chiave, parola)
+    assert (cassetto / chiavi.FILE).read_bytes() == prima
+
+
+def test_le_porte_si_contano_una_volta_sola_anche_se_sono_in_tutti_e_due(cassetto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    assert chiavi.porte(cassetto) == 1
+    chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    documento = json.loads((cassetto / chiavi.FILE).read_text("utf-8"))
+    documento["porte"] = documento["porte"][:1]
+    (cassetto / chiavi.FILE).write_text(json.dumps(documento), "utf-8")
+    assert chiavi.porte(cassetto) == 2
+    (cassetto / chiavi.RISERVA).write_text(json.dumps(documento), "utf-8")
+    assert chiavi.porte(cassetto) == 1
+
+
+def test_le_porte_senza_archivio_lo_dicono(cassetto):
+    with pytest.raises(ErroreOfficina) as scoppio:
+        chiavi.porte(cassetto)
+    assert scoppio.value.codice == "sicuro_mancante"
+
+
+def test_la_porta_nuova_usa_il_costo_dell_ultima(cassetto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO * 2)
+    chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    documento = json.loads((cassetto / chiavi.FILE).read_text("utf-8"))
+    assert [porta["n"] for porta in documento["porte"]] == [LEGGERO * 2] * 2
+
+
+@pytest.mark.parametrize("costi", [(LEGGERO, LEGGERO * 2), (LEGGERO * 2, LEGGERO)])
+def test_con_piu_porte_la_nuova_usa_il_costo_dell_ultima(cassetto, costi):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=costi[0])
+    chiavi.aggiungi_password(cassetto, chiave, NUOVA, costo=costi[1])
+    chiavi.aggiungi_password(cassetto, chiave, "la terza password lunga")
+    documento = json.loads((cassetto / chiavi.FILE).read_text("utf-8"))
+    assert [porta["n"] for porta in documento["porte"]] == [*costi, costi[1]]
+
+
+@pytest.mark.parametrize("passo", ["aggiungi_password", "tieni_solo"])
+@pytest.mark.parametrize("salta", [1, 2])
+def test_corrente_staccata_in_ogni_scrittura_lascia_aperta_la_password_giusta(
+        cassetto, monkeypatch, passo, salta):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    if passo == "tieni_solo":
+        chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    vera = chiavi.scrivi_tutto
+    contatore = {"fatte": 0}
+
+    def a_meta(percorso, dati):
+        contatore["fatte"] += 1
+        if contatore["fatte"] == salta:
+            raise OSError("corrente staccata")
+        vera(percorso, dati)
+
+    monkeypatch.setattr(chiavi, "scrivi_tutto", a_meta)
+    with pytest.raises(OSError):
+        if passo == "tieni_solo":
+            chiavi.tieni_solo(cassetto, chiave, NUOVA)
+        else:
+            chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    monkeypatch.setattr(chiavi, "scrivi_tutto", vera)
+    if passo == "tieni_solo":
+        assert _apre(cassetto, NUOVA, chiave)
+        assert salta == 2 or _apre(cassetto, PAROLA, chiave)
+    else:
+        assert _apre(cassetto, PAROLA, chiave)
+
+
+@pytest.mark.parametrize("usata", [PAROLA, NUOVA])
+@pytest.mark.parametrize("passo", ["aggiungi_password", "tieni_solo"])
+def test_dopo_un_cambio_fermato_a_meta_le_copie_tornano_uguali(
+        cassetto, monkeypatch, passo, usata):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    if passo == "tieni_solo":
+        chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    vero = chiavi.os.replace
+
+    def solo_il_primo(sorgente, arrivo):
+        if os.fspath(arrivo) == os.fspath(cassetto / chiavi.RISERVA):
+            raise OSError("corrente staccata")
+        vero(sorgente, arrivo)
+
+    monkeypatch.setattr(chiavi.os, "replace", solo_il_primo)
+    with pytest.raises(OSError):
+        if passo == "tieni_solo":
+            chiavi.tieni_solo(cassetto, chiave, NUOVA)
+        else:
+            chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    monkeypatch.setattr(chiavi.os, "replace", vero)
+    primo, riserva = [(cassetto / nome).read_bytes()
+                      for nome in (chiavi.FILE, chiavi.RISERVA)]
+    assert primo != riserva
+    atteso = riserva if (passo, usata) == ("tieni_solo", PAROLA) else primo
+    assert chiavi.apri(cassetto, usata).nome == chiave.nome
+    assert [(cassetto / nome).read_bytes()
+            for nome in (chiavi.FILE, chiavi.RISERVA)] == [atteso, atteso]
+    assert _apre(cassetto, NUOVA, chiave)
+    assert _apre(cassetto, PAROLA, chiave) is ((passo, usata) != ("tieni_solo", NUOVA))
+
+
+def test_dopo_ogni_scambio_la_cartella_si_fissa_sul_disco(cassetto, monkeypatch):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    fatti = []
+    vero = chiavi.os.replace
+
+    def scambia(sorgente, arrivo):
+        vero(sorgente, arrivo)
+        fatti.append(("scambio", os.path.basename(arrivo)))
+
+    monkeypatch.setattr(chiavi.os, "replace", scambia)
+    monkeypatch.setattr(chiavi, "fissa_cartella",
+                        lambda cartella: fatti.append(("fissa", cartella)))
+    chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    monkeypatch.setattr(chiavi.os, "replace", vero)
+    assert [fatto for fatto in fatti
+            if fatto[0] == "fissa" or fatto[1] in (chiavi.FILE, chiavi.RISERVA)] == [
+        ("scambio", chiavi.FILE), ("fissa", cassetto),
+        ("scambio", chiavi.RISERVA), ("fissa", cassetto)]
+
+
+def _guasta(dati: bytes, guasto: str) -> bytes:
+    documento = json.loads(dati)
+    if guasto == "chiusa":
+        chiusa = bytearray.fromhex(documento["porte"][-1]["chiusa"])
+        chiusa[0] ^= 1
+        documento["porte"][-1]["chiusa"] = chiusa.hex()
+    else:
+        nome = documento["nome"]
+        documento["nome"] = ("1" if nome[0] == "0" else "0") + nome[1:]
+    return json.dumps(documento).encode()
+
+
+def _da_provare(cartella) -> list[str]:
+    return sorted(percorso.name for percorso in cartella.iterdir()
+                  if percorso.name.endswith((chiavi.DA_PROVARE, ".nuovo")))
+
+
+@pytest.mark.parametrize("guasto", ["chiusa", "nome"])
+@pytest.mark.parametrize("passo", ["aggiungi_password", "tieni_solo"])
+@pytest.mark.parametrize("rotto", [chiavi.FILE, chiavi.RISERVA])
+def test_se_rileggendo_un_file_non_torna_ci_si_ferma_e_l_altro_resta_buono(
+        cassetto, monkeypatch, passo, rotto, guasto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    if passo == "tieni_solo":
+        chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    prima = (cassetto / rotto).read_bytes()
+    vera = chiavi.scrivi_tutto
+    scritti = []
+
+    def scrive_male(percorso, dati):
+        scritti.append(percorso.name)
+        if percorso.name == rotto + chiavi.DA_PROVARE:
+            dati = _guasta(dati, guasto)
+        vera(percorso, dati)
+
+    monkeypatch.setattr(chiavi, "scrivi_tutto", scrive_male)
+    with pytest.raises(chiavi.ChiaveRovinata):
+        if passo == "tieni_solo":
+            chiavi.tieni_solo(cassetto, chiave, NUOVA)
+        else:
+            chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    monkeypatch.setattr(chiavi, "scrivi_tutto", vera)
+    assert scritti == [nome + chiavi.DA_PROVARE for nome in (chiavi.FILE, chiavi.RISERVA)
+                       ][:1 + (rotto == chiavi.RISERVA)]
+    assert (cassetto / rotto).read_bytes() == prima
+    assert _da_provare(cassetto) == []
+    if passo == "tieni_solo":
+        assert _apre(cassetto, NUOVA, chiave)
+    else:
+        assert _apre(cassetto, PAROLA, chiave)
+    assert chiavi.apri(cassetto, PAROLA if passo == "aggiungi_password" else NUOVA
+                       ).nome == chiave.nome
+
+
+@pytest.mark.parametrize("guasto", ["chiusa", "nome"])
+@pytest.mark.parametrize("passo", ["aggiungi_password", "tieni_solo"])
+@pytest.mark.parametrize("rotto", [chiavi.FILE, chiavi.RISERVA])
+def test_se_dopo_lo_scambio_il_file_non_torna_ci_si_ferma(
+        cassetto, monkeypatch, passo, rotto, guasto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    if passo == "tieni_solo":
+        chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    altro = chiavi.RISERVA if rotto == chiavi.FILE else chiavi.FILE
+    prima = (cassetto / altro).read_bytes()
+    vero = chiavi.os.replace
+
+    def scambia_male(sorgente, arrivo):
+        vero(sorgente, arrivo)
+        if os.fspath(arrivo) == os.fspath(cassetto / rotto):
+            (cassetto / rotto).write_bytes(_guasta((cassetto / rotto).read_bytes(), guasto))
+
+    monkeypatch.setattr(chiavi.os, "replace", scambia_male)
+    with pytest.raises(chiavi.ChiaveRovinata):
+        if passo == "tieni_solo":
+            chiavi.tieni_solo(cassetto, chiave, NUOVA)
+        else:
+            chiavi.aggiungi_password(cassetto, chiave, NUOVA)
+    monkeypatch.setattr(chiavi.os, "replace", vero)
+    assert _da_provare(cassetto) == []
+    if rotto == chiavi.FILE:
+        assert (cassetto / altro).read_bytes() == prima
+    tenuta = PAROLA if passo == "aggiungi_password" else NUOVA
+    assert chiavi.apri(cassetto, tenuta).nome == chiave.nome
+    assert _apre(cassetto, tenuta, chiave)
+
+
+def test_cambiare_password_lascia_un_solo_file_per_tipo(cassetto):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    chiavi.cambia_password(cassetto, chiave, NUOVA)
+    assert sorted(p.name for p in cassetto.iterdir()) == sorted(
+        [chiavi.FILE, chiavi.RISERVA])
+
+
+@pytest.mark.parametrize("avanzo", [b"", b"{mezzo", b"\x00\xff" * 300])
+def test_gli_avanzi_di_un_cambio_interrotto_non_lo_fermano(cassetto, avanzo):
+    chiave = chiavi.crea(cassetto, PAROLA, costo=LEGGERO)
+    for nome in (chiavi.FILE, chiavi.RISERVA):
+        (cassetto / (nome + chiavi.DA_PROVARE)).write_bytes(avanzo)
+        (cassetto / (nome + chiavi.DA_PROVARE + ".nuovo")).write_bytes(avanzo)
+    chiavi.cambia_password(cassetto, chiave, NUOVA)
+    assert sorted(p.name for p in cassetto.iterdir()) == sorted(
+        [chiavi.FILE, chiavi.RISERVA])
+    assert _apre(cassetto, NUOVA, chiave) and not _apre(cassetto, PAROLA, chiave)
 
 
 def test_le_sottochiavi_sono_diverse_e_sempre_le_stesse(cassetto):

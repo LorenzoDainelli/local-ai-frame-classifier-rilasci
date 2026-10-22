@@ -460,6 +460,121 @@ def test_la_password_cambiata_arriva_sulla_chiavetta(tmp_path, chiave):
         chiavi.apri(prova.dove, PASSWORD)
 
 
+def _chiave_storta(percorso: Path) -> bytes:
+    documento = json.loads(_byte(percorso).decode("utf-8"))
+    porta = documento["porte"][0]
+    porta["numero"] = "00" * 8 if porta["numero"] != "00" * 8 else "11" * 8
+    return chiavi._in_byte(documento)
+
+
+def _chiavi_in(cartella: Path) -> list[bytes]:
+    return [_byte(cartella / nome) for nome in (chiavi.FILE, chiavi.RISERVA)]
+
+
+@pytest.mark.parametrize("storta", [chiavi.FILE, chiavi.RISERVA])
+def test_se_le_chiavi_del_pc_non_sono_uguali_quella_della_chiavetta_non_si_tocca(
+        tmp_path, chiave, storta):
+    prova = Prova(tmp_path, chiave)
+    prova.foto(1)
+    prova.pronta()
+    prima = _chiavi_in(prova.dove)
+    percorso = prova.banco.archivio / storta
+    percorso.write_bytes(_chiave_storta(percorso))
+    resoconto = prova.chiavetta.aggiorna(prova.radice)
+    assert "chiave_diversa_sul_pc" in resoconto.problemi
+    assert _chiavi_in(prova.dove) == prima
+    assert chiavi.apri(prova.dove, PASSWORD).nome == chiave.nome
+    assert not prova.chiavetta.chiave_del_pc_a_posto()
+    assert not prova.chiavetta.chiave_uguale(prova.radice)
+
+
+def test_se_sul_pc_c_e_una_chiave_sola_e_diversa_la_chiavetta_tiene_la_sua(tmp_path,
+                                                                          chiave):
+    prova = Prova(tmp_path, chiave)
+    prova.foto(1)
+    prova.pronta()
+    prima = _chiavi_in(prova.dove)
+    archivio = prova.banco.archivio
+    (archivio / chiavi.RISERVA).write_bytes(_chiave_storta(archivio / chiavi.RISERVA))
+    os.unlink(archivio / chiavi.FILE)
+    resoconto = prova.chiavetta.aggiorna(prova.radice)
+    assert "chiave_diversa_sul_pc" in resoconto.problemi
+    assert _chiavi_in(prova.dove) == prima
+    assert not (archivio / chiavi.FILE).exists()
+
+
+def test_se_sul_pc_manca_una_chiave_quella_uguale_della_chiavetta_resta(tmp_path, chiave):
+    prova = Prova(tmp_path, chiave)
+    prova.foto(1)
+    prova.pronta()
+    os.unlink(prova.dove / chiavi.FILE)
+    os.unlink(prova.banco.archivio / chiavi.RISERVA)
+    resoconto = prova.chiavetta.aggiorna(prova.radice)
+    assert "chiave_diversa_sul_pc" in resoconto.problemi
+    buona = _byte(prova.banco.archivio / chiavi.FILE)
+    assert _chiavi_in(prova.dove) == [buona, buona]
+
+
+def test_se_le_chiavi_del_pc_non_sono_uguali_e_la_chiavetta_non_ne_ha_si_copia(tmp_path,
+                                                                              chiave):
+    prova = Prova(tmp_path, chiave)
+    prova.foto(1)
+    prova.pronta()
+    for nome in (chiavi.FILE, chiavi.RISERVA):
+        os.unlink(prova.dove / nome)
+    archivio = prova.banco.archivio
+    (archivio / chiavi.RISERVA).write_bytes(_chiave_storta(archivio / chiavi.RISERVA))
+    resoconto = prova.chiavetta.aggiorna(prova.radice)
+    assert "chiave_diversa_sul_pc" in resoconto.problemi
+    buona = _byte(archivio / chiavi.FILE)
+    assert _chiavi_in(prova.dove) == [buona, buona]
+    assert chiavi.apri(prova.dove, PASSWORD).nome == chiave.nome
+
+
+def test_con_le_chiavi_del_pc_uguali_la_chiavetta_storta_si_rimette(tmp_path, chiave):
+    prova = Prova(tmp_path, chiave)
+    prova.foto(1)
+    prova.pronta()
+    (prova.dove / chiavi.FILE).write_bytes(_chiave_storta(prova.dove / chiavi.FILE))
+    resoconto = prova.chiavetta.aggiorna(prova.radice)
+    assert "chiave_diversa_sul_pc" not in resoconto.problemi
+    assert _chiavi_in(prova.dove) == _chiavi_in(prova.banco.archivio)
+    assert prova.chiavetta.chiave_uguale(prova.radice)
+
+
+@pytest.mark.parametrize("storta", [chiavi.FILE, chiavi.RISERVA])
+def test_la_chiave_del_pc_si_rimette_copia_per_copia(tmp_path, chiave, storta):
+    prova = Prova(tmp_path, chiave)
+    prova.foto(1)
+    prova.pronta()
+    (prova.dove / storta).write_bytes(_chiave_storta(prova.dove / storta))
+    sopra = _chiavi_in(prova.dove)
+    archivio = prova.banco.archivio
+    for nome in (chiavi.FILE, chiavi.RISERVA):
+        os.unlink(archivio / nome)
+    resoconto = prova.chiavetta.aggiorna(prova.radice)
+    assert resoconto.chiave_rimessa_sul_pc
+    assert _chiavi_in(archivio) == sopra
+    assert chiavi.apri(archivio, PASSWORD).nome == chiave.nome
+    assert _chiavi_in(archivio)[0] == _chiavi_in(archivio)[1]
+    resoconto = prova.chiavetta.aggiorna(prova.radice)
+    assert resoconto.problemi == []
+    assert prova.chiavetta.chiave_uguale(prova.radice)
+    assert chiavi.apri(prova.dove, PASSWORD).nome == chiave.nome
+
+
+def test_se_la_chiavetta_ha_una_chiave_sola_la_rimette_in_tutte_e_due(tmp_path, chiave):
+    prova = Prova(tmp_path, chiave)
+    prova.foto(1)
+    prova.pronta()
+    buona = _byte(prova.dove / chiavi.RISERVA)
+    os.unlink(prova.dove / chiavi.FILE)
+    for nome in (chiavi.FILE, chiavi.RISERVA):
+        os.unlink(prova.banco.archivio / nome)
+    assert prova.chiavetta.aggiorna(prova.radice).chiave_rimessa_sul_pc
+    assert _chiavi_in(prova.banco.archivio) == [buona, buona]
+
+
 @pytest.mark.parametrize("sistema", ["FAT32", "fat32", "FAT", "FAT16", "FAT12"])
 def test_la_fat32_non_si_usa_e_si_spiega_come_formattare(tmp_path, chiave, sistema):
     prova = Prova(tmp_path, chiave, sistema=lambda radice: sistema)

@@ -259,6 +259,14 @@ def test_nessun_filo_puo_morire_in_silenzio():
         "officina/sicuro/recupera.py":
             "`Regia._prepara` prende dentro qualunque guasto e torna alla "
             "password con il messaggio, che la finestrina mostra",
+        "officina/sicuro/cestino.py":
+            "il filo che parla col Cestino di Windows prende dentro qualunque "
+            "errore e chi lo fa partire lo aspetta e legge l'esito: se l'esito "
+            "manca, il file conta come non spostato",
+        "officina/sicuro/custode.py":
+            "`Custode._gira` passa solo da `comincia` e `giro`, che prendono "
+            "dentro qualunque errore e lo tengono in `problema` per la pagina: "
+            "il giro dopo riprova",
     }
 
     radice = Path(__file__).resolve().parent.parent

@@ -74,9 +74,9 @@ GLOBALI = frozenset({
     "occupato", "archivio_sparito", "archivio_cambiato", "chiavetta_mai_fatta",
     "chiavetta_persa", "chiavetta_da_aggiornare", "chiavetta_da_attaccare",
     "chiavetta_vecchia", "chiavetta_diversa", "due_chiavette", "dentro_l_archivio",
-    "dentro_gli_originali", "stesso_disco", "chiavetta_senza_chiave",
-    "chiavetta_illeggibile", "chiavetta_elenco_rovinato", "chiavetta_cambiata",
-    ChiavettaStaccata.codice})
+    "dentro_gli_originali", "stesso_disco", "chiave_diversa_sul_pc",
+    "chiavetta_senza_chiave", "chiavetta_illeggibile", "chiavetta_elenco_rovinato",
+    "chiavetta_cambiata", ChiavettaStaccata.codice})
 PAROLE = {
     "manca": "non è nell'archivio",
     "da_ricopiare": "nell'archivio è copiato a metà o mentre era aperto: va ricopiato",
@@ -476,6 +476,11 @@ class Esaminatore:
         problema = chiavetta.posto_sbagliato(disco)
         if problema is not None:
             raise ErroreOfficina(problema[1], codice=problema[0])
+        if not chiavetta.chiave_del_pc_a_posto():
+            raise ErroreOfficina(
+                "Sul PC una delle due copie della chiave dell'archivio manca o non è "
+                "uguale all'altra: chiudi e riapri il programma, poi riprova.",
+                codice="chiave_diversa_sul_pc")
         if not chiavetta.chiave_uguale(disco):
             self._ancora_attaccata(disco, identita)
             raise ErroreOfficina(

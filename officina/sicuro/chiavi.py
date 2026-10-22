@@ -2,18 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets
 import time
 from pathlib import Path
 
 from officina.errori import ErroreOfficina, PasswordSbagliata
-from officina.sicuro.disco import scrivi_tutto
+from officina.sicuro.disco import fissa_cartella, scrivi_tutto
 
 
 VERSIONE = 1
 TIPO = "officina-archivio-sicuro-chiave"
 FILE = "chiave.json"
 RISERVA = "chiave.riserva.json"
+DA_PROVARE = ".da-provare"
 
 LUNGHEZZA = 32
 NOME = 16
@@ -219,54 +221,67 @@ def crea(cartella: Path, password: str, costo: int | None = None) -> Chiave:
     return chiave
 
 
-def _prova(cartella: Path, chiave: Chiave, password: str) -> None:
-    aperte: dict[str, bytes | None] = {}
-    for documento in _leggi(cartella):
-        buono = documento is not None and documento["nome"] == chiave.nome
-        if buono:
-            buono = False
-            for porta in documento["porte"]:
-                impronta = json.dumps(porta, sort_keys=True)
-                if impronta not in aperte:
-                    aperte[impronta] = _apri_porta(porta, password)
-                if aperte[impronta] == chiave._segreto:
-                    buono = True
-                    break
-        if not buono:
+def _prova(cartella: Path, chiave: Chiave, password: str,
+           nomi: tuple[str, ...] = (FILE, RISERVA),
+           aperte: dict[str, bytes | None] | None = None) -> None:
+    aperte = {} if aperte is None else aperte
+    for nome in nomi:
+        if not _si_apre(_leggi_uno(cartella / nome), chiave, password, aperte):
             raise ChiaveRovinata(
                 "Ho scritto la chiave dell'Archivio sicuro ma rileggendola non "
                 "torna. La password di prima vale ancora.")
 
 
+def _si_apre(documento: dict | None, chiave: Chiave, password: str,
+             aperte: dict[str, bytes | None]) -> bool:
+    if documento is None or documento["nome"] != chiave.nome:
+        return False
+    return any(_apri_ricordando(porta, password, aperte) == chiave._segreto
+               for porta in documento["porte"])
+
+
+def _apri_ricordando(porta: dict, password: str,
+                     aperte: dict[str, bytes | None]) -> bytes | None:
+    impronta = json.dumps(porta, sort_keys=True)
+    if impronta not in aperte:
+        aperte[impronta] = _apri_porta(porta, password)
+    return aperte[impronta]
+
+
+def _segreti(documento: dict | None, password: str,
+             aperte: dict[str, bytes | None]) -> set[bytes]:
+    porte = [] if documento is None else documento["porte"]
+    return {segreto for segreto in (_apri_ricordando(porta, password, aperte)
+                                    for porta in porte)
+            if segreto is not None}
+
+
 def _cerca(cartella: Path, password: str, ripara: bool = True) -> Chiave | None:
-    principale, riserva = _leggi(cartella)
-    provate: set[str] = set()
-    for documento in (principale, riserva):
-        if documento is None:
-            continue
-        for porta in documento["porte"]:
-            impronta = json.dumps(porta, sort_keys=True)
-            if impronta in provate:
-                continue
-            provate.add(impronta)
-            segreto = _apri_porta(porta, password)
-            if segreto is None:
-                continue
-            chiave = Chiave(segreto)
-            if chiave.nome != documento["nome"]:
-                raise ChiaveRovinata(
-                    "La password apre la chiave, ma la chiave non è quella "
-                    "di questo archivio: qualcuno ha mescolato i file.")
-            if ripara:
-                _rimetti_le_copie(cartella, principale, riserva, documento)
-            return chiave
-    return None
+    documenti = _leggi(cartella)
+    aperte: dict[str, bytes | None] = {}
+    segreti = [_segreti(documento, password, aperte) for documento in documenti]
+    tutti = set().union(*segreti)
+    if not tutti:
+        return None
+    chiave = Chiave(min(tutti))
+    giusti = [documento for documento, suoi in zip(documenti, segreti, strict=True)
+              if suoi and documento["nome"] == chiave.nome]
+    if len(tutti) > 1 or not giusti:
+        raise ChiaveRovinata(
+            "La password apre la chiave, ma la chiave non è quella "
+            "di questo archivio: qualcuno ha mescolato i file.",
+            codice="chiave_mescolata")
+    if ripara:
+        _rimetti_le_copie(cartella, documenti, segreti, giusti[0])
+    return chiave
 
 
-def _rimetti_le_copie(cartella: Path, principale: dict | None,
-                      riserva: dict | None, buono: dict) -> None:
+def _rimetti_le_copie(cartella: Path, documenti: tuple[dict | None, dict | None],
+                      segreti: list[set[bytes]], buono: dict) -> None:
     dati = _in_byte(buono)
-    for nome, documento in ((FILE, principale), (RISERVA, riserva)):
+    for nome, documento, suoi in zip((FILE, RISERVA), documenti, segreti, strict=True):
+        if documento is not None and not suoi and documento["nome"] != buono["nome"]:
+            continue
         if documento is None or _in_byte(documento) != dati:
             try:
                 scrivi_tutto(cartella / nome, dati)
@@ -287,18 +302,69 @@ def apri(cartella: Path, password: str, ripara: bool = True) -> Chiave:
     return chiave
 
 
+def porte(cartella: Path) -> int:
+    return len(_tutte_le_porte(*_leggi(cartella)))
+
+
+def _tutte_le_porte(*documenti: dict | None) -> list[dict]:
+    viste: set[str] = set()
+    tutte = []
+    for documento in documenti:
+        for porta in [] if documento is None else documento["porte"]:
+            impronta = json.dumps(porta, sort_keys=True)
+            if impronta not in viste:
+                viste.add(impronta)
+                tutte.append(porta)
+    return tutte
+
+
+def _porte_di(cartella: Path, chiave: Chiave) -> list[dict]:
+    documenti = _leggi(cartella)
+    for documento in documenti:
+        if documento is not None and documento["nome"] != chiave.nome:
+            raise ChiaveRovinata("Questa chiave non è quella dell'archivio.",
+                                 codice="chiave_mescolata")
+    return _tutte_le_porte(*documenti)
+
+
+def _scrivi_provando(cartella: Path, chiave: Chiave, porte: list[dict],
+                     password: str) -> None:
+    dati = _in_byte(_documento(chiave, porte))
+    aperte: dict[str, bytes | None] = {}
+    for nome in (FILE, RISERVA):
+        provvisorio = cartella / (nome + DA_PROVARE)
+        try:
+            scrivi_tutto(provvisorio, dati)
+            _prova(cartella, chiave, password, (provvisorio.name,), aperte)
+            os.replace(provvisorio, cartella / nome)
+        finally:
+            provvisorio.unlink(missing_ok=True)
+        fissa_cartella(cartella)
+        _prova(cartella, chiave, password, (nome,), aperte)
+
+
+def aggiungi_password(cartella: Path, chiave: Chiave, nuova: str,
+                      costo: int | None = None) -> None:
+    password_nuova_valida(nuova)
+    vecchie = _porte_di(cartella, chiave)
+    porta = _porta(chiave, nuova, costo or vecchie[-1]["n"])
+    _scrivi_provando(cartella, chiave, [*vecchie, porta], nuova)
+
+
+def tieni_solo(cartella: Path, chiave: Chiave, password: str) -> None:
+    aperte: dict[str, bytes | None] = {}
+    for porta in _porte_di(cartella, chiave):
+        if _apri_ricordando(porta, password, aperte) == chiave._segreto:
+            _scrivi_provando(cartella, chiave, [porta], password)
+            return
+    raise PasswordSbagliata(
+        "Questa password non apre l'Archivio sicuro: non ho tolto niente.")
+
+
 def cambia_password(cartella: Path, chiave: Chiave, nuova: str,
                     costo: int | None = None) -> None:
-    password_nuova_valida(nuova)
-    principale, riserva = _leggi(cartella)
-    documento = principale if principale is not None else riserva
-    if documento["nome"] != chiave.nome:
-        raise ChiaveRovinata("Questa chiave non è quella dell'archivio.")
-    porta = _porta(chiave, nuova, costo or documento["porte"][-1]["n"])
-    _scrivi(cartella, _documento(chiave, [*documento["porte"], porta]))
-    _prova(cartella, chiave, nuova)
-    _scrivi(cartella, _documento(chiave, [porta]))
-    _prova(cartella, chiave, nuova)
+    aggiungi_password(cartella, chiave, nuova, costo)
+    tieni_solo(cartella, chiave, nuova)
 
 
 def copia_in(cartella: Path, altrove: Path) -> None:

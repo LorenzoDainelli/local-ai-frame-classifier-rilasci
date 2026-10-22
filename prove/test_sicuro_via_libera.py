@@ -17,8 +17,8 @@ from officina.sicuro.elenco import Elenco
 from officina.sicuro.sottofondo import ERRORE, FERMATO, FINITO
 from officina.sicuro.via_libera import (GLOBALI, ORDINE, PAROLE, VALIDO_PER, ControlloFresco,
                                         Esame, Esaminatore, sincronizzato)
-from prove.test_sicuro_chiavetta import (Prova, _danneggia, _scrivi_segno, _segno_finto,
-                                         _sveglio, chiave, pezzi_piccoli)
+from prove.test_sicuro_chiavetta import (Prova, _chiave_storta, _danneggia, _scrivi_segno,
+                                         _segno_finto, _sveglio, chiave, pezzi_piccoli)
 from prove.test_sicuro_copia import _dati, _settori_rotti
 
 ATTESA = 20.0
@@ -1046,6 +1046,17 @@ def _chiave_di_riserva_sparita(via):
     return {}
 
 
+def _chiave_del_pc_sparita(via):
+    os.unlink(via.banco.archivio / chiavi.RISERVA)
+    return {}
+
+
+def _chiave_del_pc_storta(via):
+    percorso = via.banco.archivio / chiavi.FILE
+    percorso.write_bytes(_chiave_storta(percorso))
+    return {}
+
+
 def _elenco_rovinato(via):
     fotografie = sorted((via.prova.dove / elenco.ELENCO).glob("fotografia-*"))
     dati = bytearray(fotografie[-1].read_bytes())
@@ -1089,6 +1100,8 @@ def _elenco_che_non_si_apre(via, monkeypatch):
     (_stesso_disco, "stesso_disco"),
     (_chiave_cambiata, "chiavetta_senza_chiave"),
     (_chiave_di_riserva_sparita, "chiavetta_senza_chiave"),
+    (_chiave_del_pc_sparita, "chiave_diversa_sul_pc"),
+    (_chiave_del_pc_storta, "chiave_diversa_sul_pc"),
     (_elenco_rovinato, "chiavetta_elenco_rovinato"),
     (_elenco_tutto_rovinato, "chiavetta_elenco_rovinato"),
     (_elenco_sparito, "chiavetta_elenco_rovinato"),
@@ -1480,8 +1493,10 @@ def test_la_chiavetta_dice_chi_e_e_se_ha_la_chiave(tmp_path, chiave):
     stessa = via.prova.nuova(stesso_disco=lambda uno, altro: True)
     assert stessa.posto_sbagliato(via.prova.radice)[0] == "stesso_disco"
     assert chiavetta.chiave_uguale(via.prova.radice)
+    assert chiavetta.chiave_del_pc_a_posto()
     os.unlink(via.banco.archivio / chiavi.FILE)
-    assert chiavetta.chiave_uguale(via.prova.radice)
+    assert not chiavetta.chiave_uguale(via.prova.radice)
+    assert not chiavetta.chiave_del_pc_a_posto()
     os.unlink(via.banco.archivio / chiavi.RISERVA)
     assert not chiavetta.chiave_uguale(via.prova.radice)
 
