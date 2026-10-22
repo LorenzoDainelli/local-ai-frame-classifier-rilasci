@@ -13,7 +13,7 @@ from officina.web import miglioramento as miglioramento_web
 from officina.web import vista
 from officina.programma import librerie
 
-from officina.web import in_disparte
+from officina.web import in_disparte, sosta
 from officina.web.strade import base, comune
 
 strada = APIRouter()
@@ -112,7 +112,7 @@ def api_modelli_del_miglioramento():
 
 @strada.post("/miglioramento/avvia")
 def miglioramento_avvia():
-    _avvia(accesso.aperto())
+    avvia_il_miglioramento(accesso.aperto())
     return RedirectResponse("/miglioramento", status_code=303)
 
 
@@ -123,7 +123,7 @@ def miglioramento_sfida_riprova():
     archivio = accesso.aperto()
     with archivio.scrittura() as connessione:
         sfida.segna_il_salto(connessione, None)
-    _avvia(archivio)
+    avvia_il_miglioramento(archivio)
     return RedirectResponse("/miglioramento", status_code=303)
 
 
@@ -136,17 +136,19 @@ def miglioramento_sfida_ricomincia():
     registro.evento("miglioria.sfida_ricominciata", rimesse=esito.rimesse,
                     saltate=len(esito.saltate))
     if esito.rimesse:
-        _avvia(archivio)
+        avvia_il_miglioramento(archivio)
     return JSONResponse({"rimesse": esito.rimesse, "saltate": esito.saltate})
 
 
-def _avvia(archivio) -> None:
+def avvia_il_miglioramento(archivio) -> None:
     from officina.miglioria import preparazione
 
     if not preparazione.e_pronto(archivio.dove.modelli):
         raise ErroreOfficina(
             "Per migliorare serve SeedVR2, che non è ancora sul computer: "
             "si scarica da Stato, nella parte «La salute».")
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.MIGLIORAMENTO):
+        return
     miglioratore = miglioramento_web.il_miglioratore(archivio)
     if in_disparte.A_PARTE and not archivio.di_prova:
         in_disparte.lancia(miglioratore.lavoro, "miglioramento", archivio.dove.nome,
@@ -158,10 +160,15 @@ def _avvia(archivio) -> None:
         miglioratore.parti()
 
 
+def ferma_il_miglioramento(archivio) -> None:
+    in_disparte.ferma("miglioramento")
+    miglioramento_web.il_miglioratore(archivio).ferma(aspetta=2.0)
+
+
 @strada.post("/miglioramento/ferma")
 def miglioramento_ferma():
-    in_disparte.ferma("miglioramento")
-    miglioramento_web.il_miglioratore(accesso.aperto()).ferma(aspetta=2.0)
+    sosta.per_la_copia.fermato_da_te(sosta.MIGLIORAMENTO)
+    ferma_il_miglioramento(accesso.aperto())
     return RedirectResponse("/miglioramento", status_code=303)
 
 
@@ -193,7 +200,9 @@ def miglioramento_rimetti(miglioria_id: int):
 
 @strada.get("/api/miglioramento")
 def api_miglioramento():
-    return miglioramento_web.come_va(accesso.aperto())
+    stato = miglioramento_web.come_va(accesso.aperto())
+    stato["aspetta_la_copia"] = sosta.per_la_copia.aspetta_la_copia(sosta.MIGLIORAMENTO)
+    return stato
 
 
 @strada.post("/api/miglioramento/metti")

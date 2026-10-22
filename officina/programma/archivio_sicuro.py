@@ -10,6 +10,7 @@ from officina.programma import carta
 
 MESE = 30 * 24 * 3600
 ASPETTA_ALLA_CHIUSURA = 20.0
+USATO_DA_POCO = 30.0
 
 ASSENTE = "assente"
 SENZA_CHIAVE = "senza_chiave"
@@ -174,10 +175,20 @@ def programmino() -> Path | None:
     return None
 
 
+def stai_usando() -> bool:
+    from officina.web import blocco
+
+    return blocco.guardia.usato_da_poco(USATO_DA_POCO)
+
+
+def prima_copia_segnata() -> bool:
+    return bool(_lista(carta.leggi().get(PRIMA_COPIA)))
+
+
 def _di_serie(dove: Path, salta, programmino):
     from officina.sicuro.servizio import ArchivioSicuro
 
-    return ArchivioSicuro(dove, salta=salta, programmino=programmino)
+    return ArchivioSicuro(dove, salta=salta, programmino=programmino, rallenta=stai_usando)
 
 
 def _lista(valore) -> list[str]:
@@ -507,6 +518,15 @@ class Collegamento:
         if restano != segnate:
             self._segna_la_prima_copia(restano)
         return bool(restano)
+
+    def serve_la_sosta(self) -> bool | None:
+        with self._serratura:
+            if self._finito:
+                return None
+            if not self._servizio_aperto():
+                return None if self.guarda() == SI_APRE else False
+        voluta = self._servizio.copia_voluta()
+        return voluta and self.prima_copia_in_corso()
 
     def lavori_tuoi(self) -> list[str]:
         if not self._servizio_aperto():

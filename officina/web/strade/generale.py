@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Form
+from fastapi import APIRouter, Form, Request, Response
 from fastapi.responses import RedirectResponse
 
 from officina import registro
 from officina.archivio import accesso
-from officina.web import coda_ritocco, in_disparte
+from officina.web import blocco, coda_ritocco, in_disparte, sosta
 from officina.web import miglioramento as miglioramento_web
 from officina.web import sincronia as sincronia_web
 from officina.web import telefono as telefono_web
@@ -65,6 +65,12 @@ def _nome_bello(cosa: str) -> str:
 IN_ATTESA = "in attesa della scheda"
 
 
+@strada.post("/api/sei-qui")
+def sei_qui(richiesta: Request):
+    blocco.guardia.usato_adesso(blocco.chi_e(richiesta))
+    return Response(status_code=204)
+
+
 @strada.get("/api/in-corso")
 def api_in_corso():
     fuori: list[dict] = []
@@ -107,6 +113,7 @@ def disco_occupato() -> bool:
 
 
 def ferma_tutto(entro: float = 5.0) -> None:
+    sosta.per_la_copia.smetti(entro)
     comune.raddrizza_basta.set()
     comune.date_basta.set()
     comune.macchine_basta.set()

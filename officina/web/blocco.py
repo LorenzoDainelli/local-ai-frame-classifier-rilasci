@@ -24,6 +24,7 @@ class Stato:
 class _Schermo:
     bloccato: bool = False
     ultimo: float = 0.0
+    usato: float | None = None
 
 
 class Guardia:
@@ -54,6 +55,16 @@ class Guardia:
     def visto_qualcuno(self, chi: str) -> None:
         with self._lucchetto:
             self._suo(chi).ultimo = time.monotonic()
+
+    def usato_adesso(self, chi: str) -> None:
+        with self._lucchetto:
+            self._suo(chi).usato = time.monotonic()
+
+    def usato_da_poco(self, secondi: float) -> bool:
+        adesso = time.monotonic()
+        with self._lucchetto:
+            return any(schermo.usato is not None and adesso - schermo.usato < secondi
+                       for schermo in self._schermi.values())
 
     def controlla(self, chi: str, dopo_minuti: int, acceso: bool) -> bool:
         if not acceso or dopo_minuti <= 0:

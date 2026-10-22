@@ -271,6 +271,10 @@ def test_nessun_filo_puo_morire_in_silenzio():
             "`Collegamento._apri` prende dentro qualunque errore e lo tiene in "
             "`stato` e `messaggio` per la striscia rossa: l'archivio resta "
             "chiuso e non si tocca niente",
+        "officina/web/sosta.py":
+            "`Sosta._gira` prende dentro qualunque errore di un giro, lo scrive "
+            "nel registro e riprova al giro dopo: chi aspetta la fine della "
+            "prima copia resta segnato nella carta e riparte lo stesso",
     }
 
     radice = Path(__file__).resolve().parent.parent

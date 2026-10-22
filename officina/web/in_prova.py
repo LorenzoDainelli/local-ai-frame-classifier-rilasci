@@ -43,7 +43,7 @@ SI_PUO_SCRIVERE = tuple(re.compile(f"^{strada}$") for strada in (
     r"/elenchi/schermate-(tienile|fuori-archivio)",
     r"/api/doppioni/(tieni|diverse|rimetti)", r"/scatti/in-blocco",
     r"/api/miglioramento/metti", r"/miglioramento/\d+/(togli|rimetti)",
-    r"/blocco/(apri|adesso)", r"/prova/\w+", r"/api/novita/lette",
+    r"/blocco/(apri|adesso)", r"/prova/\w+", r"/api/novita/lette", r"/api/sei-qui",
 ))
 
 

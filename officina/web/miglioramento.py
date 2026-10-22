@@ -52,6 +52,10 @@ def il_miglioratore(archivio):
     return _miglioratore
 
 
+def sta_lavorando() -> bool:
+    return _miglioratore is not None and _miglioratore.lavoro.sta_lavorando
+
+
 def miglioramento_di_la(archivio):
     miglioratore = il_miglioratore(archivio)
     miglioratore.parti()

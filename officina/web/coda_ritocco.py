@@ -7,7 +7,7 @@ from officina.archivio.database import leggi_stato, scrivi_stato
 from officina.modello import file_media
 from officina.ritocco import coda, seguiti
 from officina.ritocco.copia import RitoccoFermato
-from officina.web import lavori
+from officina.web import lavori, sosta
 
 ACCESA = "ritocco_coda_accesa"
 UN_ALTRO_LAVORO = "un altro lavoro"
@@ -143,20 +143,48 @@ def avvia(archivio) -> bool:
     ritoccatore = il_ritoccatore(archivio)
     with archivio.scrittura() as connessione:
         scrivi_stato(connessione, ACCESA, True)
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.RITOCCO):
+        return False
     return ritoccatore.parti()
 
 
 def ferma_dall_utente(archivio, aspetta: float = 2.0) -> None:
+    if not archivio.di_prova:
+        sosta.per_la_copia.fermato_da_te(sosta.RITOCCO)
     with archivio.scrittura() as connessione:
         scrivi_stato(connessione, ACCESA, False)
     il_ritoccatore(archivio).ferma(aspetta)
 
 
-def ferma(aspetta: float = 0.0) -> None:
+def ferma_la_coda(aspetta: float = 0.0) -> None:
     if _ritoccatore is not None:
         _ritoccatore.ferma(aspetta)
+
+
+def gara_in_corso() -> bool:
+    return _gara is not None and _gara.lavoro.sta_lavorando
+
+
+def ferma_la_gara(aspetta: float = 0.0) -> None:
     if _gara is not None:
         _gara.ferma(aspetta)
+
+
+def ferma(aspetta: float = 0.0) -> None:
+    ferma_la_coda(aspetta)
+    ferma_la_gara(aspetta)
+
+
+def parti_la_gara(archivio) -> bool:
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.GARA):
+        return False
+    return la_gara(archivio).parti()
+
+
+def ferma_la_gara_dall_utente(archivio, aspetta: float = 2.0) -> None:
+    if not archivio.di_prova:
+        sosta.per_la_copia.fermato_da_te(sosta.GARA)
+    la_gara(archivio).ferma(aspetta)
 
 
 def la_gara(archivio):
@@ -172,16 +200,22 @@ def la_gara(archivio):
     return _gara
 
 
+def riparti_se_accesa(archivio) -> bool:
+    with archivio.lettura() as connessione:
+        accesa = bool(leggi_stato(connessione, ACCESA, False))
+        in_coda = coda.conteggi(connessione)[coda.IN_CODA]
+    if not accesa or not in_coda:
+        return False
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.RITOCCO):
+        return False
+    return il_ritoccatore(archivio).parti()
+
+
 def ripara(archivio) -> dict:
     with archivio.scrittura() as connessione:
         lasciati = seguiti.ferma_i_lasciati(connessione)
     fatto = coda.ripara(archivio)
-    with archivio.lettura() as connessione:
-        accesa = bool(leggi_stato(connessione, ACCESA, False))
-        in_coda = coda.conteggi(connessione)[coda.IN_CODA]
-    ripartita = False
-    if accesa and in_coda:
-        ripartita = il_ritoccatore(archivio).parti()
+    ripartita = riparti_se_accesa(archivio)
     if lasciati or ripartita:
         registro.evento("ritocco.coda_ripresa", seguiti=lasciati, ripartita=ripartita)
     return {**fatto, "seguiti": lasciati, "ripartita": ripartita}

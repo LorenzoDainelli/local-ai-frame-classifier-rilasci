@@ -15,7 +15,7 @@ from officina.volti import rilevatore as volti_rilevatore
 from officina.corpi import motore as corpi_motore
 from officina.corpi import rilevatore as corpi_rilevatore
 
-from officina.web import in_disparte
+from officina.web import in_disparte, sosta
 from officina.web.strade import base, comune, misura, persone
 
 strada = APIRouter()
@@ -435,6 +435,7 @@ def come_va_la_fila_ia() -> dict:
         "dettaglio": "" if corre else comune.lavoro_ia.dettaglio,
         "dove_guasto": "" if corre else comune.fila_ia["dove_guasto"],
         "lavori": lavori_qui,
+        "aspetta_la_copia": sosta.per_la_copia.aspetta_la_copia(sosta.IA),
     }
 
 
@@ -486,19 +487,24 @@ def avviso_scritte_visto():
     return JSONResponse({"fatto": True})
 
 
-@strada.post("/intelligenza/avvia")
-def avvia_l_intelligenza(scelti: list[str] = Form([])):
-    archivio = accesso.aperto()
-    voluti = [chiave for chiave in IA_IN_FILA if chiave in scelti]
+def parti_la_fila(archivio, scelti) -> bool:
+    voluti = [chiave for chiave in IA_IN_FILA if chiave in (scelti or [])]
     if not voluti or comune.lavoro_ia.sta_lavorando:
-        return RedirectResponse("/intelligenza", status_code=303)
+        return False
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.IA, scelti=voluti):
+        return False
     comune.fila_ia.update({"scelti": voluti, "adesso": "", "fermata": False,
                     "dove_guasto": ""})
     if in_disparte.A_PARTE:
         nome = archivio.dove.nome
-        comune.lavoro_ia.parti(lambda: in_disparte.ponte(nome, voluti), "intelligenza")
-    else:
-        comune.lavoro_ia.parti(lambda: _la_fila_ia(archivio), "intelligenza")
+        return comune.lavoro_ia.parti(lambda: in_disparte.ponte(nome, voluti),
+                                      "intelligenza")
+    return comune.lavoro_ia.parti(lambda: _la_fila_ia(archivio), "intelligenza")
+
+
+@strada.post("/intelligenza/avvia")
+def avvia_l_intelligenza(scelti: list[str] = Form([])):
+    parti_la_fila(accesso.aperto(), scelti)
     return RedirectResponse("/intelligenza", status_code=303)
 
 
@@ -515,13 +521,18 @@ def scelta_dell_intelligenza(chiave: str = Form(...), acceso: bool = Form(...)):
     return JSONResponse(come_va_la_fila_ia())
 
 
-@strada.post("/intelligenza/ferma")
-def ferma_l_intelligenza():
+def ferma_la_fila() -> None:
     comune.fila_ia["fermata"] = True
     in_disparte.ferma()
     if comune.fila_ia["adesso"]:
         _ferma_il_sotto_lavoro(comune.fila_ia["adesso"])
     comune.lavoro_ia.aspetta_che_finisca(2.0)
+
+
+@strada.post("/intelligenza/ferma")
+def ferma_l_intelligenza():
+    sosta.per_la_copia.fermato_da_te(sosta.IA)
+    ferma_la_fila()
     return RedirectResponse("/intelligenza", status_code=303)
 
 

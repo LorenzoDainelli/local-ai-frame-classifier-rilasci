@@ -16,7 +16,7 @@ from officina.immagini import consegna
 from officina.modello import file_media
 from officina.ritocco import (coda, copia, elenco, maschere, pixela, racconto, scelta,
                               sfida_togli, strumento)
-from officina.web import coda_ritocco, rivedi_ritocco
+from officina.web import coda_ritocco, rivedi_ritocco, sosta
 from officina.web import ritocco as ritocco_web
 
 strada = APIRouter()
@@ -293,7 +293,8 @@ def _la_coda() -> dict:
                       "OR (stato = ? AND deciso_il IS NULL) ORDER BY id LIMIT ?",
                       *coda.APERTI, coda.FALLITO, QUANTI_IN_CODA)
         lavori = [coda.a_parole(connessione, riga) for riga in righe]
-    return {"lavoro": ritoccatore.come_va(), "conteggi": conteggi, "lavori": lavori}
+    return {"lavoro": ritoccatore.come_va(), "conteggi": conteggi, "lavori": lavori,
+            "aspetta_la_copia": sosta.per_la_copia.aspetta_la_copia(sosta.RITOCCO)}
 
 
 def _avvia() -> dict:
@@ -327,16 +328,17 @@ def _decidi(lavoro_id: int, come: str) -> dict:
 def _la_gara() -> dict:
     stato = coda_ritocco.la_gara(accesso.aperto()).come_va()
     stato.pop("dettaglio", None)
+    stato["aspetta_la_copia"] = sosta.per_la_copia.aspetta_la_copia(sosta.GARA)
     return stato
 
 
 def _avvia_la_gara() -> dict:
-    coda_ritocco.la_gara(accesso.aperto()).parti()
+    coda_ritocco.parti_la_gara(accesso.aperto())
     return _la_gara()
 
 
 def _ferma_la_gara() -> dict:
-    coda_ritocco.la_gara(accesso.aperto()).ferma(2.0)
+    coda_ritocco.ferma_la_gara_dall_utente(accesso.aperto())
     return _la_gara()
 
 

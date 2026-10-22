@@ -584,6 +584,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                 registro.errore("schermo.porta_non_riaperta", **registro.dove_si_e_rotto(guasto))
         self.fase_apertura = 3
         self._apri_l_archivio_sicuro_in_sottofondo(password)
+        self._parti_la_sosta()
         self._parti_le_copie_in_sottofondo()
         self._parti_la_salute_in_sottofondo()
         threading.Thread(target=self._prepara_i_conti, name="preparazione", daemon=True).start()
@@ -610,6 +611,23 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         except Exception as guasto:
             registro.errore("programma.sicuro_non_aperto",
                             **registro.dove_si_e_rotto(guasto))
+
+    def _parti_la_sosta(self) -> None:
+        from officina.programma import archivio_sicuro
+        from officina.web import sosta
+
+        try:
+            sosta.per_la_copia.guarda(self._serve_la_sosta,
+                                      attiva=archivio_sicuro.prima_copia_segnata())
+        except Exception as guasto:
+            registro.errore("programma.sosta_non_partita",
+                            **registro.dove_si_e_rotto(guasto))
+
+    def _serve_la_sosta(self) -> bool | None:
+        sicuro = self.sicuro
+        if sicuro is None or self._sta_chiudendo or self._spento:
+            return None
+        return sicuro.serve_la_sosta()
 
     def _parola_del_forziere(self) -> str | None:
         from officina.archivio import accesso

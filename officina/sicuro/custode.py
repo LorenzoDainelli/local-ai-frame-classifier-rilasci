@@ -94,6 +94,7 @@ class Custode:
         self._con_chiavetta = False
         self._fase: str | None = None
         self._pronto = False
+        self._girato = False
         self._prima_fatta = prima is None
         self._in_prima = False
         self._fermo = False
@@ -297,6 +298,7 @@ class Custode:
         with self._cambio:
             if self._fermo:
                 return None
+            self._girato = True
             if copia is not None:
                 if copia:
                     self._voglie.setdefault(COPIA, (None, {}))
@@ -367,6 +369,20 @@ class Custode:
             self._voglie[COPIA] = (None, dict(grandezze or {}))
             self._rimesse.pop(COPIA, None)
             self._cambio.notify_all()
+
+    def copia_voluta(self) -> bool | None:
+        with self._cambio:
+            if self.copia is None or self._fermo:
+                return False
+            if not self._girato:
+                return None
+            if not self._prima_fatta:
+                return False
+            if COPIA in self._fermi:
+                return True
+            if self.copia.acceso:
+                return self.copia.stato != SPAZIO_FINITO
+            return COPIA in self._voglie
 
     def controlla_ora(self) -> None:
         if self.controllo is None:

@@ -452,6 +452,12 @@ class ArchivioSicuro:
             return []
         return [nome for nome, lavoro in aperto.tuoi().items() if lavoro.acceso]
 
+    def copia_voluta(self) -> bool | None:
+        aperto = self._aperto
+        if aperto is None:
+            return None
+        return aperto.custode.copia_voluta()
+
     def da_finire(self) -> set[str] | None:
         aperto = self._aperto
         if aperto is None:
