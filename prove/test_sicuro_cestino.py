@@ -9,7 +9,9 @@ import random
 import shutil
 import string
 import struct
+import sys
 import time
+import types
 from pathlib import Path
 
 import pytest
@@ -110,6 +112,8 @@ class CestinoFinto(Cestino):
             for cartella, _, nomi in os.walk(self.dentro) for nome in nomi)
 
     def pulizia(self):
+        if self.guasto == "pulizia":
+            raise OSError(errno.EIO, "pulizia")
         return self.giorni
 
     def cartella(self, volume):
@@ -403,7 +407,7 @@ def test_dopo_il_cestino_le_foto_si_ritrovano_nell_archivio(tmp_path, chiave):
 def test_la_lista_tiene_le_impronte_e_i_posti(tmp_path, chiave):
     scena = Scena(tmp_path, chiave)
     esame = scena.esame()
-    risultato, = scena.spedizioniere.manda([esame], "cancella")
+    risultato, = scena.spedizioniere.manda([esame], "CANCELLA")
     lista = scena.quaderno.leggi_lista(risultato["spedizione"])
     voce, = lista["voci"]
     assert voce["posti"] == dict(sorted(esame.dove_posti.items()))
@@ -411,15 +415,18 @@ def test_la_lista_tiene_le_impronte_e_i_posti(tmp_path, chiave):
                                 for relativo, impronta in esame.impronta.items()}
 
 
-@pytest.mark.parametrize("parola", ["CANCELLA", "cancella", " Cancella ", "CANCELLA\n",
-                                    "cAnCeLlA"])
+@pytest.mark.parametrize("parola", ["CANCELLA", " CANCELLA ", "CANCELLA\n", "\tCANCELLA"])
 def test_la_parola_giusta(tmp_path, chiave, parola):
     scena = Scena(tmp_path, chiave)
     assert scena.manda(parola=parola)[0]["esito"] == NEL_CESTINO
 
 
 @pytest.mark.parametrize("parola", ["", " ", "CANCELL", "cancellare", "CANCELLA!", "sì",
-                                    "ok", "C A N C E L L A", None, 1, b"CANCELLA"])
+                                    "ok", "C A N C E L L A", None, 1, b"CANCELLA",
+                                    "cancella", "Cancella", " cancella ", "cAnCeLlA",
+                                    "CANCELLa", "CANCELLARE", "\uff23\uff21\uff2e\uff23"
+                                    "\uff25\uff2c\uff2c\uff21", "CANCELL\u0410",
+                                    "CANCE\u200bLLA"])
 def test_la_parola_sbagliata_non_tocca_niente(tmp_path, chiave, parola):
     scena = Scena(tmp_path, chiave)
     esame = scena.esame()
@@ -442,11 +449,97 @@ def test_il_riepilogo_dice_quante_e_quanto(tmp_path, chiave):
     json.dumps(riepilogo)
 
 
-def test_il_riepilogo_avvisa_del_sensore_memoria(tmp_path, chiave):
+@pytest.mark.parametrize("giorni", [31, 60, 365])
+def test_il_riepilogo_avvisa_del_sensore_memoria(tmp_path, chiave, giorni):
     scena = Scena(tmp_path, chiave)
+    scena.cestino.giorni = giorni
+    riepilogo = scena.spedizioniere.riepilogo([scena.esame()])
+    assert riepilogo["si_puo"] and riepilogo["fuori"] == []
+    assert any(f"dopo {giorni} giorni (Sensore memoria)" in frase
+               for frase in riepilogo["frasi"])
+    assert scena.manda()[0]["esito"] == NEL_CESTINO
+
+
+@pytest.mark.parametrize("giorni", [1, 14, 29, 30])
+def test_se_il_sensore_memoria_svuota_prima_del_ricontrollo_non_si_manda(tmp_path, chiave,
+                                                                          giorni):
+    scena = Scena(tmp_path, chiave)
+    scena.cestino.giorni = giorni
+    riepilogo = scena.spedizioniere.riepilogo([scena.esame()])
+    assert not riepilogo["si_puo"]
+    assert [fuori["codice"] for fuori in riepilogo["fuori"]] == ["sensore_memoria"]
+    assert not any("Sensore memoria)" in frase for frase in riepilogo["frasi"])
+    risultato, = scena.manda()
+    assert risultato["esito"] == NON_TOCCATA and risultato["codice"] == "sensore_memoria"
+    assert "Impostazioni, Sistema, Archiviazione" in risultato["messaggio"]
+    assert scena.cestino.mosse == [] and scena.via.qui("s/a.jpg").exists()
+    assert scena.quaderno.spedizioni() == []
+
+
+def test_il_sensore_acceso_dopo_il_riepilogo_ferma_lo_stesso(tmp_path, chiave):
+    scena = Scena(tmp_path, chiave, foto=DUE, cartelle=DUE_VUOTE)
+    esami = [scena.esame("s"), scena.esame("t")]
+    assert scena.spedizioniere.riepilogo(esami)["si_puo"]
     scena.cestino.giorni = 14
-    frasi = scena.spedizioniere.riepilogo([scena.esame()])["frasi"]
-    assert any("dopo 14 giorni (Sensore memoria)" in frase for frase in frasi)
+    risultati = scena.spedizioniere.manda(esami, "CANCELLA")
+    assert [risultato["codice"] for risultato in risultati] == ["sensore_memoria"] * 2
+    assert scena.cestino.mosse == []
+
+
+UTENTE = ("utente", modulo.SENSORE)
+REGOLA = ("macchina", modulo.REGOLA_SENSORE)
+DWORD = 4
+
+
+def _registro_finto(valori: dict):
+    chiavi = {(radice, percorso) for radice, percorso, _ in valori}
+
+    @contextlib.contextmanager
+    def apri(radice, percorso):
+        if (radice, percorso) not in chiavi:
+            raise FileNotFoundError(errno.ENOENT, percorso)
+        yield radice, percorso
+
+    def leggi(chiave, nome):
+        if (*chiave, nome) not in valori:
+            raise FileNotFoundError(errno.ENOENT, nome)
+        return valori[(*chiave, nome)]
+
+    return types.SimpleNamespace(HKEY_CURRENT_USER="utente", HKEY_LOCAL_MACHINE="macchina",
+                                 REG_DWORD=DWORD, REG_QWORD=11, OpenKey=apri,
+                                 QueryValueEx=leggi)
+
+
+@pytest.mark.parametrize("valori, giorni", [
+    ({}, None),
+    ({(*UTENTE, "01"): (0, DWORD), (*UTENTE, "256"): (1, DWORD)}, None),
+    ({(*UTENTE, "01"): (1, DWORD), (*UTENTE, "256"): (14, DWORD)}, 14),
+    ({(*UTENTE, "01"): (1, DWORD), (*UTENTE, "256"): (60, DWORD)}, 60),
+    ({(*UTENTE, "01"): (1, DWORD), (*UTENTE, "256"): (0, DWORD)}, None),
+    ({(*UTENTE, "01"): (1, DWORD)}, 30),
+    ({(*UTENTE, "01"): (1, DWORD), (*UTENTE, "256"): ("14", 1)}, 30),
+    ({(*REGOLA, "AllowStorageSenseGlobal"): (0, DWORD), (*UTENTE, "01"): (1, DWORD),
+      (*UTENTE, "256"): (1, DWORD)}, None),
+    ({(*REGOLA, "AllowStorageSenseGlobal"): (1, DWORD)}, 30),
+    ({(*REGOLA, "AllowStorageSenseGlobal"): (1, DWORD), (*UTENTE, "256"): (60, DWORD)}, 60),
+    ({(*REGOLA, "AllowStorageSenseGlobal"): (1, DWORD),
+      (*REGOLA, "ConfigStorageSenseRecycleBinCleanupThreshold"): (0, DWORD)}, None),
+    ({(*REGOLA, "ConfigStorageSenseRecycleBinCleanupThreshold"): (7, DWORD),
+      (*UTENTE, "01"): (1, DWORD), (*UTENTE, "256"): (60, DWORD)}, 7),
+    ({(*REGOLA, "ConfigStorageSenseRecycleBinCleanupThreshold"): (90, DWORD),
+      (*UTENTE, "01"): (1, DWORD), (*UTENTE, "256"): (1, DWORD)}, 90),
+    ({(*REGOLA, "ConfigStorageSenseRecycleBinCleanupThreshold"): (7, DWORD)}, None),
+])
+def test_il_sensore_memoria_si_legge_dal_registro(monkeypatch, valori, giorni):
+    monkeypatch.setitem(sys.modules, "winreg", _registro_finto(valori))
+    assert modulo.CestinoWindows().pulizia() == giorni
+
+
+def test_il_sensore_spento_lascia_mandare(tmp_path, chiave):
+    scena = Scena(tmp_path, chiave)
+    riepilogo = scena.spedizioniere.riepilogo([scena.esame()])
+    assert riepilogo["si_puo"]
+    assert not any("Sensore memoria" in frase for frase in riepilogo["frasi"])
 
 
 def test_il_riepilogo_con_due_cartelle_e_una_rossa(tmp_path, chiave):
@@ -764,6 +857,13 @@ def _pieno(cestino, scena):
     cestino.in_piu = int(cestino.massimo * modulo.MARGINE) - PESO + 1
 
 
+def _sensore(giorni):
+    def accendi(cestino, scena):
+        cestino.giorni = giorni
+    accendi.__name__ = f"_sensore_{giorni}"
+    return accendi
+
+
 def _guasto(quale):
     def guasta(cestino, scena):
         cestino.guasto = quale
@@ -791,6 +891,9 @@ def _percorso_lungo(cestino, scena):
     (_senza_massimo, "cestino_sconosciuto"),
     (_piccolo, "troppo_grande"),
     (_pieno, "cestino_pieno"),
+    (_sensore(1), "sensore_memoria"),
+    (_sensore(30), "sensore_memoria"),
+    (_guasto("pulizia"), "cestino_sconosciuto"),
     (_guasto("usato"), "cestino_sconosciuto"),
     (_guasto("cartella"), "cestino_sconosciuto"),
     (_guasto("capienza"), "cestino_sconosciuto"),
@@ -819,6 +922,24 @@ def test_ntfs_e_refs_vanno_bene(tmp_path, chiave, sistema):
     scena = Scena(tmp_path, chiave)
     scena.cestino.dischi[scena.cestino.disco][1] = sistema
     assert scena.manda()[0]["esito"] == NEL_CESTINO
+
+
+@pytest.mark.parametrize("in_piu, esito", [(7 * PESO - 10, NEL_CESTINO),
+                                           (7 * PESO + 10, NON_TOCCATA)])
+def test_il_cestino_si_riempie_solo_fino_all_ottanta_per_cento(tmp_path, chiave, in_piu,
+                                                              esito):
+    scena = Scena(tmp_path, chiave)
+    scena.cestino.massimo = 10 * PESO
+    scena.cestino.in_piu = in_piu
+    assert scena.manda()[0]["esito"] == esito
+
+
+@pytest.mark.parametrize("massimo, esito", [(PESO * 5 // 4 + 10, NEL_CESTINO),
+                                            (PESO * 5 // 4 - 10, NON_TOCCATA)])
+def test_una_cartella_sola_non_supera_l_ottanta_per_cento(tmp_path, chiave, massimo, esito):
+    scena = Scena(tmp_path, chiave)
+    scena.cestino.massimo = massimo
+    assert scena.manda()[0]["esito"] == esito
 
 
 def test_al_limite_del_margine_va_ancora(tmp_path, chiave):
@@ -1964,10 +2085,11 @@ def test_la_mandata_in_sottofondo(tmp_path, chiave):
     json.dumps(foto)
 
 
-def test_la_mandata_con_la_parola_sbagliata_non_parte(tmp_path, chiave):
+@pytest.mark.parametrize("parola", ["si", "cancella", "Cancella", None])
+def test_la_mandata_con_la_parola_sbagliata_non_parte(tmp_path, chiave, parola):
     scena = Scena(tmp_path, chiave)
     mandata = Mandata(scena.spedizioniere, sveglio=_sveglio)
-    assert _codice(lambda: mandata.avvia([scena.esame()], "si")) == "parola_sbagliata"
+    assert _codice(lambda: mandata.avvia([scena.esame()], parola)) == "parola_sbagliata"
     assert not mandata.acceso and scena.cestino.mosse == []
 
 

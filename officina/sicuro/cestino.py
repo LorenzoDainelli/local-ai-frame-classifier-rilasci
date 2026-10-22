@@ -32,7 +32,7 @@ from officina.sicuro.via_libera import Esaminatore
 
 GIORNI = 30
 ATTESA = GIORNI * 86400.0
-MARGINE = 0.9
+MARGINE = 0.8
 PERCENTO = 4
 SISTEMI = frozenset({"NTFS", "REFS"})
 CESTINO = "$Recycle.Bin"
@@ -45,7 +45,7 @@ PROVA_FILE = 100
 PROVA_BYTE = 2 * 1024 ** 3
 OGNI = 60.0
 TENTATIVI = 5
-PAROLA = "cancella"
+PAROLA = "CANCELLA"
 GB = 1024 ** 3
 MB = 1024 ** 2
 SECONDI_WINDOWS = 11644473600.0
@@ -70,6 +70,7 @@ IUNKNOWN = "00000000-0000-0000-c000-000000000046"
 BITBUCKET = r"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket"
 POLITICHE = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
 SENSORE = r"Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy"
+REGOLA_SENSORE = r"SOFTWARE\Policies\Microsoft\Windows\StorageSense"
 
 TIPO_QUADERNO = b"officina-archivio-sicuro-cestino"
 TIPO_LISTA = b"officina-archivio-sicuro-cestino-lista"
@@ -131,6 +132,10 @@ PROBLEMI = {
         "non la tocco. Puoi riaccenderlo nelle proprietà del Cestino."),
     "cestino_sconosciuto": (
         "Non riesco a leggere com'è fatto il Cestino su questo disco: non la tocco."),
+    "sensore_memoria": (
+        "Il Sensore memoria di Windows svuota da solo il Cestino prima del ricontrollo dei "
+        "30 giorni: non la tocco. Mettilo a 60 giorni o a «Mai» in Impostazioni, Sistema, "
+        "Archiviazione, Sensore memoria."),
     "troppo_grande": (
         "Questa cartella è troppo grande per il Cestino di questo disco: Windows la "
         "cancellerebbe per sempre. Non la tocco. Mandane una parte alla volta, o "
@@ -637,6 +642,9 @@ class Cestino:
         capienza = self.capienza(volume)
         if capienza.spento:
             return self._problema("cestino_spento")
+        pulizia = self.pulizia()
+        if pulizia is not None and pulizia <= GIORNI:
+            return self._problema("sensore_memoria")
         if capienza.massimo is None:
             return self._problema("cestino_sconosciuto")
         if byte > MARGINE * capienza.massimo:
@@ -1093,11 +1101,19 @@ class CestinoWindows(Cestino):
     def pulizia(self) -> int | None:
         import winreg
 
-        acceso = _registro(winreg.HKEY_CURRENT_USER, SENSORE, "01")
-        giorni = _registro(winreg.HKEY_CURRENT_USER, SENSORE, "256")
-        if acceso == 1 and giorni:
-            return int(giorni)
-        return None
+        acceso = _registro(winreg.HKEY_LOCAL_MACHINE, REGOLA_SENSORE,
+                           "AllowStorageSenseGlobal")
+        if acceso is None:
+            acceso = _registro(winreg.HKEY_CURRENT_USER, SENSORE, "01")
+        if acceso != 1:
+            return None
+        giorni = _registro(winreg.HKEY_LOCAL_MACHINE, REGOLA_SENSORE,
+                           "ConfigStorageSenseRecycleBinCleanupThreshold")
+        if giorni is None:
+            giorni = _registro(winreg.HKEY_CURRENT_USER, SENSORE, "256")
+        if giorni is None:
+            return GIORNI
+        return int(giorni) or None
 
     def sid(self) -> str | None:
         if self._sid is not None:
@@ -1319,8 +1335,9 @@ class Spedizioniere:
             if pulizia:
                 frasi.append(
                     f"Attenzione: Windows svuota da solo il Cestino dopo {pulizia} giorni "
-                    "(Sensore memoria). Se vuoi tenerle nel Cestino più a lungo, spegnilo "
-                    "in Impostazioni, Sistema, Archiviazione.")
+                    "(Sensore memoria): apri l'Officina prima, così faccio il ricontrollo. "
+                    "Se vuoi tenerle nel Cestino più a lungo, mettilo a «Mai» in "
+                    "Impostazioni, Sistema, Archiviazione.")
             if self.quaderno.collaudo == DA_FARE:
                 frasi.append("È la prima volta: dopo, estrai questa cartella dall'archivio "
                              "e guardala con i tuoi occhi.")
@@ -1332,7 +1349,7 @@ class Spedizioniere:
                 "si_puo": bool(buone) and collaudo is None and not self.quaderno.problemi}
 
     def manda(self, esami, parola: str) -> list[dict]:
-        if not isinstance(parola, str) or parola.strip().casefold() != PAROLA:
+        if not isinstance(parola, str) or parola.strip() != PAROLA:
             raise ErroreOfficina("Per mandarle nel Cestino scrivi CANCELLA.",
                                  codice="parola_sbagliata")
         esami = list(esami)
@@ -1774,7 +1791,7 @@ class Mandata(Sottofondo):
         self.risultati: list[dict] = []
 
     def avvia(self, esami, parola: str) -> bool:
-        if not isinstance(parola, str) or parola.strip().casefold() != PAROLA:
+        if not isinstance(parola, str) or parola.strip() != PAROLA:
             raise ErroreOfficina("Per mandarle nel Cestino scrivi CANCELLA.",
                                  codice="parola_sbagliata")
         return self._parti(list(esami), parola)
