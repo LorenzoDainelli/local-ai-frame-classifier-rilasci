@@ -150,6 +150,7 @@ class Esame:
     avvisi: Counter = field(default_factory=Counter)
     contenuti: set[str] = field(default_factory=set)
     posti: set[str] = field(default_factory=set)
+    dove_posti: dict[str, str] = field(default_factory=dict)
     da_controllare: set[str] = field(default_factory=set)
     da_rileggere: set[str] = field(default_factory=set)
     impronta: dict[str, tuple] = field(default_factory=dict)
@@ -162,6 +163,10 @@ class Esame:
 
     def avvisa(self, avviso: str) -> None:
         self.avvisi[avviso] += 1
+
+    def tieni(self, chiave: str, relativo: str) -> None:
+        self.posti.add(chiave)
+        self.dove_posti[chiave] = relativo
 
     def vuoto(self) -> Esame:
         return Esame(cartella=self.cartella, vero=self.vero, radici=list(self.radici),
@@ -809,7 +814,7 @@ class Esaminatore:
             if (sopra is None or sopra.tipo != metadati.CARTELLA
                     or _senza_accesso(sopra.metadati) != dettagli):
                 raise _Rosso("non_sulla_chiavetta")
-            esame.posti.add(posto.chiave)
+            esame.tieni(posto.chiave, relativo)
 
     def _collegamento(self, esame: Esame, riserva: _Riserva, relativo: str,
                       letto) -> None:
@@ -824,7 +829,7 @@ class Esaminatore:
             if (sopra is None or sopra.tipo != metadati.COLLEGAMENTO
                     or _senza_accesso(sopra.metadati) != dettagli):
                 raise _Rosso("non_sulla_chiavetta")
-            esame.posti.add(posto.chiave)
+            esame.tieni(posto.chiave, relativo)
         esame.collegamenti += 1
         if len(esame.bersagli) < ESEMPI:
             esame.bersagli.append({
@@ -893,7 +898,7 @@ class Esaminatore:
                     or not all(self._stesso_contenuto(riserva.elenco, numero)
                                for numero in (posto.contenuto, *salvati.values()))):
                 raise _Rosso("non_sulla_chiavetta")
-            esame.posti.add(posto.chiave)
+            esame.tieni(posto.chiave, relativo)
         for numero, informazioni in principali.items():
             self._byte_per_byte(esame, riserva, assoluto, numero, informazioni)
         for nome in sorted(nascosti):

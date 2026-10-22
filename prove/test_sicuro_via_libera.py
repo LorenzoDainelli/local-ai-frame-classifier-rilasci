@@ -145,6 +145,8 @@ def test_una_cartella_copiata_e_sulla_chiavetta_e_verde(tmp_path, chiave):
     attesi = {via.banco.posto(nome).chiave for nome in ("s", "s/sotto", "s/vuota", *(
         nome[2:] and nome for nome in FOTO))}
     assert esame.posti == attesi
+    assert esame.dove_posti == {via.banco.posto(nome).chiave: nome[2:]
+                                for nome in ("s", "s/sotto", "s/vuota", *FOTO)}
     assert esame.contenuti == {via.numero(nome) for nome in FOTO}
     assert len(esame.contenuti) == 4
     assert esame.avvisi == {} and esame.da_controllare == set()
