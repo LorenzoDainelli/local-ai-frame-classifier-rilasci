@@ -26,6 +26,7 @@ from officina.sicuro.copia import (CUSTODITO, DA_SALTARE, SEGNI_DA_RIFARE, STATI
 from officina.sicuro.dentro import _numero, _resto, _sotto_di, _uguali, _vero
 from officina.sicuro.diretto import Lettore
 from officina.sicuro.disco import WINDOWS, percorso_lungo, scrivi_tutto
+from officina.sicuro.estrai import scelti
 from officina.sicuro.sottofondo import PAUSA_SE_USI, Sottofondo
 from officina.sicuro.via_libera import Esaminatore
 
@@ -95,8 +96,9 @@ DA_GUARDARE = "da_guardare"
 NON_TOCCATA = "non_toccata"
 
 DA_FARE = "da_fare"
+ESTRATTA = "estratta"
 FATTO = "fatto"
-COLLAUDI = (DA_FARE, DA_GUARDARE, FATTO)
+COLLAUDI = (DA_FARE, DA_GUARDARE, ESTRATTA, FATTO)
 
 SVUOTABILE = "svuotabile"
 ASPETTA = "aspetta"
@@ -560,6 +562,16 @@ def _della_voce(impronte: dict, relativo: str) -> dict[str, list]:
         if resto is not None:
             dentro[resto] = list(valore)
     return dentro
+
+
+def _sopra(percorso: str, relativo: str) -> str | None:
+    if not relativo:
+        return percorso
+    if percorso == relativo:
+        return ""
+    if percorso.endswith("/" + relativo):
+        return percorso[:-len(relativo) - 1]
+    return None
 
 
 def _nella_voce(dove: str, relativo: str) -> bool:
@@ -1299,6 +1311,10 @@ class Spedizioniere:
             return ("prima_guarda",
                     "Prima estrai dall'archivio la cartella di prova e guardala con i tuoi "
                     "occhi, poi premi «Ho controllato».")
+        if collaudo == ESTRATTA:
+            return ("prima_guarda",
+                    "Guarda con i tuoi occhi la cartella di prova che hai estratto, poi "
+                    "premi «Ho controllato».")
         if collaudo == DA_FARE and (len(buone) > 1 or any(
                 file > PROVA_FILE or byte > PROVA_BYTE
                 for file, byte in map(self._quanti, buone))):
@@ -1601,10 +1617,71 @@ class Spedizioniere:
         return riprese
 
     def ho_controllato(self) -> None:
-        if self.quaderno.collaudo != DA_GUARDARE:
+        collaudo = self.quaderno.collaudo
+        if collaudo == DA_GUARDARE:
+            raise ErroreOfficina(
+                "Prima estrai dall'archivio la cartella di prova con «Estrai la cartella "
+                "di prova», poi guardala con i tuoi occhi.", codice="prima_estrai")
+        if collaudo != ESTRATTA:
             raise ErroreOfficina("Non c'è nessuna cartella di prova da guardare.",
                                  codice="niente_da_guardare")
         self.quaderno.metti_collaudo(FATTO)
+
+    @staticmethod
+    def _prova_persa() -> ErroreOfficina:
+        return ErroreOfficina(
+            "Non ritrovo nell'archivio tutta la cartella di prova: rimettila al suo posto "
+            "dal Cestino e non mandare altro nel Cestino.", codice="prova_non_estraibile")
+
+    def prova_da_estrarre(self, dove) -> dict:
+        id = self.quaderno.prova
+        if self.quaderno.collaudo not in (DA_GUARDARE, ESTRATTA) or id is None:
+            raise ErroreOfficina("Non c'è nessuna cartella di prova da estrarre.",
+                                 codice="niente_da_guardare")
+        spedizione = next((spedizione for spedizione in self.quaderno.spedizioni()
+                           if spedizione["id"] == id), None)
+        lista = None if spedizione is None else self.quaderno.leggi_lista(id)
+        if lista is None:
+            raise self._prova_persa()
+        quando = spedizione["partenza"] or spedizione["quando"]
+        gruppi: dict[str, tuple[str, set[str]]] = {}
+        for voce in lista["voci"]:
+            for chiave, relativo in voce["posti"].items():
+                posto = self.elenco.posto(chiave)
+                sopra = None if posto is None else _sopra(posto.percorso, relativo)
+                if sopra is None or gruppi.setdefault(
+                        posto.radice, (sopra, set()))[0] != sopra:
+                    raise self._prova_persa()
+                gruppi[posto.radice][1].add(chiave)
+                quando = max(quando, posto.visto)
+        if not gruppi:
+            raise self._prova_persa()
+        presi = {}
+        for radice, (sotto, chiavi) in sorted(gruppi.items()):
+            trovati = {posto.chiave: posto
+                       for posto in scelti(self.elenco, radice, sotto, quando)}
+            if not chiavi <= set(trovati):
+                raise self._prova_persa()
+            presi.update(trovati)
+        radice = min(gruppi, key=lambda radice: (-len(gruppi[radice][1]), radice))
+        sotto, chiavi = gruppi[radice]
+        return {"radice": radice, "sotto": sotto, "quando": quando, "dove": Path(dove),
+                "prova": id, "file": sum(1 for chiave in chiavi
+                                         if presi[chiave].tipo == metadati.FILE)}
+
+    def segna_estratta(self, richiesta: dict, resoconto) -> bool:
+        prova = self.quaderno.prova
+        if prova is None or richiesta.get("prova") != prova:
+            return False
+        if self.quaderno.collaudo == ESTRATTA:
+            return True
+        if (self.quaderno.collaudo != DA_GUARDARE or resoconto is None
+                or not resoconto.verde or resoconto.radice != richiesta.get("radice")
+                or resoconto.sotto != richiesta.get("sotto")
+                or not _intero(richiesta.get("file")) or resoconto.file < richiesta["file"]):
+            return False
+        self.quaderno.metti_collaudo(ESTRATTA)
+        return True
 
     def da_ricontrollare(self) -> list[dict]:
         adesso = self._adesso()

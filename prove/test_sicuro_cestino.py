@@ -20,7 +20,8 @@ from officina.errori import ErroreOfficina
 from officina.sicuro import chiavi
 from officina.sicuro import cestino as modulo
 from officina.sicuro.cestino import (A_META, ASPETTA, ATTESA, ATTIVO, AVVISO, CESTINO,
-                                     CHIAVETTA, DA_FARE, DA_GUARDARE, DIVERSA, FATTO,
+                                     CHIAVETTA, DA_FARE, DA_GUARDARE, DIVERSA, ESTRATTA,
+                                     FATTO,
                                      FINITA, FISSO, IN_PARTE, IN_PARTENZA, LASCIATO, LISTE,
                                      NEL_CESTINO, NON_PARTITA, NON_TOCCATA, PERSA, PERSO,
                                      QUADERNO, RETE, RIMESSO, RISERVA, STRANO, SVUOTABILE,
@@ -32,6 +33,7 @@ from officina.sicuro.chiavetta import ChiavettaStaccata
 from officina.sicuro.copia import CUSTODITO, Fermato
 from officina.sicuro.dentro import _resto, _uguali
 from officina.sicuro.elenco import CONTENUTI, fatto_radice
+from officina.sicuro.estrai import ROSSI, Estrattore, Estrazione, Resoconto
 from officina.sicuro.sottofondo import FERMATO, FINITO
 from officina.sicuro.via_libera import VALIDO_PER
 from prove.test_sicuro_chiavetta import _danneggia, _sveglio, chiave, pezzi_piccoli
@@ -258,6 +260,16 @@ def _aspetta_che(condizione, quanto: float = ATTESA_FILO) -> None:
 
 def _voce(scena: Scena, risultato: dict) -> dict:
     return scena.quaderno.spedizione(risultato["spedizione"])["voci"][0]
+
+
+def _estrai_la_prova(scena: Scena, dove: Path):
+    richiesta = scena.spedizioniere.prova_da_estrarre(dove)
+    banco = scena.via.banco
+    estrattore = Estrattore(banco.archivio, banco.elenco, scena.chiave, apri=banco.apri,
+                            spazio=lambda dove: 1 << 50)
+    resoconto = estrattore.estrai(richiesta["radice"], richiesta["dove"],
+                                  richiesta["sotto"], richiesta["quando"])
+    return richiesta, resoconto
 
 
 def test_le_info_del_cestino_si_scrivono_e_si_rileggono():
@@ -590,11 +602,215 @@ def test_la_prima_volta_una_cartella_piccola_e_poi_si_guarda(tmp_path, chiave):
     assert not spedizioniere.riepilogo([scena.esame("t")])["si_puo"]
     assert _codice(lambda: scena.manda("t")) == "prima_guarda"
     assert scena.via.qui("t").exists()
+    assert _codice(spedizioniere.ho_controllato) == "prima_estrai"
+    assert scena.quaderno.collaudo == DA_GUARDARE
+    richiesta, resoconto = _estrai_la_prova(scena, tmp_path / "fuori")
+    assert spedizioniere.segna_estratta(richiesta, resoconto)
+    assert scena.quaderno.collaudo == ESTRATTA
+    assert spedizioniere.segna_estratta(richiesta, None)
+    assert _codice(lambda: scena.manda("t")) == "prima_guarda"
+    riepilogo = spedizioniere.riepilogo([scena.esame("t")])
+    assert not riepilogo["si_puo"]
+    assert riepilogo["frasi"][-1].startswith("Guarda con i tuoi occhi la cartella di prova")
+    assert scena.via.qui("t").exists() and len(scena.cestino.mosse) == 1
     spedizioniere.ho_controllato()
     assert scena.quaderno.collaudo == FATTO
     assert _codice(spedizioniere.ho_controllato) == "niente_da_guardare"
+    assert _codice(lambda: spedizioniere.prova_da_estrarre(tmp_path / "ancora")) == (
+        "niente_da_guardare")
+    assert not spedizioniere.segna_estratta(richiesta, resoconto)
+    assert scena.quaderno.collaudo == FATTO
     assert scena.manda("t")[0]["esito"] == NEL_CESTINO
     assert scena.quaderno.collaudo == FATTO
+
+
+def _rifatta_dopo(scena: Scena) -> None:
+    scena.via.banco.metti("s/a.jpg", b"un'altra")
+    scena.via.banco.metti("s/nuova.jpg", b"nuova")
+    scena.via.banco.giro()
+
+
+@pytest.mark.parametrize("dopo", [None, lambda scena: scena.via.banco.giro(), _rifatta_dopo])
+def test_la_cartella_di_prova_si_estrae_com_era(tmp_path, chiave, dopo):
+    scena = Scena(tmp_path, chiave, prova_fatta=False)
+    scena.manda()
+    if dopo is not None:
+        dopo(scena)
+    richiesta, resoconto = _estrai_la_prova(scena, tmp_path / "fuori")
+    assert richiesta["radice"] == "r1" and richiesta["sotto"] == "s"
+    assert richiesta["prova"] == scena.quaderno.prova and richiesta["file"] == 5
+    assert richiesta["dove"] == tmp_path / "fuori"
+    assert resoconto.verde and resoconto.file == 5
+    assert _albero(resoconto.cartella) == DENTRO_S
+    assert scena.spedizioniere.segna_estratta(richiesta, resoconto)
+    assert scena.riapri().quaderno.collaudo == ESTRATTA
+    scena.spedizioniere.ho_controllato()
+    assert scena.quaderno.collaudo == FATTO
+
+
+def test_la_prova_si_estrae_anche_col_lavoro_di_sottofondo(tmp_path, chiave):
+    scena = Scena(tmp_path, chiave, prova_fatta=False)
+    scena.manda()
+    richiesta = scena.spedizioniere.prova_da_estrarre(tmp_path / "fuori")
+    banco = scena.via.banco
+    estrazione = Estrazione(banco.archivio, banco.elenco, chiave, sveglio=_sveglio,
+                            apri=banco.apri, spazio=lambda dove: 1 << 50)
+    assert estrazione.avvia([richiesta])
+    _aspetta_che(lambda: estrazione.stato == FINITO)
+    resoconto, = estrazione.resoconti
+    assert _albero(resoconto.cartella) == DENTRO_S
+    assert scena.spedizioniere.segna_estratta(richiesta, resoconto)
+    assert scena.quaderno.collaudo == ESTRATTA
+
+
+def test_la_prova_di_tutta_la_cartella_delle_foto_si_estrae(tmp_path, chiave):
+    foto = {"s/a.jpg": b"a", "t/b.jpg": b"bb", "c.jpg": b"ccc"}
+    scena = Scena(tmp_path, chiave, prova_fatta=False, foto=foto, cartelle=())
+    esame = scena.spedizioniere.esaminatore.esamina(scena.via.foto)
+    assert esame.solo_dentro
+    risultato, = scena.spedizioniere.manda([esame], "CANCELLA")
+    assert risultato["esito"] == NEL_CESTINO and scena.quaderno.collaudo == DA_GUARDARE
+    richiesta, resoconto = _estrai_la_prova(scena, tmp_path / "fuori")
+    assert richiesta["sotto"] == "" and richiesta["file"] == 3
+    assert resoconto.verde and resoconto.file == 3
+    assert _albero(resoconto.cartella) == {"s": None, "t": None, **foto}
+    assert scena.spedizioniere.segna_estratta(richiesta, resoconto)
+
+
+def _rosso(richiesta, resoconto):
+    return richiesta, dataclasses.replace(resoconto, problemi=[(min(ROSSI), "s/a.jpg")])
+
+
+def _togli(nome):
+    def togli(richiesta, resoconto):
+        richiesta = dict(richiesta)
+        del richiesta[nome]
+        return richiesta, resoconto
+    return togli
+
+
+def _cambia(nome, valore):
+    def cambia(richiesta, resoconto):
+        return {**richiesta, nome: valore}, resoconto
+    return cambia
+
+
+def _diverso(**cambi):
+    return lambda richiesta, resoconto: (richiesta, dataclasses.replace(resoconto, **cambi))
+
+
+@pytest.mark.parametrize("guasta", [
+    _diverso(finito=False), _rosso, _diverso(radice="r2"), _diverso(sotto=""),
+    _diverso(sotto="s/sotto"), _diverso(file=4),
+    lambda richiesta, resoconto: (richiesta, None),
+    _cambia("prova", "0123456789abcdef"), _togli("prova"), _togli("file"),
+    _cambia("file", "5"), _cambia("file", True), _cambia("file", -1), _cambia("file", 5.0),
+    _cambia("radice", "r2"), _cambia("sotto", "s/sotto"), _togli("sotto"),
+])
+def test_un_estrazione_non_riuscita_non_basta(tmp_path, chiave, guasta):
+    scena = Scena(tmp_path, chiave, prova_fatta=False)
+    scena.manda()
+    richiesta, resoconto = guasta(*_estrai_la_prova(scena, tmp_path / "fuori"))
+    assert not scena.spedizioniere.segna_estratta(richiesta, resoconto)
+    assert scena.quaderno.collaudo == DA_GUARDARE
+    assert _codice(scena.spedizioniere.ho_controllato) == "prima_estrai"
+
+
+def test_con_un_file_in_piu_l_estrazione_basta(tmp_path, chiave):
+    scena = Scena(tmp_path, chiave, prova_fatta=False)
+    scena.manda()
+    richiesta, resoconto = _estrai_la_prova(scena, tmp_path / "fuori")
+    resoconto = dataclasses.replace(resoconto, file=6)
+    assert scena.spedizioniere.segna_estratta(richiesta, resoconto)
+
+
+@pytest.mark.parametrize("prova_fatta", [True, False])
+def test_senza_cartella_di_prova_non_c_e_niente_da_estrarre(tmp_path, chiave, prova_fatta):
+    scena = Scena(tmp_path, chiave, prova_fatta=prova_fatta)
+    spedizioniere = scena.spedizioniere
+    collaudo = scena.quaderno.collaudo
+    assert _codice(lambda: spedizioniere.prova_da_estrarre(tmp_path / "fuori")) == (
+        "niente_da_guardare")
+    assert _codice(spedizioniere.ho_controllato) == "niente_da_guardare"
+    assert not spedizioniere.segna_estratta({"prova": None, "radice": "r1", "sotto": "s",
+                                             "file": 0}, None)
+    assert scena.quaderno.collaudo == collaudo
+
+
+def test_da_guardare_senza_prova_non_si_estrae(tmp_path, chiave):
+    scena = Scena(tmp_path, chiave, prova_fatta=False)
+    scena.quaderno.metti_collaudo(DA_GUARDARE)
+    assert scena.quaderno.prova is None
+    assert _codice(lambda: scena.spedizioniere.prova_da_estrarre(tmp_path / "fuori")) == (
+        "niente_da_guardare")
+    richiesta = {"prova": None, "radice": "r1", "sotto": "s", "file": 0}
+    resoconto = Resoconto("r1", "s", finito=True)
+    assert not scena.spedizioniere.segna_estratta(richiesta, resoconto)
+    assert scena.quaderno.collaudo == DA_GUARDARE
+
+
+def _senza_lista(scena, monkeypatch):
+    (scena.via.banco.archivio / LISTE / f"{scena.quaderno.prova}.lista").unlink()
+    (scena.via.banco.archivio / LISTE / f"{scena.quaderno.prova}.riserva.lista").unlink()
+
+
+def _senza_spedizioni(scena, monkeypatch):
+    monkeypatch.setattr(scena.quaderno, "spedizioni", lambda: [])
+
+
+def _lista_vuota(scena, monkeypatch):
+    monkeypatch.setattr(scena.quaderno, "leggi_lista", lambda id: {"id": id, "voci": []})
+
+
+def _posto_cambiato(cambia):
+    def guasto(scena, monkeypatch):
+        elenco = scena.via.banco.elenco
+        vero = elenco.posto
+        tolto = elenco.attuale("r1", "s/a.jpg").chiave
+        monkeypatch.setattr(elenco, "posto", lambda chiave: cambia(vero(chiave))
+                            if chiave == tolto else vero(chiave))
+    return guasto
+
+
+def _niente_scelto(scena, monkeypatch):
+    monkeypatch.setattr(modulo, "scelti", lambda *argomenti: [])
+
+
+def _uno_in_meno(scena, monkeypatch):
+    vero = modulo.scelti
+    monkeypatch.setattr(modulo, "scelti", lambda *argomenti: [
+        posto for posto in vero(*argomenti) if posto.percorso != "s/sotto/c.jpg"])
+
+
+@pytest.mark.parametrize("guasto", [
+    _senza_lista, _senza_spedizioni, _lista_vuota,
+    _posto_cambiato(lambda posto: None),
+    _posto_cambiato(lambda posto: dataclasses.replace(posto, percorso="t/a.jpg")),
+    _posto_cambiato(lambda posto: dataclasses.replace(posto, percorso="a.jpg")),
+    _posto_cambiato(lambda posto: dataclasses.replace(posto, percorso="x/s/b.jpg")),
+    _posto_cambiato(lambda posto: dataclasses.replace(posto, radice="r2")),
+    _niente_scelto, _uno_in_meno,
+])
+def test_se_la_prova_non_e_tutta_nell_archivio_si_avvisa(tmp_path, chiave, monkeypatch,
+                                                       guasto):
+    scena = Scena(tmp_path, chiave, prova_fatta=False)
+    scena.manda()
+    guasto(scena, monkeypatch)
+    assert _codice(lambda: scena.spedizioniere.prova_da_estrarre(tmp_path / "fuori")) == (
+        "prova_non_estraibile")
+    assert scena.quaderno.collaudo == DA_GUARDARE
+    assert not (tmp_path / "fuori").exists()
+
+
+def test_la_prova_si_trova_anche_se_l_orologio_era_indietro(tmp_path, chiave):
+    scena = Scena(tmp_path, chiave, prova_fatta=False, orologio=lambda: 5.0)
+    assert scena.manda()[0]["esito"] == NEL_CESTINO
+    assert scena.quaderno.spedizione(scena.quaderno.prova)["partenza"] == 5.0
+    richiesta, resoconto = _estrai_la_prova(scena, tmp_path / "fuori")
+    voce, = scena.quaderno.leggi_lista(scena.quaderno.prova)["voci"]
+    elenco = scena.via.banco.elenco
+    assert richiesta["quando"] == max(elenco.posto(chiave).visto for chiave in voce["posti"])
+    assert resoconto.verde and _albero(resoconto.cartella) == DENTRO_S
 
 
 @pytest.mark.parametrize("cosa", ["file", "byte"])
