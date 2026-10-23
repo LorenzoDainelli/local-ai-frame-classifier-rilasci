@@ -288,16 +288,28 @@ def _controlla_la_qualita(archivio) -> None:
 
 @strada.post("/api/miglioramento/qualita/controlla")
 def api_qualita_controlla():
-    archivio = accesso.aperto()
+    controlla_la_qualita_in(accesso.aperto())
+    return _come_va_il_controllo()
+
+
+def controlla_la_qualita_in(archivio) -> bool:
+    if comune.lavoro_qualita.sta_lavorando:
+        return False
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.QUALITA):
+        return False
     comune.ferma_la_qualita.clear()
     comune.lavoro_qualita.numeri = {"fatti": 0, "totale": 0, "corretti": 0, "non_si_aprono": 0}
     if in_disparte.A_PARTE:
-        in_disparte.lancia(comune.lavoro_qualita, "qualita", archivio.dove.nome,
-                           "officina.web.strade.miglioramento:qualita_di_la",
-                           ferma_con="officina.web.strade.miglioramento:ferma_la_qualita_di_la")
-    else:
-        comune.lavoro_qualita.parti(lambda: _controlla_la_qualita(archivio), "qualita")
-    return comune.lavoro_qualita.come_va()
+        return in_disparte.lancia(
+            comune.lavoro_qualita, "qualita", archivio.dove.nome,
+            "officina.web.strade.miglioramento:qualita_di_la",
+            ferma_con="officina.web.strade.miglioramento:ferma_la_qualita_di_la")
+    return comune.lavoro_qualita.parti(lambda: _controlla_la_qualita(archivio), "qualita")
+
+
+def _come_va_il_controllo() -> dict:
+    return {**comune.lavoro_qualita.come_va(),
+            "aspetta_la_copia": sosta.per_la_copia.aspetta_la_copia(sosta.QUALITA)}
 
 
 def qualita_di_la(archivio):
@@ -312,14 +324,20 @@ def ferma_la_qualita_di_la() -> None:
 
 @strada.post("/api/miglioramento/qualita/ferma")
 def api_qualita_ferma():
+    sosta.per_la_copia.fermato_da_te(sosta.QUALITA)
+    ferma_il_controllo()
+    return _come_va_il_controllo()
+
+
+def ferma_il_controllo(aspetta: float = 0.0) -> None:
     comune.ferma_la_qualita.set()
     in_disparte.ferma("qualita")
-    return comune.lavoro_qualita.come_va()
+    comune.lavoro_qualita.aspetta_che_finisca(aspetta)
 
 
 @strada.get("/api/miglioramento/qualita/controllo")
 def api_qualita_controllo():
-    return comune.lavoro_qualita.come_va()
+    return _come_va_il_controllo()
 
 
 @strada.post("/api/miglioramento/qualita/metti")

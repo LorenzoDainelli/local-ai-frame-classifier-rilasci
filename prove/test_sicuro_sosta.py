@@ -515,11 +515,12 @@ def test_si_fermano_dice_chi_si_fermerebbe(banco, scritti):
 
 
 def test_i_nomi_si_possono_dire():
-    assert set(NOMI) == set(ORDINE) and len(ORDINE) == 4
+    assert set(NOMI) == set(ORDINE) and len(ORDINE) == len(set(ORDINE)) == 11
+    assert ORDINE[0] == IA
     assert NOMI[GARA] == "la gara dei video"
     assert sosta.ASPETTA_LA_COPIA.format(chi=NOMI[IA]) == (
         "L'Archivio sicuro sta facendo la prima copia: l'intelligenza artificiale parte "
-        "da solo appena finisce.")
+        "appena la copia è finita.")
 
 
 def test_smettere_mentre_chiedo_non_cambia_niente(banco):
@@ -676,11 +677,11 @@ def _con_lavoro(acceso: bool):
                            ferma=lambda aspetta=0.0: fermate.append(aspetta))
 
 
-def test_di_serie_ci_sono_tutti_e_quattro():
+def test_di_serie_ci_sono_tutti():
     di_serie = sosta._di_serie()
     assert list(di_serie) == list(ORDINE)
     assert [type(lavoro).__name__ for lavoro in di_serie.values()] == [
-        "_Ia", "_Miglioramento", "_Ritocco", "_Gara"]
+        "_Ia", *["_DaSolo"] * 7, "_Miglioramento", "_Ritocco", "_Gara"]
 
 
 def test_l_intelligenza_si_guarda_si_ferma_e_riparte(monkeypatch):
@@ -1030,9 +1031,11 @@ def test_fermare_dalle_pagine_vuol_dire_non_ripartire(cliente, per_la_copia, mon
         per_la_copia.sosta.aspetta(nome)
     cliente.post("/intelligenza/ferma", follow_redirects=False)
     cliente.post("/miglioramento/ferma", follow_redirects=False)
-    assert per_la_copia.sosta.in_attesa() == [RITOCCO, GARA]
+    assert per_la_copia.sosta.in_attesa() == [
+        nome for nome in ORDINE if nome not in (IA, MIGLIORAMENTO)]
     cliente.post("/api/ritocco/coda/ferma")
-    assert per_la_copia.sosta.in_attesa() == [GARA]
+    assert per_la_copia.sosta.in_attesa() == [
+        nome for nome in ORDINE if nome not in (IA, MIGLIORAMENTO, RITOCCO)]
 
 
 def test_avviare_dalla_pagina_durante_la_copia_aspetta(cliente, per_la_copia, monkeypatch):

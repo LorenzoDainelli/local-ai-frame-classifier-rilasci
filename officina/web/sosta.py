@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import threading
 
 from officina import registro
@@ -9,15 +10,27 @@ ASPETTA_A_FERMARSI = 10.0
 DA_RIPARTIRE = "sicuro_da_ripartire"
 
 IA = "ia"
+IMPRONTE = "impronte"
+VOLTI = "volti"
+SCRITTE = "scritte"
+CHI_E = "chi_e"
+FACCE = "facce_insegnate"
+DOPPIONI = "doppioni"
+QUALITA = "qualita"
 MIGLIORAMENTO = "miglioramento"
 RITOCCO = "ritocco"
 GARA = "gara_video"
-ORDINE = (IA, MIGLIORAMENTO, RITOCCO, GARA)
-NOMI = {IA: "l'intelligenza artificiale", MIGLIORAMENTO: "il miglioramento",
-        RITOCCO: "la coda del ritocco", GARA: "la gara dei video"}
+ORDINE = (IA, IMPRONTE, VOLTI, SCRITTE, CHI_E, FACCE, DOPPIONI, QUALITA, MIGLIORAMENTO,
+          RITOCCO, GARA)
+NOMI = {IA: "l'intelligenza artificiale", IMPRONTE: "il calcolo delle impronte",
+        VOLTI: "la ricerca dei volti", SCRITTE: "la lettura delle scritte",
+        CHI_E: "la ricerca di chi è senza volto", FACCE: "lo studio delle facce insegnate",
+        DOPPIONI: "la ricerca dei doppioni", QUALITA: "il controllo degli scatti",
+        MIGLIORAMENTO: "il miglioramento", RITOCCO: "la coda del ritocco",
+        GARA: "la gara dei video"}
 
-ASPETTA_LA_COPIA = ("L'Archivio sicuro sta facendo la prima copia: {chi} parte da solo "
-                    "appena finisce.")
+ASPETTA_LA_COPIA = ("L'Archivio sicuro sta facendo la prima copia: {chi} parte appena "
+                    "la copia è finita.")
 
 
 class _Ia:
@@ -107,8 +120,66 @@ class _Gara:
         coda_ritocco.parti_la_gara(archivio)
 
 
+class _DaSolo:
+
+    def __init__(self, modulo: str, lavoro: str, ferma: str, parti: str,
+                 memoria: str = "", con_la_fila: str = ""):
+        self._modulo = modulo
+        self._lavoro = lavoro
+        self._ferma = ferma
+        self._parti = parti
+        self._memoria = memoria
+        self._con_la_fila = con_la_fila
+
+    def _funzione(self, nome: str):
+        return getattr(importlib.import_module(self._modulo), nome)
+
+    def _fila_accesa(self) -> bool:
+        from officina.web.strade import comune
+
+        return bool(self._con_la_fila) and comune.lavoro_ia.sta_lavorando
+
+    def acceso(self) -> bool:
+        from officina.web.strade import comune
+
+        if self._fila_accesa():
+            return False
+        return getattr(comune, self._lavoro).sta_lavorando
+
+    def memoria(self) -> dict:
+        return dict(self._funzione(self._memoria)()) if self._memoria else {}
+
+    def ferma(self) -> None:
+        self._funzione(self._ferma)(2.0)
+
+    def riparti(self, archivio, memoria: dict) -> None:
+        from officina.web.strade import comune
+
+        if self._fila_accesa() and self._con_la_fila in comune.fila_ia["scelti"]:
+            return
+        self._funzione(self._parti)(archivio, **memoria)
+
+
 def _di_serie() -> dict:
-    return {IA: _Ia(), MIGLIORAMENTO: _Miglioramento(), RITOCCO: _Ritocco(), GARA: _Gara()}
+    return {
+        IA: _Ia(),
+        IMPRONTE: _DaSolo("officina.web.strade.misura", "lavoro_impronte_passata",
+                          "ferma_le_impronte", "parti_le_impronte_per", "impronte_chieste",
+                          con_la_fila="impronte"),
+        VOLTI: _DaSolo("officina.web.strade.persone", "lavoro_volti",
+                       "ferma_la_ricerca_dei_volti", "trova_i_volti_in",
+                       con_la_fila="volti"),
+        SCRITTE: _DaSolo("officina.web.strade.intelligenza", "lavoro_parole",
+                         "ferma_la_lettura", "leggi_le_scritte_in", con_la_fila="scritte"),
+        CHI_E: _DaSolo("officina.web.strade.etichetta", "lavoro_chi_e", "ferma_chi_e",
+                       "rifai_chi_e"),
+        FACCE: _DaSolo("officina.web.strade.persone", "lavoro_riferimento", "ferma_le_facce",
+                       "insegna_le_facce", "facce_chieste"),
+        DOPPIONI: _DaSolo("officina.web.strade.doppioni", "lavoro_doppioni",
+                          "ferma_i_doppioni", "cerca_i_doppioni", "doppioni_chiesti"),
+        QUALITA: _DaSolo("officina.web.strade.miglioramento", "lavoro_qualita",
+                         "ferma_il_controllo", "controlla_la_qualita_in"),
+        MIGLIORAMENTO: _Miglioramento(), RITOCCO: _Ritocco(), GARA: _Gara()}
 
 
 def _dalla_carta():

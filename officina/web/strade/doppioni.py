@@ -11,10 +11,13 @@ from officina.doppioni import motore as doppioni_motore
 from officina.modello import scatti
 from officina.web import vista
 
-from officina.web import in_disparte
+from officina.web import in_disparte, sosta
 from officina.web.strade import base, comune
 
 strada = APIRouter()
+
+GUARDA = "guarda"
+CONTA = "conta"
 
 
 def _gruppi_per_schermo(gruppi: list[dict]) -> list[dict]:
@@ -86,19 +89,33 @@ def pagina_doppioni(richiesta: Request, gruppo: str = ""):
 
 @strada.post("/doppioni/guarda")
 def doppioni_guarda(dove_torno: str = Form("")):
-    _cerca_i_doppioni(accesso.aperto())
+    cerca_i_doppioni(accesso.aperto())
     return RedirectResponse(base.torna_a(dove_torno, "/doppioni"), status_code=303)
 
 
-def _cerca_i_doppioni(archivio) -> None:
+def cerca_i_doppioni(archivio, come: str = GUARDA) -> bool:
+    if come not in (GUARDA, CONTA):
+        raise ValueError(come)
     if comune.lavoro_doppioni.sta_lavorando:
-        return
+        return False
+    if not archivio.di_prova:
+        if come == CONTA and sosta.per_la_copia.aspetta_la_copia(sosta.DOPPIONI):
+            return False
+        if sosta.per_la_copia.aspetta(sosta.DOPPIONI, come=come):
+            return False
+    comune.doppioni_come = come
+    if come == CONTA:
+        return _conta(archivio)
     if in_disparte.A_PARTE:
-        in_disparte.lancia(comune.lavoro_doppioni, "doppioni", archivio.dove.nome,
-                           "officina.web.strade.doppioni:doppioni_di_la",
-                           ferma_con="officina.web.strade.doppioni:ferma_di_la")
-        return
+        return in_disparte.lancia(comune.lavoro_doppioni, "doppioni", archivio.dove.nome,
+                                  "officina.web.strade.doppioni:doppioni_di_la",
+                                  ferma_con="officina.web.strade.doppioni:ferma_di_la")
     _cerca_qui(archivio)
+    return True
+
+
+def doppioni_chiesti() -> dict:
+    return {"come": comune.doppioni_come}
 
 
 def doppioni_di_la(archivio):
@@ -129,7 +146,7 @@ def doppioni_dopo_l_importazione() -> None:
     if accesso.in_prova():
         return
     try:
-        _cerca_i_doppioni(accesso.aperto())
+        cerca_i_doppioni(accesso.aperto())
     except Exception as guasto:
         registro.errore("doppioni.dopo_importazione",
                         **registro.dove_si_e_rotto(guasto))
@@ -159,16 +176,16 @@ def _guarda_e_conta(archivio, passata) -> None:
 
 @strada.post("/doppioni/conta")
 def doppioni_conta():
-    archivio = accesso.aperto()
-    if comune.lavoro_doppioni.sta_lavorando:
-        return RedirectResponse("/doppioni", status_code=303)
+    cerca_i_doppioni(accesso.aperto(), CONTA)
+    return RedirectResponse("/doppioni", status_code=303)
+
+
+def _conta(archivio) -> bool:
     comune.lavoro_doppioni.numeri = {"fatte": 0, "totale": 0, "gruppi": None}
     if in_disparte.A_PARTE:
-        in_disparte.lancia(comune.lavoro_doppioni, "doppioni", archivio.dove.nome,
-                           "officina.web.strade.doppioni:conto_di_la")
-    else:
-        comune.lavoro_doppioni.parti(lambda: _solo_il_conto(archivio), "doppioni")
-    return RedirectResponse("/doppioni", status_code=303)
+        return in_disparte.lancia(comune.lavoro_doppioni, "doppioni", archivio.dove.nome,
+                                  "officina.web.strade.doppioni:conto_di_la")
+    return comune.lavoro_doppioni.parti(lambda: _solo_il_conto(archivio), "doppioni")
 
 
 def _solo_il_conto(archivio) -> None:
@@ -182,17 +199,25 @@ def _solo_il_conto(archivio) -> None:
 
 @strada.post("/doppioni/ferma")
 def doppioni_ferma():
+    sosta.per_la_copia.fermato_da_te(sosta.DOPPIONI)
+    ferma_i_doppioni()
+    return RedirectResponse("/doppioni", status_code=303)
+
+
+def ferma_i_doppioni(aspetta: float = 0.0) -> None:
     if comune.passata_doppioni is not None:
         comune.passata_doppioni.ferma()
     in_disparte.ferma("doppioni")
-    return RedirectResponse("/doppioni", status_code=303)
+    comune.lavoro_doppioni.aspetta_che_finisca(aspetta)
 
 
 @strada.get("/api/doppioni")
 def api_doppioni():
     with accesso.aperto().lettura() as connessione:
         conto = doppioni_decisioni.il_conto(connessione)
-    return JSONResponse({**comune.lavoro_doppioni.come_va(), "conto": conto})
+    aspetta = sosta.per_la_copia.aspetta_la_copia(sosta.DOPPIONI)
+    return JSONResponse({**comune.lavoro_doppioni.come_va(), "conto": conto,
+                         "aspetta_la_copia": aspetta})
 
 
 @strada.get("/api/doppioni/gruppi")

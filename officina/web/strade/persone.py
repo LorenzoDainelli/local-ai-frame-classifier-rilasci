@@ -18,7 +18,7 @@ from officina.volti import motore as volti_motore
 from officina.volti import rilevatore as volti_rilevatore
 from officina.volti import riferimento as volti_riferimento
 
-from officina.web import in_disparte
+from officina.web import in_disparte, lavori, sosta
 from officina.web.strade import base, comune
 
 strada = APIRouter()
@@ -315,19 +315,27 @@ def una_faccia_finta(indice: int, quale: str):
 
 @strada.post("/persone/trova")
 def trova_i_volti():
+    trova_i_volti_in(accesso.aperto())
+    return RedirectResponse("/intelligenza", status_code=303)
 
-    archivio = accesso.aperto()
-    if not in_disparte.A_PARTE:
-        parti_i_volti(archivio)
-        return RedirectResponse("/intelligenza", status_code=303)
+
+def trova_i_volti_in(archivio) -> bool:
     manca = volti_rilevatore.cosa_manca(archivio.dove.modelli)
     if manca:
         raise ErroreOfficina(manca)
-    if in_disparte.lancia(comune.lavoro_volti, "volti", archivio.dove.nome,
-                          "officina.web.strade.persone:volti_di_la",
-                          ferma_con="officina.web.strade.persone:ferma_i_volti_di_la"):
-        comune.passata_volti = in_disparte.PassataRiflessa("volti", a="volti")
-    return RedirectResponse("/intelligenza", status_code=303)
+    if comune.lavoro_volti.sta_lavorando:
+        return False
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.VOLTI):
+        return False
+    if not in_disparte.A_PARTE:
+        parti_i_volti(archivio)
+        return True
+    if not in_disparte.lancia(comune.lavoro_volti, "volti", archivio.dove.nome,
+                              "officina.web.strade.persone:volti_di_la",
+                              ferma_con="officina.web.strade.persone:ferma_i_volti_di_la"):
+        return False
+    comune.passata_volti = in_disparte.PassataRiflessa("volti", a="volti")
+    return True
 
 
 def volti_di_la(archivio):
@@ -426,31 +434,55 @@ def insegna_altre_facce(persona_id: int, cartella: str = Form("")):
         raise ErroreOfficina(
             "Manca la cartella da leggere: scrivi il percorso della cartella "
             "con i suoi ritratti.")
-    archivio = accesso.aperto()
+    insegna_le_facce(accesso.aperto(), persona_id, scritto)
+    return RedirectResponse(f"/persone/{persona_id}#insegna", status_code=303)
+
+
+def insegna_le_facce(archivio, persona_id: int, cartella: str) -> bool:
     manca = volti_rilevatore.cosa_manca(archivio.dove.modelli)
     if manca:
         raise ErroreOfficina(manca)
     if comune.lavoro_riferimento.sta_lavorando:
-        return RedirectResponse(f"/persone/{persona_id}#insegna", status_code=303)
-
-    dove = Path(scritto)
+        return False
+    dove = Path(cartella)
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(
+            sosta.FACCE, persona_id=persona_id, cartella=str(dove)):
+        return False
+    comune.facce_chieste = {"persona_id": persona_id, "cartella": str(dove)}
+    comune.facce_basta.clear()
     if in_disparte.A_PARTE:
-        in_disparte.lancia(comune.lavoro_riferimento, "riferimento", archivio.dove.nome,
-                           "officina.web.strade.persone:facce_di_la", (persona_id, str(dove)))
-    else:
-        comune.lavoro_riferimento.parti(
-            lambda: _impara_le_facce(archivio, persona_id, dove), "riferimento")
-    return RedirectResponse(f"/persone/{persona_id}#insegna", status_code=303)
+        return in_disparte.lancia(
+            comune.lavoro_riferimento, "riferimento", archivio.dove.nome,
+            "officina.web.strade.persone:facce_di_la", (persona_id, str(dove)),
+            ferma_con="officina.web.strade.persone:ferma_le_facce_di_la")
+    return comune.lavoro_riferimento.parti(
+        lambda: _impara_le_facce(archivio, persona_id, dove), "riferimento")
+
+
+def facce_chieste() -> dict:
+    return dict(comune.facce_chieste)
+
+
+def ferma_le_facce(aspetta: float = lavori.ATTESA_DOPO_FERMA) -> None:
+    comune.facce_basta.set()
+    in_disparte.ferma("riferimento")
+    comune.lavoro_riferimento.aspetta_che_finisca(aspetta)
 
 
 def facce_di_la(archivio, persona_id: int, cartella: str):
+    comune.facce_basta.clear()
     comune.lavoro_riferimento.parti(
         lambda: _impara_le_facce(archivio, persona_id, Path(cartella)), "riferimento")
     return comune.lavoro_riferimento
 
 
+def ferma_le_facce_di_la() -> None:
+    comune.facce_basta.set()
+
+
 def _impara_le_facce(archivio, persona_id: int, cartella: Path) -> None:
-    raccolto = volti_riferimento.insegna(archivio, persona_id, cartella)
+    raccolto = volti_riferimento.insegna(archivio, persona_id, cartella,
+                                         fermato=comune.facce_basta.is_set)
     comune.lavoro_riferimento.di(raccolto.a_parole())
     for nome in raccolto.con_piu_facce:
         comune.lavoro_riferimento.di(f"saltata «{nome}»: dentro c'è più di una faccia, "
@@ -478,17 +510,24 @@ def togli_faccia_insegnata(riferimento_id: int, persona_id: int = Form(0)):
 
 @strada.get("/api/riferimento")
 def api_riferimento():
-    return JSONResponse(comune.lavoro_riferimento.come_va())
+    aspetta = sosta.per_la_copia.aspetta_la_copia(sosta.FACCE)
+    return JSONResponse({**comune.lavoro_riferimento.come_va(), "aspetta_la_copia": aspetta})
 
 
 @strada.post("/persone/trova/ferma")
 def ferma_i_volti():
+    sosta.per_la_copia.fermato_da_te(sosta.VOLTI)
+    ferma_la_ricerca_dei_volti()
+    return RedirectResponse("/intelligenza", status_code=303)
+
+
+def ferma_la_ricerca_dei_volti(aspetta: float = lavori.ATTESA_DOPO_FERMA) -> None:
     if comune.passata_volti is not None:
         comune.passata_volti.ferma()
-    comune.lavoro_volti.aspetta_che_finisca()
-    return RedirectResponse("/intelligenza", status_code=303)
+    comune.lavoro_volti.aspetta_che_finisca(aspetta)
 
 
 @strada.get("/api/volti")
 def api_volti():
-    return JSONResponse(comune.lavoro_volti.come_va())
+    aspetta = sosta.per_la_copia.aspetta_la_copia(sosta.VOLTI)
+    return JSONResponse({**comune.lavoro_volti.come_va(), "aspetta_la_copia": aspetta})

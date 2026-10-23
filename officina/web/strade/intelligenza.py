@@ -15,28 +15,38 @@ from officina.volti import rilevatore as volti_rilevatore
 from officina.corpi import motore as corpi_motore
 from officina.corpi import rilevatore as corpi_rilevatore
 
-from officina.web import in_disparte, sosta
+from officina.web import in_disparte, lavori, sosta
 from officina.web.strade import base, comune, misura, persone
 
 strada = APIRouter()
 
 @strada.post("/parole/leggi")
 def leggi_le_scritte():
+    leggi_le_scritte_in(accesso.aperto())
+    return RedirectResponse("/intelligenza", status_code=303)
+
+
+def leggi_le_scritte_in(archivio) -> bool:
     from officina import parole as parole_mod
 
-    archivio = accesso.aperto()
-    if not in_disparte.A_PARTE:
-        _parti_le_scritte(archivio)
-        return RedirectResponse("/intelligenza", status_code=303)
     if not parole_mod.in_casa(archivio.dove.modelli):
         raise ErroreOfficina(
             "Il lettore delle scritte non è ancora in casa. Si scarica da "
             "Stato, nella carta «I modelli».")
-    if in_disparte.lancia(comune.lavoro_parole, "scritte", archivio.dove.nome,
-                          "officina.web.strade.intelligenza:scritte_di_la",
-                          ferma_con="officina.web.strade.intelligenza:ferma_le_scritte_di_la"):
-        comune.passata_parole = in_disparte.PassataRiflessa("scritte", a="scritte")
-    return RedirectResponse("/intelligenza", status_code=303)
+    if comune.lavoro_parole.sta_lavorando:
+        return False
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.SCRITTE):
+        return False
+    if not in_disparte.A_PARTE:
+        _parti_le_scritte(archivio)
+        return True
+    if not in_disparte.lancia(
+            comune.lavoro_parole, "scritte", archivio.dove.nome,
+            "officina.web.strade.intelligenza:scritte_di_la",
+            ferma_con="officina.web.strade.intelligenza:ferma_le_scritte_di_la"):
+        return False
+    comune.passata_parole = in_disparte.PassataRiflessa("scritte", a="scritte")
+    return True
 
 
 def scritte_di_la(archivio):
@@ -91,15 +101,21 @@ def _leggi_le_scritte(passata) -> None:
 
 @strada.post("/parole/ferma")
 def ferma_le_scritte():
+    sosta.per_la_copia.fermato_da_te(sosta.SCRITTE)
+    ferma_la_lettura()
+    return RedirectResponse("/intelligenza", status_code=303)
+
+
+def ferma_la_lettura(aspetta: float = lavori.ATTESA_DOPO_FERMA) -> None:
     if comune.passata_parole is not None:
         comune.passata_parole.ferma()
-    comune.lavoro_parole.aspetta_che_finisca()
-    return RedirectResponse("/intelligenza", status_code=303)
+    comune.lavoro_parole.aspetta_che_finisca(aspetta)
 
 
 @strada.get("/api/parole")
 def api_parole():
-    return JSONResponse(comune.lavoro_parole.come_va())
+    aspetta = sosta.per_la_copia.aspetta_la_copia(sosta.SCRITTE)
+    return JSONResponse({**comune.lavoro_parole.come_va(), "aspetta_la_copia": aspetta})
 
 
 def parti_i_corpi(archivio) -> None:

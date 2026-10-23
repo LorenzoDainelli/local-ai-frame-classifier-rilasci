@@ -11,7 +11,7 @@ from officina.modello import etichette, impronte as magazzino_impronte, nodi, sc
 from officina.modello.scatti import Filtro
 from officina.web import vista
 
-from officina.web import in_disparte
+from officina.web import in_disparte, lavori, sosta
 from officina.web.strade import base, comune
 
 strada = APIRouter()
@@ -288,27 +288,35 @@ def _quali_in_coda(descrittore: str, archivio) -> list[str]:
 
 @strada.post("/misura/impronte")
 def parti_impronte(descrittore: str = Form(""), dove_torno: str = Form("")):
+    parti_le_impronte_per(accesso.aperto(), descrittore)
+    return RedirectResponse(base.torna_a(dove_torno, "/intelligenza"), status_code=303)
 
+
+def parti_le_impronte_per(archivio, descrittore: str = "") -> bool:
     from officina.impronte.motore import Coda
 
-    dove_dopo = base.torna_a(dove_torno, "/intelligenza")
     if comune.lavoro_impronte_passata.sta_lavorando:
-        return RedirectResponse(dove_dopo, status_code=303)
-
-    archivio = accesso.aperto()
+        return False
     quali = _quali_in_coda(descrittore, archivio)
     if not quali:
-        return RedirectResponse(dove_dopo, status_code=303)
+        return False
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.IMPRONTE,
+                                                            descrittore=descrittore):
+        return False
+    comune.descrittore_chiesto = descrittore
     if in_disparte.A_PARTE:
-        in_disparte.lancia(comune.lavoro_impronte_passata, "impronte", archivio.dove.nome,
-                           "officina.web.strade.misura:impronte_di_la", (quali,),
-                           ferma_con="officina.web.strade.misura:ferma_di_la",
-                           racconta="officina.web.in_disparte:racconta_la_coda",
-                           applica="officina.web.in_disparte:applica_la_coda")
-        return RedirectResponse(dove_dopo, status_code=303)
+        return in_disparte.lancia(
+            comune.lavoro_impronte_passata, "impronte", archivio.dove.nome,
+            "officina.web.strade.misura:impronte_di_la", (quali,),
+            ferma_con="officina.web.strade.misura:ferma_di_la",
+            racconta="officina.web.in_disparte:racconta_la_coda",
+            applica="officina.web.in_disparte:applica_la_coda")
     comune.coda_impronte = Coda(archivio, quali)
-    comune.lavoro_impronte_passata.parti(comune.coda_impronte.esegui, "impronte")
-    return RedirectResponse(dove_dopo, status_code=303)
+    return comune.lavoro_impronte_passata.parti(comune.coda_impronte.esegui, "impronte")
+
+
+def impronte_chieste() -> dict:
+    return {"descrittore": comune.descrittore_chiesto}
 
 
 def impronte_di_la(archivio, quali: list[str]):
@@ -336,10 +344,15 @@ def parti_le_impronte(archivio) -> None:
 
 @strada.post("/misura/impronte/ferma")
 def ferma_impronte():
+    sosta.per_la_copia.fermato_da_te(sosta.IMPRONTE)
+    ferma_le_impronte()
+    return RedirectResponse("/intelligenza", status_code=303)
+
+
+def ferma_le_impronte(aspetta: float = lavori.ATTESA_DOPO_FERMA) -> None:
     if comune.coda_impronte is not None:
         comune.coda_impronte.ferma()
-    comune.lavoro_impronte_passata.aspetta_che_finisca()
-    return RedirectResponse("/intelligenza", status_code=303)
+    comune.lavoro_impronte_passata.aspetta_che_finisca(aspetta)
 
 
 def _perche_saltati(motivi: dict[str, int]) -> str:
@@ -352,9 +365,11 @@ def _perche_saltati(motivi: dict[str, int]) -> str:
 
 @strada.get("/api/impronte")
 def api_impronte():
+    aspetta = sosta.per_la_copia.aspetta_la_copia(sosta.IMPRONTE)
     if comune.coda_impronte is None:
         return JSONResponse({"sta_lavorando": False,
-                             "guasto": comune.lavoro_impronte_passata.guasto})
+                             "guasto": comune.lavoro_impronte_passata.guasto,
+                             "aspetta_la_copia": aspetta})
     from officina.descrittori import SCHEDE
 
     adesso = comune.coda_impronte.adesso
@@ -388,6 +403,7 @@ def api_impronte():
         "adesso_resta": di_adesso.resta if di_adesso else 0,
         "adesso_impronte": di_adesso.impronte if di_adesso else 0,
         "adesso_quanto_manca": di_adesso.quanto_manca() if di_adesso else "",
+        "aspetta_la_copia": aspetta,
     })
 
 

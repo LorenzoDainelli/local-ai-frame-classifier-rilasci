@@ -60,7 +60,7 @@ def immagini_nella(cartella: Path) -> list[Path]:
 
 
 def insegna(archivio: Archivio, persona_id: int, cartella: Path,
-            rilevatore=None) -> Raccolto:
+            rilevatore=None, fermato=None) -> Raccolto:
     with archivio.lettura() as connessione:
         if persone.per_id(connessione, persona_id) is None:
             raise ErroreOfficina("Questa persona non c'è più.",
@@ -78,6 +78,8 @@ def insegna(archivio: Archivio, persona_id: int, cartella: Path,
     versione = rilevatore.versione
     try:
         for percorso in file:
+            if fermato is not None and fermato():
+                break
             fuori.lette += 1
             try:
                 immagine = lettura.copia_di_lavoro(percorso, LATO_DI_LAVORO)

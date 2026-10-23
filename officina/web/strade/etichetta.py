@@ -10,7 +10,7 @@ from officina.corpi import chi_e
 from officina.errori import ErroreOfficina
 from officina.modello import etichette, nodi, ripassi, persone, scatti
 from officina.modello import posti as posti_mod
-from officina.web import etichettatura, vista
+from officina.web import etichettatura, lavori, sosta, vista
 
 from officina.web.strade import albero, base, comune
 
@@ -364,20 +364,39 @@ def api_corpo_risposta(corpo_id: int = Form(...), persona_id: int = Form(...),
 
 def _rifai_chi_e_con_calma() -> None:
     comune.ultima_risposta_dei_corpi["quando"] = time.monotonic()
+    rifai_chi_e(accesso.aperto())
+
+
+def rifai_chi_e(archivio) -> bool:
     if comune.lavoro_chi_e.sta_lavorando or comune.lavoro_corpi.sta_lavorando:
-        return
-    archivio = accesso.aperto()
+        return False
+    if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.CHI_E):
+        return False
+    basta = comune.chi_e_basta
+    basta.clear()
+
+    def in_quiete() -> bool:
+        passati = time.monotonic() - comune.ultima_risposta_dei_corpi["quando"]
+        return passati < QUIETE_DOPO_LE_RISPOSTE
 
     def lavora() -> None:
         while True:
-            while time.monotonic() - comune.ultima_risposta_dei_corpi["quando"] < QUIETE_DOPO_LE_RISPOSTE:
-                time.sleep(min(1.0, QUIETE_DOPO_LE_RISPOSTE))
+            while in_quiete() and not basta.is_set():
+                basta.wait(min(1.0, QUIETE_DOPO_LE_RISPOSTE))
+            if basta.is_set():
+                return
             partito = time.monotonic()
-            chi_e.Passata(archivio).esegui()
+            chi_e.Passata(archivio, fermato=basta.is_set).esegui()
             if comune.ultima_risposta_dei_corpi["quando"] < partito:
                 return
 
-    comune.lavoro_chi_e.parti(lavora, "chi_e")
+    return comune.lavoro_chi_e.parti(lavora, "chi_e")
+
+
+def ferma_chi_e(aspetta: float = lavori.ATTESA_DOPO_FERMA) -> None:
+    comune.chi_e_basta.set()
+    lavori.turno.rinuncia("chi_e")
+    comune.lavoro_chi_e.aspetta_che_finisca(aspetta)
 
 
 @strada.post("/api/nessuna-persona")
