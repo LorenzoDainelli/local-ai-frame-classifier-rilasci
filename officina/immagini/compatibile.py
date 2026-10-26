@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import functools
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from officina import registro
 from officina.archivio.accesso import Archivio
 from officina.immagini import fotogrammi
 from officina.importazione import quicktime
+from officina.sicuro.dall_archivio import per_av
 
 LATO_MASSIMO = 1920
 
@@ -14,15 +16,54 @@ VIDEO = "libx264"
 SUONO = "aac"
 
 QUANTO_STRINGERE = "23"
+DI_PASSAGGIO = "di_passaggio"
 
 
 def serve(codec: str | None) -> bool:
     return bool(codec) and not quicktime.il_browser_lo_apre(codec)
 
 
-def gia_fatta(archivio: Archivio, impronta: str) -> Path | None:
-    percorso = archivio.percorso_copia_video(archivio.nome_copia_video(impronta))
+def di_passaggio(dove) -> Path:
+    return Path(dove.miniature) / DI_PASSAGGIO
+
+
+def _dove(archivio: Archivio, impronta: str, passaggio: bool) -> Path:
+    nome = archivio.nome_copia_video(impronta)
+    if passaggio:
+        return di_passaggio(archivio.dove) / nome
+    return archivio.percorso_copia_video(nome)
+
+
+def gia_fatta(archivio: Archivio, impronta: str, passaggio: bool = False) -> Path | None:
+    percorso = _dove(archivio, impronta, passaggio)
     return percorso if percorso.exists() else None
+
+
+def butta_quelle_di_passaggio(dove) -> int:
+    cartella = di_passaggio(dove)
+    buttate = 0
+    try:
+        sotto = [voce for voce in cartella.iterdir()
+                 if voce.is_dir() and not voce.is_symlink()]
+    except OSError:
+        return 0
+    for cassetto in sotto:
+        try:
+            copie = [voce for voce in cassetto.iterdir()
+                     if voce.suffix == ".mp4" and voce.is_file() and not voce.is_symlink()]
+        except OSError:
+            continue
+        for copia in copie:
+            try:
+                copia.unlink()
+            except OSError:
+                continue
+            buttate += 1
+        with contextlib.suppress(OSError):
+            cassetto.rmdir()
+    with contextlib.suppress(OSError):
+        cartella.rmdir()
+    return buttate
 
 
 @functools.lru_cache(maxsize=1)
@@ -35,9 +76,8 @@ def si_puo_fare() -> bool:
 
 
 def fai(archivio: Archivio, impronta: str, originale: Path,
-        al_passo=None) -> Path | None:
-    nome = archivio.nome_copia_video(impronta)
-    dove = archivio.percorso_copia_video(nome)
+        al_passo=None, passaggio: bool = False) -> Path | None:
+    dove = _dove(archivio, impronta, passaggio)
     if dove.exists():
         return dove
     if not si_puo_fare():
@@ -47,18 +87,19 @@ def fai(archivio: Archivio, impronta: str, originale: Path,
     temporaneo = dove.with_suffix(".parziale.mp4")
     try:
         _ricodifica(originale, temporaneo, al_passo)
+        temporaneo.replace(dove)
     except Exception as errore:
         temporaneo.unlink(missing_ok=True)
         registro.avviso("copia_video_non_riuscita",
                         **registro.dove_si_e_rotto(errore))
         return None
-    temporaneo.replace(dove)
     return dove
 
 
 def _ricodifica(originale: Path, verso: Path, al_passo=None) -> None:
     av = fotogrammi.decodificatore()
-    with av.open(str(originale)) as dentro, av.open(str(verso), "w") as fuori:
+    with (per_av(originale) as sorgente, av.open(sorgente) as dentro,
+          av.open(str(verso), "w") as fuori):
         entrata = dentro.streams.video[0]
         entrata.thread_type = "AUTO"
 

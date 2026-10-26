@@ -148,3 +148,6 @@ class PontePrincipale:
 
     def chiudi_comunque(self) -> dict:
         return self._programma.fai(self._programma.chiudi_comunque)
+
+    def apri_l_archivio_sicuro(self, password: str) -> dict:
+        return self._programma.fai(lambda: self._programma.apri_l_archivio_sicuro(password))

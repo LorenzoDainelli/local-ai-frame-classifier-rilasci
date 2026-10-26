@@ -1007,6 +1007,16 @@ class Elenco:
                 "blake2b = ? AND sha256 = ? ORDER BY scritto, numero",
                 (dimensione, blake2b, sha256))]
 
+    def con_impronta(self, blake2b: str, dimensione: int | None = None) -> list[str]:
+        filtro = "" if dimensione is None else "dimensione = ? AND "
+        valori = () if dimensione is None else (dimensione,)
+        with self._serratura:
+            return [riga[0] for riga in self._db.execute(
+                f"SELECT numero FROM contenuti WHERE {filtro}blake2b = ? "
+                "AND coalesce(perche, '') NOT LIKE ? ORDER BY CASE stato "
+                "WHEN 'buono' THEN 0 WHEN 'riparato' THEN 0 WHEN 'incompleto' THEN 1 "
+                "ELSE 2 END, scritto, numero", (*valori, blake2b, SALVATO + "%"))]
+
     def numeri(self) -> list[str]:
         with self._serratura:
             return [riga[0] for riga in self._db.execute(

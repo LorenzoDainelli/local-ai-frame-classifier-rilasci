@@ -14,6 +14,7 @@ from officina.archivio.accesso import Archivio
 from officina.errori import FileNonLeggibile
 from officina.immagini import consegna, fotogrammi, lettura
 from officina.modello import file_media
+from officina.sicuro.dall_archivio import DallArchivio
 
 
 def formato_in_cache() -> tuple[str, str]:
@@ -49,10 +50,12 @@ def fai(archivio: Archivio, impronta: str, percorso: Path, genere: str,
     return nome
 
 
-def per_file(archivio: Archivio, riga: sqlite3.Row, lato: int = 640) -> str | None:
+def per_file(archivio: Archivio, riga: sqlite3.Row, lato: int = 640, *,
+             anche_dall_archivio: bool = False) -> str | None:
     with archivio.lettura() as connessione:
-        percorso, migliorata = file_media.da_mostrare(connessione, riga["id"])
-    if percorso is None:
+        percorso, migliorata = file_media.da_mostrare(
+            connessione, riga["id"], anche_dall_archivio=anche_dall_archivio)
+    if percorso is None or (isinstance(percorso, DallArchivio) and percorso.diversa):
         return None
     try:
         nome = fai(archivio, migliorata or riga["impronta"], percorso, riga["genere"],

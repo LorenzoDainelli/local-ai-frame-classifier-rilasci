@@ -11,6 +11,7 @@ from PIL import Image
 
 from officina import istruzioni
 from officina.importazione import quicktime
+from officina.sicuro.dall_archivio import per_av
 
 SECONDI_FRA_CANDIDATI = 2.0
 CANDIDATI_MASSIMI = 900
@@ -191,7 +192,7 @@ def misure_dal_decodificatore(percorso: Path) -> tuple[int | None, int | None]:
     if not c_e_il_decodificatore():
         return None, None
     try:
-        with _av().open(str(percorso)) as contenitore:
+        with per_av(percorso) as sorgente, _av().open(sorgente) as contenitore:
             traccia = next((t for t in contenitore.streams if t.type == "video"), None)
             if traccia is None:
                 return None, None
@@ -279,7 +280,8 @@ def _da_decodificatore(percorso: Path,
     av = _av()
 
     fuori: list[Fotogramma] = []
-    with av.open(str(percorso)) as contenitore:      # pragma: no cover - serve PyAV
+    with (per_av(percorso) as sorgente,      # pragma: no cover - serve PyAV
+          av.open(sorgente) as contenitore):
         traccia = _la_traccia(contenitore)
         if traccia is None:
             return []
@@ -316,7 +318,8 @@ def _in_fila(percorso: Path, numeri: set[int], lato: int | None) -> dict[int, Im
     av = _av()
     ultimo = max(numeri)
     trovati: dict[int, Image.Image] = {}
-    with av.open(str(percorso)) as contenitore:      # pragma: no cover - serve PyAV
+    with (per_av(percorso) as sorgente,      # pragma: no cover - serve PyAV
+          av.open(sorgente) as contenitore):
         traccia = _la_traccia(contenitore)
         if traccia is None:
             return trovati
@@ -333,7 +336,8 @@ def _dal_decodificatore_a_misura(percorso: Path, scelti: list[Fotogramma],
     av = _av()
 
     trovati: dict[int, Image.Image] = {}
-    with av.open(str(percorso)) as contenitore:      # pragma: no cover - serve PyAV
+    with (per_av(percorso) as sorgente,      # pragma: no cover - serve PyAV
+          av.open(sorgente) as contenitore):
         traccia = _la_traccia(contenitore)
         if traccia is None:
             return scelti
@@ -471,7 +475,7 @@ def _uno_col_decodificatore(percorso: Path, numero: int, istante_ms: int | None,
     av = _av()      # pragma: no cover - serve PyAV
 
     try:
-        with av.open(str(percorso)) as contenitore:
+        with per_av(percorso) as sorgente, av.open(sorgente) as contenitore:
             traccia = _la_traccia(contenitore, FILI_PER_UNO)
             if traccia is None:
                 return None

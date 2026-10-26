@@ -52,9 +52,19 @@
 </dialog>
 {% endmacro %}
 
+{% macro la_foto_persa(nascosta) %}
+<div class="dentro-la-lastra ft-non-si-apre ft-persa" id="foto-persa" role="alert" {% if nascosta %}hidden{% endif %}>
+    <p class="piccolo"><b>Questa foto, nell'Archivio sicuro, è rovinata.</b> Non ho cancellato niente.{% call spiega("Cosa succede adesso") %}
+        <p>Non sono riuscito a ripararla qui. L'archivio prova a ripararla da solo,
+        cercando lo stesso file anche sulla chiavetta e sugli altri dischi.</p>
+    {% endcall %}</p>
+</div>
+{% endmacro %}
+
 {% macro il_visore() %}
 {% set filmato = movimento or (principale if scatto.genere == 'video' else none) %}
 {% set si_vede = si_riproduce or copia_pronta %}
+{% set dall_archivio = nell_archivio.perche if nell_archivio else none %}
 <div class="visore">
     <div class="lastra {{ 'con-live' if movimento }}" {% if movimento %}data-live="/live/{{ scatto.id }}"{% endif %}>
         {% if non_si_apre %}
@@ -72,6 +82,21 @@
                 <a href="/sistemare">Da sistemare</a> &rarr; Controlla adesso.
             </p>
         </div>
+        {% elif nell_archivio and nell_archivio.persa %}
+        {{ la_foto_persa(false) }}
+        {% elif dall_archivio == 'chiuso' %}
+        <div class="dentro-la-lastra ft-non-si-apre" id="archivio-chiuso">
+            <p class="attenuato piccolo"><b>Questa foto è nell'Archivio sicuro</b>: scrivi la password per vederla.</p>
+            <form id="modulo-archivio-sicuro" method="post" action="/scatto/{{ scatto.id }}" data-solo-nel-programma hidden>
+                <input class="campo" type="password" name="password" autocomplete="current-password"
+                       aria-label="La password dell'Archivio sicuro" required>
+                <button class="tasto-comando" type="submit">Apri l'archivio</button>
+            </form>
+        </div>
+        {% elif dall_archivio == 'si_apre' %}
+        <div class="dentro-la-lastra ft-non-si-apre" id="archivio-si-apre" role="status" data-file="{{ principale.id }}">
+            <p class="attenuato piccolo"><b>L'Archivio sicuro si sta aprendo.</b> La foto arriva da sola fra poco.</p>
+        </div>
         {% else %}
         {% if scatto.genere == 'video' and principale %}
         <video id="lastra-video" {% if si_vede %}src="/originale/{{ principale.id }}"{% else %}data-sorgente="/originale/{{ principale.id }}" hidden{% endif %}
@@ -84,6 +109,10 @@
             <p class="attenuato piccolo"><b>Questa foto non si riesce a mostrare.</b> Il file è ancora al suo posto: magari il disco non è collegato, oppure il formato ha bisogno di un pezzo che manca.</p>
             <button class="tasto-comando" type="button" id="riprova-la-foto">Riprova</button>
         </div>
+        {% if dall_archivio == 'trovata' and principale %}
+        <span hidden data-dall-archivio="{{ principale.id }}"></span>
+        {{ la_foto_persa(true) }}
+        {% endif %}
         {% if movimento %}
         <button class="ft-live" type="button" id="accendi-la-live" aria-pressed="false" title="Guarda il movimento. Basta anche passarci sopra col mouse.">◎ LIVE</button>
         {% endif %}
@@ -99,7 +128,10 @@
         {% if corpi_visti %}<script type="application/json" id="corpi-dello-scatto">{{ corpi_visti|tojson }}</script>{% endif %}
         {% endif %}
     </div>
-    {% if filmato and not si_vede and not non_si_apre %}
+    {% if dall_archivio == 'trovata' and nell_archivio.diversa and not nell_archivio.persa %}
+    <p class="ft-versione-diversa piccolo" role="note">È una versione diversa da quella importata: l'IA non la usa.</p>
+    {% endif %}
+    {% if filmato and not si_vede and not non_si_apre and dall_archivio not in ('chiuso', 'si_apre') and not (nell_archivio and nell_archivio.persa) %}
     <div class="carta ft-non-si-apre ft-sotto-la-lastra" id="live-non-si-legge" {% if movimento %}hidden{% endif %}>
         <p class="attenuato piccolo">
             {{ "Il movimento di questa foto live" if movimento else "Questo video" }} è codificato in
@@ -111,7 +143,7 @@
         </form>
         <p class="tenue minuscolo" id="copia-video-a-che-punto"></p>
         <p class="tenue minuscolo">
-            Sta nella cache: si butta quando vuoi e si rifà da sola.{% call spiega("La copia che si vede") %}
+            {% if copia_di_passaggio %}Si butta da sola quando chiudi il programma.{% else %}Sta nella cache: si butta quando vuoi e si rifà da sola.{% endif %}{% call spiega("La copia che si vede") %}
                 <p>È peggiore dell'originale, perché ricodificare butta via
                 qualcosa. Serve a guardare, e basta.</p>
                 <p>Tutto il resto del programma continua a leggere
@@ -207,6 +239,7 @@
             <span class="piccolo nome-di-file">{{ file.nome }}</span>
             <span class="tenue minuscolo">· {{ file.formato or '?' }} · {{ file.peso }}</span>
             {% if not file.presente %}<span class="pillola proposta minuscolo">non trovato sul disco</span>{% endif %}
+            {% if file.dall_archivio %}<span class="pillola minuscolo">dall'Archivio sicuro</span>{% endif %}
         </div>
         {% endfor %}
     </dd>
@@ -261,6 +294,7 @@
                 {{ la_striscia() }}
                 <div class="ft-tasti" role="toolbar" aria-label="Cosa fare con questa foto">
                     <button class="tasto-comando piccolo" type="button" data-apri-info aria-expanded="false" aria-controls="ft-info">{{ icona('info', 14) }} Informazioni</button>
+                    {% if nell_archivio and nell_archivio.perche == 'trovata' and not nell_archivio.persa %}<span class="pillola minuscolo ft-dall-archivio" title="L'originale non c'è più sul disco: questa foto arriva dall'Archivio sicuro.">Dall'Archivio sicuro</span>{% endif %}
                     <button class="tasto-comando nudo piccolo" type="button" data-apri-nodi aria-expanded="false" aria-controls="ft-nodi" title="Vedi e cambia i nodi di questo scatto (N)">{{ icona('albero', 14) }} Nodi<span data-quanti-nodi></span></button>
                     <button class="tasto-comando nudo piccolo" type="button" data-apri-nota aria-controls="ft-info">{{ icona('nota', 14) }} Nota{% if scatto.nota %} ·{% endif %}</button>
                     {% if corpi_visti %}<button class="tasto-comando nudo piccolo" type="button" data-mostra-corpi aria-pressed="false" title="Mostra il contorno e i punti del corpo di ogni persona">{{ icona('persona', 14) }} Corpi · {{ corpi_visti|length }}</button>{% endif %}
@@ -423,16 +457,51 @@
     const sostituto = document.getElementById("foto-non-si-vede");
     if (!lastra || !sostituto) return;
     const video = document.getElementById("lastra-video");
-    lastra.addEventListener("error", () => {
+    const segno = document.querySelector("[data-dall-archivio]");
+    const persa = document.getElementById("foto-persa");
+    const comeSta = async () => {
+        if (!segno || !persa) return false;
+        let stato;
+        try {
+            stato = await (await fetch(`/api/dall-archivio/${segno.dataset.dallArchivio}`)).json();
+        } catch (errore) { return false; }
+        if (stato.perche === "chiuso" || stato.perche === "si_apre") {
+            window.location.reload();
+            return true;
+        }
+        if (!stato.persa) return false;
+        lastra.hidden = true;
+        if (video) video.hidden = true;
+        sostituto.hidden = true;
+        persa.hidden = false;
+        document.querySelector(".ft-dall-archivio")?.remove();
+        return true;
+    };
+    lastra.addEventListener("error", async () => {
         if (video && !video.hidden) return;
+        if (await comeSta()) return;
         lastra.hidden = true;
         sostituto.hidden = false;
     });
+    if (video) video.addEventListener("error", () => { comeSta(); });
     document.getElementById("riprova-la-foto").addEventListener("click", () => {
         sostituto.hidden = true;
         lastra.hidden = false;
         lastra.src = lastra.src.split("?")[0] + "?di-nuovo=" + Date.now();
     });
+})();
+
+(function () {
+    const dove = document.getElementById("archivio-si-apre");
+    if (!dove) return;
+    const guarda = async () => {
+        let stato;
+        try {
+            stato = await (await fetch(`/api/dall-archivio/${dove.dataset.file}`)).json();
+        } catch (errore) { return; }
+        if (stato.perche !== "si_apre") window.location.reload();
+    };
+    setInterval(guarda, 1500);
 })();
 
 (function () {

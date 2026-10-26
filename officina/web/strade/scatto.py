@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse, Response,
+                               StreamingResponse)
+from starlette.background import BackgroundTask
 
 from officina.archivio import accesso
 from officina.archivio.database import tutti, uno
@@ -14,6 +17,8 @@ from officina.importazione import miniature, quicktime
 from officina.modello import file_media, scatti, segnalazioni
 from officina.miglioria import misura as miglioria_misura
 from officina.ritocco import elenco as elenco_ritocchi
+from officina.sicuro import dall_archivio
+from officina.sicuro.dall_archivio import DallArchivio
 from officina.web import miglioramento as miglioramento_web
 from officina.web import vista
 from officina import istruzioni
@@ -91,11 +96,14 @@ def uno_scatto(richiesta: Request, scatto_id: int):
         for riga in file_righe:
             percorsi = file_media.percorsi_di(connessione, riga["id"])
             percorsi_in_piu += max(len(percorsi) - 1, 0)
+            letto = file_media.percorso_migliore(connessione, riga["id"],
+                                                 anche_dall_archivio=True)
             elenco_file.append({
                 "nome": percorsi[0]["nome"] if percorsi else "?",
                 "formato": riga["formato"],
                 "peso": vista.peso_a_parole(riga["dimensione"]),
                 "presente": any(p["presente"] for p in percorsi),
+                "dall_archivio": isinstance(letto, DallArchivio),
             })
 
         intorno = scatti.vicini(connessione, filtro, scatto_id)
@@ -112,7 +120,9 @@ def uno_scatto(richiesta: Request, scatto_id: int):
         percorso_video = None
         if movimento is not None or (scatto["genere"] == "video" and principale):
             da_leggere = movimento or principale
-            percorso_video = file_media.percorso_da_mostrare(connessione, da_leggere["id"])
+            percorso_video = file_media.percorso_da_mostrare(connessione, da_leggere["id"],
+                                                             anche_dall_archivio=True)
+        nell_archivio = _come_sta_nell_archivio(connessione, principale)
 
         miglioria = miglioramento_web.dello_scatto(connessione, scatto_id)
         ritocchi = elenco_ritocchi.quanti_fatti(
@@ -152,7 +162,8 @@ def uno_scatto(richiesta: Request, scatto_id: int):
             ]
 
     base.ricorda(accesso.aperto(), "ultimo_scatto", scatto_id)
-    codec = quicktime.codec_video(percorso_video) if percorso_video is not None else None
+    codec = _codec_di(percorso_video)
+    video_dall_archivio = isinstance(percorso_video, DallArchivio)
 
     return base.pagine.TemplateResponse(richiesta, "scatto.html", {
         **base.comune(richiesta, "scatto"),
@@ -172,8 +183,12 @@ def uno_scatto(richiesta: Request, scatto_id: int):
         "si_riproduce": quicktime.il_browser_lo_apre(codec),
         "copia_pronta": bool(
             da_leggere is not None
-            and compatibile.gia_fatta(archivio, da_leggere["impronta"])),
+            and (compatibile.gia_fatta(archivio, _impronta_di(da_leggere, percorso_video))
+                 or (video_dall_archivio and compatibile.gia_fatta(
+                     archivio, _impronta_di(da_leggere, percorso_video), passaggio=True)))),
         "copia_si_puo_fare": compatibile.si_puo_fare(),
+        "copia_di_passaggio": video_dall_archivio,
+        "nell_archivio": nell_archivio,
         "striscia": striscia,
         "non_si_apre": non_si_apre,
         "miglioria": miglioria,
@@ -186,6 +201,52 @@ def uno_scatto(richiesta: Request, scatto_id: int):
             and not miglioria_misura.e_gia_grande(scatto["larghezza"],
                                                   scatto["altezza"])),
     })
+
+
+def _impronta_di(riga, percorso) -> str:
+    return percorso.blake2b if isinstance(percorso, DallArchivio) else riga["impronta"]
+
+
+def _codec_di(percorso) -> str | None:
+    if percorso is None:
+        return None
+    try:
+        return quicktime.codec_video(percorso)
+    except ErroreOfficina:
+        if isinstance(percorso, DallArchivio):
+            return None
+        raise
+
+
+def _come_sta_nell_archivio(connessione, riga) -> dict | None:
+    if riga is None or file_media.percorso_migliore(connessione, riga["id"]) is not None:
+        return None
+    percorso, _ = file_media.da_mostrare(connessione, riga["id"], anche_dall_archivio=True)
+    if isinstance(percorso, DallArchivio):
+        ricerca = dall_archivio.Ricerca(dall_archivio.TROVATA, percorso)
+    elif percorso is None:
+        ricerca = file_media.cerca_nell_archivio(connessione, riga["id"])
+        if ricerca.perche == dall_archivio.TROVATA:
+            return None
+    else:
+        return None
+    return {"perche": ricerca.perche, "diversa": ricerca.diversa,
+            "persa": _e_persa(ricerca.trovata)}
+
+
+def _e_persa(trovata: DallArchivio | None) -> bool:
+    from officina.sicuro import servizio
+
+    attuale = servizio.attuale()
+    return bool(trovata is not None and attuale is not None
+                and attuale.persa(trovata.numero))
+
+
+@strada.get("/api/dall-archivio/{file_id}")
+def com_e_nell_archivio(file_id: int):
+    with accesso.aperto().lettura() as connessione:
+        stato = _come_sta_nell_archivio(connessione, file_media.per_id(connessione, file_id))
+    return stato or {"perche": None, "diversa": False, "persa": False}
 
 
 @strada.get("/una-foto")
@@ -240,6 +301,9 @@ def metti_fuori(scatto_id: int, fuori: int = Form(1)):
 
 
 DA_RICONTROLLARE = "private, no-cache"
+NON_SI_TIENE = "no-store"
+PEZZO = 256 * 1024
+PEZZO_CHIESTO = re.compile(r"bytes=(\d{0,20})-(\d{0,20})", re.ASCII | re.IGNORECASE)
 
 
 def segno(*pezzi) -> str:
@@ -268,16 +332,20 @@ def da_ricontrollare(dati: bytes, tipo: str, atteso: str) -> Response:
                     headers={"ETag": atteso, "Cache-Control": DA_RICONTROLLARE})
 
 
+def da_non_tenere(dati: bytes, tipo: str) -> Response:
+    return Response(dati, media_type=tipo, headers={"Cache-Control": NON_SI_TIENE})
+
+
 def _cosa_mostrare(file_id: int, sotto: bool = False) -> tuple | None:
     with accesso.aperto().lettura() as connessione:
         riga = file_media.per_id(connessione, file_id)
         if riga is None:
             return None
         quale = file_media.da_mostrare_sotto if sotto else file_media.da_mostrare
-        percorso, migliorata = quale(connessione, riga["id"])
+        percorso, migliorata = quale(connessione, riga["id"], anche_dall_archivio=True)
     if percorso is None:
         return None
-    return riga, percorso, migliorata or riga["impronta"]
+    return riga, percorso, migliorata or _impronta_di(riga, percorso)
 
 
 def _miniatura_pronta(file_id: int, chiesto: str | None = None) -> tuple | None:
@@ -294,8 +362,16 @@ def _miniatura_pronta(file_id: int, chiesto: str | None = None) -> tuple | None:
 
 def _miniatura_nuova(riga) -> tuple | None:
     archivio = accesso.aperto()
-    nome = miniature.per_file(archivio, riga)
+    try:
+        nome = miniature.per_file(archivio, riga, anche_dall_archivio=True)
+    except ErroreOfficina as errore:
+        if errore.codice in NON_SI_LEGGE_DALL_ARCHIVIO:
+            return None
+        raise
     return (nome, archivio.leggi_miniatura(nome)) if nome else None
+
+
+NON_SI_LEGGE_DALL_ARCHIVIO = frozenset({"archivio_chiuso", "persa_nell_archivio"})
 
 
 def _tipo_della_cache(nome: str) -> str:
@@ -340,6 +416,9 @@ async def una_immagine(richiesta: Request, file_id: int, lato: int | None = None
 
     if riga["genere"] == "video":
         return await _manda_un_fotogramma(richiesta, percorso, impronta, 0, None, lato)
+    if isinstance(percorso, DallArchivio):
+        fatta = await consegna.a_parte(richiesta, _foto_per_browser, percorso, lato)
+        return Response(status_code=404) if fatta is None else da_non_tenere(*fatta)
 
     from officina import schermo
 
@@ -369,14 +448,16 @@ def _fotogramma_in_cache(percorso: Path, impronta: str, numero: int,
 
     misura = consegna.lato_per_guardare(lato)
     chiave = f"fotogramma#{impronta}#{numero}#{istante or 0}#{misura}"
-    pronto = consegna.gia_pronte.prendi(chiave)
+    si_tiene = not isinstance(percorso, DallArchivio)
+    pronto = consegna.gia_pronte.prendi(chiave) if si_tiene else None
     if pronto is not None:
         return pronto
     immagine = estrattore.uno(percorso, numero, istante, misura)
     if immagine is None:
         return None
     dati, tipo = consegna.da_immagine(immagine)
-    consegna.gia_pronte.metti(chiave, dati, tipo)
+    if si_tiene:
+        consegna.gia_pronte.metti(chiave, dati, tipo)
     return dati, tipo
 
 
@@ -385,13 +466,16 @@ async def _manda_un_fotogramma(richiesta: Request, percorso: Path, impronta: str
                                lato: int | None) -> Response:
     atteso = segno("fotogramma", impronta, numero, istante or 0,
                    consegna.lato_per_guardare(lato))
-    if gia_ce_l_ha(richiesta, atteso):
+    dall_archivio = isinstance(percorso, DallArchivio)
+    if not dall_archivio and gia_ce_l_ha(richiesta, atteso):
         return non_e_cambiata(atteso)
     fatto = await consegna.a_parte(richiesta, _fotogramma_in_cache, percorso, impronta,
                                    numero, istante, lato, filmato=True)
     if fatto is None:
         return Response(status_code=404)
     dati, tipo = fatto
+    if dall_archivio:
+        return da_non_tenere(dati, tipo)
     return da_ricontrollare(dati, tipo, atteso)
 
 
@@ -403,13 +487,21 @@ def un_originale(richiesta: Request, file_id: int, sotto: int = 0):
         if riga is None:
             return Response(status_code=404)
         quale = file_media.da_mostrare_sotto if sotto else file_media.da_mostrare
-        percorso, migliorata = quale(connessione, riga["id"])
+        percorso, migliorata = quale(connessione, riga["id"], anche_dall_archivio=True)
     if percorso is None:
         return Response(status_code=404)
 
-    impronta = migliorata or riga["impronta"]
+    impronta = migliorata or _impronta_di(riga, percorso)
     copia = compatibile.gia_fatta(archivio, impronta)
     tipi = {"mov": "video/mp4", "mp4": "video/mp4", "m4v": "video/mp4"}
+    if isinstance(percorso, DallArchivio):
+        copia = copia or compatibile.gia_fatta(archivio, impronta, passaggio=True)
+        if copia is not None:
+            return FileResponse(copia, media_type="video/mp4",
+                                headers={"Cache-Control": NON_SI_TIENE})
+        return _dall_archivio_a_pezzi(
+            richiesta, percorso,
+            tipi.get((riga["formato"] or "").lower(), "application/octet-stream"))
     da_mandare = copia or percorso
     tipo = ("video/mp4" if copia is not None
             else tipi.get((riga["formato"] or "").lower(), "application/octet-stream"))
@@ -422,6 +514,59 @@ def un_originale(richiesta: Request, file_id: int, sotto: int = 0):
         return non_e_cambiata(atteso)
     return FileResponse(da_mandare, media_type=tipo,
                         headers={"ETag": atteso, "Cache-Control": DA_RICONTROLLARE})
+
+
+def il_pezzo_chiesto(chiesto: str | None, quanto: int) -> tuple[int, int] | bool | None:
+    trovato = PEZZO_CHIESTO.fullmatch((chiesto or "").strip())
+    if trovato is None:
+        return None
+    da, a = trovato.groups()
+    if not da and not a:
+        return None
+    if not da:
+        coda = int(a)
+        if not coda or not quanto:
+            return False
+        return max(0, quanto - coda), quanto - 1
+    inizio = int(da)
+    fine = int(a) if a else quanto - 1
+    if a and fine < inizio:
+        return None
+    if inizio >= quanto:
+        return False
+    return inizio, min(fine, quanto - 1)
+
+
+def _a_pezzi(lettore, inizio: int, quanti: int):
+    try:
+        lettore.seek(inizio)
+        while quanti > 0:
+            pezzo = lettore.read(min(PEZZO, quanti))
+            if not pezzo:
+                return
+            quanti -= len(pezzo)
+            yield pezzo
+    except (ErroreOfficina, OSError, ValueError):
+        return
+    finally:
+        lettore.close()
+
+
+def _dall_archivio_a_pezzi(richiesta: Request, trovata: DallArchivio, tipo: str) -> Response:
+    quanto = trovata.dimensione
+    pezzo = il_pezzo_chiesto(richiesta.headers.get("range"), quanto)
+    intestazioni = {"Cache-Control": NON_SI_TIENE, "Accept-Ranges": "bytes"}
+    if pezzo is False:
+        return Response(status_code=416,
+                        headers={**intestazioni, "Content-Range": f"bytes */{quanto}"})
+    inizio, fine = pezzo or (0, quanto - 1)
+    lettore = trovata.apri()
+    intestazioni["Content-Length"] = str(fine - inizio + 1)
+    if pezzo:
+        intestazioni["Content-Range"] = f"bytes {inizio}-{fine}/{quanto}"
+    return StreamingResponse(_a_pezzi(lettore, inizio, fine - inizio + 1),
+                             status_code=206 if pezzo else 200, media_type=tipo,
+                             headers=intestazioni, background=BackgroundTask(lettore.close))
 
 
 @strada.get("/live/{scatto_id}")
@@ -441,7 +586,8 @@ def prepara_la_copia_del_video(file_id: int):
         riga = file_media.per_id(connessione, file_id)
         if riga is None:
             raise ErroreOfficina("Questo file non c'è.")
-        percorso, migliorata = file_media.da_mostrare(connessione, riga["id"])
+        percorso, migliorata = file_media.da_mostrare(connessione, riga["id"],
+                                                      anche_dall_archivio=True)
         scatto_id = riga["scatto_id"]
     if percorso is None:
         raise ErroreOfficina(
@@ -456,22 +602,37 @@ def prepara_la_copia_del_video(file_id: int):
     durata = riga["durata_ms"] or 0
     comune.lavoro_copia_video.numeri = {"fatti": 0, "totale": durata}
     comune.lavoro_copia_video.parti(
-        lambda: _fai_la_copia(archivio, migliorata or riga["impronta"], percorso,
-                              durata),
+        lambda: _fai_la_copia(archivio, migliorata or _impronta_di(riga, percorso), percorso,
+                              durata, isinstance(percorso, DallArchivio)),
         "copia-video")
     return RedirectResponse(f"/scatto/{scatto_id}", status_code=303)
 
 
-def _fai_la_copia(archivio, impronta: str, percorso, durata: int) -> None:
+def _fai_la_copia(archivio, impronta: str, percorso, durata: int,
+                  passaggio: bool = False) -> None:
     def al_passo(millisecondi: int) -> None:
         comune.lavoro_copia_video.numeri = {"fatti": millisecondi, "totale": durata}
 
-    fatta = compatibile.fai(archivio, impronta, percorso, al_passo=al_passo)
+    fatta = compatibile.fai(archivio, impronta, percorso, al_passo=al_passo,
+                            passaggio=passaggio)
+    if passaggio and fatta is not None and not _archivio_ancora_aperto():
+        from officina.programma import archivio_sicuro
+
+        archivio_sicuro.butta_le_copie_di_passaggio(archivio.dove)
+        raise ErroreOfficina(
+            "L'Archivio sicuro si è chiuso mentre preparavo la copia del video, e la "
+            "copia l'ho buttata. Apri l'archivio e riprova.")
     if fatta is None:
         raise ErroreOfficina(
             "Questo video non si è riuscito a ricodificare. L'originale non "
             "è stato toccato, e i momenti della striscia restano quelli.")
     comune.lavoro_copia_video.numeri = {"fatti": durata, "totale": durata}
+
+
+def _archivio_ancora_aperto() -> bool:
+    from officina.programma import archivio_sicuro
+
+    return archivio_sicuro.per_le_foto()[0] == dall_archivio.TROVATA
 
 
 @strada.get("/api/copia-video")

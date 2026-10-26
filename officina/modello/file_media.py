@@ -6,6 +6,7 @@ from pathlib import Path
 from officina.archivio.database import adesso, inserisci, tutti, uno
 from officina.modello import segnalazioni
 from officina.modello.luoghi import coordinate_valide
+from officina.sicuro.dall_archivio import NON_C_E, DallArchivio, Ricerca
 
 
 def per_impronta(connessione: sqlite3.Connection, impronta: str) -> sqlite3.Row | None:
@@ -71,21 +72,42 @@ def percorsi_di(connessione: sqlite3.Connection, file_id: int) -> list[sqlite3.R
     )
 
 
-def percorso_migliore(connessione: sqlite3.Connection, file_id: int) -> Path | None:
+def percorso_migliore(connessione: sqlite3.Connection, file_id: int, *,
+                      anche_dall_archivio: bool = False) -> Path | DallArchivio | None:
     for riga in percorsi_di(connessione, file_id):
         percorso = Path(riga["percorso"])
         if percorso.exists():
             return percorso
+    if anche_dall_archivio:
+        return cerca_nell_archivio(connessione, file_id).trovata
     return None
 
 
-def da_mostrare(connessione: sqlite3.Connection,
-                file_id: int) -> tuple[Path | None, str | None]:
+def cerca_nell_archivio(connessione: sqlite3.Connection, file_id: int) -> Ricerca:
+    from officina.programma import archivio_sicuro
+
+    riga = per_id(connessione, file_id)
+    if riga is None or not riga["impronta"]:
+        return Ricerca(NON_C_E)
+    perche, servizio = archivio_sicuro.per_le_foto()
+    if servizio is None:
+        return Ricerca(perche)
+    percorsi = percorsi_di(connessione, file_id)
+    nome = next((r["nome"] or Path(r["percorso"]).name for r in percorsi), "")
+    return servizio.cerca(riga["impronta"], riga["dimensione"],
+                          [r["percorso"] for r in percorsi], nome=nome or str(file_id),
+                          intero=riga["genere"] == "immagine")
+
+
+def da_mostrare(connessione: sqlite3.Connection, file_id: int, *,
+                anche_dall_archivio: bool = False) -> tuple[Path | DallArchivio | None,
+                                                            str | None]:
     ritoccata = uno(connessione,
                     "SELECT stato, percorso_copia, impronta_copia FROM ritoccate "
                     "WHERE file_id = ?", file_id)
     if ritoccata is None:
-        return senza_ritocchi(connessione, file_id)
+        return senza_ritocchi(connessione, file_id,
+                              anche_dall_archivio=anche_dall_archivio)
     if ritoccata["stato"] == "fatta" and ritoccata["impronta_copia"]:
         percorso = Path(ritoccata["percorso_copia"])
         if percorso.exists():
@@ -93,8 +115,9 @@ def da_mostrare(connessione: sqlite3.Connection,
     return None, None
 
 
-def da_mostrare_sotto(connessione: sqlite3.Connection,
-                      file_id: int) -> tuple[Path | None, str | None]:
+def da_mostrare_sotto(connessione: sqlite3.Connection, file_id: int, *,
+                      anche_dall_archivio: bool = False) -> tuple[Path | DallArchivio | None,
+                                                                  str | None]:
     ritoccata = uno(connessione,
                     "SELECT percorso_base, impronta_base FROM ritoccate "
                     "WHERE file_id = ? AND stato = 'fatta'", file_id)
@@ -102,11 +125,12 @@ def da_mostrare_sotto(connessione: sqlite3.Connection,
         percorso = Path(ritoccata["percorso_base"])
         if percorso.exists():
             return percorso, ritoccata["impronta_base"]
-    return senza_ritocchi(connessione, file_id)
+    return senza_ritocchi(connessione, file_id, anche_dall_archivio=anche_dall_archivio)
 
 
-def senza_ritocchi(connessione: sqlite3.Connection,
-                   file_id: int) -> tuple[Path | None, str | None]:
+def senza_ritocchi(connessione: sqlite3.Connection, file_id: int, *,
+                   anche_dall_archivio: bool = False) -> tuple[Path | DallArchivio | None,
+                                                               str | None]:
     migliorata = uno(
         connessione,
         "SELECT percorso_migliorata, impronta_migliorata FROM migliorie "
@@ -116,11 +140,13 @@ def senza_ritocchi(connessione: sqlite3.Connection,
         percorso = Path(migliorata["percorso_migliorata"])
         if percorso.exists():
             return percorso, migliorata["impronta_migliorata"]
-    return percorso_migliore(connessione, file_id), None
+    return percorso_migliore(connessione, file_id,
+                             anche_dall_archivio=anche_dall_archivio), None
 
 
-def percorso_da_mostrare(connessione: sqlite3.Connection, file_id: int) -> Path | None:
-    return da_mostrare(connessione, file_id)[0]
+def percorso_da_mostrare(connessione: sqlite3.Connection, file_id: int, *,
+                         anche_dall_archivio: bool = False) -> Path | DallArchivio | None:
+    return da_mostrare(connessione, file_id, anche_dall_archivio=anche_dall_archivio)[0]
 
 
 def collega_a_scatto(connessione: sqlite3.Connection, file_id: int, scatto_id: int,

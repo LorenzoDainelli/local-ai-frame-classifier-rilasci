@@ -1,18 +1,22 @@
 from __future__ import annotations
 
+import io
 import os
 import threading
 import time
+from contextlib import ExitStack
 from pathlib import Path
 
 from officina.errori import ErroreOfficina
-from officina.sicuro import chiavi, leggimi
+from officina.sicuro import chiavi, leggimi, prendi
 from officina.sicuro import elenco as registro
 from officina.sicuro.cestino import (Mandata, Quaderno, Ricontrollo, Ronda, Spedizioniere,
                                      Vedetta, cestino_di_sistema)
 from officina.sicuro.chiavetta import AggiornaChiavetta
 from officina.sicuro.controllo import ControlloMensile
 from officina.sicuro.custode import Custode
+from officina.sicuro.dall_archivio import CHIUSO as ARCHIVIO_CHIUSO
+from officina.sicuro.dall_archivio import NON_C_E, TROVATA, DallArchivio, Ricerca
 from officina.sicuro.dentro import Verifica, _resto, _uguali, _vero
 from officina.sicuro.disco import fissa_cartella
 from officina.sicuro.estrai import Estrazione
@@ -21,6 +25,7 @@ from officina.sicuro.via_libera import ControlloFresco
 
 
 ASPETTA_CHIUSURA = 30.0
+RIPROVA = 600.0
 CHIUSO = "L'Archivio sicuro è chiuso: aprilo e riprova."
 AVANZI = frozenset({chiavi.FILE + ".nuovo", chiavi.RISERVA + ".nuovo"})
 SOLO_LA_CHIAVE = frozenset({chiavi.FILE, chiavi.RISERVA, *AVANZI})
@@ -56,6 +61,14 @@ class _Aperto:
         self.cartella = cartella
         self._registra = threading.RLock()
         self._elenco_chiuso = False
+        self._mali = threading.Lock()
+        self._spento = False
+        self.letti_male: set[str] = set()
+        self.persi: set[str] = set()
+        self._da_riparare: set[str] = set()
+        self._tentati: dict[str, float] = {}
+        self._leggi_blob = opzioni.get("leggi", {}).get("apri", prendi.leggi)
+        self.riparatore = prendi.Riparatore(self._prova_a_riparare, **per("riparatore"))
         self.elenco = registro.Elenco.apri(cartella, chiave)
         try:
             self.quaderno = Quaderno(cartella, chiave)
@@ -113,15 +126,106 @@ class _Aperto:
 
     def ferma(self, aspetta: float) -> bool:
         fine = time.monotonic() + max(0.0, aspetta)
+        with self._mali:
+            self._spento = True
+            self.riparatore.ferma()
         self.custode.ferma()
         self.ronda.ferma()
         custode = self.custode.aspetta_fine(max(0.0, fine - time.monotonic()))
         ronda = self.ronda.aspetta_fine(max(0.0, fine - time.monotonic()))
-        return custode and ronda
+        riparatore = self.riparatore.aspetta_fine(max(0.0, fine - time.monotonic()))
+        return custode and ronda and riparatore
 
     @property
     def fermo(self) -> bool:
-        return self.custode.aspetta_fine(0.0) and self.ronda.aspetta_fine(0.0)
+        return (self.custode.aspetta_fine(0.0) and self.ronda.aspetta_fine(0.0)
+                and self.riparatore.aspetta_fine(0.0))
+
+    def _vivo(self) -> None:
+        if self._spento or self._elenco_chiuso:
+            raise ErroreOfficina(CHIUSO, codice="archivio_chiuso")
+
+    def cerca(self, impronta: str, dimensione: int | None, percorsi):
+        with self._registra:
+            self._vivo()
+            return prendi.trova(self.elenco, impronta, dimensione, percorsi)
+
+    def _sulla_chiavetta(self) -> tuple:
+        try:
+            radice, _ = self.custode.guardiano.trova()
+        except (ErroreOfficina, OSError):
+            return ()
+        if radice is None:
+            return ()
+        return (self.chiavetta.chiavetta.copia_di(radice),)
+
+    def _altre(self, numero: str, informazioni: dict) -> list:
+        with self._registra:
+            self._vivo()
+            vicini = prendi.parenti(self.elenco, numero, informazioni)
+        return prendi.altre_fonti(self.cartella, numero, informazioni, vicini,
+                                  self._sulla_chiavetta())
+
+    def leggi(self, numero: str, intero: bool):
+        pila = ExitStack()
+        try:
+            with self._registra:
+                self._vivo()
+                informazioni = self.elenco.contenuto(numero)
+                if informazioni is None:
+                    raise prendi.Persa(prendi.PERSA)
+                fonti = prendi.Fonti(
+                    numero, informazioni, self.chiave, pila, apri=self._leggi_blob,
+                    altre=lambda: self._altre(numero, informazioni),
+                    segnala=self._segnala, letta=self._letta, vivo=self._vivo)
+                fonti.aggiungi(registro.percorso_contenuto(self.cartella, numero), numero,
+                               informazioni["testa"])
+            if not intero:
+                return io.BufferedReader(prendi.Flusso(fonti, pila),
+                                         buffer_size=fonti.forma.blocco)
+            with pila:
+                return prendi.tutto(fonti, informazioni)
+        except BaseException:
+            pila.close()
+            raise
+
+    def _letta(self, numero: str) -> None:
+        with self._mali:
+            self.persi.discard(numero)
+
+    def _segnala(self, numero: str, persa: bool) -> None:
+        with self._mali:
+            self.letti_male.add(numero)
+            if persa:
+                self.persi.add(numero)
+            if time.monotonic() - self._tentati.get(numero, -RIPROVA) < RIPROVA:
+                return
+            self._da_riparare.add(numero)
+        if self._prova_a_riparare():
+            return
+        with self._mali:
+            if not self._spento:
+                self.riparatore.avvia()
+
+    def _prova_a_riparare(self) -> bool:
+        with self._mali:
+            if self._spento:
+                return True
+            numeri = sorted(self._da_riparare)
+        if not numeri:
+            return True
+        try:
+            self.chiavetta.chiavetta.rileggi_presto(numeri)
+            partito = self.custode.fai(self.ripara, numeri, chiavetta=True)
+        except ErroreOfficina:
+            return False
+        if not partito:
+            return False
+        adesso = time.monotonic()
+        with self._mali:
+            self._da_riparare.difference_update(numeri)
+            self._tentati.update(dict.fromkeys(numeri, adesso))
+            return not self._da_riparare
 
     def salva(self) -> bool:
         with self._registra:
@@ -215,6 +319,9 @@ class _Aperto:
             "collaudo": self.quaderno.collaudo,
             "problemi_elenco": list(self.elenco.problemi),
             "problemi_quaderno": list(self.quaderno.problemi),
+            "letti_male": sorted(self.letti_male),
+            "persi": sorted(self.persi),
+            "riparatore": self.riparatore.istantanea(),
         }
 
 
@@ -233,6 +340,7 @@ class ArchivioSicuro:
         self._serratura = threading.RLock()
         self._aperto: _Aperto | None = None
         self._chiusura: _Aperto | None = None
+        self._si_apre = False
         self.problemi: list[str] = []
 
     @property
@@ -246,6 +354,10 @@ class ArchivioSicuro:
     @property
     def ha_qualcosa(self) -> bool:
         return self._c_e_qualcosa()
+
+    @property
+    def si_apre(self) -> bool:
+        return self._si_apre
 
     @property
     def si_chiude(self) -> bool:
@@ -307,8 +419,12 @@ class ArchivioSicuro:
                     "file con la chiave: non ci creo sopra un archivio nuovo. Attacca la "
                     "chiavetta dell'archivio, che ha una copia della chiave.",
                     codice="cartella_non_vuota")
-            chiave = chiavi.crea(self.cartella, password, costo)
-            self._accendi(chiave, password, False)
+            self._si_apre = True
+            try:
+                chiave = chiavi.crea(self.cartella, password, costo)
+                self._accendi(chiave, password, False)
+            finally:
+                self._si_apre = False
 
     def apri(self, password: str, *, pulisci: bool = True) -> None:
         with self._serratura:
@@ -319,8 +435,12 @@ class ArchivioSicuro:
                     raise chiavi.ChiaveRovinata("Questa chiave non è quella dell'archivio.")
                 return
             self._puo_aprire()
-            chiave = chiavi.apri(self.cartella, password)
-            self._accendi(chiave, password, pulisci)
+            self._si_apre = True
+            try:
+                chiave = chiavi.apri(self.cartella, password)
+                self._accendi(chiave, password, pulisci)
+            finally:
+                self._si_apre = False
 
     def _accendi(self, chiave, password: str, pulisci: bool) -> None:
         self.problemi = []
@@ -428,6 +548,31 @@ class ArchivioSicuro:
         numeri = list(dict.fromkeys(numeri))
         aperto.chiavetta.chiavetta.rileggi_presto(numeri)
         return aperto.custode.fai(aperto.ripara, numeri, chiavetta=True)
+
+    def cerca(self, impronta: str, dimensione: int | None, percorsi, *, nome: str,
+              intero: bool) -> Ricerca:
+        aperto = self._aperto
+        if aperto is None:
+            return Ricerca(ARCHIVIO_CHIUSO)
+        try:
+            trovato = aperto.cerca(impronta, dimensione, percorsi)
+        except ErroreOfficina as errore:
+            if errore.codice == "archivio_chiuso":
+                return Ricerca(ARCHIVIO_CHIUSO)
+            raise
+        if trovato is None:
+            return Ricerca(NON_C_E)
+        numero, informazioni, diversa = trovato
+        return Ricerca(TROVATA, DallArchivio(numero, nome, informazioni["dimensione"],
+                                             informazioni["blake2b"], intero, diversa,
+                                             self._prendi))
+
+    def _prendi(self, trovata: DallArchivio):
+        return self._di_ora().leggi(trovata.numero, trovata.intero)
+
+    def persa(self, numero: str) -> bool:
+        aperto = self._aperto
+        return aperto is not None and numero in aperto.persi
 
     def ho_capito(self, id: str) -> bool:
         return self._di_ora().vedetta.ho_capito(id)

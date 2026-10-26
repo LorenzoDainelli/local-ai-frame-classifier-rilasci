@@ -122,6 +122,44 @@ def c_e(posizione) -> bool:
         return True
 
 
+def per_le_foto():
+    from officina.archivio import accesso
+    from officina.impostazioni import REALE, posizione
+    from officina.sicuro import dall_archivio
+    from officina.sicuro import servizio as modulo
+
+    try:
+        nome = accesso.aperto().dove.nome
+    except ErroreOfficina:
+        return dall_archivio.SENZA_ARCHIVIO, None
+    if nome != REALE:
+        return dall_archivio.SENZA_ARCHIVIO, None
+    servizio = modulo.attuale()
+    if servizio is not None and servizio.aperto:
+        return dall_archivio.TROVATA, servizio
+    if servizio is not None and servizio.si_apre:
+        return dall_archivio.SI_APRE, None
+    try:
+        c_e_l_archivio = c_e(posizione(REALE))
+    except (ErroreOfficina, OSError):
+        c_e_l_archivio = True
+    return (dall_archivio.CHIUSO if c_e_l_archivio else dall_archivio.SENZA_ARCHIVIO), None
+
+
+def butta_le_copie_di_passaggio(posizione) -> int:
+    from officina.immagini import compatibile
+
+    try:
+        buttate = compatibile.butta_quelle_di_passaggio(posizione)
+    except Exception as guasto:
+        registro.errore("sicuro.copie_di_passaggio_rimaste",
+                        **registro.dove_si_e_rotto(guasto))
+        return 0
+    if buttate:
+        registro.evento("sicuro.copie_di_passaggio_buttate", quante=buttate)
+    return buttate
+
+
 def serve_la_password_scritta(posizione, adesso: float | None = None) -> bool:
     if not c_e(posizione):
         return False
@@ -545,10 +583,12 @@ class Collegamento:
         self._aspetta_l_apertura(max(0.0, fine - time.monotonic()))
         servizio = self._servizio
         if servizio is None:
+            butta_le_copie_di_passaggio(self.posizione)
             return True
         fatto = servizio.chiudi(max(0.0, fine - time.monotonic()))
         if modulo.attuale() is servizio:
             modulo.imposta(None)
+        butta_le_copie_di_passaggio(self.posizione)
         registro.evento("sicuro.chiuso", fermo=fatto)
         self.guarda()
         return fatto

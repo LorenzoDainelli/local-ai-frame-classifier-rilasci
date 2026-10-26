@@ -10,6 +10,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from officina import registro
 from officina.errori import FileNonLeggibile
+from officina.sicuro.dall_archivio import DallArchivio
 
 
 SA_LEGGERE_HEIC = False
@@ -76,8 +77,9 @@ def intestazione(percorso: Path) -> Image.Image:
             codice="file_non_leggibile",
         )
 
+    sorgente = percorso.apri() if isinstance(percorso, DallArchivio) else percorso
     try:
-        return Image.open(percorso, formats=formati_aperti())
+        return Image.open(sorgente, formats=formati_aperti())
     except UnidentifiedImageError as errore:
         raise FileNonLeggibile(
             f"«{percorso.name}» non è un'immagine: dentro c'è qualcos'altro, "

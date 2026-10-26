@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import BinaryIO, Iterator
 
 from officina.modello.luoghi import coordinate_valide
+from officina.sicuro.dall_archivio import DallArchivio
 
 SCARTO_1904 = 2082844800
 
@@ -42,6 +43,12 @@ class DatiVideo:
     creazione_mvhd: int | None = None
     creazione_traccia: int | None = None
     data_apple: str | None = None
+
+
+def _apri(percorso):
+    if isinstance(percorso, DallArchivio):
+        return percorso.apri()
+    return open(percorso, "rb")
 
 
 def _atomi(file: BinaryIO, inizio: int, fine: int) -> Iterator[tuple[bytes, int, int]]:
@@ -192,7 +199,7 @@ def leggi(percorso: Path) -> DatiVideo:
     dati = DatiVideo()
     try:
         dimensione = percorso.stat().st_size
-        with open(percorso, "rb") as file:
+        with _apri(percorso) as file:
             for nome, contenuto, fine in _atomi(file, 0, dimensione):
                 if nome != b"moov":
                     continue
@@ -242,7 +249,7 @@ def chiavi_apple(percorso: Path) -> dict[str, str]:
     trovate: dict[str, str] = {}
     try:
         dimensione = percorso.stat().st_size
-        with open(percorso, "rb") as file:
+        with _apri(percorso) as file:
             for nome, contenuto, fine in _atomi(file, 0, dimensione):
                 if nome == b"moov":
                     _raccogli_chiavi(file, contenuto, fine, trovate)
@@ -427,7 +434,7 @@ def _usa_metadati(trovati: dict[str, bytes], dati: DatiVideo) -> None:
 def primo_fotogramma_jpeg(percorso: Path) -> bytes | None:
     try:
         dimensione = percorso.stat().st_size
-        with open(percorso, "rb") as file:
+        with _apri(percorso) as file:
             posizione_dati = _trova_stbl(file, 0, dimensione)
             if posizione_dati is None:
                 return None
@@ -469,7 +476,7 @@ CODEC_CHE_IL_BROWSER_APRE = {"avc1", "avc3", "vp09", "av01"}
 
 def codec_video(percorso: Path) -> str | None:
     try:
-        with open(percorso, "rb") as file:
+        with _apri(percorso) as file:
             return _cerca_codec(file, 0, percorso.stat().st_size)
     except (OSError, struct.error, RecursionError):
         return None
@@ -504,7 +511,7 @@ class Campione:
 
 def campioni_jpeg(percorso: Path) -> list[Campione]:
     try:
-        with open(percorso, "rb") as file:
+        with _apri(percorso) as file:
             dimensione = percorso.stat().st_size
             tabelle = _tabelle_stbl(file, 0, dimensione)
             if tabelle is None:
@@ -627,7 +634,7 @@ def _durate(stts: bytes, quanti_campioni: int) -> list[int]:
 
 def leggi_campione(percorso: Path, campione: Campione) -> bytes | None:
     try:
-        with open(percorso, "rb") as file:
+        with _apri(percorso) as file:
             file.seek(campione.scarto)
             dati = file.read(min(campione.misura, MISURA_MASSIMA_CAMPIONE))
         return dati if dati[:3] == b"\xff\xd8\xff" else None

@@ -18,7 +18,7 @@ solo_qui = [Depends(base.solo_da_questo_computer)]
 AZIONI_DEL_PROGRAMMA = {
     "stato_del_programma": 0, "come_vanno_i_motori": 0, "prepara_i_motori": 0,
     "salva_la_chiave": 1, "togli_la_chiave": 0, "aggiornamento": 0,
-    "aggiorna_adesso": 0, "rifiuta_aggiornamento": 0,
+    "aggiorna_adesso": 0, "rifiuta_aggiornamento": 0, "apri_l_archivio_sicuro": 1,
 }
 
 

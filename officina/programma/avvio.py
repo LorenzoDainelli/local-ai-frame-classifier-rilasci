@@ -606,8 +606,12 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             return self.sicuro
 
     def _apri_l_archivio_sicuro_in_sottofondo(self, password: str | None) -> None:
+        from officina.programma import archivio_sicuro
+
         try:
-            self._il_sicuro().apri_in_sottofondo(password)
+            sicuro = self._il_sicuro()
+            archivio_sicuro.butta_le_copie_di_passaggio(sicuro.posizione)
+            sicuro.apri_in_sottofondo(password)
         except Exception as guasto:
             registro.errore("programma.sicuro_non_aperto",
                             **registro.dove_si_e_rotto(guasto))
@@ -660,9 +664,37 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                 "riprova: non ho toccato niente.", codice="occupato")
 
     def apri_l_archivio_sicuro(self, password: str) -> dict:
-        problemi = self._il_sicuro().apri_con_la_password(password or "",
-                                                          self._parola_del_forziere())
-        return {"aperto": True, "problemi": problemi}
+        from officina import schermo
+        from officina.errori import PasswordSbagliata
+        from officina.programma import archivio_sicuro
+        from officina.web.strade import tentativi
+
+        sicuro = self._il_sicuro()
+        if sicuro.guarda() == archivio_sicuro.APERTO:
+            return {"aperto": True, "problemi": list(sicuro.servizio.problemi)}
+        scritta = password if isinstance(password, str) else ""
+        problemi: list[str] = []
+        sbagliata: list[PasswordSbagliata] = []
+
+        def controlla() -> bool:
+            try:
+                problemi.extend(sicuro.apri_con_la_password(scritta,
+                                                            self._parola_del_forziere()))
+            except PasswordSbagliata as errore:
+                sbagliata.append(errore)
+                return False
+            return True
+
+        chi = "portatile" if schermo.dal_portatile() else "qui"
+        giusta, attesa, occupato = tentativi.freno.prova(chi, controlla)
+        if giusta:
+            return {"aperto": True, "problemi": problemi}
+        if sbagliata:
+            raise sbagliata[0]
+        if occupato:
+            raise ErroreOfficina(tentativi.MESSAGGIO_OCCUPATO, codice="occupato")
+        raise ErroreOfficina(tentativi.messaggio_di_attesa(attesa),
+                             codice="troppi_tentativi")
 
     def riprova_l_archivio_sicuro(self) -> dict:
         return {"stato": self._il_sicuro().riprova(self._parola_del_forziere())}

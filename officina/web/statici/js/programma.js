@@ -1,7 +1,8 @@
 import { chiediSeSi } from "/statici/js/finestrina.js";
 
 const DAL_FISSO = new Set(["stato_del_programma", "come_vanno_i_motori", "prepara_i_motori",
-    "salva_la_chiave", "togli_la_chiave", "aggiornamento", "aggiorna_adesso", "rifiuta_aggiornamento"]);
+    "salva_la_chiave", "togli_la_chiave", "aggiornamento", "aggiorna_adesso",
+    "rifiuta_aggiornamento", "apri_l_archivio_sicuro"]);
 const locale = () => window.pywebview && window.pywebview.api;
 let fisso = null;
 
@@ -190,6 +191,25 @@ function passwordDalPonte() {
             if (esito && esito.errore) { mostraLErrore(forziere, esito.errore); return; }
             if (window.movimenti?.forziereAcceso) await window.movimenti.forziereAcceso();
             window.location.href = (esito && esito.vai) || "/";
+        });
+    }
+    const sicuro = document.getElementById("modulo-archivio-sicuro");
+    if (sicuro) {
+        sicuro.addEventListener("submit", async (evento) => {
+            evento.preventDefault();
+            const campo = sicuro.querySelector('input[type="password"]');
+            const tasto = sicuro.querySelector('button[type="submit"]');
+            const valore = campo.value;
+            campo.value = "";
+            tasto.disabled = true;
+            const esito = await api().apri_l_archivio_sicuro(valore);
+            tasto.disabled = false;
+            if (esito && esito.errore) {
+                mostraLErrore(sicuro, esito.errore);
+                campo.focus();
+                return;
+            }
+            window.location.reload();
         });
     }
     const spegni = document.getElementById("modulo-spegni-forziere");
