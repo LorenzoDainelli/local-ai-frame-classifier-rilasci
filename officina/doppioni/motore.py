@@ -11,7 +11,9 @@ from officina import registro
 from officina.insiemi import InsiemiUniti
 from officina.archivio.accesso import Archivio
 from officina.doppioni import occhio
-from officina.errori import ErroreOfficina, FileNonLeggibile
+from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile
+from officina.modello import file_media
+from officina.sicuro import dall_archivio
 
 QUANTE_ALLA_VOLTA = 200
 
@@ -90,31 +92,52 @@ class Passata:
     def _prossime(self, quante: int, dopo: int = 0) -> list[sqlite3.Row]:
         with self.archivio.lettura() as connessione:
             return list(connessione.execute(
-                "SELECT f.id, f.impronta, MIN(p.percorso) AS percorso "
+                "SELECT f.id, f.impronta, (SELECT MIN(p.percorso) FROM percorsi AS p "
+                "WHERE p.file_id = f.id AND p.presente = 1) AS percorso "
                 "FROM file_media AS f "
-                "JOIN percorsi AS p ON p.file_id = f.id AND p.presente = 1 "
                 "WHERE f.genere = 'immagine' AND f.impronta_occhio IS NULL AND f.id > ? "
-                "GROUP BY f.id ORDER BY f.id LIMIT ?",
+                "ORDER BY f.id LIMIT ?",
                 (dopo, quante),
             ))
+
+    def _rimanda(self, codice: str, avanzamento: Avanzamento) -> None:
+        avanzamento.saltate += 1
+        avanzamento.motivi_saltate[codice] = avanzamento.motivi_saltate.get(codice, 0) + 1
 
     def _una(self, riga: sqlite3.Row, avanzamento: Avanzamento) -> None:
         principio = time.monotonic()
         try:
-            segno = occhio.del_percorso(Path(riga["percorso"]))
+            with self.archivio.lettura() as connessione:
+                percorso = file_media.da_guardare(connessione, riga["id"])
+        except DaRifare as errore:
+            self._rimanda(errore.codice, avanzamento)
+            return
+        except FileNonLeggibile as errore:
+            self._non_si_e_potuta(riga["id"], registro.Parola(errore.codice), avanzamento)
+            return
+        if percorso is None:
+            if riga["percorso"] is None:
+                return
+            percorso = Path(riga["percorso"])
+        try:
+            with dall_archivio.attento(percorso):
+                segno = occhio.del_percorso(percorso)
+        except DaRifare as errore:
+            self._rimanda(errore.codice, avanzamento)
+            return
         except (FileNonLeggibile, ErroreOfficina, OSError, ValueError) as errore:
-            self._scrivi(riga["id"], NON_SI_E_POTUTA)
-            motivo = registro.tipo_di(errore)
-            avanzamento.saltate += 1
-            avanzamento.motivi_saltate[motivo] = (
-                avanzamento.motivi_saltate.get(motivo, 0) + 1)
-            registro.avviso("doppioni_immagine_non_guardata",
-                            file_id=riga["id"], motivo=motivo)
+            self._non_si_e_potuta(riga["id"], registro.tipo_di(errore), avanzamento)
             return
         self._scrivi(riga["id"], segno)
         avanzamento.guardate += 1
         self._segna_tempo(time.monotonic() - principio)
         avanzamento.ms_per_immagine = self._media_misurata()
+
+    def _non_si_e_potuta(self, file_id: int, motivo, avanzamento: Avanzamento) -> None:
+        self._scrivi(file_id, NON_SI_E_POTUTA)
+        avanzamento.saltate += 1
+        avanzamento.motivi_saltate[motivo] = avanzamento.motivi_saltate.get(motivo, 0) + 1
+        registro.avviso("doppioni_immagine_non_guardata", file_id=file_id, motivo=motivo)
 
     def _scrivi(self, file_id: int, segno: str) -> None:
         with self.archivio.scrittura() as connessione:

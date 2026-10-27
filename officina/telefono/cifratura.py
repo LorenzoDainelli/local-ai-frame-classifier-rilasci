@@ -8,6 +8,7 @@ from pathlib import Path
 
 from officina.errori import (ErroreOfficina, FileNonLeggibile,
                              PasswordSbagliata)
+from officina.sicuro.dall_archivio import DallArchivio
 
 
 FIRMA = b"VISORE-FILE\x00"
@@ -32,6 +33,12 @@ PROVA = b"officina-visore-prova"
 
 class PacchettoRovinato(ErroreOfficina):
     codice = "pacchetto_rovinato"
+
+
+def _apri(sorgente):
+    if isinstance(sorgente, DallArchivio):
+        return sorgente.apri()
+    return open(sorgente, "rb")
 
 
 def controlla_i_parametri(costo, blocco, parallelo) -> None:
@@ -148,7 +155,8 @@ class Chiave:
         return Scritto(dimensione=len(dati), peso=len(chiuso),
                        impronta=hashlib.blake2b(dati, digest_size=32).hexdigest())
 
-    def cifra_file(self, sorgente: Path, destinazione: Path, posto: str) -> Scritto:
+    def cifra_file(self, sorgente: Path | DallArchivio, destinazione: Path,
+                   posto: str) -> Scritto:
         dimensione = sorgente.stat().st_size
         impronta = hashlib.blake2b(digest_size=32)
         prefisso = secrets.token_bytes(PREFISSO)
@@ -157,7 +165,7 @@ class Chiave:
         provvisorio = destinazione.with_name(destinazione.name + ".parziale")
         peso = 0
         try:
-            with open(sorgente, "rb") as dentro, open(provvisorio, "wb") as fuori:
+            with _apri(sorgente) as dentro, open(provvisorio, "wb") as fuori:
                 testa = _intestazione(prefisso, dimensione, VERSIONE_COL_POSTO)
                 fuori.write(testa)
                 peso += len(testa)
@@ -184,7 +192,7 @@ class Chiave:
                     if ultimo:
                         break
                     numero += 1
-        except (OSError, FileNonLeggibile):
+        except Exception:
             provvisorio.unlink(missing_ok=True)
             raise
         provvisorio.replace(destinazione)

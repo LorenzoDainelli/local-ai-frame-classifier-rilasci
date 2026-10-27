@@ -8,12 +8,13 @@ from typing import Callable
 from officina import registro
 from officina.archivio.accesso import Archivio
 from officina.descrittori import torcia
-from officina.errori import ErroreOfficina, FileNonLeggibile
+from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile
 from officina.immagini import fotogrammi as estrattore
 from officina.immagini import lettura
 from officina.modello import file_media, segnalazioni
 from officina.parole import SCHEDA
 from officina.parole import magazzino
+from officina.sicuro import dall_archivio
 
 QUANTI_ALLA_VOLTA = 32
 
@@ -167,6 +168,9 @@ class Passata:
             immagini, file_id = self._immagini_di(scatto_id)
         except estrattore.Fermato:
             return False
+        except DaRifare as errore:
+            self._salta(scatto_id, errore.codice)
+            return False
         except FileNonLeggibile as errore:
             self._salta(scatto_id, errore.codice)
             self._metti_da_parte(scatto_id, errore.codice, errore.file_id)
@@ -233,25 +237,26 @@ class Passata:
             if principale is None:
                 raise FileNonLeggibile("Nessuna immagine da leggere.",
                                        codice="senza_file")
-            percorso = file_media.percorso_migliore(connessione, principale["id"])
+            percorso = file_media.da_guardare(connessione, principale["id"])
         if percorso is None:
             raise FileNonLeggibile("Il file non si trova sul disco.",
                                    codice="file_non_trovato",
                                    file_id=principale["id"])
-        if video is not None:
-            resa = estrattore.prendi(percorso, self.per_video, LATO_MASSIMO,
-                                     basta=lambda: self.fermata)
-            if not resa:
-                raise FileNonLeggibile(resa.motivo or "Il video non si apre.",
-                                       codice=resa.codice or "video_non_apribile",
-                                       file_id=principale["id"])
-            return [(f.numero, f.immagine) for f in resa.fotogrammi], principale["id"]
-        try:
-            immagine = lettura.copia_di_lavoro(percorso, LATO_MASSIMO)
-        except FileNonLeggibile as errore:
-            errore.file_id = principale["id"]
-            raise
-        return [(0, immagine)], principale["id"]
+        with dall_archivio.attento(percorso):
+            if video is not None:
+                resa = estrattore.prendi(percorso, self.per_video, LATO_MASSIMO,
+                                         basta=lambda: self.fermata)
+                if not resa:
+                    raise FileNonLeggibile(resa.motivo or "Il video non si apre.",
+                                           codice=resa.codice or "video_non_apribile",
+                                           file_id=principale["id"])
+                return [(f.numero, f.immagine) for f in resa.fotogrammi], principale["id"]
+            try:
+                immagine = lettura.copia_di_lavoro(percorso, LATO_MASSIMO)
+            except FileNonLeggibile as errore:
+                errore.file_id = principale["id"]
+                raise
+            return [(0, immagine)], principale["id"]
 
     def _salta(self, scatto_id: int, motivo: str) -> None:
         self.avanzamento.saltati += 1

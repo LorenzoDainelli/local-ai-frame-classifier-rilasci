@@ -1,18 +1,29 @@
 from __future__ import annotations
 
+import json
 from typing import Callable
 
 from officina import registro
 from officina.archivio.accesso import Archivio
 from officina.archivio.database import tutti
-from officina.errori import FileNonLeggibile
-from officina.importazione import metadati
+from officina.errori import DaRifare, FileNonLeggibile
+from officina.importazione import metadati, ripasso
 from officina.modello import file_media
 from officina.modello.scatti import marca_senza_data
+from officina.sicuro import dall_archivio
 
 FINO_A = "date_da_rileggere"
 DA = "date_rilette_fino_a"
+RIMANDATE = "date_rimandate"
 A_GRUPPI = 50
+IN_FILA = ("SELECT id, scatto_id FROM file_media WHERE origine_data = 'assente' "
+           "AND id > ? AND id <= ? ORDER BY id LIMIT ?")
+RIPRESI = ("SELECT id, scatto_id FROM file_media WHERE origine_data = 'assente' "
+           "AND id IN (SELECT value FROM json_each(?)) ORDER BY id")
+NEL_SICURO_CHIUSO = "è solo nell'Archivio sicuro, che è chiuso: aprilo e riguarda"
+NEL_SICURO_ROVINATO = "nell'Archivio sicuro è rovinato"
+NEL_SICURO_DIVERSO = ("nell'Archivio sicuro c'è solo una versione cambiata "
+                      "dopo l'importazione")
 
 
 def quanti_restano(archivio: Archivio) -> int:
@@ -22,17 +33,23 @@ def quanti_restano(archivio: Archivio) -> int:
     with archivio.lettura() as connessione:
         return tutti(connessione,
                      "SELECT count(*) AS q FROM file_media WHERE origine_data = 'assente' "
-                     "AND id > ? AND id <= ?",
-                     int(archivio.stato(DA, 0) or 0), int(fino_a))[0]["q"]
+                     "AND (id > ? AND id <= ? "
+                     "OR id IN (SELECT value FROM json_each(?)))",
+                     int(archivio.stato(DA, 0) or 0), int(fino_a),
+                     json.dumps(ripasso.rimandati(archivio, RIMANDATE)))[0]["q"]
 
 
 def uno(archivio: Archivio, riga) -> bool:
-    with archivio.lettura() as connessione:
-        percorso = file_media.percorso_migliore(connessione, riga["id"])
+    try:
+        with archivio.lettura() as connessione:
+            percorso = file_media.da_guardare(connessione, riga["id"])
+    except FileNonLeggibile:
+        return False
     if percorso is None:
         return False
     try:
-        dati = metadati.leggi(percorso)
+        with dall_archivio.attento(percorso):
+            dati = metadati.leggi(percorso)
     except FileNonLeggibile:
         return False
     if not dati.ha_data:
@@ -61,37 +78,21 @@ def uno(archivio: Archivio, riga) -> bool:
 
 def tutti_i_file(archivio: Archivio, basta: Callable[[], bool] = lambda: False,
                  al_passo: Callable[[int], None] | None = None) -> int:
-    fino_a = archivio.stato(FINO_A)
-    if not fino_a:
+    if not archivio.stato(FINO_A):
         return 0
-    trovate = 0
-    da = int(archivio.stato(DA, 0) or 0)
-    while not basta():
-        with archivio.lettura() as connessione:
-            righe = tutti(
-                connessione,
-                "SELECT id, scatto_id FROM file_media WHERE origine_data = 'assente' "
-                "AND id > ? AND id <= ? ORDER BY id LIMIT ?",
-                da, int(fino_a), A_GRUPPI)
-        if not righe:
-            break
-        for riga in righe:
-            if basta():
-                break
-            try:
-                if uno(archivio, riga):
-                    trovate += 1
-            except Exception:                           # noqa: BLE001
-                registro.avviso("rileggi_date.file_non_letto")
-            da = riga["id"]
-            archivio.salva_stato(DA, da)
-            if al_passo is not None:
-                al_passo(trovate)
-    if basta():
+    esito = ripasso.passa(archivio, fino_a=FINO_A, da=DA, lasciati=RIMANDATE,
+                          in_fila=IN_FILA, ripresi=RIPRESI,
+                          fai=lambda riga: uno(archivio, riga),
+                          avviso="rileggi_date.file_non_letto", basta=basta,
+                          al_passo=al_passo, a_gruppi=A_GRUPPI)
+    trovate = esito.fatti
+    if esito.fermato:
         return trovate
     trovate += dai_compagni(archivio)
-    with archivio.scrittura() as connessione:
-        connessione.execute("DELETE FROM stato WHERE chiave IN (?, ?)", (FINO_A, DA))
+    if esito.rimandati:
+        registro.evento("rileggi_date.rimandate", quanti=esito.rimandati)
+        return trovate
+    ripasso.finisci(archivio, FINO_A, DA, RIMANDATE)
     registro.evento("rileggi_date.finito", quanti=trovate)
     return trovate
 
@@ -124,15 +125,20 @@ def perche(archivio: Archivio) -> list[dict]:
             connessione,
             "SELECT f.id FROM scatti s JOIN file_media f ON f.scatto_id = s.id "
             "WHERE s.data_locale IS NULL AND s.fuori_archivio = 0 ORDER BY f.id")
-        percorsi = [(riga["id"], file_media.percorso_migliore(connessione, riga["id"]))
-                    for riga in righe]
+        percorsi = [(riga["id"], _da_guardare(connessione, riga["id"])) for riga in righe]
     gruppi: dict[tuple, int] = {}
     for _, percorso in percorsi:
         if percorso is None:
             chiave = ("?", (("file", "non trovato: il disco o la cartella non ci sono"),))
+        elif isinstance(percorso, str):
+            chiave = ("?", (("file", percorso),))
         else:
             try:
-                motivi = tuple(metadati.diagnosi(percorso))
+                with dall_archivio.attento(percorso):
+                    motivi = tuple(metadati.diagnosi(percorso))
+            except DaRifare as errore:
+                chiuso = errore.codice == dall_archivio.CHIUSO_ADESSO
+                motivi = (("file", NEL_SICURO_CHIUSO if chiuso else NEL_SICURO_ROVINATO),)
             except OSError:
                 motivi = (("file", "non si legge"),)
             chiave = (percorso.suffix.lower() or "senza estensione", motivi)
@@ -140,3 +146,12 @@ def perche(archivio: Archivio) -> list[dict]:
     return sorted(({"tipo": tipo, "motivi": list(motivi), "quanti": quanti}
                    for (tipo, motivi), quanti in gruppi.items()),
                   key=lambda gruppo: -gruppo["quanti"])
+
+
+def _da_guardare(connessione, file_id: int):
+    try:
+        return file_media.da_guardare(connessione, file_id)
+    except DaRifare:
+        return NEL_SICURO_CHIUSO
+    except FileNonLeggibile:
+        return NEL_SICURO_DIVERSO

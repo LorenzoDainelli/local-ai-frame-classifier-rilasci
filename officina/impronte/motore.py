@@ -4,7 +4,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Callable, Sequence
 
 from PIL import Image
@@ -14,10 +13,11 @@ from officina.archivio.accesso import Archivio
 from officina.descrittori import apri as apri_descrittore
 from officina.descrittori import griglia, preparazione, scheda, torcia
 from officina.descrittori.base import Descrittore, Scheda
-from officina.errori import FileNonLeggibile
+from officina.errori import DaRifare, FileNonLeggibile
 from officina.immagini import fotogrammi as estrattore
 from officina.immagini import lettura
 from officina.modello import file_media, impronte as magazzino, segnalazioni
+from officina.sicuro import dall_archivio
 
 IMMAGINI_PER_GRUPPO = 24
 
@@ -262,6 +262,8 @@ class Passata:
                 ritagli, quanti_fotogrammi = self._ritagli_di(riga)
             except estrattore.Fermato:
                 break
+            except DaRifare as errore:
+                saltati.append((riga["id"], errore.codice))
             except FileNonLeggibile as errore:
                 saltati.append((riga["id"], errore.codice))
                 non_si_aprono.append(
@@ -319,28 +321,29 @@ class Passata:
             principale = _il_file_da_guardare(file_righe)
             if principale is None:
                 raise FileNonLeggibile("Nessun file da guardare.", codice="senza_file")
-            percorso = file_media.percorso_migliore(connessione, principale["id"])
+            percorso = file_media.da_guardare(connessione, principale["id"])
 
         if percorso is None:
             raise FileNonLeggibile("Il file non si trova sul disco.",
                                    codice="file_non_trovato",
                                    file_id=principale["id"])
 
-        if principale["genere"] == "immagine":
-            try:
-                immagine = lettura.copia_di_lavoro(percorso, self.carta.lato * 4)
-            except FileNonLeggibile as errore:
-                errore.file_id = principale["id"]
-                raise
-            return [
-                _Lavoro(riga["id"], principale["id"], ritaglio.inquadratura,
-                        ritaglio.metodo, ritaglio.riquadro, 0, None, ritaglio.immagine)
-                for ritaglio in self._inquadrature(immagine)
-            ], 0
-        return self._ritagli_di_un_video(riga, principale, percorso)
+        with dall_archivio.attento(percorso):
+            if principale["genere"] == "immagine":
+                try:
+                    immagine = lettura.copia_di_lavoro(percorso, self.carta.lato * 4)
+                except FileNonLeggibile as errore:
+                    errore.file_id = principale["id"]
+                    raise
+                return [
+                    _Lavoro(riga["id"], principale["id"], ritaglio.inquadratura,
+                            ritaglio.metodo, ritaglio.riquadro, 0, None, ritaglio.immagine)
+                    for ritaglio in self._inquadrature(immagine)
+                ], 0
+            return self._ritagli_di_un_video(riga, principale, percorso)
 
     def _ritagli_di_un_video(self, riga, principale,
-                             percorso: Path) -> tuple[list[_Lavoro], int]:
+                             percorso) -> tuple[list[_Lavoro], int]:
         resa = estrattore.prendi(percorso, self.per_video, self.carta.lato * 4,
                                  basta=lambda: self.fermata)
         if not resa:

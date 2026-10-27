@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Callable
 
 from officina.importazione import gruppi
@@ -11,9 +10,10 @@ from officina import registro
 from officina.archivio.accesso import Archivio
 from officina.archivio.database import adesso, tutti, uno
 from officina.descrittori import torcia, vettori
-from officina.errori import ErroreOfficina, FileNonLeggibile
+from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile
 from officina.immagini import lettura
 from officina.modello import file_media, segnalazioni
+from officina.sicuro import dall_archivio
 from officina.volti import rilevatore as rilevatore_mod
 
 LATO_DI_LAVORO = 1280
@@ -95,6 +95,8 @@ class Passata:
                     self.avanzamento.fatti += 1
                     for pesante in memoria.riuscito():
                         self._segnala(pesante, ErroreOfficina(torcia.TROPPO_PER_LA_MEMORIA))
+                except DaRifare as errore:
+                    self._rimanda(errore.codice)
                 except ErroreOfficina as errore:
                     self._segnala(scatto_id, errore)
                 except Exception as guasto:          # noqa: BLE001
@@ -118,7 +120,7 @@ class Passata:
             principale = next((f for f in righe if f["ruolo"] == "principale"), None)
             if principale is None:
                 raise ErroreOfficina("Questo scatto non ha un file principale.")
-            percorso = file_media.percorso_migliore(connessione, principale["id"])
+            percorso = file_media.da_guardare(connessione, principale["id"])
             fotogrammi = [(riga["fotogramma"], riga["istante_ms"]) for riga in tutti(
                 connessione,
                 "SELECT fotogramma, min(istante_ms) AS istante_ms FROM impronte "
@@ -129,18 +131,19 @@ class Passata:
             raise ErroreOfficina("Il file non si trova sul disco.")
 
         trovati: list[tuple[int, object]] = []
-        if principale["genere"] == "immagine":
-            immagine = lettura.copia_di_lavoro(Path(percorso), LATO_DI_LAVORO)
-            trovati = [(0, faccia) for faccia in self.rilevatore.guarda(immagine)]
-        else:
-            from officina.immagini import fotogrammi as estrattore
+        with dall_archivio.attento(percorso):
+            if principale["genere"] == "immagine":
+                immagine = lettura.copia_di_lavoro(percorso, LATO_DI_LAVORO)
+                trovati = [(0, faccia) for faccia in self.rilevatore.guarda(immagine)]
+            else:
+                from officina.immagini import fotogrammi as estrattore
 
-            for numero, istante in (fotogrammi or [(0, None)]):
-                quadro = estrattore.uno(Path(percorso), numero, istante, LATO_DI_LAVORO)
-                if quadro is None:
-                    continue
-                trovati.extend((numero, faccia)
-                               for faccia in self.rilevatore.guarda(quadro))
+                for numero, istante in (fotogrammi or [(0, None)]):
+                    quadro = estrattore.uno(percorso, numero, istante, LATO_DI_LAVORO)
+                    if quadro is None:
+                        continue
+                    trovati.extend((numero, faccia)
+                                   for faccia in self.rilevatore.guarda(quadro))
 
         with self.archivio.scrittura() as connessione:
             connessione.execute(
@@ -171,6 +174,10 @@ class Passata:
             if trovati:
                 self.avanzamento.scatti_con_volti += 1
             self.avanzamento.volti += len(trovati)
+
+    def _rimanda(self, codice: str) -> None:
+        self.avanzamento.saltati += 1
+        self.avanzamento.motivi[codice] = self.avanzamento.motivi.get(codice, 0) + 1
 
     def _segnala(self, scatto_id: int, errore: ErroreOfficina) -> None:
         self.avanzamento.saltati += 1

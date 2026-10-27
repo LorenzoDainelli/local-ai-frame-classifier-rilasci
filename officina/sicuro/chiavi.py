@@ -28,6 +28,7 @@ BLOCCO_SCRYPT = 8
 PARALLELO = 1
 SECONDI = 0.6
 MINIMO = 12
+NON_ESCE = "La chiave dell'Archivio sicuro non esce da questo programma."
 
 
 class ChiaveRovinata(ErroreOfficina):
@@ -55,6 +56,9 @@ class Chiave:
 
     def __repr__(self) -> str:
         return f"Chiave({self.nome[:8]}…)"
+
+    def __reduce__(self):
+        raise TypeError(NON_ESCE)
 
 
 def _deriva(segreto: bytes, uso: bytes, quanto: int = LUNGHEZZA) -> bytes:

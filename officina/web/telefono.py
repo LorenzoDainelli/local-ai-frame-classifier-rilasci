@@ -215,11 +215,27 @@ def avvisi(connessione, telefono, stima: selezione.Stima, se_ne_vanno: int,
                      "si può fare lo stesso, e sarà vuoto.",
             "forte": True})
 
+    if stima.da_cercare:
+        detti.append({
+            "testo": (("1 file non è sul disco" if stima.da_cercare == 1 else
+                       f"{selezione.a_numero(stima.da_cercare)} file non sono sul disco")
+                      + " e l'Archivio sicuro è chiuso: aprilo, se no il pacchetto "
+                        "non parte."),
+            "forte": True})
+
     if stima.file_mancanti:
         detti.append({
             "testo": f"{selezione.a_numero(stima.file_mancanti)} file non si "
                      f"trovano più sul disco: non entrano, e il travaso non "
                      f"si ferma per loro (regole 96, 156).",
+            "forte": False})
+
+    if stima.versioni_diverse:
+        detti.append({
+            "testo": (("1 file resta fuori" if stima.versioni_diverse == 1 else
+                       f"{selezione.a_numero(stima.versioni_diverse)} file restano fuori")
+                      + ": nell'Archivio sicuro c'è solo una versione cambiata dopo "
+                        "l'importazione."),
             "forte": False})
 
     if stima.senza_miniatura:

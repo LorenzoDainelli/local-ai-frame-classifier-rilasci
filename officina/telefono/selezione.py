@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
+from officina import registro
 from officina.archivio.database import tutti, uno
+from officina.errori import ErroreOfficina
 from officina.modello import nodi
+from officina.sicuro import dall_archivio
 from officina.telefono import cifratura
 
 DATABASE_PER_SCATTO = 1000
@@ -215,6 +218,8 @@ class Stima:
     senza_miniatura: int = 0
     file_mancanti: int = 0
     in_attesa: int = 0
+    da_cercare: int = 0
+    versioni_diverse: int = 0
 
     @property
     def peso(self) -> int:
@@ -240,6 +245,34 @@ class Stima:
     def sul_tasto(self, telefono: str) -> str:
         return (f"Prepara {a_numero(self.quanti_scatti)} scatti "
                 f"({a_misura(self.peso)}) per {telefono}")
+
+
+def _il_sicuro() -> tuple:
+    from officina.programma import archivio_sicuro
+
+    return archivio_sicuro.per_le_foto()
+
+
+def _nell_archivio(connessione, riga, sicuro: tuple) -> str:
+    from officina.modello import file_media
+
+    perche, servizio = sicuro
+    if servizio is None:
+        return perche
+    try:
+        if riga["impronta"]:
+            veloce = servizio.cerca(riga["impronta"], riga["dimensione"], [],
+                                    nome=str(riga["id"]),
+                                    intero=riga["genere"] == "immagine")
+            if veloce.trovata is not None and not veloce.diversa:
+                return dall_archivio.TROVATA
+        ricerca = file_media.cerca_nell_archivio(connessione, riga["id"])
+    except ErroreOfficina as errore:
+        registro.avviso("sicuro.ricerca_non_riuscita", motivo=registro.Parola(errore.codice))
+        return dall_archivio.CHIUSO
+    if ricerca.diversa:
+        return dall_archivio.DIVERSA
+    return ricerca.perche
 
 
 def a_numero(quanti: int) -> str:
@@ -284,17 +317,29 @@ def stima(connessione, scelta: Selezione,
 
     righe = tutti(
         connessione,
-        f"SELECT f.dimensione, f.genere, f.miniatura, s.genere AS scatto, "
+        f"SELECT f.id, f.impronta, f.dimensione, f.genere, f.miniatura, "
+        f"       s.genere AS scatto, "
         f"       EXISTS (SELECT 1 FROM percorsi p WHERE p.file_id = f.id "
         f"               AND p.presente = 1) AS c_e "
         f"FROM file_media f JOIN scatti s ON s.id = f.scatto_id "
         f"WHERE {dove}", *parametri)
 
     miniature = set()
+    sicuro = None
     for r in righe:
         if not r["c_e"]:
-            conto.file_mancanti += 1
-            continue
+            if sicuro is None:
+                sicuro = _il_sicuro()
+            perche = _nell_archivio(connessione, r, sicuro)
+            if perche in (dall_archivio.CHIUSO, dall_archivio.SI_APRE):
+                conto.da_cercare += 1
+                continue
+            if perche == dall_archivio.DIVERSA:
+                conto.versioni_diverse += 1
+                continue
+            if perche != dall_archivio.TROVATA:
+                conto.file_mancanti += 1
+                continue
         conto.quanti_file += 1
         peso = cifratura.peso_cifrato(r["dimensione"] or 0)
         conto.peso_originali += peso

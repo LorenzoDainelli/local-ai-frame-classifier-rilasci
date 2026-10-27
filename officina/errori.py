@@ -33,6 +33,10 @@ class FileNonLeggibile(ErroreOfficina):
         self.file_id = file_id
 
 
+class DaRifare(ErroreOfficina):
+    codice = "da_rifare"
+
+
 class CartellaNonTrovata(ErroreOfficina):
     codice = "cartella_non_trovata"
 
@@ -62,6 +66,12 @@ PERCHE_SALTATO = {
               "OneDrive, con il contenuto ancora nella nuvola"),
     "estensione_bugiarda": "il file non è del tipo che dice di essere",
     "corrotto": "il file è danneggiato",
+    "sicuro_chiuso": ("il file non è sul disco e l'Archivio sicuro è chiuso: lo rifaccio "
+                      "quando lo apri"),
+    "persa_nell_archivio": ("nell'Archivio sicuro il file è rovinato: lo riprovo quando "
+                            "l'archivio l'ha riparato"),
+    "versione_diversa": ("nell'Archivio sicuro c'è solo una versione cambiata dopo "
+                         "l'importazione: l'IA non la guarda"),
 }
 
 MOTIVO_SENZA_FRASE = "per un motivo che il programma non sa ancora spiegare"

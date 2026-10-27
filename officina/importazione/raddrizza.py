@@ -1,17 +1,26 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Callable
 
 from officina import registro
 from officina.archivio.accesso import Archivio
 from officina.archivio.database import tutti
-from officina.importazione import quicktime
+from officina.errori import FileNonLeggibile
+from officina.importazione import quicktime, ripasso
 from officina.modello import file_media
+from officina.sicuro import dall_archivio
 
 FINO_A = "video_da_raddrizzare"
 DA = "video_raddrizzati_fino_a"
+RIMANDATI = "video_rimandati"
 A_GRUPPI = 50
+IN_FILA = ("SELECT id, impronta, miniatura, scatto_id, ruolo FROM file_media "
+           "WHERE genere = 'video' AND id > ? AND id <= ? ORDER BY id LIMIT ?")
+RIPRESI = ("SELECT id, impronta, miniatura, scatto_id, ruolo FROM file_media "
+           "WHERE genere = 'video' AND id IN (SELECT value FROM json_each(?)) "
+           "ORDER BY id")
 
 
 def quanti_restano(archivio: Archivio) -> int:
@@ -21,8 +30,10 @@ def quanti_restano(archivio: Archivio) -> int:
     with archivio.lettura() as connessione:
         return tutti(connessione,
                      "SELECT count(*) AS q FROM file_media WHERE genere = 'video' "
-                     "AND id > ? AND id <= ?",
-                     int(archivio.stato(DA, 0) or 0), int(fino_a))[0]["q"]
+                     "AND (id > ? AND id <= ? "
+                     "OR id IN (SELECT value FROM json_each(?)))",
+                     int(archivio.stato(DA, 0) or 0), int(fino_a),
+                     json.dumps(ripasso.rimandati(archivio, RIMANDATI)))[0]["q"]
 
 
 def nome_della_copia_storta(impronta: str) -> str:
@@ -42,11 +53,15 @@ def _butta(archivio: Archivio, nome: str | None, copia: bool = False) -> None:
 
 
 def uno(archivio: Archivio, riga) -> bool:
-    with archivio.lettura() as connessione:
-        percorso = file_media.percorso_migliore(connessione, riga["id"])
+    try:
+        with archivio.lettura() as connessione:
+            percorso = file_media.da_guardare(connessione, riga["id"])
+    except FileNonLeggibile:
+        return False
     if percorso is None:
         return False
-    letto = quicktime.leggi(percorso)
+    with dall_archivio.attento(percorso):
+        letto = quicktime.leggi(percorso)
     if not letto.rotazione:
         return False
     larghezza, altezza = quicktime.misure_raddrizzate(letto)
@@ -71,35 +86,18 @@ def uno(archivio: Archivio, riga) -> bool:
 
 def tutti_i_video(archivio: Archivio, basta: Callable[[], bool] = lambda: False,
                   al_passo: Callable[[int], None] | None = None) -> int:
-    fino_a = archivio.stato(FINO_A)
-    if not fino_a:
+    if not archivio.stato(FINO_A):
         return 0
-    raddrizzati = 0
-    da = int(archivio.stato(DA, 0) or 0)
-    while not basta():
-        with archivio.lettura() as connessione:
-            righe = tutti(
-                connessione,
-                "SELECT id, impronta, miniatura, scatto_id, ruolo FROM file_media "
-                "WHERE genere = 'video' AND id > ? AND id <= ? ORDER BY id LIMIT ?",
-                da, int(fino_a), A_GRUPPI)
-        if not righe:
-            break
-        for riga in righe:
-            if basta():
-                break
-            try:
-                if uno(archivio, riga):
-                    raddrizzati += 1
-            except Exception:                           # noqa: BLE001
-                registro.avviso("raddrizza.video_non_letto")
-            da = riga["id"]
-            archivio.salva_stato(DA, da)
-            if al_passo is not None:
-                al_passo(raddrizzati)
-    if basta():
-        return raddrizzati
-    with archivio.scrittura() as connessione:
-        connessione.execute("DELETE FROM stato WHERE chiave IN (?, ?)", (FINO_A, DA))
-    registro.evento("raddrizza.video", quanti=raddrizzati)
-    return raddrizzati
+    esito = ripasso.passa(archivio, fino_a=FINO_A, da=DA, lasciati=RIMANDATI,
+                          in_fila=IN_FILA, ripresi=RIPRESI,
+                          fai=lambda riga: uno(archivio, riga),
+                          avviso="raddrizza.video_non_letto", basta=basta,
+                          al_passo=al_passo, a_gruppi=A_GRUPPI)
+    if esito.fermato:
+        return esito.fatti
+    if esito.rimandati:
+        registro.evento("raddrizza.rimandati", quanti=esito.rimandati)
+        return esito.fatti
+    ripasso.finisci(archivio, FINO_A, DA, RIMANDATI)
+    registro.evento("raddrizza.video", quanti=esito.fatti)
+    return esito.fatti

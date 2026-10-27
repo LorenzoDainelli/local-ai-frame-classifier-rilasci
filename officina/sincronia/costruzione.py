@@ -181,6 +181,22 @@ def _percorso_sul_disco(percorsi: list[tuple[str, str]]) -> tuple[Path | None, s
     return None, nome
 
 
+def _senza_originale(archivio, file_id: int, impronta: str) -> str:
+    from officina.modello import file_media
+    from officina.sicuro import dall_archivio
+
+    try:
+        with archivio.lettura() as connessione:
+            perche = file_media.cerca_nell_archivio(connessione, file_id).perche
+    except ErroreOfficina:
+        perche = dall_archivio.CHIUSO
+    if perche == dall_archivio.TROVATA:
+        return f"originale solo nell'Archivio sicuro: {impronta[:12]}"
+    if perche in (dall_archivio.CHIUSO, dall_archivio.SI_APRE):
+        return f"originale non sul disco, e l'Archivio sicuro era chiuso: {impronta[:12]}"
+    return f"originale non trovato sul disco: {impronta[:12]}"
+
+
 def _appoggio(archivio) -> Path:
     lavoro = Path(archivio.dove.radice) / "lavoro"
     lavoro.mkdir(parents=True, exist_ok=True)
@@ -407,7 +423,7 @@ def _metti_i_file(archivio, viaggiante: sqlite3.Connection, cartella: Path,
             if not allegare:
                 pass
             elif sorgente is None:
-                note.append(f"originale non trovato sul disco: {impronta[:12]}")
+                note.append(_senza_originale(archivio, riga["id"], impronta))
             else:
                 posto = formato.posto_dell_originale()
                 destinazione = formato.dentro(cartella, posto)

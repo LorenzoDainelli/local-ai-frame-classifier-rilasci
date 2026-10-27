@@ -12,9 +12,10 @@ from officina.archivio.database import adesso, tutti, uno
 from officina.corpi import Interrotta, corpo3d, maschere, obiettivo
 from officina.corpi import rilevatore as rilevatore_mod
 from officina.descrittori import torcia
-from officina.errori import ErroreOfficina, FileNonLeggibile
+from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile
 from officina.importazione import gruppi
 from officina.modello import file_media, segnalazioni
+from officina.sicuro import dall_archivio
 
 ASPETTO = "corpo3d-1"
 VERSIONE_OBIETTIVO = "1-puffin-caption"
@@ -64,7 +65,8 @@ def campo_dall_exif(percorso: Path, larga: int, alta: int) -> float | None:
     from officina.immagini import lettura
 
     try:
-        with Image.open(percorso, formats=lettura.formati_aperti()) as aperta:
+        with (dall_archivio.per_av(percorso) as sorgente,
+              Image.open(sorgente, formats=lettura.formati_aperti()) as aperta):
             esteso = aperta.getexif().get_ifd(IFD_EXIF) or {}
     except Exception:
         return None
@@ -206,6 +208,7 @@ class Letto:
     alta: int
     quadri: list[Quadro]
     lente: Lente | None = None
+    campo_exif: float | None = None
 
 
 class Passata:
@@ -260,6 +263,9 @@ class Passata:
                 raise Interrotta()
             try:
                 letto = self._leggi(scatto_id)
+            except DaRifare as errore:
+                self._rimanda(errore.codice)
+                continue
             except ErroreOfficina as errore:
                 self._segnala(scatto_id, errore)
                 continue
@@ -281,7 +287,7 @@ class Passata:
             principale = next((f for f in righe if f["ruolo"] == "principale"), None)
             if principale is None:
                 raise ErroreOfficina("Questo scatto non ha un file principale.")
-            percorso = file_media.percorso_migliore(connessione, principale["id"])
+            percorso = file_media.da_guardare(connessione, principale["id"])
             corpi = tutti(connessione,
                           "SELECT c.id, c.fotogramma, c.riquadro, c.maschera FROM corpi c "
                           "WHERE c.scatto_id = ? AND c.modello = ? AND NOT EXISTS ("
@@ -299,18 +305,21 @@ class Passata:
         per_quadro: dict[int, list] = {}
         for corpo in corpi:
             per_quadro.setdefault(int(corpo["fotogramma"]), []).append(corpo)
-        quadri, larga, alta = [], 0, 0
-        for numero, suoi in sorted(per_quadro.items()):
-            if principale["genere"] == "immagine":
-                intera = lettura.copia_di_lavoro(Path(percorso))
-            else:
-                from officina.immagini import fotogrammi as estrattore
+        quadri, larga, alta, campo = [], 0, 0, None
+        with dall_archivio.attento(percorso):
+            for numero, suoi in sorted(per_quadro.items()):
+                if principale["genere"] == "immagine":
+                    intera = lettura.copia_di_lavoro(percorso)
+                else:
+                    from officina.immagini import fotogrammi as estrattore
 
-                intera = estrattore.uno(Path(percorso), numero, istanti.get(numero))
-            if intera is None:
-                continue
-            larga, alta = intera.size
-            quadri.append(Quadro(numero, _ridotta(intera.convert("RGB")), list(suoi)))
+                    intera = estrattore.uno(percorso, numero, istanti.get(numero))
+                if intera is None:
+                    continue
+                larga, alta = intera.size
+                quadri.append(Quadro(numero, _ridotta(intera.convert("RGB")), list(suoi)))
+            if quadri and gia is None and principale["genere"] == "immagine":
+                campo = campo_dall_exif(percorso, larga, alta)
         if not quadri:
             raise FileNonLeggibile("Non riesco a leggere i fotogrammi di questo scatto.",
                                    codice="non_letto")
@@ -318,15 +327,15 @@ class Passata:
         if gia is not None:
             lente = Lente(gia["fonte"], gia["campo_verticale"], gia["rollio"], gia["beccheggio"],
                           gia["distorsione"])
-        return Letto(scatto_id, Path(percorso), principale["genere"], larga, alta, quadri, lente)
+        return Letto(scatto_id, percorso, principale["genere"], larga, alta, quadri, lente,
+                     campo)
 
     def _trova_le_lenti(self, letti: list[Letto]) -> list[Letto]:
         senza = []
         for letto in letti:
             if letto.lente is not None:
                 continue
-            campo = (campo_dall_exif(letto.percorso, letto.larga, letto.alta)
-                     if letto.genere == "immagine" else None)
+            campo = letto.campo_exif if letto.genere == "immagine" else None
             if campo is not None:
                 letto.lente = Lente(EXIF, campo)
                 self._salva_la_lente(letto)
@@ -421,6 +430,10 @@ class Passata:
                     "SELECT id, ?, 1, ?, ? FROM corpi WHERE id = ?",
                     (ASPETTO, corpi_mod.vettore_a_byte(numeri), bytes(int(bool(m)) for m in mani),
                      corpo_id))
+
+    def _rimanda(self, codice: str) -> None:
+        self.avanzamento.saltati += 1
+        self.avanzamento.motivi[codice] = self.avanzamento.motivi.get(codice, 0) + 1
 
     def _segnala(self, scatto_id: int, errore: ErroreOfficina) -> None:
         self.avanzamento.saltati += 1

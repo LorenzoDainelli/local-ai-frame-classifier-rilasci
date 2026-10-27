@@ -8,6 +8,7 @@ import time
 
 from officina import registro
 from officina.errori import ErroreOfficina
+from officina.sicuro import sportello
 
 OGNI_QUANTO = 0.5
 TEMPO_PER_CHIUDERSI = 5.0
@@ -132,10 +133,11 @@ def chiudi(entro: float = TEMPO_PER_CHIUDERSI) -> None:
             processo.join(timeout=2.0)
 
 
-def _avvia(a: str, bersaglio, argomenti: tuple):
-    contesto = multiprocessing.get_context("spawn")
+def _avvia(a: str, bersaglio, argomenti: tuple, contesto=None, in_fondo: tuple = ()):
+    contesto = contesto or multiprocessing.get_context("spawn")
     comandi, notizie = contesto.Queue(), contesto.Queue()
-    processo = contesto.Process(target=bersaglio, args=(*argomenti, comandi, notizie),
+    processo = contesto.Process(target=bersaglio,
+                                args=(*argomenti, comandi, notizie, *in_fondo),
                                 name=a, daemon=True)
     with _lucchetto:
         processo.start()
@@ -143,21 +145,36 @@ def _avvia(a: str, bersaglio, argomenti: tuple):
     return processo, notizie
 
 
-def _ascolta(processo, notizie, ogni_foto) -> dict | None:
+def _avvia_con_lo_sportello(a: str, bersaglio, argomenti: tuple, nome: str):
+    contesto = multiprocessing.get_context("spawn")
+    risposte, giro = contesto.Queue(), contesto.RawValue("q", 0)
+    processo, notizie = _avvia(a, bersaglio, argomenti, contesto, ((risposte, giro),))
+    return processo, notizie, sportello.Sportello(nome, risposte, giro)
+
+
+def _ascolta(processo, notizie, ogni_foto, allo_sportello=None) -> dict | None:
     esito = None
     try:
         while True:
+            if allo_sportello is not None:
+                allo_sportello.controlla()
             try:
                 tipo, foto, dati = notizie.get(timeout=OGNI_QUANTO)
             except queue.Empty:
                 if not processo.is_alive():
                     break
                 continue
+            if tipo == "archivio":
+                if allo_sportello is not None:
+                    allo_sportello.ricevi(dati)
+                continue
             ogni_foto(foto)
             if tipo == "fine":
                 esito = dati or {}
                 break
     finally:
+        if allo_sportello is not None:
+            allo_sportello.chiudi()
         processo.join(timeout=TEMPO_PER_CHIUDERSI)
         if processo.is_alive():
             processo.terminate()
@@ -241,10 +258,13 @@ def _ubbidisci(comandi) -> None:
             comune.fila_ia["scelti"] = list(comando[1])
 
 
-def _figlio(nome: str, come: str, scelti: list[str], comandi, notizie) -> None:
+def _figlio(nome: str, come: str, scelti: list[str], comandi, notizie,
+            linea: tuple | None = None) -> None:
     from officina.archivio import accesso
 
     esito: dict = {}
+    if linea is not None:
+        sportello.installa(notizie, *linea)
     try:
         archivio = accesso.apri(nome)
         from officina.web.strade import comune
@@ -319,9 +339,10 @@ def _smetti() -> None:
 
 
 def ponte(nome: str, scelti: list[str], come: str = FILA_VERA) -> None:
-    processo, notizie = _avvia(FILA, _figlio, (nome, come, list(scelti)))
+    processo, notizie, allo_sportello = _avvia_con_lo_sportello(
+        FILA, _figlio, (nome, come, list(scelti)), nome)
     try:
-        esito = _ascolta(processo, notizie, _applica)
+        esito = _ascolta(processo, notizie, _applica, allo_sportello)
     finally:
         _smetti()
     _esito_o_guasto(esito, processo)
@@ -336,7 +357,8 @@ def lancia(lavoro, a: str, nome: str, avvio: str, argomenti: tuple = (),
 
 def _ponte_di(lavoro, a: str, nome: str, avvio: str, argomenti: list,
               ferma_con: str, racconta: str, applica: str) -> None:
-    processo, notizie = _avvia(a, _figlio_di, (nome, avvio, argomenti, ferma_con, racconta))
+    processo, notizie, allo_sportello = _avvia_con_lo_sportello(
+        a, _figlio_di, (nome, avvio, argomenti, ferma_con, racconta), nome)
     metti = _trova(applica) if applica else None
 
     def ogni_foto(foto: dict | None) -> None:
@@ -347,16 +369,18 @@ def _ponte_di(lavoro, a: str, nome: str, avvio: str, argomenti: list,
             metti(foto["racconto"])
 
     try:
-        esito = _ascolta(processo, notizie, ogni_foto)
+        esito = _ascolta(processo, notizie, ogni_foto, allo_sportello)
     finally:
         lavoro.smetti_di_riflettere()
     _esito_o_guasto(esito, processo)
 
 
 def _figlio_di(nome: str, avvio: str, argomenti: list, ferma_con: str, racconta: str,
-               comandi, notizie) -> None:
+               comandi, notizie, linea: tuple | None = None) -> None:
     from officina.archivio import accesso
 
+    if linea is not None:
+        sportello.installa(notizie, *linea)
     try:
         archivio = accesso.apri(nome)
         lavoro = _trova(avvio)(archivio, *argomenti)

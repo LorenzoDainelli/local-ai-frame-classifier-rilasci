@@ -162,11 +162,16 @@ class Fonti:
 
 class Flusso(io.RawIOBase):
 
-    def __init__(self, fonti: Fonti, pila: ExitStack):
+    def __init__(self, fonti: Fonti, pila: ExitStack, guasto=None):
         super().__init__()
         self._fonti = fonti
         self._pila = pila
+        self._guasto = guasto
         self._dove = 0
+
+    def _male(self, codice: str | None) -> None:
+        if self._guasto is not None:
+            self._guasto(codice)
 
     def readable(self) -> bool:
         return True
@@ -196,9 +201,13 @@ class Flusso(io.RawIOBase):
         numero = self._dove // forma.blocco
         try:
             chiaro = self._fonti.blocco(numero)
-        except ErroreOfficina as errore:
-            raise OSError(errno.EIO, str(errore)) from errore
+        except Exception as errore:
+            self._male(getattr(errore, "codice", None))
+            if isinstance(errore, ErroreOfficina):
+                raise OSError(errno.EIO, str(errore)) from errore
+            raise
         if chiaro is None:
+            self._male(Persa.codice)
             raise OSError(errno.EIO, PERSA)
         da = self._dove - numero * forma.blocco
         quanti = min(len(spazio), len(chiaro) - da)
@@ -232,6 +241,23 @@ def tutto(fonti: Fonti, informazioni: dict) -> io.BytesIO:
         raise _persa()
     fuori.seek(0)
     return fuori
+
+
+def lettore(numero: str, informazioni: dict, chiave, percorso, intero: bool, *,
+            apri=leggi, altre=None, segnala=None, letta=None, vivo=None, guasto=None):
+    pila = ExitStack()
+    try:
+        fonti = Fonti(numero, informazioni, chiave, pila, apri=apri, altre=altre,
+                      segnala=segnala, letta=letta, vivo=vivo)
+        fonti.aggiungi(percorso, numero, informazioni["testa"])
+        if not intero:
+            return io.BufferedReader(Flusso(fonti, pila, guasto=guasto),
+                                     buffer_size=fonti.forma.blocco)
+        with pila:
+            return tutto(fonti, informazioni)
+    except BaseException:
+        pila.close()
+        raise
 
 
 def _salvataggio(informazioni: dict | None) -> bool:
@@ -336,4 +362,4 @@ class Riparatore(Sottofondo):
 
 
 __all__ = ["COMPLETI", "Flusso", "Fonti", "OGNI", "PERSA", "Persa", "Riparatore",
-           "altre_fonti", "leggi", "parenti", "trova", "tutto"]
+           "altre_fonti", "leggi", "lettore", "parenti", "trova", "tutto"]

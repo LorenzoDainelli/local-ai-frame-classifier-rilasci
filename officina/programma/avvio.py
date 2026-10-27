@@ -603,7 +603,27 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                 from officina.programma import archivio_sicuro
 
                 self.sicuro = archivio_sicuro.Collegamento(posizione(REALE))
+                self.sicuro.quando_si_apre(self._ripassi_dopo_l_apertura)
             return self.sicuro
+
+    def _ripassi_dopo_l_apertura(self) -> None:
+        from officina.archivio import accesso
+        from officina.web.strade import comune, importazione
+
+        if not comune.gia_ripreso:
+            return
+        try:
+            archivio = accesso.aperto()
+        except ErroreOfficina:
+            return
+        for riparti in (importazione.raddrizza_i_video_in_sottofondo,
+                        importazione.rileggi_le_date_in_sottofondo,
+                        importazione.rileggi_le_macchine_in_sottofondo):
+            try:
+                riparti(archivio)
+            except Exception as guasto:
+                registro.errore("programma.ripassi_non_ripartiti",
+                                **registro.dove_si_e_rotto(guasto))
 
     def _apri_l_archivio_sicuro_in_sottofondo(self, password: str | None) -> None:
         from officina.programma import archivio_sicuro

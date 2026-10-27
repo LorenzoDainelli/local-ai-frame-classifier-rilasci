@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import io
 import os
 import threading
 import time
-from contextlib import ExitStack
 from pathlib import Path
 
 from officina.errori import ErroreOfficina
@@ -29,6 +27,7 @@ RIPROVA = 600.0
 CHIUSO = "L'Archivio sicuro è chiuso: aprilo e riprova."
 AVANZI = frozenset({chiavi.FILE + ".nuovo", chiavi.RISERVA + ".nuovo"})
 SOLO_LA_CHIAVE = frozenset({chiavi.FILE, chiavi.RISERVA, *AVANZI})
+PER_UN_FIGLIO = ("testa", "dimensione", "blake2b", "sha256")
 
 
 class _EstraiLaProva(Estrazione):
@@ -63,6 +62,7 @@ class _Aperto:
         self._elenco_chiuso = False
         self._mali = threading.Lock()
         self._spento = False
+        self._spegnimenti: list = []
         self.letti_male: set[str] = set()
         self.persi: set[str] = set()
         self._da_riparare: set[str] = set()
@@ -129,6 +129,12 @@ class _Aperto:
         with self._mali:
             self._spento = True
             self.riparatore.ferma()
+            spegnimenti, self._spegnimenti = self._spegnimenti, []
+        for funzione in spegnimenti:
+            try:
+                funzione()
+            except Exception:
+                continue
         self.custode.ferma()
         self.ronda.ferma()
         custode = self.custode.aspetta_fine(max(0.0, fine - time.monotonic()))
@@ -166,28 +172,46 @@ class _Aperto:
         return prendi.altre_fonti(self.cartella, numero, informazioni, vicini,
                                   self._sulla_chiavetta())
 
-    def leggi(self, numero: str, intero: bool):
-        pila = ExitStack()
-        try:
-            with self._registra:
-                self._vivo()
-                informazioni = self.elenco.contenuto(numero)
-                if informazioni is None:
-                    raise prendi.Persa(prendi.PERSA)
-                fonti = prendi.Fonti(
-                    numero, informazioni, self.chiave, pila, apri=self._leggi_blob,
-                    altre=lambda: self._altre(numero, informazioni),
-                    segnala=self._segnala, letta=self._letta, vivo=self._vivo)
-                fonti.aggiungi(registro.percorso_contenuto(self.cartella, numero), numero,
-                               informazioni["testa"])
-            if not intero:
-                return io.BufferedReader(prendi.Flusso(fonti, pila),
-                                         buffer_size=fonti.forma.blocco)
-            with pila:
-                return prendi.tutto(fonti, informazioni)
-        except BaseException:
-            pila.close()
-            raise
+    def _informazioni(self, numero: str) -> dict:
+        with self._registra:
+            self._vivo()
+            informazioni = self.elenco.contenuto(numero)
+        if informazioni is None:
+            raise prendi.Persa(prendi.PERSA)
+        return informazioni
+
+    def leggi(self, numero: str, intero: bool, guasto=None):
+        informazioni = self._informazioni(numero)
+        return prendi.lettore(numero, informazioni, self.chiave,
+                              registro.percorso_contenuto(self.cartella, numero), intero,
+                              apri=self._leggi_blob,
+                              altre=lambda: self._altre(numero, informazioni),
+                              segnala=self._segnala, letta=self._letta, vivo=self._vivo,
+                              guasto=guasto)
+
+    def permesso(self, numero: str) -> dict:
+        informazioni = self._informazioni(numero)
+        return {"informazioni": {nome: informazioni[nome] for nome in PER_UN_FIGLIO},
+                "percorso": str(registro.percorso_contenuto(self.cartella, numero)),
+                "chiavi": {numero: self.chiave.per_contenuto(bytes.fromhex(numero))}}
+
+    def altre_per_un_figlio(self, numero: str) -> dict:
+        altre = self._altre(numero, self._informazioni(numero))
+        return {"altre": [(str(percorso), altro, testa, salvataggio)
+                          for percorso, altro, testa, salvataggio in altre],
+                "chiavi": {altro: self.chiave.per_contenuto(bytes.fromhex(altro))
+                           for altro in {fonte[1] for fonte in altre}}}
+
+    def quando_si_spegne(self, funzione) -> None:
+        with self._mali:
+            if not self._spento:
+                self._spegnimenti.append(funzione)
+                return
+        funzione()
+
+    def non_piu(self, funzione) -> None:
+        with self._mali:
+            self._spegnimenti = [gia for gia in self._spegnimenti if gia is not funzione]
 
     def _letta(self, numero: str) -> None:
         with self._mali:
@@ -568,7 +592,12 @@ class ArchivioSicuro:
                                              self._prendi))
 
     def _prendi(self, trovata: DallArchivio):
-        return self._di_ora().leggi(trovata.numero, trovata.intero)
+        return self._di_ora().leggi(trovata.numero, trovata.intero,
+                                    guasto=trovata.segna_guasto)
+
+    @property
+    def apertura(self) -> _Aperto | None:
+        return self._aperto
 
     def persa(self, numero: str) -> bool:
         aperto = self._aperto

@@ -3,10 +3,13 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from officina import registro
 from officina.archivio.database import adesso, inserisci, tutti, uno
+from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile, perche_saltato
 from officina.modello import segnalazioni
 from officina.modello.luoghi import coordinate_valide
-from officina.sicuro.dall_archivio import NON_C_E, DallArchivio, Ricerca
+from officina.sicuro.dall_archivio import (CHIUSO, CHIUSO_ADESSO, DIVERSA, NON_C_E, SI_APRE,
+                                           DallArchivio, Ricerca, da_rifare)
 
 
 def per_impronta(connessione: sqlite3.Connection, impronta: str) -> sqlite3.Row | None:
@@ -99,6 +102,28 @@ def cerca_nell_archivio(connessione: sqlite3.Connection, file_id: int) -> Ricerc
                           intero=riga["genere"] == "immagine")
 
 
+def da_guardare(connessione: sqlite3.Connection,
+                file_id: int) -> Path | DallArchivio | None:
+    for riga in percorsi_di(connessione, file_id):
+        percorso = Path(riga["percorso"])
+        if percorso.exists():
+            return percorso
+    try:
+        ricerca = cerca_nell_archivio(connessione, file_id)
+    except DaRifare:
+        raise
+    except ErroreOfficina as errore:
+        registro.avviso("sicuro.ricerca_non_riuscita", motivo=registro.Parola(errore.codice))
+        raise da_rifare(CHIUSO_ADESSO) from errore
+    if ricerca.perche in (CHIUSO, SI_APRE):
+        raise da_rifare(CHIUSO_ADESSO)
+    if ricerca.diversa:
+        testo = perche_saltato(DIVERSA)
+        raise FileNonLeggibile(testo[:1].upper() + testo[1:] + ".", codice=DIVERSA,
+                               file_id=file_id)
+    return ricerca.trovata
+
+
 def da_mostrare(connessione: sqlite3.Connection, file_id: int, *,
                 anche_dall_archivio: bool = False) -> tuple[Path | DallArchivio | None,
                                                             str | None]:
@@ -113,6 +138,17 @@ def da_mostrare(connessione: sqlite3.Connection, file_id: int, *,
         if percorso.exists():
             return percorso, ritoccata["impronta_copia"]
     return None, None
+
+
+def da_mostrare_con_ricerca(
+        connessione: sqlite3.Connection,
+        file_id: int) -> tuple[Path | DallArchivio | None, str | None, Ricerca | None]:
+    percorso, impronta = da_mostrare(connessione, file_id)
+    ritoccata = uno(connessione, "SELECT 1 AS c FROM ritoccate WHERE file_id = ?", file_id)
+    if percorso is not None or ritoccata is not None:
+        return percorso, impronta, None
+    ricerca = cerca_nell_archivio(connessione, file_id)
+    return ricerca.trovata, None, ricerca
 
 
 def da_mostrare_sotto(connessione: sqlite3.Connection, file_id: int, *,

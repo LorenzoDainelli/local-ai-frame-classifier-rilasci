@@ -10,14 +10,21 @@ from pathlib import Path
 from officina import VERSIONE, registro
 from officina.archivio.accesso import Archivio
 from officina.archivio.database import tutti
-from officina.errori import ErroreOfficina, FileNonLeggibile, SpazioInsufficiente
+from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile, SpazioInsufficiente
 from officina.modello import file_media, persone, telefoni
+from officina.sicuro import dall_archivio
+from officina.sicuro.dall_archivio import DallArchivio
 from officina.telefono import cifratura, dati, formato, ritorno, selezione
 
 LATO_MINIATURA = 640
 LATO_VOLTO = 320
 QUALITA = 84
 A_GRUPPI = 64
+DIVERSA = ("nell'Archivio sicuro c'è solo una versione cambiata dopo l'importazione: "
+           "non va sul telefono")
+ROVINATA = "nell'Archivio sicuro il file è rovinato: lo riprovo al prossimo travaso"
+SI_E_CHIUSO = ("L'Archivio sicuro si è chiuso: aprilo e rifai il pacchetto, riparte da "
+               "dove si era fermato.")
 
 
 @dataclass
@@ -26,7 +33,7 @@ class Compito:
     genere: str
     impronta: str = ""
     dimensione: int = 0
-    sorgente: Path | None = None
+    sorgente: Path | DallArchivio | None = None
     scatto_id: int | None = None
     file_id: int | None = None
     persona_id: int | None = None
@@ -184,6 +191,7 @@ class Travaso:
         compiti: list[Compito] = []
         presi: set[str] = set()
         miniature: dict[str, Compito] = {}
+        da_cercare: set[int] = set()
 
         for scatto_id in scelti:
             righe = tutti(
@@ -194,8 +202,16 @@ class Travaso:
             principale = None
             movimento = None
             for riga in righe:
-                percorso, migliorata = file_media.da_mostrare(connessione,
-                                                              riga["id"])
+                percorso, migliorata, ricerca = file_media.da_mostrare_con_ricerca(
+                    connessione, riga["id"])
+                if ricerca is not None and ricerca.perche in (dall_archivio.CHIUSO,
+                                                              dall_archivio.SI_APRE):
+                    da_cercare.add(scatto_id)
+                    continue
+                if ricerca is not None and ricerca.diversa:
+                    piano.saltati.append(Saltato(posto=f"scatto {scatto_id}",
+                                                 perche=DIVERSA))
+                    continue
                 if percorso is None:
                     piano.saltati.append(Saltato(
                         posto=f"scatto {scatto_id}",
@@ -240,6 +256,8 @@ class Travaso:
                 posto_movimento=movimento.posto if movimento else None,
                 mini=miniature[impronta_mini].posto))
 
+        if da_cercare:
+            raise ErroreOfficina(da_aprire(len(da_cercare)), codice="sicuro_chiuso")
         compiti.extend(miniature.values())
         compiti.extend(self._volti(connessione, {p.scatto_id for p in piano.posti},
                                    riuso, presi))
@@ -259,8 +277,9 @@ class Travaso:
             if (copertina is None or copertina["scatto_id"] not in scelti
                     or not copertina["file_id"]):
                 continue
-            percorso, mostrata = file_media.da_mostrare(connessione, copertina["file_id"])
-            if percorso is None:
+            percorso, mostrata = file_media.da_mostrare(connessione, copertina["file_id"],
+                                                        anche_dall_archivio=True)
+            if percorso is None or (isinstance(percorso, DallArchivio) and percorso.diversa):
                 continue
             riquadro = json.dumps(copertina["riquadro"])
             impronta = f"volto:{riga['id']}:{copertina['id']}:{mostrata or ''}:{riquadro}"
@@ -385,7 +404,14 @@ class Travaso:
                 return
             self.quando_cambia("scrivo", numero, quanti)
             try:
-                scritto = self._scrivi_uno(compito)
+                with dall_archivio.attento(compito.sorgente):
+                    scritto = self._scrivi_uno(compito)
+            except DaRifare as guaio:
+                if guaio.codice != dall_archivio.PERSA:
+                    esito.interrotto = True
+                    raise ErroreOfficina(SI_E_CHIUSO, codice=guaio.codice) from guaio
+                esito.saltati.append(Saltato(compito.posto, ROVINATA))
+                continue
             except FileNonLeggibile as guaio:
                 esito.saltati.append(Saltato(compito.posto, guaio.messaggio))
                 continue
@@ -568,6 +594,13 @@ class Travaso:
 def _adesso() -> str:
     from officina.archivio.database import adesso
     return adesso()
+
+
+def da_aprire(quante: int) -> str:
+    if quante == 1:
+        return "Apri l'Archivio sicuro: 1 foto non è sul disco, e solo lì posso cercarla."
+    return (f"Apri l'Archivio sicuro: {selezione.a_numero(quante)} foto non sono sul "
+            "disco, e solo lì posso cercarle.")
 
 
 def _riusabili(gia: dict) -> dict[str, str]:

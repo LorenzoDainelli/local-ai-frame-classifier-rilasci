@@ -13,6 +13,7 @@ from officina.errori import FileNonLeggibile
 from officina.immagini import lettura
 from officina.importazione import quicktime
 from officina.modello.luoghi import coordinate_valide
+from officina.sicuro import dall_archivio
 
 
 MISURE_SCHERMO = {
@@ -345,7 +346,8 @@ def _leggi_dentro(percorso: Path) -> Metadati:
         return da_video(percorso)
 
     try:
-        with Image.open(percorso, formats=lettura.formati_aperti()) as prova:
+        with (dall_archivio.per_av(percorso) as sorgente,
+              Image.open(sorgente, formats=lettura.formati_aperti()) as prova):
             prova.verify()
         return da_immagine(percorso)
     except Exception as errore:

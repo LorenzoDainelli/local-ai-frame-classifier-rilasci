@@ -104,3 +104,66 @@ def racconta() -> dict:
 
 def ricevi(dati: dict) -> None:
     ricevuti.append(dati)
+
+
+def dall_archivio(archivio, foto: list, segnale: str):
+    import hashlib
+    from pathlib import Path
+
+    from officina.errori import ErroreOfficina
+    from officina.sicuro import formato, sportello
+    from officina.web.lavori import Lavoro
+
+    global _lavoro
+    _lavoro = Lavoro("finto")
+    (impronta, dimensione, percorso, nome), (grande, quanto, dove, come) = foto
+
+    def leggi() -> None:
+        lontano = sportello.qui()
+        piccola = lontano.cerca(impronta, dimensione, [percorso], nome=nome,
+                                intero=True).trovata
+        with piccola.apri() as flusso:
+            fatta = hashlib.blake2b(flusso.read(), digest_size=formato.IMPRONTA)
+        _lavoro.di(f"letta {fatta.hexdigest()}")
+        lunga = lontano.cerca(grande, quanto, [dove], nome=come, intero=False).trovata
+        with lunga.apri() as flusso:
+            _lavoro.di(f"primo {len(flusso.read(formato.BLOCCO))}")
+            scadenza = time.monotonic() + 60
+            while not Path(segnale).exists() and time.monotonic() < scadenza:
+                time.sleep(0.05)
+            try:
+                flusso.read()
+            except OSError:
+                _lavoro.di(f"fermata {lunga.guasto}")
+            else:
+                _lavoro.di("letta tutta")
+        try:
+            piccola.apri()
+        except ErroreOfficina as errore:
+            _lavoro.di(f"rifiutata {errore.codice}")
+        else:
+            _lavoro.di("aperta")
+
+    _lavoro.parti(leggi, "finto")
+    return _lavoro
+
+
+def dalla_fila(archivio) -> None:
+    import hashlib
+
+    from officina.sicuro import formato, sportello
+    from officina.web.strade import comune, intelligenza
+
+    impronta, dimensione, percorso, nome = comune.fila_ia["scelti"]
+    sotto = intelligenza.sotto_lavoro_ia("scritte")
+
+    def leggi() -> None:
+        trovata = sportello.qui().cerca(impronta, int(dimensione), [percorso], nome=nome,
+                                        intero=True).trovata
+        with trovata.apri() as flusso:
+            fatta = hashlib.blake2b(flusso.read(), digest_size=formato.IMPRONTA)
+        sotto.di(f"letta {fatta.hexdigest()}")
+
+    sotto.parti(leggi, "scritte")
+    while sotto.sta_lavorando:
+        time.sleep(0.05)

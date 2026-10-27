@@ -77,7 +77,17 @@ def intestazione(percorso: Path) -> Image.Image:
             codice="file_non_leggibile",
         )
 
-    sorgente = percorso.apri() if isinstance(percorso, DallArchivio) else percorso
+    if not isinstance(percorso, DallArchivio):
+        return _apri_l_intestazione(percorso, percorso)
+    sorgente = percorso.apri()
+    try:
+        return _apri_l_intestazione(percorso, sorgente)
+    except BaseException:
+        sorgente.close()
+        raise
+
+
+def _apri_l_intestazione(percorso, sorgente) -> Image.Image:
     try:
         return Image.open(sorgente, formats=formati_aperti())
     except UnidentifiedImageError as errore:

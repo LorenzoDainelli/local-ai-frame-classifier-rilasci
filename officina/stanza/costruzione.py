@@ -10,8 +10,9 @@ from typing import Callable
 from officina import istruzioni, registro
 from officina.archivio.database import tutti, uno
 from officina.descrittori import torcia
-from officina.errori import ErroreOfficina
+from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile
 from officina.importazione import gruppi
+from officina.sicuro import dall_archivio
 from officina.stanza import da3, dettaglio, versioni, vggt
 
 VERSIONE = "2-4k-versioni"
@@ -338,6 +339,9 @@ class Passata:
                         self._costruisci(posto_id)
                     else:
                         self._metti_le_nuove(posto_id)
+                except DaRifare as errore:
+                    self.avanzamento.motivi[errore.codice] = (
+                        self.avanzamento.motivi.get(errore.codice, 0) + 1)
                 except ErroreOfficina as errore:
                     if errore.codice == STANZA_SENZA_MEMORIA:
                         memoria.finita(posto_id, errore)
@@ -397,12 +401,18 @@ class Passata:
                                if f["ruolo"] == "principale"), None)
             if principale is None or principale["genere"] != "immagine":
                 return None
-            percorso = file_media.percorso_migliore(connessione, principale["id"])
+            try:
+                percorso = file_media.da_guardare(connessione, principale["id"])
+            except FileNonLeggibile:
+                return None
             quando = uno(connessione, "SELECT data_locale FROM scatti WHERE id = ?", scatto_id)
         if percorso is None:
             return None
         try:
-            immagine = lettura.copia_di_lavoro(Path(percorso), lato).convert("RGB")
+            with dall_archivio.attento(percorso):
+                immagine = lettura.copia_di_lavoro(percorso, lato).convert("RGB")
+        except DaRifare:
+            raise
         except Exception:                                # noqa: BLE001
             return None
         with self.archivio.lettura() as connessione:

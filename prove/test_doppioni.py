@@ -281,8 +281,8 @@ def test_un_file_che_non_si_apre_non_viene_riprovato_per_sempre(archivio_pieno):
             "UPDATE file_media SET impronta_occhio = NULL WHERE id = ?",
             (riga["id"],))
         connessione.execute(
-            "UPDATE percorsi SET percorso = percorso || '.andato' WHERE id = ?",
-            (riga["percorso_id"],))
+            "UPDATE percorsi SET percorso = percorso || '.andato' WHERE file_id = ?",
+            (riga["id"],))
 
     avanzamento = motore.Passata(archivio_pieno).esegui()
 

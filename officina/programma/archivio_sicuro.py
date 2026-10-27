@@ -125,7 +125,7 @@ def c_e(posizione) -> bool:
 def per_le_foto():
     from officina.archivio import accesso
     from officina.impostazioni import REALE, posizione
-    from officina.sicuro import dall_archivio
+    from officina.sicuro import dall_archivio, sportello
     from officina.sicuro import servizio as modulo
 
     try:
@@ -134,6 +134,9 @@ def per_le_foto():
         return dall_archivio.SENZA_ARCHIVIO, None
     if nome != REALE:
         return dall_archivio.SENZA_ARCHIVIO, None
+    lontano = sportello.qui()
+    if lontano is not None:
+        return dall_archivio.TROVATA, lontano
     servizio = modulo.attuale()
     if servizio is not None and servizio.aperto:
         return dall_archivio.TROVATA, servizio
@@ -248,6 +251,22 @@ class Collegamento:
         self.stato = ASSENTE
         self.messaggio = ""
         self.codice = ""
+        self._dopo_l_apertura: list = []
+
+    def quando_si_apre(self, funzione) -> None:
+        with self._serratura:
+            if funzione not in self._dopo_l_apertura:
+                self._dopo_l_apertura.append(funzione)
+
+    def _aperto_adesso(self) -> None:
+        with self._serratura:
+            funzioni = list(self._dopo_l_apertura)
+        for funzione in funzioni:
+            try:
+                funzione()
+            except Exception as guasto:
+                registro.errore("sicuro.dopo_l_apertura_rotto",
+                                **registro.dove_si_e_rotto(guasto))
 
     @property
     def servizio(self):
@@ -337,10 +356,13 @@ class Collegamento:
             self._segna(GUASTO, NON_SI_APRE, "apertura_rotta")
         else:
             with self._serratura:
-                if not self._finito:
+                aperto = not self._finito
+                if aperto:
                     registro.evento("sicuro.aperto")
                     self._segna(APERTO)
-                    return
+            if aperto:
+                self._aperto_adesso()
+                return
             registro.evento("sicuro.aperto_mentre_si_chiude")
             self._segna(CHIUSO)
             self.servizio.chiudi(ASPETTA_ALLA_CHIUSURA)
@@ -358,28 +380,33 @@ class Collegamento:
             self._non_finito()
             if self._servizio_aperto():
                 return list(self.servizio.problemi)
-            stato = self._dal_disco()
-            if stato != CHIUSO:
-                self._segna_dal_disco(stato)
-                raise ErroreOfficina(*PERCHE[stato])
-            riallinea = bool(del_forziere) and del_forziere != password
-            try:
-                self.servizio.apri(password, pulisci=not riallinea)
-            except PasswordSbagliata:
-                raise
-            except ErroreOfficina as errore:
-                self._segna(GUASTO, errore.messaggio, errore.codice)
-                raise
-            except OSError as errore:
-                self._segna(GUASTO, CARTELLA_NON_SI_LEGGE, "cartella_non_si_legge")
-                raise ErroreOfficina(CARTELLA_NON_SI_LEGGE,
-                                     codice="cartella_non_si_legge") from errore
-            registro.evento("sicuro.aperto_a_mano")
-            self._segna(APERTO)
-            _segna_la_password_scritta()
-            if riallinea:
-                self._riallinea(del_forziere)
-            return list(self.servizio.problemi)
+            problemi = self._con_la_password(password, del_forziere)
+        self._aperto_adesso()
+        return problemi
+
+    def _con_la_password(self, password: str, del_forziere: str | None) -> list[str]:
+        stato = self._dal_disco()
+        if stato != CHIUSO:
+            self._segna_dal_disco(stato)
+            raise ErroreOfficina(*PERCHE[stato])
+        riallinea = bool(del_forziere) and del_forziere != password
+        try:
+            self.servizio.apri(password, pulisci=not riallinea)
+        except PasswordSbagliata:
+            raise
+        except ErroreOfficina as errore:
+            self._segna(GUASTO, errore.messaggio, errore.codice)
+            raise
+        except OSError as errore:
+            self._segna(GUASTO, CARTELLA_NON_SI_LEGGE, "cartella_non_si_legge")
+            raise ErroreOfficina(CARTELLA_NON_SI_LEGGE,
+                                 codice="cartella_non_si_legge") from errore
+        registro.evento("sicuro.aperto_a_mano")
+        self._segna(APERTO)
+        _segna_la_password_scritta()
+        if riallinea:
+            self._riallinea(del_forziere)
+        return list(self.servizio.problemi)
 
     def _riallinea(self, del_forziere: str) -> None:
         servizio = self.servizio
