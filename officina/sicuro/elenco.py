@@ -141,6 +141,11 @@ def percorso_pulito(percorso: str) -> str:
     return "/".join(parti)
 
 
+def piegato(testo: str) -> str:
+    return "".join(lettera.upper() if ord(lettera) < 0x10000 and len(lettera.upper()) == 1
+                   else lettera for lettera in testo)
+
+
 def _adesso(quando: float | None) -> float:
     return time.time() if quando is None else float(quando)
 
@@ -1058,6 +1063,19 @@ class Elenco:
         presenti = [posto for posto in self.storia(radice, percorso)
                     if posto.sparito is None]
         return presenti[-1] if presenti else None
+
+    def omonimi(self, radice: str, percorsi) -> list[Posto]:
+        puliti = [percorso_pulito(percorso) for percorso in percorsi]
+        cercati = {piegato(pulito) for pulito in puliti}
+        lunghezze = json.dumps(sorted({len(pulito) for pulito in puliti}))
+        with self._serratura:
+            righe = self._db.execute(
+                f"SELECT {self._COLONNE_POSTO} FROM posti WHERE radice = ? AND "
+                "sparito IS NULL AND (length(percorso) IN (SELECT value FROM "
+                "json_each(?)) OR typeof(percorso) = 'blob') ORDER BY percorso, visto, "
+                "rowid", (_al_db(radice), lunghezze)).fetchall()
+        return [posto for posto in map(self._posto, righe)
+                if piegato(posto.percorso) in cercati]
 
     def dentro(self, radice: str, anche_spariti: bool = False):
         filtro = "" if anche_spariti else " AND sparito IS NULL"

@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from officina.errori import ErroreOfficina
-from officina.sicuro import chiavi, leggimi, prendi
+from officina.sicuro import accoglienza, chiavi, leggimi, prendi
 from officina.sicuro import elenco as registro
 from officina.sicuro.cestino import (Mandata, Quaderno, Ricontrollo, Ronda, Spedizioniere,
                                      Vedetta, cestino_di_sistema)
@@ -23,8 +23,11 @@ from officina.sicuro.via_libera import ControlloFresco
 
 
 ASPETTA_CHIUSURA = 30.0
+ASPETTA_TURNO = 30.0
+RIPROVA_TURNO = 0.25
 RIPROVA = 600.0
 CHIUSO = "L'Archivio sicuro è chiuso: aprilo e riprova."
+GIA_ALTRO = "L'archivio sta già facendo un'altra cosa: aspetta che finisca e poi riprova."
 AVANZI = frozenset({chiavi.FILE + ".nuovo", chiavi.RISERVA + ".nuovo"})
 SOLO_LA_CHIAVE = frozenset({chiavi.FILE, chiavi.RISERVA, *AVANZI})
 PER_UN_FIGLIO = ("testa", "dimensione", "blake2b", "sha256")
@@ -102,6 +105,9 @@ class _Aperto:
             self.vedetta = Vedetta(self.elenco, self.spedizioniere.cestino, self.quaderno,
                                    **per("vedetta", salta=salta, avvisa=servizio.avvisa))
             self.ronda = Ronda(self.vedetta, **per("ronda", rallenta=rallenta))
+            self.accoglienza = accoglienza.Accoglienza(cartella, self.elenco, chiave,
+                                                       **per("accoglienza"))
+            self.accoglie = threading.Lock()
             self.custode = Custode(copia=self.copia, chiavetta=self.chiavetta,
                                    controllo=self.controllo,
                                    prima=self.spedizioniere.riprendi, **per("custode"))
@@ -155,6 +161,11 @@ class _Aperto:
         with self._registra:
             self._vivo()
             return prendi.trova(self.elenco, impronta, dimensione, percorsi)
+
+    def casa(self, impronta: str, dimensione: int | None, percorsi):
+        with self._registra:
+            self._vivo()
+            return accoglienza.casa(self.elenco, impronta, dimensione, percorsi)
 
     def _sulla_chiavetta(self) -> tuple:
         try:
@@ -590,6 +601,41 @@ class ArchivioSicuro:
         return Ricerca(TROVATA, DallArchivio(numero, nome, informazioni["dimensione"],
                                              informazioni["blake2b"], intero, diversa,
                                              self._prendi))
+
+    def casa(self, impronta: str, dimensione: int | None,
+             percorsi) -> tuple[str | None, str | None]:
+        aperto = self._aperto
+        if aperto is None:
+            return None, ARCHIVIO_CHIUSO
+        try:
+            return aperto.casa(impronta, dimensione, percorsi)
+        except ErroreOfficina as errore:
+            if errore.codice == "archivio_chiuso":
+                return None, ARCHIVIO_CHIUSO
+            raise
+
+    def accogli(self, richiesta: dict, aspetta: float = ASPETTA_TURNO) -> dict:
+        aperto = self._di_ora()
+        aspetta = max(0.0, aspetta)
+        fine = time.monotonic() + aspetta
+        if not aperto.accoglie.acquire(timeout=aspetta):
+            raise ErroreOfficina(GIA_ALTRO, codice="occupato")
+        try:
+            while True:
+                try:
+                    partito = aperto.custode.fai(aperto.accoglienza, dict(richiesta))
+                except ErroreOfficina as errore:
+                    if errore.codice != "occupato" or time.monotonic() >= fine:
+                        raise
+                    time.sleep(RIPROVA_TURNO)
+                    continue
+                if not partito:
+                    raise ErroreOfficina(GIA_ALTRO, codice="occupato")
+                break
+            aperto.accoglienza.aspetta_fine()
+            return aperto.accoglienza.istantanea()
+        finally:
+            aperto.accoglie.release()
 
     def _prendi(self, trovata: DallArchivio):
         return self._di_ora().leggi(trovata.numero, trovata.intero,

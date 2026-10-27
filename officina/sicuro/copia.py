@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import sqlite3
 import stat
 import time
 from collections import Counter
@@ -36,6 +37,12 @@ ROSSI = frozenset({
     "cartella_illeggibile", "radice_mancante", "radice_illeggibile",
     "nome_strano", "cambia_sempre", "flussi_illeggibili", "flusso_strano",
     "radice_nell_archivio"})
+NON_PORTATO = ("Non sono riuscito a leggere per intero il file da mettere nell'Archivio "
+               "sicuro: non l'ho messo.")
+CAMBIATO_MENTRE = ("Il file da mettere nell'Archivio sicuro è cambiato mentre lo leggevo: "
+                   "non l'ho messo.")
+RILETTO_MALE = ("Il disco dell'archivio, riletto, non ridà gli stessi byte: mi fermo per "
+                "non rovinare niente.")
 
 
 class DiscoArchivioGuasto(ErroreOfficina):
@@ -149,6 +156,13 @@ class _Risultato:
     segni: frozenset[str] = frozenset()
     info: object = None
     fatto: dict | None = None
+
+
+@dataclass(frozen=True)
+class Portato:
+    numero: str
+    nuovo: bool
+    fatti: list[dict]
 
 
 class _Confronto:
@@ -496,6 +510,68 @@ class Copiatore:
             for provvisorio in provvisori:
                 if provvisorio is not None:
                     provvisorio.unlink(missing_ok=True)
+
+    def porta_intero(self, radice: dict, relativo: str, assoluto: str, impronta: str,
+                     segni=()) -> Portato:
+
+        def segno_ora():
+            return metadati.segno_di(os.lstat(percorso_lungo(assoluto)))
+
+        def prepara(tentativo: int, numero: str):
+            info = metadati.leggi(assoluto)
+            if info.tipo != metadati.FILE or info.cloud:
+                raise _NonPiuUnFile
+            posto = registro.fatto_posto(radice["id"], relativo, metadati.FILE, numero,
+                                         info.metadati, segni, quando=self._adesso())
+            return info, info.segno, [self._fatto_radice(radice)], posto
+
+        risultato = self._porta(assoluto, prepara, segno_ora)
+        fissato = buono = False
+        try:
+            if risultato.problema:
+                raise ErroreOfficina(NON_PORTATO, codice="non_portato")
+            valori = (self._valori(risultato.nuovo) if risultato.nuovo is not None
+                      else self.elenco.contenuto(risultato.numero))
+            if valori is None or valori["blake2b"] != impronta:
+                raise ErroreOfficina(CAMBIATO_MENTRE, codice="cambiato")
+            fatti = []
+            if risultato.nuovo is not None:
+                fissato = True
+                self._fissa(risultato)
+                fatti += self._fatti_contenuto(risultato)
+            esito = self._confronta(
+                assoluto, valori["dimensione"],
+                registro.percorso_contenuto(self.cartella, risultato.numero),
+                bytes.fromhex(risultato.numero), valori["testa"],
+                {"blake2b": valori["blake2b"], "sha256": valori["sha256"]}, ())
+            if esito == "sbagliata":
+                raise DiscoArchivioGuasto(RILETTO_MALE)
+            if esito != "uguale":
+                raise ErroreOfficina(CAMBIATO_MENTRE, codice="cambiato")
+            fatti.append(dict(risultato.fatto, contenuto=risultato.numero))
+            buono = True
+            return Portato(risultato.numero, fissato, fatti)
+        finally:
+            if risultato.provvisorio is not None:
+                risultato.provvisorio.unlink(missing_ok=True)
+            if fissato and not buono:
+                self.togli_il_nuovo(risultato.numero)
+
+    def togli_il_nuovo(self, numero: str) -> bool:
+        try:
+            if self.elenco.contenuto(numero) is not None or self.elenco.usato(numero):
+                return False
+            finale = registro.percorso_contenuto(self.cartella, numero)
+            finale.unlink(missing_ok=True)
+            fissa_cartella(finale.parent)
+        except (ErroreOfficina, OSError, ValueError, sqlite3.Error):
+            return False
+        return True
+
+    @staticmethod
+    def _valori(scritto: formato.Scritto) -> dict:
+        return {"dimensione": scritto.dimensione, "blake2b": scritto.blake2b,
+                "sha256": scritto.sha256, "testa": scritto.testa}
 
     def _fatti_contenuto(self, risultato: _Risultato) -> list[dict]:
         fatti = [registro.fatto_contenuto(risultato.nuovo, risultato.stato,
