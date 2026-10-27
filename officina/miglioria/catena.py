@@ -6,6 +6,7 @@ from typing import Callable, Iterable, Iterator
 
 from officina.errori import ErroreOfficina
 from officina.miglioria import date, metadati, misura, motori, pezzi, video
+from officina.sicuro.dall_archivio import DallArchivio
 
 GIA_GRANDE = "gia_grande"
 PER_VOLTA = 41
@@ -39,6 +40,18 @@ def _col_freno(quadri: Iterator, frenato: Frenato) -> Iterator:
         partito = time.monotonic()
 
 
+def _originale(lavoro: dict):
+    originale = lavoro["originale"]
+    return originale if isinstance(originale, DallArchivio) else Path(originale)
+
+
+def _date(originale, uscita: Path, lavoro: dict) -> None:
+    if isinstance(originale, DallArchivio):
+        date.rimetti(uscita, lavoro.get("date") or {})
+    else:
+        date.copia(originale, uscita)
+
+
 def esegui(lavoro: dict, al_passo: Callable[[int, int], None] | None = None,
            freno=None, racconta: Callable[[dict], None] | None = None) -> dict:
     if lavoro["genere"] == "immagine":
@@ -47,7 +60,7 @@ def esegui(lavoro: dict, al_passo: Callable[[int, int], None] | None = None,
 
 
 def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
-    originale = Path(lavoro["originale"])
+    originale = _originale(lavoro)
     uscita = Path(lavoro["uscita"])
     aperta = metadati.apri(originale)
     larghezza, altezza = aperta.immagine.size
@@ -90,14 +103,14 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
 
     metadati.salva(grande, aperta.metadati, uscita,
                    metadati.formato_di(originale), aperta.alfa)
-    date.copia(originale, uscita)
+    _date(originale, uscita, lavoro)
     _passo(al_passo, 3, passi)
     return {"larghezza": nuova_larghezza, "altezza": nuova_altezza,
             "motori": usati}
 
 
 def filmato(lavoro: dict, al_passo=None, freno=None, racconta=None) -> dict:
-    originale = Path(lavoro["originale"])
+    originale = _originale(lavoro)
     uscita = Path(lavoro["uscita"])
     piano = video.guarda(originale)
     if misura.e_gia_grande(piano.larghezza, piano.altezza):
@@ -119,16 +132,18 @@ def filmato(lavoro: dict, al_passo=None, freno=None, racconta=None) -> dict:
             yield fatto
 
     video.lavora(originale, uscita, larghezza, altezza, rifatti)
-    date.copia(originale, uscita)
+    _date(originale, uscita, lavoro)
     pezzi.butta(fatti.dove)
     return {"larghezza": larghezza, "altezza": altezza,
             "motori": [{"nome": motore.nome, "versione": motore.versione}]}
 
 
-def _firma(originale: Path, motore, larghezza: int, altezza: int) -> dict:
+def _firma(originale, motore, larghezza: int, altezza: int) -> dict:
     stato = originale.stat()
     proprie = getattr(motore, "firma", None)
-    return {"originale": str(originale), "byte": stato.st_size, "larghezza": larghezza, "altezza": altezza,
+    nome = originale.blake2b if isinstance(originale, DallArchivio) else str(originale)
+    return {"originale": nome, "byte": stato.st_size, "larghezza": larghezza,
+            "altezza": altezza,
             "motore": proprie() if callable(proprie) else
             {"nome": motore.nome, "versione": motore.versione}}
 

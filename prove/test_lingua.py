@@ -271,6 +271,11 @@ def test_nessun_filo_puo_morire_in_silenzio():
             "`Collegamento._apri` prende dentro qualunque errore e lo tiene in "
             "`stato` e `messaggio` per la striscia rossa: l'archivio resta "
             "chiuso e non si tocca niente",
+        "officina/sicuro/tubo.py":
+            "`DaVerso._ascolta` prende dentro qualunque errore: se il tubo si "
+            "chiude finisce e basta, se si rompe lo manda al programma, che lo "
+            "scrive nel registro; comunque vada la stanza smette di leggere "
+            "dall'archivio",
         "officina/web/sosta.py":
             "`Sosta._gira` prende dentro qualunque errore di un giro, lo scrive "
             "nel registro e riprova al giro dopo: chi aspetta la fine della "

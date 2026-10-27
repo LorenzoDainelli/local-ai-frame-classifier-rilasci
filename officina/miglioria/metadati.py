@@ -8,6 +8,7 @@ from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 
 from officina.immagini import lettura
+from officina.sicuro.dall_archivio import DallArchivio
 
 FORMATI = {
     ".jpg": "JPEG", ".jpeg": "JPEG", ".heic": "HEIF", ".heif": "HEIF",
@@ -61,10 +62,12 @@ class FotoAperta:
     metadati: Metadati
 
 
-def formato_di(percorso: Path) -> str:
-    formato = FORMATI.get(Path(percorso).suffix.casefold())
+def formato_di(percorso) -> str:
+    suffisso = (percorso.suffix if isinstance(percorso, DallArchivio)
+                else Path(percorso).suffix)
+    formato = FORMATI.get(suffisso.casefold())
     if formato is None:
-        raise ValueError(f"formato che non si migliora: {Path(percorso).suffix}")
+        raise ValueError(f"formato che non si migliora: {suffisso}")
     return formato
 
 

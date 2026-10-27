@@ -14,6 +14,21 @@ def copia(da: Path, verso: Path) -> None:
         _creazione_su_windows(verso, nascita)
 
 
+def _intero(valore) -> bool:
+    return type(valore) is int
+
+
+def rimetti(verso: Path, date: dict) -> None:
+    modifica = date.get("modifica")
+    if not _intero(modifica):
+        return
+    accesso = date.get("accesso")
+    os.utime(verso, ns=(accesso if _intero(accesso) else modifica, modifica))
+    creazione = date.get("creazione")
+    if os.name == "nt" and _intero(creazione):
+        _creazione_su_windows(verso, creazione)
+
+
 def _creazione_su_windows(percorso: Path, nanosecondi: int) -> None:
     import ctypes
     from ctypes import wintypes

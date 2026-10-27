@@ -6,6 +6,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Callable, Iterable, Iterator
 
+from officina.sicuro.dall_archivio import per_av
+
 CONTENITORI_TENUTI = {".mov": "mov", ".mp4": "mp4", ".m4v": "mp4"}
 SUFFISSO_NUOVO = ".mp4"
 
@@ -43,11 +45,11 @@ def _rotazione(stream) -> int:
     return 0
 
 
-def guarda(percorso: Path) -> Piano:
+def guarda(percorso) -> Piano:
     from officina.immagini import fotogrammi
 
     av = fotogrammi.decodificatore()
-    with av.open(str(percorso)) as dentro:
+    with per_av(percorso) as sorgente, av.open(sorgente) as dentro:
         entrata = dentro.streams.video[0]
         rotazione = 0
         for fotogramma in dentro.decode(entrata):
@@ -112,11 +114,11 @@ def _dritto(quadro, rotazione: int):
     return quadro
 
 
-def dritti(originale: Path) -> Iterator:
+def dritti(originale) -> Iterator:
     from officina.immagini import fotogrammi
 
     av = fotogrammi.decodificatore()
-    with av.open(str(originale)) as dentro:
+    with per_av(originale) as sorgente, av.open(sorgente) as dentro:
         entrata = dentro.streams.video[0]
         entrata.thread_type = "AUTO"
         for pacchetto in dentro.demux(entrata):
@@ -125,7 +127,7 @@ def dritti(originale: Path) -> Iterator:
                 yield _dritto(fotogramma.to_ndarray(format="rgb24"), rotazione)
 
 
-def lavora(originale: Path, verso: Path, larghezza: int, altezza: int,
+def lavora(originale, verso: Path, larghezza: int, altezza: int,
            trasforma: Callable[[Iterable], Iterator],
            al_passo: Callable[[int, int], None] | None = None) -> Piano:
     from officina.immagini import fotogrammi
@@ -136,7 +138,7 @@ def lavora(originale: Path, verso: Path, larghezza: int, altezza: int,
     formato = contenitore(suffisso_di_arrivo(originale))
     verso.parent.mkdir(parents=True, exist_ok=True)
 
-    with av.open(str(originale)) as dentro, \
+    with per_av(originale) as sorgente, av.open(sorgente) as dentro, \
             av.open(str(verso), "w", format=formato,
                     options={"movflags": "use_metadata_tags"}) as fuori:
         entrata = dentro.streams.video[0]

@@ -94,6 +94,42 @@ def spazio_dei_pezzi(originale: Path) -> int:
     return larghezza * altezza * BYTE_PER_PIXEL_DEI_PEZZI * max(piano.fotogrammi, 0)
 
 
+def _sportello(processo: subprocess.Popen):
+    from officina.archivio import accesso
+    from officina.sicuro import sportello, tubo
+
+    try:
+        nome = accesso.aperto().dove.nome
+    except ErroreOfficina:
+        nome = None
+    verso = tubo.Verso(processo.stdin, processo.kill)
+    return sportello.Sportello(nome, verso, verso)
+
+
+def _allo_sportello(allo_sportello, domanda) -> None:
+    from officina.sicuro import tubo
+
+    try:
+        domanda = tubo.da_testo(domanda)
+    except ValueError:
+        return
+    allo_sportello.ricevi(domanda)
+
+
+def _tubo_rotto(dove: dict) -> dict:
+    tipo, posto, riga = (str(dove.get(chiave, "")) for chiave in ("guasto", "dove", "riga"))
+    registro.errore("sicuro.tubo_rotto", tipo=registro.Parola(tipo),
+                    dove=registro.Parola(posto), riga=riga)
+    return {"guasto": "rotto", "tipo": tipo, "dove": posto, "riga": riga}
+
+
+def _chiudi(entrata) -> None:
+    try:
+        entrata.close()
+    except (OSError, ValueError):
+        pass
+
+
 def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
                      ricorda: Callable[[subprocess.Popen], None],
                      modulo: str = "officina.miglioria.stanza") -> dict:
@@ -106,14 +142,28 @@ def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
         encoding="utf-8", creationflags=scheda.SENZA_FINESTRA)
     ricorda(processo)
     esito: dict | None = None
+    allo_sportello = None
+    rotto = None
     try:
-        processo.stdin.write(json.dumps(lavoro))
-        processo.stdin.close()
+        processo.stdin.write(json.dumps(lavoro) + "\n")
+        processo.stdin.flush()
+        if lavoro.get("dall_archivio"):
+            allo_sportello = _sportello(processo)
+        else:
+            processo.stdin.close()
         for riga in processo.stdout:
             try:
                 messaggio = json.loads(riga)
             except ValueError:
                 continue
+            if allo_sportello is not None:
+                allo_sportello.controlla()
+                if "archivio" in messaggio:
+                    _allo_sportello(allo_sportello, messaggio["archivio"])
+                    continue
+                if isinstance(messaggio.get("tubo_rotto"), dict):
+                    rotto = _tubo_rotto(messaggio["tubo_rotto"])
+                    continue
             if isinstance(messaggio.get("tempi"), dict):
                 registro.evento("miglioria.tempi", **{
                     chiave: valore for chiave, valore in messaggio["tempi"].items()
@@ -123,9 +173,14 @@ def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
             elif "fatto" in messaggio or "guasto" in messaggio:
                 esito = messaggio
     finally:
+        if allo_sportello is not None:
+            allo_sportello.chiudi()
+        _chiudi(processo.stdin)
         codice_di_uscita = processo.wait()
     if esito is None:
         esito = {"guasto": "stanza_muta" if codice_di_uscita == 0 else "stanza_caduta"}
+    if rotto is not None and "guasto" in esito:
+        esito = rotto
     return esito
 
 
