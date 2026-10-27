@@ -226,7 +226,8 @@ def ripara(archivio) -> dict:
         interrotte = coda.riprendi_interrotte(connessione)
         in_scambio = coda.in_stato(connessione, coda.IN_SCAMBIO)
         cartelle = {riga["id"]: attesa.cartella(connessione,
-                                                Path(riga["percorso_originale"]))
+                                                Path(riga["percorso_originale"]),
+                                                archivio.dove.radice)
                     for riga in interrotte}
     for riga in interrotte:
         togli_i_parziali(cartelle[riga["id"]], riga["id"])

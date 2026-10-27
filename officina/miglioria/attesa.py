@@ -18,22 +18,25 @@ def _stesso_disco(una: Path, altra: Path) -> bool:
         return False
 
 
-def cartella(connessione: sqlite3.Connection, originale: Path) -> Path:
-    radice = originale.parent
+def cartella(connessione: sqlite3.Connection, originale: Path,
+             riserva: Path | None = None) -> Path:
+    sopra = originale.parent
+    c_e = sopra.is_dir()
     for riga in scansione.cartelle(connessione, solo_attive=False):
         sorgente = Path(riga["percorso"])
         try:
             originale.relative_to(sorgente)
         except ValueError:
             continue
-        if sorgente.is_dir() and _stesso_disco(sorgente, originale.parent):
-            radice = sorgente
-            break
-    return radice / NOME
+        if sorgente.is_dir() and (not c_e or _stesso_disco(sorgente, sopra)):
+            return sorgente / NOME
+    if riserva is not None and not c_e:
+        return Path(riserva) / NOME
+    return sopra / NOME
 
 
 def prepara(dove: Path) -> Path:
-    dove.mkdir(parents=True, exist_ok=True)
+    dove.mkdir(exist_ok=True)
     if os.name == "nt":
         _nascondi(dove)
     return dove

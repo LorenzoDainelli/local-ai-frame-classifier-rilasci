@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,6 +9,8 @@ from officina.importazione import gruppi
 from officina.archivio.database import adesso, inserisci, tutti, uno
 from officina.miglioria import misura
 from officina.modello import file_media
+from officina.sicuro.accoglienza import SENZA_CASA
+from officina.sicuro.dall_archivio import CHIUSO, DIVERSA, SI_APRE
 
 IN_CODA = "in_coda"
 IN_LAVORO = "in_lavoro"
@@ -37,11 +40,17 @@ class Esito:
     con_ritocchi: int = 0
     lasciati: int = 0
     video_ritoccati: int = 0
+    dall_archivio: int = 0
+    chiusi: list[str] = field(default_factory=list)
+    diversi: list[str] = field(default_factory=list)
+    senza_casa: list[str] = field(default_factory=list)
 
     def a_parole(self) -> str:
         pezzi = []
         if self.messi:
             pezzi.append(f"{self.messi} in coda")
+        if self.dall_archivio:
+            pezzi.append(f"{self.dall_archivio} dall'Archivio sicuro")
         if self.gia_grandi:
             pezzi.append(f"{len(self.gia_grandi)} scartati: sono già FHD o più")
         if self.gia_in_coda:
@@ -52,6 +61,14 @@ class Esito:
             pezzi.append(f"{len(self.non_adatti)} in un formato che non si migliora")
         if self.assenti:
             pezzi.append(f"{len(self.assenti)} non sono sul disco")
+        if self.chiusi:
+            pezzi.append(f"{len(self.chiusi)} sono solo nell'Archivio sicuro, che è chiuso")
+        if self.diversi:
+            pezzi.append(f"{len(self.diversi)} nell'Archivio sicuro hanno una versione "
+                         "diversa dell'originale")
+        if self.senza_casa:
+            pezzi.append(f"{len(self.senza_casa)} sono nell'Archivio sicuro, ma non so in "
+                         "che cartella stavano")
         if self.con_ritocchi:
             pezzi.append("1 ritoccato: il pixelato si rifà sopra quando lo tieni"
                          if self.con_ritocchi == 1 else
@@ -153,10 +170,13 @@ def _metti_uno(connessione: sqlite3.Connection, riga: sqlite3.Row,
         return
 
     percorso = file_media.percorso_migliore(connessione, riga["id"])
-    nome = percorso.name if percorso else _un_nome(connessione, riga["id"])
-    if percorso is None:
-        esito.assenti.append(nome)
-        return
+    dall_archivio = percorso is None
+    if dall_archivio:
+        percorso, perche = file_media.casa_nell_archivio(connessione, riga["id"])
+        if percorso is None:
+            _non_messo(esito, perche).append(_un_nome(connessione, riga["id"]))
+            return
+    nome = percorso.name
     if not si_migliora(riga, percorso):
         esito.non_adatti.append(nome)
         return
@@ -173,6 +193,17 @@ def _metti_uno(connessione: sqlite3.Connection, riga: sqlite3.Row,
         riga["id"], riga["scatto_id"], IN_CODA, riga["impronta"],
         str(percorso), larghezza, altezza, adesso())
     esito.messi += 1
+    esito.dall_archivio += dall_archivio
+
+
+def _non_messo(esito: Esito, perche: str) -> list[str]:
+    if perche in (CHIUSO, SI_APRE):
+        return esito.chiusi
+    if perche == DIVERSA:
+        return esito.diversi
+    if perche == SENZA_CASA:
+        return esito.senza_casa
+    return esito.assenti
 
 
 def _un_nome(connessione: sqlite3.Connection, file_id: int) -> str:
@@ -186,13 +217,14 @@ def per_id(connessione: sqlite3.Connection, miglioria_id: int) -> sqlite3.Row | 
     return uno(connessione, "SELECT * FROM migliorie WHERE id = ?", miglioria_id)
 
 
-def prossima(connessione: sqlite3.Connection) -> sqlite3.Row | None:
+def prossima(connessione: sqlite3.Connection, salta=()) -> sqlite3.Row | None:
     return uno(connessione,
                "SELECT m.* FROM migliorie m JOIN file_media f ON f.id = m.file_id "
-               "JOIN scatti s ON s.id = f.scatto_id WHERE m.stato = ?"
+               "JOIN scatti s ON s.id = f.scatto_id WHERE m.stato = ? "
+               "AND m.id NOT IN (SELECT value FROM json_each(?))"
                + gruppi.clausola(connessione, "miglioramento")
                + " ORDER BY m.id LIMIT 1",
-               IN_CODA)
+               IN_CODA, json.dumps(sorted({int(numero) for numero in salta})))
 
 
 def in_stato(connessione: sqlite3.Connection, stato: str) -> list[sqlite3.Row]:

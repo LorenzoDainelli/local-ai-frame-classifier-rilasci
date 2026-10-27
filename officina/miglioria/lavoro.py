@@ -15,12 +15,14 @@ from officina.importazione import impronta
 from officina.miglioria import (attesa, catena, coda, da_guardare, fedelta, motori, persone, pezzi,
                                 scambio, sfida, video)
 from officina.modello import file_media
+from officina.sicuro.dall_archivio import CHIUSO, CHIUSO_ADESSO, DIVERSA, PERSA, SI_APRE
 from officina.web.lavori import Lavoro
 
 MARGINE_DI_SPAZIO = 512 * 1024 * 1024
 QUANTO_PUO_CRESCERE = 12
 BYTE_PER_PIXEL_DEI_PEZZI = 2
-DA_RIPRENDERE = {"memoria_scheda_finita", "memoria_finita", "stanza_caduta"}
+DA_RIFARE_DOPO = {CHIUSO_ADESSO, PERSA}
+DA_RIPRENDERE = {"memoria_scheda_finita", "memoria_finita", "stanza_caduta"} | DA_RIFARE_DOPO
 SCHEDA_FINITA = "memoria_scheda_finita"
 DI_FILA_SENZA_MEMORIA = 3
 SCHEDA_OCCUPATA = ("La scheda video ha finito la memoria su tre file di fila: di solito vuol dire "
@@ -44,6 +46,15 @@ MESSAGGI = {
     "pezzi_rotti": "un pezzo già migliorato non si legge più: si rifà da capo",
     "torch_troppo_vecchio": ("il motore delle reti neurali è troppo vecchio per aprire "
                              "i pesi in sicurezza: aggiorna i motori"),
+    DIVERSA: "nell'Archivio sicuro c'è solo una versione diversa dell'originale",
+    CHIUSO_ADESSO: ("l'originale è solo nell'Archivio sicuro, che è chiuso: resta in coda "
+                    "finché lo apri"),
+    PERSA: ("nell'Archivio sicuro l'originale è rovinato: resta in coda finché "
+            "l'archivio l'ha riparato"),
+}
+NON_RIPRESA = {
+    "originale_assente": ("assente", "non trovo la foto o la versione di SeedVR2"),
+    "originale_cambiato": ("cambiata", "la foto è cambiata da quando SeedVR2 l'ha fatta"),
 }
 
 
@@ -198,6 +209,7 @@ class Miglioratore:
         self._processo: subprocess.Popen | None = None
         self.adesso: dict = {}
         self._saltate_in_sfida: set[int] = set()
+        self._salta: set[int] = set()
 
     @property
     def sta_lavorando(self) -> bool:
@@ -270,10 +282,11 @@ class Miglioratore:
         fatti = 0
         senza_memoria: list[int] = []
         self._saltate_in_sfida = set()
+        self._salta = set()
         try:
             while not self._fermati.is_set():
                 with self.archivio.scrittura() as connessione:
-                    riga = coda.prossima(connessione)
+                    riga = coda.prossima(connessione, self._salta)
                     if riga is None:
                         break
                     coda.segna(connessione, riga["id"], coda.IN_LAVORO, guasto=None)
@@ -309,23 +322,29 @@ class Miglioratore:
         originale = Path(riga["percorso_originale"])
         with self.archivio.lettura() as connessione:
             file = file_media.per_id(connessione, riga["file_id"])
-            dove = attesa.cartella(connessione, originale)
+            dove = attesa.cartella(connessione, originale, self.archivio.dove.radice)
         self.adesso = {"id": miglioria_id, "nome": originale.name,
                        "fatti": 0, "totale": 0}
         self.lavoro.di(f"lavoro «{originale.name}»")
 
-        if file is None or not originale.is_file():
+        if file is None:
             self._fallita(miglioria_id, "originale_assente")
             return
-        if impronta.del_file(originale) != riga["impronta_originale"]:
-            self._fallita(miglioria_id, "originale_cambiato")
+        letto, piu, codice = self._originale(riga, originale)
+        if codice in DA_RIFARE_DOPO:
+            self._aspetta_l_archivio(miglioria_id, originale, codice)
             return
+        if codice is not None:
+            self._fallita(miglioria_id, codice)
+            return
+        if piu is not None:
+            self.adesso["dall_archivio"] = True
 
         attesa.prepara(dove)
         genere = file["genere"]
-        serve = originale.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
+        serve = letto.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
         if genere == "video":
-            serve += spazio_dei_pezzi(originale)
+            serve += spazio_dei_pezzi(letto)
         if shutil.disk_usage(dove).free < serve:
             self._fallita(miglioria_id, "spazio")
             return
@@ -335,7 +354,7 @@ class Miglioratore:
         finale = dove / attesa.nome_in_attesa(miglioria_id, originale, suffisso)
         parziale = finale.with_name(finale.name + attesa.PARZIALE)
 
-        lavoro = self._il_lavoro(genere, originale, riga["file_id"])
+        lavoro = self._il_lavoro(genere, originale, riga["file_id"], piu)
         al_passo = self._al_passo
 
         if self._in_sfida(genere):
@@ -346,15 +365,18 @@ class Miglioratore:
         if esito is None:
             self._rimetti_in_coda(miglioria_id)
             return
+        if esito.get("guasto") in DA_RIFARE_DOPO:
+            self._aspetta_l_archivio(miglioria_id, originale, esito["guasto"])
+            return
         if "guasto" in esito:
             self._non_riuscita(miglioria_id, esito)
             return
 
         os.replace(parziale, finale)
         if genere == "video":
-            self._copie_da_guardare(miglioria_id, originale, finale)
+            self._copie_da_guardare(miglioria_id, originale, finale, dal_disco=piu is None)
         fatto = esito["fatto"]
-        fedele = self._fedelta(genere, originale, finale)
+        fedele = self._fedelta(genere, letto, finale)
         sua_impronta = impronta.del_file(finale)
         with self.archivio.scrittura() as connessione:
             coda.segna(connessione, miglioria_id, coda.DA_RIVEDERE,
@@ -366,7 +388,50 @@ class Miglioratore:
                        finita_il=adesso())
         self.lavoro.di(f"pronto da rivedere: «{originale.name}»")
 
-    def _il_lavoro(self, genere: str, originale: Path, file_id: int) -> dict:
+    def _originale(self, riga, originale: Path):
+        if originale.is_file():
+            if impronta.del_file(originale) != riga["impronta_originale"]:
+                return None, None, "originale_cambiato"
+            return originale, None, None
+        file_id = riga["file_id"]
+        try:
+            with self.archivio.lettura() as connessione:
+                file = file_media.per_id(connessione, file_id)
+                if file is None:
+                    return None, None, "originale_assente"
+                if file["impronta"] != riga["impronta_originale"]:
+                    return None, None, "originale_cambiato"
+                ricerca = file_media.cerca_nell_archivio(connessione, file_id)
+                percorsi = [r["percorso"] for r in file_media.percorsi_di(connessione,
+                                                                          file_id)]
+                date = (None if ricerca.trovata is None else
+                        file_media.date_nell_archivio(connessione, file_id, originale))
+        except ErroreOfficina as errore:
+            registro.avviso("miglioria.archivio_non_risponde",
+                            motivo=registro.Parola(errore.codice))
+            return None, None, CHIUSO_ADESSO
+        trovata = ricerca.trovata
+        if ricerca.perche in (CHIUSO, SI_APRE):
+            return None, None, CHIUSO_ADESSO
+        if trovata is None:
+            return None, None, "originale_assente"
+        if trovata.diversa or trovata.blake2b != riga["impronta_originale"]:
+            return None, None, DIVERSA
+        if date is None:
+            return None, None, CHIUSO_ADESSO
+        cercata = {"impronta": riga["impronta_originale"], "dimensione": file["dimensione"],
+                   "percorsi": percorsi, "nome": originale.name}
+        return trovata, {"dall_archivio": cercata, "date": date}, None
+
+    def _aspetta_l_archivio(self, miglioria_id: int, originale: Path, codice: str) -> None:
+        with self.archivio.scrittura() as connessione:
+            coda.segna(connessione, miglioria_id, coda.IN_CODA, guasto=codice)
+        self._salta.add(miglioria_id)
+        registro.avviso("miglioria.aspetta_l_archivio", motivo=registro.Parola(codice))
+        self.lavoro.di(f"«{originale.name}»: {a_parole(codice)}")
+
+    def _il_lavoro(self, genere: str, originale: Path, file_id: int,
+                   piu: dict | None = None) -> dict:
         scelti = self._scelti()
         chi = []
         if genere == "immagine" and scelti.get("volti") == motori.FACEME:
@@ -380,6 +445,7 @@ class Miglioratore:
             "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
             "percorsi": percorsi_della_stanza(),
             "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli)},
+            **(piu or {}),
         }
 
     def _al_passo(self, fatti: int, totale: int) -> None:
@@ -450,9 +516,12 @@ class Miglioratore:
                            f"{sfida.NOMI[motore]}, versione {passo} di {len(sfida.SFIDANTI)}")
             scelti = dict(lavoro["motori"], foto=motore)
             esito = self._una_versione(dict(lavoro, motori=scelti), parziale, al_passo)
-            if esito is None:
+            if esito is None or esito.get("guasto") in DA_RIFARE_DOPO:
                 sfida.butta([dati[0] for dati in fatte.values()])
-                self._rimetti_in_coda(miglioria_id)
+                if esito is None:
+                    self._rimetti_in_coda(miglioria_id)
+                else:
+                    self._aspetta_l_archivio(miglioria_id, originale, esito["guasto"])
                 return
             if "guasto" in esito:
                 if motore == motori.SEEDVR2:
@@ -532,16 +601,18 @@ class Miglioratore:
         self.adesso = {"id": miglioria_id, "nome": originale.name, "fatti": 0,
                        "totale": 0, "ripresa": True}
         self.lavoro.di(f"LucidFlux riprende «{originale.name}» per la sfida alla cieca")
-        if not (originale.is_file() and tenuta.is_file() and attesa.e_dentro(tenuta)):
-            self._non_ripresa(originale, "assente",
-                              "non trovo la foto o la versione di SeedVR2")
+        if not (tenuta.is_file() and attesa.e_dentro(tenuta)):
+            self._non_ripresa(originale, *NON_RIPRESA["originale_assente"])
             return
-        if (impronta.del_file(originale) != riga["impronta_originale"]
-                or impronta.del_file(tenuta) != riga["impronta_migliorata"]):
-            self._non_ripresa(originale, "cambiata",
-                              "la foto è cambiata da quando SeedVR2 l'ha fatta")
+        if impronta.del_file(tenuta) != riga["impronta_migliorata"]:
+            self._non_ripresa(originale, *NON_RIPRESA["originale_cambiato"])
             return
-        serve = originale.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
+        letto, piu, codice = self._originale(riga, originale)
+        if codice is not None:
+            perche = NON_RIPRESA.get(codice, (codice, a_parole(codice)))
+            self._non_ripresa(originale, *perche)
+            return
+        serve = letto.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
         if shutil.disk_usage(tenuta.parent).free < serve:
             self._non_ripresa(originale, "spazio", "manca spazio sul disco")
             return
@@ -549,10 +620,13 @@ class Miglioratore:
                                                        originale.suffix)
         arrivo = finale.with_name(f"{finale.stem}.{motori.LUCIDFLUX}{finale.suffix}")
         parziale = arrivo.with_name(arrivo.name + attesa.PARZIALE)
-        lavoro = self._il_lavoro("immagine", originale, riga["file_id"])
+        lavoro = self._il_lavoro("immagine", originale, riga["file_id"], piu)
         lavoro["motori"] = dict(lavoro["motori"], foto=motori.LUCIDFLUX)
         esito = self._una_versione(lavoro, parziale, self._al_passo)
         if esito is None:
+            return
+        if esito.get("guasto") in DA_RIFARE_DOPO:
+            self._non_ripresa(originale, esito["guasto"], a_parole(esito["guasto"]))
             return
         if "guasto" in esito:
             with self.archivio.scrittura() as connessione:
@@ -590,8 +664,10 @@ class Miglioratore:
         self.lavoro.di(f"«{originale.name}» resta solo di SeedVR2: {perche}")
 
     def _copie_da_guardare(self, miglioria_id: int, originale: Path,
-                           finale: Path) -> None:
-        lati = {da_guardare.PRIMA: originale, da_guardare.DOPO: finale}
+                           finale: Path, dal_disco: bool = True) -> None:
+        lati = {da_guardare.DOPO: finale}
+        if dal_disco:
+            lati[da_guardare.PRIMA] = originale
         if not da_guardare.mancano(self.archivio.dove, miglioria_id, lati):
             return
         self.lavoro.di(f"preparo la copia da guardare di «{originale.name}»")
@@ -608,7 +684,9 @@ class Miglioratore:
         with self.archivio.scrittura() as connessione:
             riga = coda.per_id(connessione, miglioria_id)
             if riga is not None and codice not in DA_RIPRENDERE:
-                pezzi.butta_quelli_di(attesa.cartella(connessione, Path(riga["percorso_originale"])),
+                pezzi.butta_quelli_di(attesa.cartella(connessione,
+                                                      Path(riga["percorso_originale"]),
+                                                      self.archivio.dove.radice),
                                       miglioria_id)
             coda.segna(connessione, miglioria_id, coda.FALLITA, guasto=codice,
                        finita_il=adesso())

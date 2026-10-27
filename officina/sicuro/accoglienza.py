@@ -19,6 +19,7 @@ from officina.sicuro.sottofondo import PAUSA_SE_USI, Sottofondo
 VERSIONE_DIVERSA = "versione_diversa"
 NON_C_E = "non_c_e"
 SENZA_CASA = "senza_casa"
+DATE = ("modifica", "accesso", "creazione")
 _IMPRONTA = re.compile(r"[0-9a-f]{64}")
 DOPO = " Non ho cambiato niente nell'archivio."
 MESSAGGI = {
@@ -90,6 +91,21 @@ def casa(elenco, impronta: str, dimensione: int | None,
     if nella_storia is not None:
         return nella_storia, None
     return None, SENZA_CASA
+
+
+def date(elenco, impronta: str, dimensione: int | None, percorso) -> dict:
+    numeri = set(elenco.con_impronta(impronta, dimensione))
+    for radice in elenco.radici():
+        if radice["tolta"]:
+            continue
+        trovata = _storia(elenco, radice, percorso)
+        if trovata is None:
+            continue
+        for posto in reversed(trovata[1]):
+            if _e_lei(posto, numeri):
+                return {nome: posto.metadati[nome] for nome in DATE
+                        if type(posto.metadati.get(nome)) is int}
+    return {}
 
 
 @dataclass(frozen=True)

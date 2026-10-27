@@ -9,7 +9,7 @@ from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile, perche_s
 from officina.modello import segnalazioni
 from officina.modello.luoghi import coordinate_valide
 from officina.sicuro.dall_archivio import (CHIUSO, CHIUSO_ADESSO, DIVERSA, NON_C_E, SI_APRE,
-                                           DallArchivio, Ricerca, da_rifare)
+                                           TROVATA, DallArchivio, Ricerca, da_rifare)
 
 
 def per_impronta(connessione: sqlite3.Connection, impronta: str) -> sqlite3.Row | None:
@@ -100,6 +100,41 @@ def cerca_nell_archivio(connessione: sqlite3.Connection, file_id: int) -> Ricerc
     return servizio.cerca(riga["impronta"], riga["dimensione"],
                           [r["percorso"] for r in percorsi], nome=nome or str(file_id),
                           intero=riga["genere"] == "immagine")
+
+
+def casa_nell_archivio(connessione: sqlite3.Connection,
+                       file_id: int) -> tuple[Path | None, str]:
+    from officina.programma import archivio_sicuro
+
+    riga = per_id(connessione, file_id)
+    if riga is None or not riga["impronta"]:
+        return None, NON_C_E
+    perche, servizio = archivio_sicuro.per_le_foto()
+    if servizio is None:
+        return None, perche
+    try:
+        percorso, perche = servizio.casa(riga["impronta"], riga["dimensione"],
+                                         [r["percorso"] for r in percorsi_di(connessione,
+                                                                             file_id)])
+    except ErroreOfficina as errore:
+        registro.avviso("sicuro.casa_non_trovata", motivo=registro.Parola(errore.codice))
+        return None, CHIUSO
+    if percorso is None:
+        return None, perche
+    return Path(percorso), TROVATA
+
+
+def date_nell_archivio(connessione: sqlite3.Connection, file_id: int,
+                       percorso: Path) -> dict | None:
+    from officina.programma import archivio_sicuro
+
+    riga = per_id(connessione, file_id)
+    if riga is None or not riga["impronta"]:
+        return None
+    _, servizio = archivio_sicuro.per_le_foto()
+    if servizio is None:
+        return None
+    return servizio.date(riga["impronta"], riga["dimensione"], str(percorso))
 
 
 def da_guardare(connessione: sqlite3.Connection,

@@ -167,6 +167,11 @@ class _Aperto:
             self._vivo()
             return accoglienza.casa(self.elenco, impronta, dimensione, percorsi)
 
+    def date(self, impronta: str, dimensione: int | None, percorso) -> dict:
+        with self._registra:
+            self._vivo()
+            return accoglienza.date(self.elenco, impronta, dimensione, percorso)
+
     def _sulla_chiavetta(self) -> tuple:
         try:
             radice, _ = self.custode.guardiano.trova()
@@ -612,6 +617,17 @@ class ArchivioSicuro:
         except ErroreOfficina as errore:
             if errore.codice == "archivio_chiuso":
                 return None, ARCHIVIO_CHIUSO
+            raise
+
+    def date(self, impronta: str, dimensione: int | None, percorso) -> dict | None:
+        aperto = self._aperto
+        if aperto is None:
+            return None
+        try:
+            return aperto.date(impronta, dimensione, percorso)
+        except ErroreOfficina as errore:
+            if errore.codice == "archivio_chiuso":
+                return None
             raise
 
     def accogli(self, richiesta: dict, aspetta: float = ASPETTA_TURNO) -> dict:

@@ -179,11 +179,13 @@ def miglioramento_togli(miglioria_id: int):
     from officina.miglioria import attesa, pezzi
     from officina.miglioria import coda as miglioria_coda
 
-    with accesso.aperto().scrittura() as connessione:
+    archivio = accesso.aperto()
+    with archivio.scrittura() as connessione:
         riga = miglioria_coda.per_id(connessione, miglioria_id)
         if miglioria_coda.togli(connessione, miglioria_id) and riga is not None:
-            pezzi.butta_quelli_di(attesa.cartella(connessione, Path(riga["percorso_originale"])),
-                                  miglioria_id)
+            dove = attesa.cartella(connessione, Path(riga["percorso_originale"]),
+                                   archivio.dove.radice)
+            pezzi.butta_quelli_di(dove, miglioria_id)
     return RedirectResponse("/miglioramento", status_code=303)
 
 
