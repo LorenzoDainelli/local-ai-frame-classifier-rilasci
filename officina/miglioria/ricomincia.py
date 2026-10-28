@@ -24,7 +24,7 @@ def approvate(connessione: sqlite3.Connection) -> list[sqlite3.Row]:
         return []
     return tutti(connessione,
                  "SELECT m.* FROM migliorie AS m JOIN file_media AS f ON f.id = m.file_id "
-                 "WHERE m.stato = ? AND f.genere = 'immagine' "
+                 "WHERE m.stato = ? AND f.genere = 'immagine' AND m.nell_archivio = 0 "
                  "AND NOT EXISTS (SELECT 1 FROM ritoccate AS r WHERE r.file_id = m.file_id) "
                  "AND NOT EXISTS (SELECT 1 FROM sfide AS s WHERE s.miglioria_id = m.id) "
                  "ORDER BY m.id LIMIT ?", coda.APPROVATA, posto)

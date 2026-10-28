@@ -4,11 +4,26 @@ import os
 from pathlib import Path
 
 from officina import registro
-from officina.archivio.database import adesso, uno
+from officina.archivio.database import adesso, tutti, uno
 from officina.errori import ErroreOfficina
 from officina.importazione import impronta
 from officina.miglioria import attesa, coda
 from officina.modello import file_media
+from officina.sicuro.dall_archivio import SENZA_ARCHIVIO
+
+SICURO_CHIUSO = "sicuro_chiuso"
+CAMBIATA = "la copia in attesa è cambiata dopo il sì: non l'ho toccata"
+NON_PRESA = "il Cestino di Windows non l'ha presa"
+RIMASTA = ("la copia migliorata è ancora in chiaro nella cartella di attesa: riprovo a "
+           "metterla nel Cestino a ogni avvio, o puoi cancellarla tu")
+CHIUSO_ORA = ("l'Archivio sicuro si è chiuso prima di prendere la migliorata: aprilo e "
+              "dai di nuovo il sì")
+CHIUSO_DOPO = ("l'Archivio sicuro è chiuso: riprovo alla prossima partenza della coda, "
+               "ad archivio aperto")
+MUTO_ORA = "l'Archivio sicuro non ha risposto: dai di nuovo il sì fra poco"
+MUTO_DOPO = "l'Archivio sicuro non ha risposto: riprovo alla prossima partenza della coda"
+A_META = "l'Archivio sicuro si è fermato a metà: riprovo alla prossima partenza della coda"
+NON_PRESA_DALL_ARCHIVIO = "L'Archivio sicuro non ha preso la migliorata."
 
 
 class ScambioFermato(ErroreOfficina):
@@ -75,14 +90,13 @@ def approva(archivio, miglioria_id: int) -> Path:
         raise ScambioFermato(
             "La copia migliorata è cambiata da quando è stata fatta: non la "
             "metto al posto dell'originale. Rifiutala e rimetti il file in coda.")
-    if not originale.is_file():
-        raise ScambioFermato(
-            f"L'originale «{originale.name}» non è più dov'era: lo scambio "
-            "non parte. Nessun file è stato toccato.")
-    if impronta.del_file(originale) != riga["impronta_originale"]:
-        raise ScambioFermato(
-            f"«{originale.name}» non è più il file che era stato migliorato: "
-            "lo scambio non parte. Nessun file è stato toccato.")
+    nell_archivio = not os.path.lexists(originale)
+    if nell_archivio:
+        _si_puo_dall_archivio(archivio, riga, originale)
+    elif not originale.is_file():
+        raise _non_c_e(originale)
+    elif impronta.del_file(originale) != riga["impronta_originale"]:
+        raise _cambiato(originale)
     if spostato.exists():
         raise ScambioFermato(
             f"In «{attesa.ORIGINALI}» c'è già un file che si chiama "
@@ -95,13 +109,177 @@ def approva(archivio, miglioria_id: int) -> Path:
     with archivio.scrittura() as connessione:
         cambiate = connessione.execute(
             "UPDATE migliorie SET stato = ?, percorso_spostato = ?, "
-            "percorso_migliorata = ?, guasto = NULL WHERE id = ? AND stato = ?",
-            (coda.IN_SCAMBIO, str(spostato), str(finale), miglioria_id,
-             coda.DA_RIVEDERE)).rowcount
+            "percorso_migliorata = ?, nell_archivio = ?, guasto = NULL "
+            "WHERE id = ? AND stato = ?",
+            (coda.IN_SCAMBIO, str(spostato), str(finale), int(nell_archivio),
+             miglioria_id, coda.DA_RIVEDERE)).rowcount
     if not cambiate:
         raise ScambioFermato("Questo file non è in attesa di una decisione.")
     registro.evento("miglioria.scambio_inizio", miglioria=miglioria_id)
+    if nell_archivio:
+        return _nell_archivio(archivio, _leggi(archivio, miglioria_id), appena=True)
     return porta_a_termine(archivio, miglioria_id)
+
+
+def _non_c_e(originale: Path) -> ScambioFermato:
+    return ScambioFermato(
+        f"L'originale «{originale.name}» non è più dov'era: lo scambio "
+        "non parte. Nessun file è stato toccato.")
+
+
+def _cambiato(originale: Path) -> ScambioFermato:
+    return ScambioFermato(
+        f"«{originale.name}» non è più il file che era stato migliorato: "
+        "lo scambio non parte. Nessun file è stato toccato.")
+
+
+def _chiuso(originale: Path) -> ScambioFermato:
+    return ScambioFermato(
+        f"«{originale.name}» c'è solo nell'Archivio sicuro, che è chiuso: aprilo e "
+        "riprova. Nessun file è stato toccato.", codice=SICURO_CHIUSO)
+
+
+def _si_puo_dall_archivio(archivio, riga, originale: Path) -> None:
+    from officina.programma import archivio_sicuro
+
+    with archivio.lettura() as connessione:
+        file = file_media.per_id(connessione, riga["file_id"])
+    if file is None or file["impronta"] != riga["impronta_originale"]:
+        raise _cambiato(originale)
+    perche, servizio = archivio_sicuro.per_le_foto()
+    if servizio is not None:
+        return
+    if perche == SENZA_ARCHIVIO:
+        raise _non_c_e(originale)
+    raise _chiuso(originale)
+
+
+def _nell_archivio(archivio, riga, appena: bool = False) -> Path:
+    from officina.programma import archivio_sicuro
+    from officina.sicuro.sottofondo import FINITO
+
+    miglioria_id = riga["id"]
+    originale = Path(riga["percorso_originale"])
+    with archivio.lettura() as connessione:
+        file = file_media.per_id(connessione, riga["file_id"])
+    if file is None or file["impronta"] != riga["impronta_originale"]:
+        _non_scritto(archivio, miglioria_id, appena,
+                     "l'originale nel programma non è più quello migliorato")
+        raise _cambiato(originale)
+    richiesta = {"originale": str(originale), "impronta": riga["impronta_originale"],
+                 "dimensione": file["dimensione"], "nuova": riga["in_revisione"] or "",
+                 "impronta_nuova": riga["impronta_migliorata"] or "",
+                 "verso": riga["percorso_migliorata"] or "",
+                 "spostato": riga["percorso_spostato"] or ""}
+    _, servizio = archivio_sicuro.per_le_foto()
+    try:
+        if servizio is None:
+            raise _chiuso(originale)
+        fatto = servizio.accogli(richiesta)
+    except ErroreOfficina as errore:
+        chiuso = errore.codice in (SICURO_CHIUSO, "archivio_chiuso")
+        if appena:
+            _torna_indietro(archivio, miglioria_id, CHIUSO_ORA if chiuso else MUTO_ORA)
+        else:
+            _ferma(archivio, miglioria_id, CHIUSO_DOPO if chiuso else MUTO_DOPO)
+        if chiuso:
+            raise _chiuso(originale) from None
+        raise ScambioFermato(
+            f"L'Archivio sicuro non ha preso la migliorata: {errore}",
+            codice=errore.codice) from None
+    except Exception as guasto:
+        registro.errore("miglioria.archivio_guasto", **registro.dove_si_e_rotto(guasto))
+        _ferma(archivio, miglioria_id, A_META)
+        raise _a_meta() from None
+    esito = fatto["esito"]
+    if fatto["stato"] != FINITO or esito is None:
+        if fatto["scritto"]:
+            _ferma(archivio, miglioria_id, A_META)
+            raise _a_meta()
+        perche = fatto["errore"] or NON_PRESA_DALL_ARCHIVIO
+        _non_scritto(archivio, miglioria_id, appena, perche)
+        raise ScambioFermato(f"Lo scambio non è avvenuto. {perche}", codice=fatto["codice"])
+    verso = Path(esito["verso"])
+    spostato = Path(esito["spostato"])
+    with archivio.scrittura() as connessione:
+        cambia_il_percorso(connessione, riga["file_id"], originale, spostato,
+                           presente=False)
+        connessione.execute("UPDATE file_media SET miniatura = NULL WHERE id = ?",
+                            (riga["file_id"],))
+        coda.segna(connessione, miglioria_id, coda.APPROVATA, decisa_il=adesso(),
+                   percorso_spostato=str(spostato), percorso_migliorata=str(verso),
+                   guasto=None)
+    registro.evento("miglioria.scambio_fatto", miglioria=miglioria_id,
+                    nell_archivio=True, gia_fatto=bool(esito["gia_fatto"]))
+    butta_la_copia(archivio, miglioria_id)
+    return verso
+
+
+def _a_meta() -> ScambioFermato:
+    return ScambioFermato(
+        "L'Archivio sicuro si è fermato a metà mentre prendeva la migliorata: riprovo alla "
+        "prossima partenza della coda. Nessun file è stato cancellato.")
+
+
+def _non_scritto(archivio, miglioria_id: int, appena: bool, perche: str) -> None:
+    if appena:
+        _torna_indietro(archivio, miglioria_id, perche)
+    else:
+        _ferma(archivio, miglioria_id, perche)
+
+
+def butta_la_copia(archivio, miglioria_id: int) -> bool:
+    riga = _leggi(archivio, miglioria_id)
+    if (riga["stato"] != coda.APPROVATA or not riga["nell_archivio"]
+            or not riga["in_revisione"]):
+        return False
+    in_attesa = Path(riga["in_revisione"])
+    try:
+        motivo = _nel_cestino(riga, in_attesa)
+    except Exception as guasto:
+        registro.errore("miglioria.cestino_guasto", **registro.dove_si_e_rotto(guasto))
+        motivo = NON_PRESA
+    with archivio.scrittura() as connessione:
+        if motivo is None or motivo == CAMBIATA:
+            connessione.execute(
+                "UPDATE migliorie SET in_revisione = NULL, guasto = ? WHERE id = ? "
+                "AND stato = ?", (motivo, miglioria_id, coda.APPROVATA))
+        else:
+            connessione.execute(
+                "UPDATE migliorie SET guasto = ? WHERE id = ? AND stato = ?",
+                (f"{RIMASTA}. {motivo}", miglioria_id, coda.APPROVATA))
+    if motivo is not None:
+        registro.avviso("miglioria.copia_in_chiaro", miglioria=miglioria_id,
+                        cambiata=motivo == CAMBIATA)
+    return motivo is None
+
+
+def _nel_cestino(riga, in_attesa: Path) -> str | None:
+    from officina.programma import archivio_sicuro
+
+    if not os.path.lexists(in_attesa):
+        return None
+    if (not attesa.e_dentro(in_attesa) or not in_attesa.is_file()
+            or impronta.del_file(in_attesa) != riga["impronta_migliorata"]):
+        return CAMBIATA
+    cestino = archivio_sicuro.il_cestino()
+    problema = cestino.problema(str(in_attesa.parent), [(str(in_attesa), 0)],
+                                in_attesa.stat().st_size)
+    if problema is not None:
+        return problema[1]
+    try:
+        cestino.butta(str(in_attesa))
+    except Exception as guasto:
+        registro.errore("miglioria.cestino_guasto", **registro.dove_si_e_rotto(guasto))
+    return NON_PRESA if os.path.lexists(in_attesa) else None
+
+
+def butta_le_copie_rimaste(archivio) -> int:
+    with archivio.lettura() as connessione:
+        righe = tutti(connessione,
+                      "SELECT id FROM migliorie WHERE stato = ? AND nell_archivio = 1 "
+                      "AND in_revisione IS NOT NULL ORDER BY id", coda.APPROVATA)
+    return sum(1 for riga in righe if butta_la_copia(archivio, riga["id"]))
 
 
 def porta_a_termine(archivio, miglioria_id: int) -> Path:
@@ -110,6 +288,8 @@ def porta_a_termine(archivio, miglioria_id: int) -> Path:
         return Path(riga["percorso_migliorata"])
     if riga["stato"] != coda.IN_SCAMBIO:
         raise ScambioFermato("Questo scambio non è in corso.")
+    if riga["nell_archivio"]:
+        return _nell_archivio(archivio, riga)
     from officina.miglioria import sopra
 
     if sopra.in_corso(riga):
@@ -171,16 +351,18 @@ def porta_a_termine(archivio, miglioria_id: int) -> Path:
 
 
 def cambia_il_percorso(connessione, file_id: int, prima: Path,
-                                dopo: Path) -> None:
+                                dopo: Path, presente: bool = True) -> None:
     riga = uno(connessione,
                "SELECT id, cartella_id FROM percorsi WHERE percorso = ?", str(prima))
     if riga is not None:
         connessione.execute(
-            "UPDATE percorsi SET percorso = ?, nome = ?, presente = 1, "
+            "UPDATE percorsi SET percorso = ?, nome = ?, presente = ?, "
             "visto_il = ?, file_id = ? WHERE id = ?",
-            (str(dopo), dopo.name, adesso(), file_id, riga["id"]))
+            (str(dopo), dopo.name, int(presente), adesso(), file_id, riga["id"]))
         return
-    file_media.aggiungi_percorso(connessione, file_id, dopo)
+    nuovo, _ = file_media.aggiungi_percorso(connessione, file_id, dopo)
+    if not presente:
+        connessione.execute("UPDATE percorsi SET presente = 0 WHERE id = ?", (nuovo,))
 
 
 def _torna_indietro(archivio, miglioria_id: int, perche: str) -> None:
@@ -238,6 +420,7 @@ def ripara(archivio) -> dict:
             finiti += 1
         except (ScambioFermato, OSError):
             fermi += 1
+    butta_le_copie_rimaste(archivio)
     if interrotte or in_scambio:
         registro.evento("miglioria.riparata", riprese=len(interrotte),
                         scambi_finiti=finiti, scambi_fermi=fermi)

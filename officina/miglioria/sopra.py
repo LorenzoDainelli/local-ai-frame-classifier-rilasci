@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from officina import registro
@@ -46,6 +47,10 @@ def approva(archivio, riga, ritoccata) -> Path:
         raise ScambioFermato(
             "La copia migliorata è cambiata da quando è stata fatta: non la "
             "metto al posto dell'originale. Rifiutala e rimetti il file in coda.")
+    if not os.path.lexists(originale):
+        raise ScambioFermato(
+            f"«{originale.name}» c'è solo nell'Archivio sicuro: per uno scatto ritoccato "
+            "questo scambio non si fa ancora. Nessun file è stato toccato.")
     if not originale.is_file() or impronta.del_file(originale) != riga["impronta_originale"]:
         raise ScambioFermato(
             f"«{originale.name}» in «{attesa.ORIGINALI}» non è più il file che era stato "
@@ -62,7 +67,8 @@ def approva(archivio, riga, ritoccata) -> Path:
     with archivio.scrittura() as connessione:
         cambiate = connessione.execute(
             "UPDATE migliorie SET stato = ?, percorso_spostato = ?, "
-            "percorso_migliorata = ?, guasto = NULL WHERE id = ? AND stato = ?",
+            "percorso_migliorata = ?, nell_archivio = 0, guasto = NULL "
+            "WHERE id = ? AND stato = ?",
             (coda.IN_SCAMBIO, str(originale), str(finale), riga["id"],
              coda.DA_RIVEDERE)).rowcount
     if not cambiate:

@@ -149,6 +149,15 @@ def per_le_foto():
     return (dall_archivio.CHIUSO if c_e_l_archivio else dall_archivio.SENZA_ARCHIVIO), None
 
 
+def il_cestino():
+    from officina.sicuro import servizio as modulo
+    from officina.sicuro.cestino import cestino_di_sistema
+
+    servizio = modulo.attuale()
+    cestino = servizio.cestino if servizio is not None else None
+    return cestino or cestino_di_sistema()
+
+
 def butta_le_copie_di_passaggio(posizione) -> int:
     from officina.immagini import compatibile
 
