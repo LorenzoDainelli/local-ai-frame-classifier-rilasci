@@ -44,6 +44,9 @@ class Esito:
     chiusi: list[str] = field(default_factory=list)
     diversi: list[str] = field(default_factory=list)
     senza_casa: list[str] = field(default_factory=list)
+    scatti_chiusi: int = 0
+    fermo: bool = False
+    altri: int = 0
 
     def a_parole(self) -> str:
         pezzi = []
@@ -135,13 +138,27 @@ def ritoccati_da_chiedere(connessione: sqlite3.Connection, scatti) -> int:
 
 
 def metti(connessione: sqlite3.Connection, scatti: list[int],
-          ritoccati: bool | None = None) -> Esito:
+          ritoccati: bool | None = None, *, chiedi_l_archivio: bool = False) -> Esito:
     esito = Esito()
     scelti = list(dict.fromkeys(int(s) for s in scatti))
     if ritoccati is None:
         esito.ritoccati = ritoccati_da_chiedere(connessione, scelti)
         if esito.ritoccati:
             return esito
+    connessione.execute("SAVEPOINT metti_in_coda")
+    try:
+        _metti_tutti(connessione, scelti, ritoccati, esito)
+        if chiedi_l_archivio and esito.chiusi:
+            connessione.execute("ROLLBACK TO metti_in_coda")
+            return Esito(chiusi=esito.chiusi, scatti_chiusi=esito.scatti_chiusi, fermo=True,
+                         altri=esito.messi)
+    finally:
+        connessione.execute("RELEASE metti_in_coda")
+    return esito
+
+
+def _metti_tutti(connessione: sqlite3.Connection, scelti: list[int],
+                 ritoccati: bool | None, esito: Esito) -> None:
     for scatto_id in scelti:
         righe = file_da_guardare(connessione, scatto_id)
         ritoccato = bool(_ritoccati(connessione, righe))
@@ -151,12 +168,13 @@ def metti(connessione: sqlite3.Connection, scatti: list[int],
         if ritoccato and not ritoccati:
             esito.lasciati += 1
             continue
-        messi = esito.messi
+        messi, chiusi = esito.messi, len(esito.chiusi)
         for riga in righe:
             _metti_uno(connessione, riga, esito)
         if ritoccato and esito.messi > messi:
             esito.con_ritocchi += 1
-    return esito
+        if len(esito.chiusi) > chiusi:
+            esito.scatti_chiusi += 1
 
 
 def _metti_uno(connessione: sqlite3.Connection, riga: sqlite3.Row,

@@ -239,14 +239,37 @@ def _metti_in_coda(dati: dict, numeri: list[int]) -> dict:
     if not numeri:
         raise ErroreOfficina("Non hai selezionato niente.")
     with accesso.aperto().scrittura() as connessione:
-        esito = miglioria_coda.metti(connessione, numeri, _ritoccati(dati))
+        esito = miglioria_coda.metti(connessione, numeri, _ritoccati(dati),
+                                     chiedi_l_archivio=_chiedi_l_archivio(dati))
     registro.evento("miglioria.messi", messi=esito.messi, scelti=len(numeri))
-    return {"messi": esito.messi, "detto": esito.a_parole(), "ritoccati": esito.ritoccati}
+    return _risposta(esito)
 
 
 def _ritoccati(dati: dict) -> bool | None:
     scelta = dati.get("ritoccati")
     return scelta if isinstance(scelta, bool) else None
+
+
+def _chiedi_l_archivio(dati: dict) -> bool:
+    return dati.get("senza_l_archivio") is not True
+
+
+def _risposta(esito) -> dict:
+    from officina.programma import archivio_sicuro
+
+    risposta = {"messi": esito.messi, "detto": esito.a_parole(),
+                "ritoccati": esito.ritoccati}
+    if esito.fermo:
+        risposta["archivio"] = {"come": archivio_sicuro.per_le_foto()[0],
+                                "scatti": esito.scatti_chiusi, "altri": esito.altri}
+    return risposta
+
+
+@strada.get("/api/miglioramento/archivio")
+def api_miglioramento_archivio():
+    from officina.programma import archivio_sicuro
+
+    return {"come": archivio_sicuro.per_le_foto()[0]}
 
 
 def _qualita_scelte(dati) -> tuple[list[str], list[str], str | None]:
@@ -374,10 +397,11 @@ def _metti_in_coda_per_qualita(dati: dict) -> dict:
     if not numeri:
         raise ErroreOfficina("Con questi filtri non c'è niente da mettere in coda.")
     with accesso.aperto().scrittura() as connessione:
-        esito = miglioria_coda.metti(connessione, numeri, _ritoccati(dati))
+        esito = miglioria_coda.metti(connessione, numeri, _ritoccati(dati),
+                                     chiedi_l_archivio=_chiedi_l_archivio(dati))
     registro.evento("miglioria.messi_dalla_qualita", messi=esito.messi,
                     scelti=len(numeri))
-    return {"messi": esito.messi, "detto": esito.a_parole(), "ritoccati": esito.ritoccati}
+    return _risposta(esito)
 
 
 @strada.get("/miglioramento/rivedi", response_class=HTMLResponse)

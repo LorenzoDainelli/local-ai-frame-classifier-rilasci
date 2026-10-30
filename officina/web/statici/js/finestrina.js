@@ -286,3 +286,83 @@ export function chiediFraTre({ titolo, sotto = "", primo, secondo, annulla = "An
         finestra.querySelector("[data-primo]").focus();
     });
 }
+
+export function chiediLaPassword({ titolo, sotto = "", primo = "", secondo = "",
+                                   annulla = "Annulla", etichetta = "La password",
+                                   prova = null, finche = null }) {
+    const finestra = document.createElement("dialog");
+    finestra.className = "finestrina";
+    finestra.setAttribute("aria-labelledby", "finestrina-titolo");
+    finestra.innerHTML =
+        `<form method="dialog" class="finestrina-dentro" novalidate>` +
+        `<h2 id="finestrina-titolo">${dentro(titolo)}</h2>` +
+        (sotto ? `<p class="finestrina-sotto">${dentro(sotto)}</p>` : "") +
+        (prova ? `<input class="finestrina-campo" type="password" ` +
+                 `autocomplete="current-password" aria-label="${scampa(etichetta)}">` : "") +
+        `<p class="finestrina-errore" role="alert" hidden></p>` +
+        `<div class="finestrina-tasti">` +
+        `<button type="button" class="tasto-comando nudo" data-no>` +
+        `${scampa(annulla)} <kbd>Esc</kbd></button>` +
+        (secondo ? `<button type="button" class="tasto-comando" data-secondo>` +
+                   `${scampa(secondo)}</button>` : "") +
+        (primo ? `<button type="submit" class="tasto-comando principale" data-primo>` +
+                 `${scampa(primo)} <kbd>&crarr;</kbd></button>` : "") +
+        `</div></form>`;
+    document.body.appendChild(finestra);
+    const campo = finestra.querySelector(".finestrina-campo");
+    const errore = finestra.querySelector(".finestrina-errore");
+    const tasti = [...finestra.querySelectorAll("button")];
+
+    return new Promise((risolvi) => {
+        let chiusa = false;
+        let provo = false;
+        const chiudi = async (risposta) => {
+            if (chiusa || provo) return;
+            chiusa = true;
+            await esci(finestra);
+            risolvi(risposta);
+        };
+        const sbagliato = (testo) => {
+            errore.textContent = testo;
+            errore.hidden = false;
+            scuoti(campo);
+            campo.focus();
+        };
+        finestra.addEventListener("cancel", (evento) => {
+            evento.preventDefault();
+            chiudi(null);
+        });
+        finestra.addEventListener("click", (evento) => {
+            if (evento.target === finestra) chiudi(null);
+        });
+        finestra.querySelector("[data-no]").addEventListener("click", () => chiudi(null));
+        finestra.querySelector("[data-secondo]")?.addEventListener("click",
+            () => chiudi("secondo"));
+        finestra.querySelector("form").addEventListener("submit", async (evento) => {
+            evento.preventDefault();
+            if (!primo || provo) return;
+            if (!campo) { chiudi("primo"); return; }
+            const valore = campo.value;
+            campo.value = "";
+            if (!valore) { sbagliato("Scrivi la password."); return; }
+            provo = true;
+            tasti.forEach((tasto) => { tasto.disabled = true; });
+            let problema;
+            try {
+                problema = await prova(valore);
+            } catch (guasto) {
+                problema = "Qualcosa è andato storto. Riprova.";
+            }
+            provo = false;
+            tasti.forEach((tasto) => { tasto.disabled = false; });
+            if (problema) sbagliato(problema);
+            else chiudi("primo");
+        });
+        if (campo) campo.addEventListener("input", () => { errore.hidden = true; });
+        if (finche) finche(() => chiusa).then((fine) => { if (fine) chiudi(fine); });
+        finestra.showModal();
+        entra(finestra);
+        (campo || finestra.querySelector("[data-primo]")
+            || finestra.querySelector("[data-no]")).focus();
+    });
+}

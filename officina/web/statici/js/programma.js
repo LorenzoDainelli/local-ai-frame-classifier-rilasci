@@ -17,6 +17,16 @@ async function chiediAlFisso(azione, argomenti) {
 
 const api = () => fisso || locale();
 
+export const nelProgramma = () => Boolean(api());
+
+export async function apriLArchivioSicuro(password) {
+    try {
+        return await api().apri_l_archivio_sicuro(password);
+    } catch (guasto) {
+        return { errore: "Qualcosa è andato storto. Riprova." };
+    }
+}
+
 async function guardaSeEIlFisso() {
     try {
         await chiediAlFisso("aggiornamento", []);
