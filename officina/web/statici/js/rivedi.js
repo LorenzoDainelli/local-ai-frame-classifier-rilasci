@@ -1,4 +1,5 @@
-import { chiedi, leggiDatiIncorporati, manda, siStaScrivendo } from "./comune.js";
+import { aspettaLArchivio, chiedi, leggiDatiIncorporati, manda, siStaScrivendo }
+    from "./comune.js";
 import { confronta, suUnCursore } from "./confronto.js";
 
 const CHIAVE_DETTO = "officina.rivedi.detto";
@@ -15,16 +16,20 @@ function di(testo, forte) {
     else esito.removeAttribute("role");
 }
 
-function ricorda(testo) {
-    try { sessionStorage.setItem(CHIAVE_DETTO, testo); } catch (errore) {  }
+function ricorda(testo, forte) {
+    try {
+        const detto = JSON.stringify({ testo, forte: Boolean(forte) });
+        sessionStorage.setItem(CHIAVE_DETTO, detto);
+    } catch (errore) {  }
 }
 
 function ricordato() {
     try {
-        const testo = sessionStorage.getItem(CHIAVE_DETTO);
+        const scritto = sessionStorage.getItem(CHIAVE_DETTO);
         sessionStorage.removeItem(CHIAVE_DETTO);
-        return testo || "";
-    } catch (errore) { return ""; }
+        const detto = JSON.parse(scritto || "{}");
+        return { testo: String(detto.testo || ""), forte: Boolean(detto.forte) };
+    } catch (errore) { return { testo: "", forte: false }; }
 }
 
 function vaiAvanti(saltate) {
@@ -50,10 +55,16 @@ async function decidi(come) {
     di(come === "approva" ? "Sposto i file e li controllo..." : "Cancello la copia...");
     try {
         const risposta = await manda(`/api/miglioramento/${scelta.id}/${come}`, {});
-        ricorda(risposta.detto || "");
+        ricorda([risposta.detto, risposta.avviso].filter(Boolean).join(" "),
+            Boolean(risposta.avviso));
         if (window.movimenti?.decisoInRevisione) await window.movimenti.decisoInRevisione(come);
         vaiAvanti(dati.saltate || []);
     } catch (errore) {
+        if (errore.codice === "sicuro_chiuso") {
+            ricorda(errore.message, true);
+            window.location.reload();
+            return;
+        }
         di(errore.message, true);
         staDecidendo = false;
         document.querySelectorAll("[data-decidi]").forEach((tasto) => {
@@ -123,4 +134,6 @@ if (faiCopie && scelta) {
 }
 
 const detto = ricordato();
-if (detto) di(detto);
+if (detto.testo) di(detto.testo, detto.forte);
+
+if (scelta) aspettaLArchivio(scelta.file_id);

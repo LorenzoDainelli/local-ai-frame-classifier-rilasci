@@ -13,8 +13,10 @@ from officina.web import miglioramento as miglioramento_web
 from officina.web import vista
 from officina.programma import librerie
 
+from officina.sicuro.dall_archivio import DallArchivio
 from officina.web import in_disparte, sosta
 from officina.web.strade import base, comune
+from officina.web.strade import scatto as scatto_web
 
 strada = APIRouter()
 
@@ -390,15 +392,16 @@ def miglioramento_rivedi(richiesta: Request, saltate: str = ""):
 
 
 @strada.get("/miglioramento/{miglioria_id}/mostra/{lato}")
-def miglioramento_mostra(miglioria_id: int, lato: str):
+def miglioramento_mostra(richiesta: Request, miglioria_id: int, lato: str):
     trovato = miglioramento_web.file_del_lato(accesso.aperto(), miglioria_id, lato)
     if trovato is None:
         return Response(status_code=404)
     genere, file = trovato
     senza_cache = {"Cache-Control": "no-store"}
-    if genere == "video":
-        return FileResponse(file, media_type="video/mp4", headers=senza_cache)
-    tipo = miglioramento_web.FORMATI_CHE_SI_APRONO.get(file.suffix.casefold())
+    tipo = ("video/mp4" if genere == "video"
+            else miglioramento_web.FORMATI_CHE_SI_APRONO.get(file.suffix.casefold()))
+    if tipo is not None and isinstance(file, DallArchivio):
+        return scatto_web._dall_archivio_a_pezzi(richiesta, file, tipo)
     if tipo is not None:
         return FileResponse(file, media_type=tipo, headers=senza_cache)
     dati, tipo = consegna.da_immagine(lettura.copia_di_lavoro(file, None), "JPEG")
@@ -492,14 +495,31 @@ def _prima_si_vota(archivio, miglioria_id: int) -> None:
 
 @strada.post("/api/miglioramento/{miglioria_id}/approva")
 def api_miglioramento_approva(miglioria_id: int):
+    from officina.miglioria import coda as miglioria_coda
     from officina.miglioria import da_guardare, scambio
 
     archivio = accesso.aperto()
     _prima_si_vota(archivio, miglioria_id)
-    finale = scambio.approva(archivio, miglioria_id)
+    with archivio.lettura() as connessione:
+        prima = miglioria_coda.per_id(connessione, miglioria_id)
+    try:
+        finale = scambio.approva(archivio, miglioria_id)
+    except scambio.ScambioFermato as errore:
+        if errore.codice != scambio.SICURO_CHIUSO:
+            raise
+        return JSONResponse({"messaggio": errore.messaggio, "codice": errore.codice},
+                            status_code=400)
     da_guardare.togli(archivio.dove, miglioria_id)
-    return {"detto": f"Approvata: «{finale.name}» ora è la migliorata, e "
-                     f"l'originale sta nella cartella «Originali» accanto."}
+    with archivio.lettura() as connessione:
+        dopo = miglioria_coda.per_id(connessione, miglioria_id)
+    if dopo is None or not dopo["nell_archivio"]:
+        return {"detto": f"Approvata: «{finale.name}» ora è la migliorata, e "
+                         f"l'originale sta nella cartella «Originali» accanto."}
+    return {"detto": f"Approvata: «{finale.name}» ora è la migliorata nell'Archivio "
+                     "sicuro, e l'originale resta custodito lì, nella cartella "
+                     "«Originali».",
+            "avviso": miglioramento_web.avviso_dopo_il_si(
+                dopo, prima["in_revisione"] if prima is not None else None)}
 
 
 @strada.post("/api/miglioramento/{miglioria_id}/rifiuta")

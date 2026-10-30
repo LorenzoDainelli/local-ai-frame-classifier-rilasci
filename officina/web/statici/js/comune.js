@@ -5,13 +5,28 @@ export async function chiedi(indirizzo, opzioni = {}) {
     });
     if (!risposta.ok) {
         let messaggio = "Qualcosa non ha funzionato.";
+        let codice = "";
         try {
             const dati = await risposta.json();
             if (dati && dati.messaggio) messaggio = dati.messaggio;
+            if (dati && dati.codice) codice = String(dati.codice);
         } catch (errore) {  }
-        throw new Error(messaggio);
+        const sbaglio = new Error(messaggio);
+        sbaglio.codice = codice;
+        throw sbaglio;
     }
     return risposta.json();
+}
+
+export function aspettaLArchivio(fileId) {
+    if (!document.getElementById("archivio-si-apre") || !fileId) return;
+    setInterval(async () => {
+        let stato;
+        try {
+            stato = await chiedi(`/api/dall-archivio/${fileId}`);
+        } catch (errore) { return; }
+        if (stato.perche !== "si_apre") window.location.reload();
+    }, 1500);
 }
 
 export async function manda(indirizzo, corpo) {

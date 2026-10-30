@@ -108,9 +108,10 @@ def registra(connessione: sqlite3.Connection, miglioria_id: int, versioni: dict,
 
 def da_votare(connessione: sqlite3.Connection) -> list[sqlite3.Row]:
     return tutti(connessione,
-                 "SELECT s.*, m.percorso_originale, m.larghezza_prima, "
-                 "m.altezza_prima, m.larghezza_dopo, m.altezza_dopo, m.scatto_id, "
-                 "m.file_id FROM sfide AS s JOIN migliorie AS m ON m.id = s.miglioria_id "
+                 "SELECT s.*, m.percorso_originale, m.impronta_originale, "
+                 "m.larghezza_prima, m.altezza_prima, m.larghezza_dopo, m.altezza_dopo, "
+                 "m.scatto_id, m.file_id FROM sfide AS s "
+                 "JOIN migliorie AS m ON m.id = s.miglioria_id "
                  "WHERE s.voto IS NULL AND m.stato = ? ORDER BY s.id", coda.DA_RIVEDERE)
 
 

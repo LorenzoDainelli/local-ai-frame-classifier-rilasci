@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_spiega.html" import spiega %}
 {% from "_icone.html" import icona %}
+{% from "_archivio_della_revisione.html" import archivio_della_revisione %}
 {% block titolo %}Sfida alla cieca — Local AI Frame Classifier{% endblock %}
 
 {% block corpo %}
@@ -23,7 +24,9 @@
         </span>
     </div>
 
-    {% if not scelta.ci_sono %}
+    {% if scelta.archivio %}
+    {{ archivio_della_revisione(scelta.archivio) }}
+    {% elif not scelta.ci_sono %}
     <div class="avviso forte" role="alert">
         <span>
             Uno dei tre file non è più dov'era. Vota &laquo;Nessuna delle
@@ -45,8 +48,10 @@
         </figure>
         <figure class="rivedi-lato originale-sfida" data-lato="centro">
             <div class="rivedi-quadro">
+                {% if not scelta.archivio %}
                 <img src="/miglioramento/{{ scelta.id }}/mostra/prima"
                      alt="L'originale" draggable="false">
+                {% endif %}
             </div>
             <figcaption>
                 <span class="etichetta-rivedi numeri">Originale &middot; {{ scelta.prima }}</span>

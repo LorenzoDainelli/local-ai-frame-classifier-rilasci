@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 from pathlib import Path
 
 from officina.archivio.database import tutti, uno
+from officina.errori import ErroreOfficina
 from officina.miglioria import attesa, coda, da_guardare, fedelta, misura, ricomincia, sfida
-from officina.modello import scatti
+from officina.modello import file_media, scatti
+from officina.sicuro.dall_archivio import CHIUSO, SI_APRE, TROVATA, DallArchivio
 from officina.web.lavori import Lavoro
 
 QUANTI_IN_CODA = 200
@@ -26,6 +29,10 @@ NOMI_DEI_MOTORI = {
 
 FORMATI_CHE_SI_APRONO = {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
                          ".png": "image/png", ".webp": "image/webp"}
+
+MUTO = "muto"
+CHIUSO_MENTRE = ("L'Archivio sicuro si è chiuso mentre preparavo la copia da guardare, e "
+                 "la copia l'ho buttata. Apri l'archivio e riprova.")
 
 UNA_RIGA = ("SELECT m.*, f.genere, f.durata_ms FROM migliorie AS m "
             "JOIN file_media AS f ON f.id = m.file_id ")
@@ -179,9 +186,39 @@ def dello_scatto(connessione: sqlite3.Connection, scatto_id: int) -> dict | None
     return dict(riga) if riga is not None else None
 
 
-def _lati(riga: sqlite3.Row) -> dict[str, Path]:
-    return {da_guardare.PRIMA: Path(riga["percorso_originale"]),
-            da_guardare.DOPO: Path(riga["in_revisione"] or "")}
+def il_prima(archivio, riga) -> tuple[Path | DallArchivio | None, str | None]:
+    originale = Path(riga["percorso_originale"])
+    if originale.is_file():
+        return originale, None
+    if os.path.lexists(originale):
+        return None, None
+    try:
+        with archivio.lettura() as connessione:
+            file = file_media.per_id(connessione, riga["file_id"])
+            if file is None or file["impronta"] != riga["impronta_originale"]:
+                return None, None
+            ricerca = file_media.cerca_nell_archivio(connessione, riga["file_id"])
+    except ErroreOfficina:
+        return None, MUTO
+    trovata = ricerca.trovata
+    if trovata is None:
+        return None, ricerca.perche if ricerca.perche in (CHIUSO, SI_APRE) else None
+    if trovata.diversa or trovata.blake2b != riga["impronta_originale"]:
+        return None, None
+    return trovata, None
+
+
+def _il_lato(archivio, riga, lato: str) -> tuple[Path | DallArchivio | None, str | None]:
+    if lato == da_guardare.PRIMA:
+        return il_prima(archivio, riga)
+    return Path(riga["in_revisione"] or ""), None
+
+
+def _da_mostrare(archivio, miglioria_id: int, lato: str, file):
+    try:
+        return da_guardare.da_mostrare(archivio.dove, miglioria_id, lato, file)
+    except ErroreOfficina:
+        return None
 
 
 def da_rivedere(archivio, saltate: set[int]) -> dict | None:
@@ -202,19 +239,22 @@ def da_rivedere(archivio, saltate: set[int]) -> dict | None:
     originale = Path(riga["percorso_originale"])
     with archivio.lettura() as connessione:
         ritoccato = sopra.di(connessione, riga) is not None
-    lati = _lati(riga)
+    prima, archivio_dice = il_prima(archivio, riga)
+    lati = {da_guardare.PRIMA: prima, da_guardare.DOPO: Path(riga["in_revisione"] or "")}
+    ci_sono = all(file is not None and file.is_file() for file in lati.values())
     mancano = []
-    if riga["genere"] == "video":
+    if riga["genere"] == "video" and ci_sono:
         mancano = [lato for lato in da_guardare.LATI
-                   if da_guardare.da_mostrare(archivio.dove, riga["id"], lato,
-                                              lati[lato]) is None]
+                   if _da_mostrare(archivio, riga["id"], lato, lati[lato]) is None]
     return {
         **a_parole(riga),
         "posizione": posizione,
         "quante": len(tutte),
         "ricominciato": ricominciato,
         "mancano_copie": mancano,
-        "ci_sono": all(file.is_file() for file in lati.values()),
+        "ci_sono": ci_sono,
+        "dall_archivio": isinstance(prima, DallArchivio),
+        "archivio": archivio_dice,
         "va_in": str(Path(originale.parent.name) / originale.name if ritoccato
                      else Path(originale.parent.name) / attesa.ORIGINALI / originale.name),
         "ritoccato": ritoccato,
@@ -230,6 +270,13 @@ def _proporzione(riga: sqlite3.Row) -> float:
     return round(4 / 3, 5)
 
 
+def avviso_dopo_il_si(riga, in_attesa: str | None) -> str:
+    if riga is None or not riga["nell_archivio"] or not riga["guasto"]:
+        return ""
+    dove = f" La trovi in «{Path(in_attesa).parent}»." if in_attesa else ""
+    return f"Attenzione: {riga['guasto'].rstrip('.')}.{dove}"
+
+
 def file_del_lato(archivio, miglioria_id: int, lato: str) -> tuple[str, Path] | None:
     if lato not in da_guardare.LATI:
         return None
@@ -239,11 +286,11 @@ def file_del_lato(archivio, miglioria_id: int, lato: str) -> tuple[str, Path] | 
         return None
     if lato == da_guardare.DOPO and not riga["in_revisione"]:
         return None
-    file = _lati(riga)[lato]
-    if not file.is_file():
+    file, _ = _il_lato(archivio, riga, lato)
+    if file is None or not file.is_file():
         return None
     if riga["genere"] == "video":
-        mostra = da_guardare.da_mostrare(archivio.dove, miglioria_id, lato, file)
+        mostra = _da_mostrare(archivio, miglioria_id, lato, file)
         return ("video", mostra) if mostra is not None else None
     return "immagine", file
 
@@ -253,11 +300,22 @@ def fai_le_copie(archivio, miglioria_id: int) -> bool:
         riga = uno(connessione, UNA_RIGA + "WHERE m.id = ?", miglioria_id)
     if riga is None or riga["stato"] != coda.DA_RIVEDERE or riga["genere"] != "video":
         return False
-    lati = _lati(riga)
+    nome = Path(riga["percorso_originale"]).name
 
     def fai() -> None:
-        copie.di(f"preparo la copia da guardare di «{lati[da_guardare.PRIMA].name}»")
+        from officina.programma import archivio_sicuro
+
+        copie.di(f"preparo la copia da guardare di «{nome}»")
+        lati = {}
+        for lato in da_guardare.LATI:
+            file, _ = _il_lato(archivio, riga, lato)
+            if file is not None and file.is_file():
+                lati[lato] = file
         da_guardare.fai(archivio.dove, miglioria_id, lati, al_passo=copie.a_che_punto)
+        if (isinstance(lati.get(da_guardare.PRIMA), DallArchivio)
+                and archivio_sicuro.per_le_foto()[0] != TROVATA):
+            archivio_sicuro.butta_le_copie_di_passaggio(archivio.dove)
+            raise ErroreOfficina(CHIUSO_MENTRE)
         copie.di("pronta")
 
     return copie.parti(fai, nome="copie da guardare")
@@ -318,6 +376,7 @@ def da_votare(archivio) -> dict | None:
     if not tutte:
         return None
     riga = tutte[0]
+    prima, archivio_dice = il_prima(archivio, riga)
     larga, alta = (riga["larghezza_dopo"], riga["altezza_dopo"]) \
         if riga["larghezza_dopo"] and riga["altezza_dopo"] else (4, 3)
     dopo = (misura_a_parole(riga["larghezza_dopo"], riga["altezza_dopo"])
@@ -326,6 +385,7 @@ def da_votare(archivio) -> dict | None:
     return {
         "id": riga["miglioria_id"],
         "scatto_id": riga["scatto_id"],
+        "file_id": riga["file_id"],
         "nome": Path(riga["percorso_originale"]).name,
         "prima": misura_a_parole(riga["larghezza_prima"], riga["altezza_prima"]),
         "dopo": dopo,
@@ -335,8 +395,9 @@ def da_votare(archivio) -> dict | None:
         "lettere": {lato: sfida.lettera_del_lato(riga, lato) for lato in LATI_DELLA_SFIDA},
         "proporzione": round(larga / alta, 5),
         "ci_sono": all(Path(riga[f"percorso_{m}"] or "").is_file()
-                       for m in sfida.SFIDANTI)
-        and Path(riga["percorso_originale"]).is_file(),
+                       for m in sfida.SFIDANTI) and prima is not None,
+        "dall_archivio": isinstance(prima, DallArchivio),
+        "archivio": archivio_dice,
     }
 
 

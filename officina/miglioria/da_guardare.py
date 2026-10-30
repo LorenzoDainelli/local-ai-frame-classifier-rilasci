@@ -4,7 +4,9 @@ import threading
 from pathlib import Path
 from typing import Callable
 
+from officina.immagini import compatibile
 from officina.importazione import quicktime
+from officina.sicuro.dall_archivio import DallArchivio, per_av
 
 PRIMA = "prima"
 DOPO = "dopo"
@@ -22,24 +24,35 @@ class Fermato(Exception):
     pass
 
 
-def cartella(dove) -> Path:
+def cartella(dove, passaggio: bool = False) -> Path:
+    if passaggio:
+        return compatibile.di_passaggio(dove) / "revisione"
     return Path(dove.miniature) / "revisione"
 
 
-def percorso(dove, miglioria_id: int, lato: str) -> Path:
+def percorso(dove, miglioria_id: int, lato: str, passaggio: bool = False) -> Path:
     if lato not in LATI:
         raise ValueError(f"lato sconosciuto: {lato!r}")
-    return cartella(dove) / f"{int(miglioria_id)}-{lato}.mp4"
+    return cartella(dove, passaggio) / f"{int(miglioria_id)}-{lato}.mp4"
+
+
+def _la_copia(dove, miglioria_id: int, lato: str, file) -> Path:
+    return percorso(dove, miglioria_id, lato, isinstance(file, DallArchivio))
+
+
+def _il_file(file):
+    return file if isinstance(file, DallArchivio) else Path(file)
 
 
 def _parziale(arrivo: Path) -> Path:
     return arrivo.with_name(arrivo.stem + PARZIALE)
 
 
-def si_apre(file: Path) -> bool:
-    if Path(file).suffix.casefold() not in CONTENITORI_CHE_SI_APRONO:
+def si_apre(file) -> bool:
+    file = _il_file(file)
+    if file.suffix.casefold() not in CONTENITORI_CHE_SI_APRONO:
         return False
-    return quicktime.il_browser_lo_apre(quicktime.codec_video(Path(file)))
+    return quicktime.il_browser_lo_apre(quicktime.codec_video(file))
 
 
 def da_fare(file_per_lato: dict[str, Path]) -> list[str]:
@@ -49,13 +62,13 @@ def da_fare(file_per_lato: dict[str, Path]) -> list[str]:
 
 def mancano(dove, miglioria_id: int, file_per_lato: dict[str, Path]) -> list[str]:
     return [lato for lato in da_fare(file_per_lato)
-            if not percorso(dove, miglioria_id, lato).is_file()]
+            if not _la_copia(dove, miglioria_id, lato, file_per_lato[lato]).is_file()]
 
 
-def da_mostrare(dove, miglioria_id: int, lato: str, file: Path) -> Path | None:
+def da_mostrare(dove, miglioria_id: int, lato: str, file):
     if si_apre(file):
-        return Path(file)
-    copia = percorso(dove, miglioria_id, lato)
+        return _il_file(file)
+    copia = _la_copia(dove, miglioria_id, lato, file)
     return copia if copia.is_file() else None
 
 
@@ -64,11 +77,11 @@ def fai(dove, miglioria_id: int, file_per_lato: dict[str, Path],
         al_passo: Callable[[int, int], None] | None = None) -> list[str]:
     fatti = []
     for lato in mancano(dove, miglioria_id, file_per_lato):
-        arrivo = percorso(dove, miglioria_id, lato)
+        arrivo = _la_copia(dove, miglioria_id, lato, file_per_lato[lato])
         arrivo.parent.mkdir(parents=True, exist_ok=True)
         parziale = _parziale(arrivo)
         try:
-            ricodifica(Path(file_per_lato[lato]), parziale, fermati, al_passo)
+            ricodifica(_il_file(file_per_lato[lato]), parziale, fermati, al_passo)
         except BaseException:
             parziale.unlink(missing_ok=True)
             raise
@@ -79,30 +92,32 @@ def fai(dove, miglioria_id: int, file_per_lato: dict[str, Path],
 
 def togli(dove, miglioria_id: int) -> int:
     tolti = 0
-    for lato in LATI:
-        arrivo = percorso(dove, miglioria_id, lato)
-        for file in (arrivo, _parziale(arrivo)):
-            if file.is_file():
-                file.unlink()
-                tolti += 1
+    for passaggio in (False, True):
+        for lato in LATI:
+            arrivo = percorso(dove, miglioria_id, lato, passaggio)
+            for file in (arrivo, _parziale(arrivo)):
+                if file.is_file():
+                    file.unlink()
+                    tolti += 1
     return tolti
 
 
 def pulisci(dove, tenute: set[int]) -> int:
-    base = cartella(dove)
-    if not base.is_dir():
-        return 0
     tolti = 0
-    for file in base.iterdir():
-        numero = file.name.split("-", 1)[0]
-        if not file.is_file() or (numero.isdecimal() and int(numero) in tenute):
+    for passaggio in (False, True):
+        base = cartella(dove, passaggio)
+        if not base.is_dir():
             continue
-        file.unlink()
-        tolti += 1
+        for file in base.iterdir():
+            numero = file.name.split("-", 1)[0]
+            if not file.is_file() or (numero.isdecimal() and int(numero) in tenute):
+                continue
+            file.unlink()
+            tolti += 1
     return tolti
 
 
-def ricodifica(sorgente: Path, arrivo: Path,
+def ricodifica(sorgente, arrivo: Path,
                fermati: threading.Event | None = None,
                al_passo: Callable[[int, int], None] | None = None) -> None:
     from officina.immagini import fotogrammi
@@ -113,7 +128,7 @@ def ricodifica(sorgente: Path, arrivo: Path,
     piano = video.guarda(sorgente)
     larga = max(2, piano.larghezza - piano.larghezza % 2)
     alta = max(2, piano.altezza - piano.altezza % 2)
-    with av.open(str(sorgente)) as dentro, \
+    with per_av(sorgente) as letto, av.open(letto) as dentro, \
             av.open(str(arrivo), "w", format="mp4",
                     options={"movflags": "faststart"}) as fuori:
         entrata = dentro.streams.video[0]

@@ -1,0 +1,20 @@
+{% macro archivio_della_revisione(stato) %}
+{% if stato == 'chiuso' %}
+<div class="carta rv-copie" id="archivio-chiuso">
+    <p><b>L'originale c'è solo nell'Archivio sicuro</b>, che è chiuso: scrivi la password per vederlo qui accanto.</p>
+    <form class="rv-archivio" id="modulo-archivio-sicuro" data-solo-nel-programma hidden>
+        <input class="campo" type="password" autocomplete="current-password"
+               aria-label="La password dell'Archivio sicuro" required>
+        <button class="tasto-comando" type="submit">Apri l'archivio</button>
+    </form>
+</div>
+{% elif stato == 'si_apre' %}
+<div class="carta rv-copie" id="archivio-si-apre" role="status">
+    <p><b>L'Archivio sicuro si sta aprendo.</b> L'originale arriva da solo fra poco.</p>
+</div>
+{% elif stato == 'muto' %}
+<div class="avviso forte" role="alert" id="archivio-muto">
+    <span>L'Archivio sicuro non ha risposto: ricarica la pagina fra poco. Nessun file è stato toccato.</span>
+</div>
+{% endif %}
+{% endmacro %}

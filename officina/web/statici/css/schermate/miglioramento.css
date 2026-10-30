@@ -163,6 +163,8 @@
 .rv-copie .barretta { width: 100%; }
 .rv-copie .barretta[hidden] { display: none; }
 .rv-copie p { margin: 0; }
+.rv-archivio { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0; }
+.rv-archivio[hidden] { display: none; }
 .rv-zoom { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border-radius: var(--raggio-pillola); background: var(--pozzo); }
 .rivedi-decidi .tasto-comando .icona { margin-right: 2px; }
 .pagina-sfida-fine { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-content: start; }

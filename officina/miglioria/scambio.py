@@ -13,7 +13,7 @@ from officina.sicuro.dall_archivio import SENZA_ARCHIVIO
 
 SICURO_CHIUSO = "sicuro_chiuso"
 CAMBIATA = "la copia in attesa è cambiata dopo il sì: non l'ho toccata"
-NON_PRESA = "il Cestino di Windows non l'ha presa"
+NON_PRESA = "Il Cestino di Windows non l'ha presa."
 RIMASTA = ("la copia migliorata è ancora in chiaro nella cartella di attesa: riprovo a "
            "metterla nel Cestino a ogni avvio, o puoi cancellarla tu")
 CHIUSO_ORA = ("l'Archivio sicuro si è chiuso prima di prendere la migliorata: aprilo e "

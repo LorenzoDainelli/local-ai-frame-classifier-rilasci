@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_spiega.html" import spiega %}
 {% from "_icone.html" import icona, fotina, fotina_passa %}
+{% from "_archivio_della_revisione.html" import archivio_della_revisione %}
 {% block titolo %}Rivedi — Local AI Frame Classifier{% endblock %}
 
 {% block corpo %}
@@ -47,7 +48,9 @@
     </div>
     {% endif %}
 
-    {% if not scelta.ci_sono %}
+    {% if scelta.archivio %}
+    {{ archivio_della_revisione(scelta.archivio) }}
+    {% elif not scelta.ci_sono %}
     <div class="avviso forte" role="alert">
         <span>
             Uno dei due file non è più dov'era, e questa non si può approvare.
@@ -62,11 +65,18 @@
                 <h2>Serve una copia da guardare{% call spiega("Perché") %}
                     <p>Questo video è in un formato che la finestra del programma
                     non sa far partire, come gli AVI delle macchine fotografiche
-                    vecchie o gli HEVC dell'iPhone. Di solito la copia la fa il
-                    computer da solo alla fine del lavoro: questa volta manca,
-                    forse perché la coda è stata fermata proprio lì.</p>
+                    vecchie o gli HEVC dell'iPhone.</p>
+                    {% if scelta.dall_archivio %}
+                    <p>L'originale c'è solo nell'Archivio sicuro: la sua copia si
+                    prepara solo quando la chiedi tu, sta fra le copie di passaggio
+                    e si cancella da sola quando l'archivio si chiude.</p>
+                    {% else %}
+                    <p>Di solito la copia la fa il computer da solo alla fine del
+                    lavoro: questa volta manca, forse perché la coda è stata fermata
+                    proprio lì.</p>
                     <p>La copia sta nella cache dell'archivio, non nella cartella
                     delle foto, e si cancella quando decidi.</p>
+                    {% endif %}
                 {% endcall %}</h2>
                 <span class="minuscolo tenue">La finestra non sa far partire questo video: il computer ne prepara una copia, solo per guardarla.</span>
             </div>
@@ -166,6 +176,8 @@
         {% endif %}
         {% if scelta.ritoccato %}
         <span class="minuscolo tenue spinge" data-ritoccato>è ritoccato: se approvi, il pixelato si rifà subito sopra la versione migliorata</span>
+        {% elif scelta.dall_archivio %}
+        <span class="minuscolo tenue spinge" data-nell-archivio>se approvi, la migliorata va nell'Archivio sicuro e l'originale resta custodito lì, in <span class="nome-di-file">{{ scelta.va_in }}</span></span>
         {% else %}
         <span class="minuscolo tenue spinge">se approvi, l'originale va in <span class="nome-di-file">{{ scelta.va_in }}</span></span>
         {% endif %}
