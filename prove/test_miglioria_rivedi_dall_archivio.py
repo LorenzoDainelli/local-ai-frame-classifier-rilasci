@@ -472,7 +472,9 @@ def test_il_si_con_la_copia_cambiata_dice_dove_era(pronta, monkeypatch):
     riga = _da_rivedere(pronta)
     risposta = _approva(pronta, riga["id"])
     assert risposta.status_code == 200
-    assert _di(pronta, riga["id"])["in_revisione"] is None
+    adesso = _di(pronta, riga["id"])
+    assert adesso["in_revisione"] == riga["in_revisione"]
+    assert adesso["guasto"] == scambio.CAMBIATA
     dove = Path(riga["in_revisione"]).parent
     assert risposta.json()["avviso"] == (
         f"Attenzione: {scambio.CAMBIATA}. La trovi in «{dove}».")

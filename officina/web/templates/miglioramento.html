@@ -63,6 +63,35 @@
     solito perché un file è sparito o è cambiato mentre lo si spostava. Niente
     è perso: il programma riprova da solo alla prossima partenza della coda, e
     dice qui cosa lo blocca.</p>
+    <p>Se l'originale sta solo nell'Archivio sicuro, lo scambio aspetta che
+    l'archivio prenda la migliorata. Finché non ci riesce, l'originale resta
+    nell'archivio e la migliorata nella cartella di attesa: nessun file viene
+    cancellato.</p>
+{% endcall %}{% endmacro %}
+
+{% macro riga_in_chiaro(riga) %}
+<li data-in-chiaro="{{ riga.id }}">
+    <img class="miniatura-coda" src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">
+    <span class="nome"><b>{{ riga.nome }}</b>
+        <span class="minuscolo tenue mg-dove">La copia &laquo;{{ riga.copia }}&raquo; è in &laquo;{{ riga.cartella }}&raquo;.</span>
+        <span class="minuscolo tenue">{% if riga.cambiata %}È cambiata dopo il sì: non la tocco. Se non ti serve, cancellala tu.{% else %}{{ riga.perche }}{% endif %}</span></span>
+    {% if not riga.cambiata %}
+    <form method="post" action="/miglioramento/{{ riga.id }}/cestino">
+        <button class="tasto-comando piccolo" type="submit">Riprova col Cestino</button>
+    </form>
+    {% endif %}
+</li>
+{% endmacro %}
+
+{% macro spiega_in_chiaro() %}{% call spiega("Cosa vuol dire") %}
+    <p>Dopo il sì, la migliorata è entrata nell'Archivio sicuro. La copia che
+    aspettava la tua decisione, nella cartella di attesa, doveva andare nel
+    Cestino di Windows, ma queste non ci sono andate: sono ancora sul disco,
+    senza cifratura.</p>
+    <p>Il programma riprova da solo a ogni avvio. Puoi riprovare subito, o
+    cancellarle tu. Una copia cambiata dopo il sì non la tocca: non è più il
+    file che aveva fatto lui.</p>
+    <p>Il riquadro sparisce da solo quando le copie non ci sono più.</p>
 {% endcall %}{% endmacro %}
 
 {% macro la_sfida() %}
@@ -165,6 +194,16 @@
         {{ comando() }}
         {% endif %}
     </div>
+
+    {% if in_chiaro %}
+    <section class="carta mg-in-chiaro" id="copie-in-chiaro" aria-labelledby="mg-in-chiaro-titolo">
+        <h2 id="mg-in-chiaro-titolo">Copie rimaste in chiaro <span class="tenue numeri">{{ in_chiaro|length }}</span>{{ spiega_in_chiaro() }}</h2>
+        <p class="piccolo attenuato">Queste foto e questi video stanno solo nell'Archivio sicuro, ma la loro copia migliorata è rimasta anche sul disco, senza cifratura.</p>
+        <ul class="righe-coda">
+            {% for riga in in_chiaro %}{{ riga_in_chiaro(riga) }}{% endfor %}
+        </ul>
+    </section>
+    {% endif %}
 
     {% set velo = not pronto or modelli_mg.scarica %}
     {% if velo %}

@@ -8,7 +8,8 @@ from pathlib import Path
 
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
-from officina.miglioria import attesa, coda, da_guardare, fedelta, misura, ricomincia, sfida
+from officina.miglioria import (attesa, coda, da_guardare, fedelta, misura, ricomincia,
+                                scambio, sfida)
 from officina.modello import file_media, scatti
 from officina.sicuro.dall_archivio import CHIUSO, SI_APRE, TROVATA, DallArchivio
 from officina.web.lavori import Lavoro
@@ -153,7 +154,26 @@ def la_coda(archivio) -> dict:
             "in_coda": righe(connessione, coda.IN_CODA, QUANTI_IN_CODA),
             "fallite": righe(connessione, coda.FALLITA, QUANTE_FALLITE),
             "ferme": righe(connessione, coda.IN_SCAMBIO, QUANTE_FALLITE),
+            "in_chiaro": in_chiaro(connessione),
         }
+
+
+def in_chiaro(connessione: sqlite3.Connection) -> list[dict]:
+    restano = [riga for riga in tutti(
+        connessione, UNA_RIGA + "WHERE m.stato = ? AND m.nell_archivio = 1 "
+        "AND m.in_revisione IS NOT NULL ORDER BY m.id", coda.APPROVATA)
+        if os.path.lexists(riga["in_revisione"])]
+    return [{**a_parole(riga), "copia": Path(riga["in_revisione"]).name,
+             "cartella": str(Path(riga["in_revisione"]).parent),
+             "cambiata": riga["guasto"] == scambio.CAMBIATA,
+             "perche": _perche_rimasta(riga["guasto"])} for riga in restano]
+
+
+def _perche_rimasta(guasto: str | None) -> str:
+    davanti = f"{scambio.RIMASTA}. "
+    if not guasto:
+        return "Non è ancora andata nel Cestino."
+    return guasto.removeprefix(davanti)
 
 
 def come_va(archivio) -> dict:

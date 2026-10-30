@@ -1,8 +1,10 @@
-import { aspettaLArchivio, chiedi, leggiDatiIncorporati, manda, siStaScrivendo }
-    from "./comune.js";
+import { aspettaLArchivio, chiedi, leggiDatiIncorporati, manda, seLArchivioSiChiude,
+    siStaScrivendo } from "./comune.js";
 import { confronta, suUnCursore } from "./confronto.js";
 
 const CHIAVE_DETTO = "officina.rivedi.detto";
+const NELL_ARCHIVIO = "Metto la migliorata nell'Archivio sicuro e la rileggo: "
+    + "per un video grande può volerci qualche minuto.";
 
 const dati = leggiDatiIncorporati("dati-rivedi") || { scelta: null, saltate: [] };
 const scelta = dati.scelta;
@@ -52,7 +54,8 @@ async function decidi(come) {
     staDecidendo = true;
     document.querySelectorAll("[data-decidi]").forEach((tasto) => { tasto.disabled = true; });
     confronto.suona(false);
-    di(come === "approva" ? "Sposto i file e li controllo..." : "Cancello la copia...");
+    if (come === "rifiuta") di("Cancello la copia...");
+    else di(scelta.dall_archivio ? NELL_ARCHIVIO : "Sposto i file e li controllo...");
     try {
         const risposta = await manda(`/api/miglioramento/${scelta.id}/${come}`, {});
         ricorda([risposta.detto, risposta.avviso].filter(Boolean).join(" "),
@@ -137,3 +140,4 @@ const detto = ricordato();
 if (detto.testo) di(detto.testo, detto.forte);
 
 if (scelta) aspettaLArchivio(scelta.file_id);
+if (scelta && scelta.dall_archivio) seLArchivioSiChiude(scelta.file_id);

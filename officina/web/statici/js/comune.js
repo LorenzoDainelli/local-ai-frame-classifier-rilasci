@@ -29,6 +29,29 @@ export function aspettaLArchivio(fileId) {
     }, 1500);
 }
 
+export function seLArchivioSiChiude(fileId) {
+    if (!fileId) return;
+    let chiesto = false;
+    const guarda = async () => {
+        if (chiesto) return;
+        chiesto = true;
+        try {
+            const stato = await chiedi(`/api/dall-archivio/${fileId}`);
+            if (stato.perche === "chiuso" || stato.perche === "si_apre") {
+                window.location.reload();
+                return;
+            }
+        } catch (errore) {  }
+        chiesto = false;
+    };
+    document.addEventListener("error", (evento) => {
+        if (evento.target?.matches?.("[data-prima]")) guarda();
+    }, true);
+    const rotto = (lato) => (lato.tagName === "VIDEO" ? lato.error !== null
+        : lato.complete && !lato.naturalWidth);
+    if ([...document.querySelectorAll("[data-prima]")].some(rotto)) guarda();
+}
+
 export async function manda(indirizzo, corpo) {
     return chiedi(indirizzo, {
         method: "POST",

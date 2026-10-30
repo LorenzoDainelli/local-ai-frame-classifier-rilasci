@@ -202,6 +202,14 @@ def miglioramento_rimetti(miglioria_id: int):
     return RedirectResponse("/miglioramento", status_code=303)
 
 
+@strada.post("/miglioramento/{miglioria_id}/cestino")
+def miglioramento_cestino(miglioria_id: int):
+    from officina.miglioria import scambio
+
+    scambio.butta_la_copia(accesso.aperto(), miglioria_id)
+    return RedirectResponse("/miglioramento", status_code=303)
+
+
 @strada.get("/api/miglioramento")
 def api_miglioramento():
     stato = miglioramento_web.come_va(accesso.aperto())

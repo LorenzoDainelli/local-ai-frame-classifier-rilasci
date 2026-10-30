@@ -238,16 +238,17 @@ def butta_la_copia(archivio, miglioria_id: int) -> bool:
         motivo = _nel_cestino(riga, in_attesa)
     except Exception as guasto:
         registro.errore("miglioria.cestino_guasto", **registro.dove_si_e_rotto(guasto))
-        motivo = NON_PRESA
+        motivo = NON_PRESA if os.path.lexists(in_attesa) else None
     with archivio.scrittura() as connessione:
-        if motivo is None or motivo == CAMBIATA:
+        if motivo is None:
             connessione.execute(
-                "UPDATE migliorie SET in_revisione = NULL, guasto = ? WHERE id = ? "
-                "AND stato = ?", (motivo, miglioria_id, coda.APPROVATA))
+                "UPDATE migliorie SET in_revisione = NULL, guasto = NULL WHERE id = ? "
+                "AND stato = ?", (miglioria_id, coda.APPROVATA))
         else:
             connessione.execute(
                 "UPDATE migliorie SET guasto = ? WHERE id = ? AND stato = ?",
-                (f"{RIMASTA}. {motivo}", miglioria_id, coda.APPROVATA))
+                (motivo if motivo == CAMBIATA else f"{RIMASTA}. {motivo}",
+                 miglioria_id, coda.APPROVATA))
     if motivo is not None:
         registro.avviso("miglioria.copia_in_chiaro", miglioria=miglioria_id,
                         cambiata=motivo == CAMBIATA)

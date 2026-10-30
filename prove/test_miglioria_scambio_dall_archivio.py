@@ -666,7 +666,8 @@ def test_una_copia_cambiata_dopo_il_si_non_si_tocca(pronta, tmp_path, monkeypatc
     avvisi = _eventi(monkeypatch, "avviso")
     assert scambio.butta_le_copie_rimaste(pronta.archivio) == 0
     adesso = _di(pronta.archivio, riga["id"])
-    assert adesso["in_revisione"] is None and adesso["guasto"] == scambio.CAMBIATA
+    assert adesso["in_revisione"] == str(fuori if come == "fuori" else in_attesa)
+    assert adesso["guasto"] == scambio.CAMBIATA
     assert adesso["stato"] == coda.APPROVATA
     assert avvisi == [("miglioria.copia_in_chiaro", {"miglioria": riga["id"],
                                                      "cambiata": True})]

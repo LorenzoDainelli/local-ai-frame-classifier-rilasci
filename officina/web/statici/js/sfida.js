@@ -1,4 +1,5 @@
-import { aspettaLArchivio, leggiDatiIncorporati, manda, siStaScrivendo } from "./comune.js";
+import { aspettaLArchivio, leggiDatiIncorporati, manda, seLArchivioSiChiude, siStaScrivendo }
+    from "./comune.js";
 
 const CHIAVE_DETTO = "officina.sfida.detto";
 const CHIAVE_LENTE = "officina.sfida.lente";
@@ -207,3 +208,4 @@ const detto = ricordato();
 if (detto) di(detto);
 disegna();
 if (scelta) aspettaLArchivio(scelta.file_id);
+if (scelta && scelta.dall_archivio) seLArchivioSiChiude(scelta.file_id);

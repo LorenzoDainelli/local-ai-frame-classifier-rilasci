@@ -125,7 +125,7 @@ installatore, installazione silenziosa e disinstallazione. Se tutto passa, la
 versione è pubblicata.
 
 Il file [`sviluppo/REGOLE.md`](sviluppo/REGOLE.md) è la memoria delle
-decisioni: 569 regole
+decisioni: 570 regole
 numerate. Non descrive come è fatto il programma, perché quello lo dice il
 codice: spiega **perché** è fatto così. Nel codice le regole sono citate per
 numero, e quando una scelta sembra strana la spiegazione è lì. I numeri non si

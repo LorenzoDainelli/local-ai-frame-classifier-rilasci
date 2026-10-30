@@ -91,10 +91,10 @@
         <figure class="rivedi-lato" data-lato="prima">
             <div class="rivedi-quadro">
                 {% if scelta.genere == 'video' %}
-                <video preload="auto" playsinline
+                <video preload="auto" playsinline data-prima
                        src="/miglioramento/{{ scelta.id }}/mostra/prima"></video>
                 {% else %}
-                <img src="/miglioramento/{{ scelta.id }}/mostra/prima"
+                <img src="/miglioramento/{{ scelta.id }}/mostra/prima" data-prima
                      alt="L'originale" draggable="false">
                 {% endif %}
             </div>
