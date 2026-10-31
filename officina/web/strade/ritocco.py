@@ -415,7 +415,7 @@ def _vota(lavoro_id: int, file_id: int, voto: str) -> dict:
     with archivio.scrittura() as connessione:
         riga = sfida_togli.del_file(connessione, lavoro_id, file_id)
         buttare = sfida_togli.vota(connessione, lavoro_id, file_id, voto)
-    sfida_togli.butta(buttare)
+    coda._butta(archivio, buttare)
     rivedi_ritocco.togli_le_copie(archivio, lavoro_id)
     if voto == "nessuna":
         coda.rifiuta(archivio, lavoro_id)

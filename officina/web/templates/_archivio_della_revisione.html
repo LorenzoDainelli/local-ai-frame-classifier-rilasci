@@ -1,7 +1,11 @@
-{% macro archivio_della_revisione(stato) %}
+{% macro archivio_della_revisione(stato, foto=false) %}
 {% if stato == 'chiuso' %}
 <div class="carta rv-copie" id="archivio-chiuso">
+    {% if foto %}
+    <p><b>La foto c'è solo nell'Archivio sicuro</b>, che è chiuso: scrivi la password per vederla qui accanto.</p>
+    {% else %}
     <p><b>L'originale c'è solo nell'Archivio sicuro</b>, che è chiuso: scrivi la password per vederlo qui accanto.</p>
+    {% endif %}
     <form class="rv-archivio" id="modulo-archivio-sicuro" data-solo-nel-programma hidden>
         <input class="campo" type="password" autocomplete="current-password"
                aria-label="La password dell'Archivio sicuro" required>
@@ -10,7 +14,7 @@
 </div>
 {% elif stato == 'si_apre' %}
 <div class="carta rv-copie" id="archivio-si-apre" role="status">
-    <p><b>L'Archivio sicuro si sta aprendo.</b> L'originale arriva da solo fra poco.</p>
+    <p><b>L'Archivio sicuro si sta aprendo.</b> {{ "La foto arriva da sola" if foto else "L'originale arriva da solo" }} fra poco.</p>
 </div>
 {% elif stato == 'muto' %}
 <div class="avviso forte" role="alert" id="archivio-muto">

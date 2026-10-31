@@ -4,9 +4,11 @@ import json
 import random
 import sqlite3
 from pathlib import Path
+from typing import NamedTuple
 
 from officina.archivio.database import adesso, leggi_stato, scrivi_stato, tutti, uno
 from officina.errori import ErroreOfficina
+from officina.miglioria import attesa
 from officina.ritocco import togliere
 
 FOTO, VIDEO = "foto", "video"
@@ -19,6 +21,13 @@ PRINCIPALE_FOTO = "togli_motore"
 
 class VotoRifiutato(ErroreOfficina):
     codice = "sfida_togli_voto"
+
+
+class DaButtare(NamedTuple):
+    percorso: Path
+    file_id: int | None = None
+    impronta: str | None = None
+    ritocco_id: int | None = None
 
 
 def genere_del_file(genere_media: str) -> str:
@@ -96,25 +105,30 @@ def _toppe(riga) -> dict:
     return json.loads(toppe) if isinstance(toppe, str) else toppe
 
 
-def file_della_b(riga) -> list[Path]:
-    fuori = [Path(riga["pronta_b"])] if riga["pronta_b"] else []
-    for toppa in _toppe(riga).values():
+def file_della_b(riga, file_id: int) -> list[DaButtare]:
+    fuori = ([DaButtare(Path(riga["pronta_b"]), file_id, riga["impronta_b"])]
+             if riga["pronta_b"] else [])
+    for chiave, toppa in _toppe(riga).items():
         if toppa.get("risultato"):
-            fuori.append(Path(toppa["risultato"]))
+            fuori.append(DaButtare(Path(toppa["risultato"]), file_id,
+                                   toppa.get("impronta_risultato"), int(chiave)))
     return fuori
 
 
-def file_della_a(connessione: sqlite3.Connection, riga) -> list[Path]:
+def file_della_a(connessione: sqlite3.Connection, riga) -> list[DaButtare]:
     quali = sorted(int(chiave) for chiave in _toppe(riga))
     fuori = []
-    for ritocco in tutti(connessione, "SELECT risultato FROM ritocchi "
-                         "WHERE id IN (SELECT value FROM json_each(?))", json.dumps(quali)):
+    for ritocco in tutti(connessione, "SELECT id, risultato, impronta_risultato "
+                         "FROM ritocchi WHERE id IN (SELECT value FROM json_each(?)) "
+                         "ORDER BY id", json.dumps(quali)):
         if ritocco["risultato"]:
-            fuori.append(Path(ritocco["risultato"]))
-    pronta = uno(connessione, "SELECT pronta FROM ritocchi_lavori_file WHERE lavoro_id = ? "
-                 "AND file_id = ?", riga["lavoro_id"], riga["file_id"])
+            fuori.append(DaButtare(Path(ritocco["risultato"]), riga["file_id"],
+                                   ritocco["impronta_risultato"], ritocco["id"]))
+    pronta = uno(connessione, "SELECT pronta, impronta_pronta FROM ritocchi_lavori_file "
+                 "WHERE lavoro_id = ? AND file_id = ?", riga["lavoro_id"], riga["file_id"])
     if pronta is not None and pronta["pronta"]:
-        fuori.append(Path(pronta["pronta"]))
+        fuori.append(DaButtare(Path(pronta["pronta"]), riga["file_id"],
+                               pronta["impronta_pronta"]))
     return fuori
 
 
@@ -140,7 +154,7 @@ def _dimentica_le_toppe(connessione: sqlite3.Connection, riga) -> None:
 
 
 def vota(connessione: sqlite3.Connection, lavoro_id: int, file_id: int,
-         voto: str) -> list[Path]:
+         voto: str) -> list[DaButtare]:
     if voto not in VOTI:
         raise VotoRifiutato("Questo voto non esiste.")
     riga = del_file(connessione, lavoro_id, file_id)
@@ -150,30 +164,47 @@ def vota(connessione: sqlite3.Connection, lavoro_id: int, file_id: int,
         buttare = file_della_a(connessione, riga)
         _metti_la_b(connessione, riga)
     elif voto == "nessuna":
-        buttare = file_della_a(connessione, riga) + file_della_b(riga)
+        buttare = file_della_a(connessione, riga) + file_della_b(riga, file_id)
         _dimentica_le_toppe(connessione, riga)
     else:
-        buttare = file_della_b(riga)
+        buttare = file_della_b(riga, file_id)
     connessione.execute(
         "UPDATE sfide_togli SET voto = ?, votata_il = ?, pronta_b = NULL, impronta_b = NULL "
         "WHERE lavoro_id = ? AND file_id = ?", (voto, adesso(), lavoro_id, file_id))
     return buttare
 
 
-def butta(file: list[Path]) -> None:
+def si_butta(voce: DaButtare) -> bool:
     from officina.ritocco import copia
 
-    for percorso in file:
-        if percorso.name.startswith(copia.PREFISSO):
-            copia.butta(percorso)
-        elif percorso.name.startswith("togli-"):
-            percorso.unlink(missing_ok=True)
+    percorso = Path(voce.percorso)
+    if voce.ritocco_id is None:
+        return attesa.e_dentro(percorso) and percorso.name.startswith(copia.PREFISSO)
+    nomi = {copia.nome_della_toppa(voce.ritocco_id),
+            copia.nome_della_toppa_video(voce.ritocco_id)}
+    if percorso.parent.name == copia.CARTELLA and percorso.name in nomi | {
+            copia.della_b(nome) for nome in nomi}:
+        return True
+    return attesa.e_dentro(percorso) and copia._e_una_toppa(percorso, voce.ritocco_id)
 
 
-def lascia_il_lavoro(connessione: sqlite3.Connection, lavoro_id: int) -> list[Path]:
+def butta(file: list) -> None:
+    from officina.ritocco import copia
+
+    for voce in file:
+        voce = DaButtare(*voce) if isinstance(voce, tuple) else DaButtare(Path(voce))
+        if not si_butta(voce):
+            continue
+        if voce.ritocco_id is None:
+            copia.butta(Path(voce.percorso))
+        elif Path(voce.percorso).is_file():
+            Path(voce.percorso).unlink()
+
+
+def lascia_il_lavoro(connessione: sqlite3.Connection, lavoro_id: int) -> list[DaButtare]:
     buttare = []
     for riga in da_votare(connessione, lavoro_id):
-        buttare += file_della_b(riga)
+        buttare += file_della_b(riga, riga["file_id"])
     connessione.execute("DELETE FROM sfide_togli WHERE lavoro_id = ? AND voto IS NULL",
                         (lavoro_id,))
     return buttare

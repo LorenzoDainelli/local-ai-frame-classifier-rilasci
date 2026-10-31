@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from officina.archivio.database import uno
-from officina.ritocco import coda, sfida_togli, togliere
+from officina.ritocco import coda, elenco, sfida_togli, togliere
 from officina.ritocco.copia import RitoccoFermato
 from prove.test_ritocco_togli_coda import (Togliere, _da_togliere, _file_id, _gira, _rosso,
                                            cartella, importato)
@@ -66,7 +66,7 @@ def test_con_due_modelli_si_fanno_tutte_e_due_e_prima_si_vota(con_due, cartella)
     with con_due.lettura() as connessione:
         [pronto] = coda.pronti(connessione, lavoro_id)
     assert pronto["pronta"] == riga["pronta_b"]
-    assert not any(percorso.exists() for percorso in buttare)
+    assert not any(voce.percorso.exists() for voce in buttare)
 
     coda.approva(con_due, lavoro_id)
     assert _rosso(cartella / "2019" / "gita.png") < 120
@@ -133,3 +133,48 @@ def test_dalla_pagina_si_vede_a_tre_e_si_vota(con_due, monkeypatch):
     with con_due.lettura() as connessione:
         assert uno(connessione, "SELECT voto FROM sfide_togli")["voto"] == "pari"
     assert 'data-decidi="approva"' in cliente.get(f"/ritocco/rivedi?lavoro={lavoro_id}").text
+
+
+class _SenzaLaB(Togliere):
+
+    def __call__(self, lavoro_togli: dict, ricorda) -> dict:
+        if Path(lavoro_togli["uscita"]).name.endswith("-b.png"):
+            self.lavori.append(lavoro_togli)
+            return {"guasto": "togli_motore_sconosciuto"}
+        return super().__call__(lavoro_togli, ricorda)
+
+
+def test_se_la_b_non_riesce_le_toppe_gia_messe_restano(con_due):
+    lavoro_id, file_id, _ = _in_sfida(con_due)
+    with con_due.scrittura() as connessione:
+        sfida_togli.butta(sfida_togli.vota(connessione, lavoro_id, file_id, "A"))
+    coda.approva(con_due, lavoro_id)
+    with con_due.lettura() as connessione:
+        [vecchio] = elenco.di_file(connessione, file_id)
+    toppa = Path(vecchio["risultato"])
+    dati = toppa.read_bytes()
+    secondo = coda.metti(con_due, [{"file_id": file_id, **_da_togliere()}])
+    togli = _SenzaLaB()
+    _gira(con_due, togli)
+    assert any(chiesto["uscita"].endswith("-b.png") for chiesto in togli.lavori)
+    with con_due.lettura() as connessione:
+        assert coda.per_id(connessione, secondo)["stato"] == coda.FALLITO
+    assert toppa.read_bytes() == dati
+
+
+def test_com_era_e_com_e_senza_ritocchi_arrivano_dal_disco(con_due):
+    from officina.modello import file_media
+    from officina.web import rivedi_ritocco
+
+    lavoro_id, file_id, _ = _in_sfida(con_due)
+    with con_due.scrittura() as connessione:
+        sfida_togli.butta(sfida_togli.vota(connessione, lavoro_id, file_id, "A"))
+    coda.approva(con_due, lavoro_id)
+    with con_due.lettura() as connessione:
+        ritoccata, _ = file_media.da_mostrare(connessione, file_id)
+        sotto, _ = file_media.da_mostrare_sotto(connessione, file_id)
+        lati, perche = rivedi_ritocco._prima_e_dopo(
+            connessione, file_id, {"pronta": None, "lavoro_id": lavoro_id}, True)
+    assert isinstance(ritoccata, Path) and isinstance(sotto, Path) and ritoccata != sotto
+    assert perche is None
+    assert lati == {rivedi_ritocco.PRIMA: ritoccata, rivedi_ritocco.DOPO: sotto}

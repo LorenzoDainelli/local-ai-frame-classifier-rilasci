@@ -155,22 +155,22 @@ def scrivi_i_pronti(connessione: sqlite3.Connection, lavoro_id: int,
 def _togli_i_pronti(connessione: sqlite3.Connection, lavoro_id: int) -> list[tuple]:
     buttare = [(Path(riga["pronta"]), riga["file_id"], riga["impronta_pronta"])
                for riga in pronti(connessione, lavoro_id) if riga["pronta"]]
-    buttare += [(percorso, None, None)
-                for percorso in sfida_togli.lascia_il_lavoro(connessione, lavoro_id)]
+    buttare += sfida_togli.lascia_il_lavoro(connessione, lavoro_id)
     connessione.execute("DELETE FROM ritocchi_lavori_file WHERE lavoro_id = ?", (lavoro_id,))
     return buttare
 
 
 def _butta(archivio, pronte: list[tuple]) -> None:
-    for pronta, file_id, sua in pronte:
+    for voce in pronte:
+        voce = sfida_togli.DaButtare(*voce)
         try:
-            sfida_togli.butta([pronta])
+            sfida_togli.butta([voce])
         except OSError as errore:
             registro.avviso("ritocco.pronta_non_tolta", **registro.dove_si_e_rotto(errore))
-            if (file_id is not None and sua and attesa.e_dentro(pronta)
-                    and pronta.name.startswith(copia.PREFISSO)):
+            if (voce.file_id is not None and voce.impronta
+                    and attesa.e_dentro(voce.percorso) and sfida_togli.si_butta(voce)):
                 with archivio.scrittura() as connessione:
-                    in_chiaro.segna(connessione, file_id, pronta, sua)
+                    in_chiaro.segna(connessione, voce.file_id, voce.percorso, voce.impronta)
 
 
 def _nuovo_lavoro(connessione: sqlite3.Connection, scatto_id: int) -> int:

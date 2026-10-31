@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_spiega.html" import spiega %}
 {% from "_icone.html" import icona, fotina_passa %}
+{% from "_archivio_della_revisione.html" import archivio_della_revisione %}
 {% block titolo %}Rivedi il ritocco — Local AI Frame Classifier{% endblock %}
 
 {% block corpo %}
@@ -65,7 +66,9 @@
     </div>
     {% endif %}
 
-    {% if not scelta.ci_sono %}
+    {% if scelta.archivio %}
+    {{ archivio_della_revisione(scelta.archivio, true) }}
+    {% elif not scelta.ci_sono %}
     <div class="avviso forte" role="alert">
         <span>
             Uno dei due file non è più dov'era, e questo ritocco non si può tenere.
@@ -107,7 +110,7 @@
                        src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/{{ posto.lato }}"></video>
                 {% else %}
                 <img src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/{{ posto.lato }}"
-                     alt="{{ posto.lettera }}" draggable="false">
+                     alt="{{ posto.lettera }}" draggable="false"{% if posto.lato == 'prima' %} data-prima{% endif %}>
                 {% endif %}
             </div>
             <figcaption>
@@ -126,7 +129,7 @@
                        src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/prima"></video>
                 {% else %}
                 <img src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/prima"
-                     alt="Com'era" draggable="false">
+                     alt="Com'era" draggable="false" data-prima>
                 {% endif %}
             </div>
             <figcaption>
@@ -141,7 +144,7 @@
                        src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/dopo"></video>
                 {% else %}
                 <img src="/ritocco/{{ scelta.id }}/mostra/{{ scelta.file_id }}/dopo"
-                     alt="Com'è venuta" draggable="false">
+                     alt="Com'è venuta" draggable="false"{% if scelta.dall_archivio %} data-prima{% endif %}>
                 {% endif %}
             </div>
             <figcaption>
@@ -219,9 +222,10 @@
     <div class="rivedi-decidi" role="group" aria-label="Quale è venuta meglio">
         <span class="minuscolo tenue">Quale è venuta meglio? I nomi li vedi alla fine.</span>
         <button class="tasto-comando spinge" type="button" data-vota="nessuna">Nessuna delle due</button>
-        <button class="tasto-comando" type="button" data-vota="pari">Pari</button>
-        <button class="tasto-comando principale" type="button" data-vota="{{ scelta.sfida.sinistra.lettera }}">{{ scelta.sfida.sinistra.lettera }}</button>
-        <button class="tasto-comando principale" type="button" data-vota="{{ scelta.sfida.destra.lettera }}">{{ scelta.sfida.destra.lettera }}</button>
+        {% set cieca = " disabled" if not scelta.ci_sono else "" %}
+        <button class="tasto-comando" type="button" data-vota="pari"{{ cieca }}>Pari</button>
+        <button class="tasto-comando principale" type="button" data-vota="{{ scelta.sfida.sinistra.lettera }}"{{ cieca }}>{{ scelta.sfida.sinistra.lettera }}</button>
+        <button class="tasto-comando principale" type="button" data-vota="{{ scelta.sfida.destra.lettera }}"{{ cieca }}>{{ scelta.sfida.destra.lettera }}</button>
     </div>
     {% else %}
     <div class="rivedi-decidi">

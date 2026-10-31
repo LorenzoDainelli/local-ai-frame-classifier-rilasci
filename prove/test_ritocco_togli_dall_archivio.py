@@ -16,7 +16,6 @@ from officina.miglioria import attesa
 from officina.modello import file_media
 from officina.programma import archivio_sicuro
 from officina.ritocco import coda, copia, elenco, in_chiaro, lavoro, maschere, sfida_togli
-from officina.ritocco import togliere as motori_togli
 from officina.sicuro.dall_archivio import (CHIUSO, NON_C_E, PERSA, SENZA_ARCHIVIO, SI_APRE,
                                            DallArchivio, Ricerca)
 from prove import test_ritocco_dall_archivio as di_prova
@@ -537,6 +536,7 @@ def test_buttare_segna_solo_le_copie_ritoccate_in_attesa(scena, tmp_path, monkey
     giusta = dove / f"{copia.PREFISSO}-{scena.file_id}-mare.jpg"
     coda._butta(scena.archivio, [
         (dove / "togli-3-b.png", None, None),
+        (scena.base.parent / copia.CARTELLA / "togli-3.png", scena.file_id, "ab" * 32, 3),
         (giusta, scena.file_id, "ab" * 32),
         (tmp_path / f"{copia.PREFISSO}-{scena.file_id}-mare.jpg", scena.file_id, "ab" * 32),
         (dove / "mare.jpg", scena.file_id, "ab" * 32),
@@ -602,22 +602,6 @@ def test_se_la_toppa_in_attesa_non_si_cancella_resta_segnata(scena, monkeypatch)
     assert in_chiaro.butta_tutte(scena.archivio) == 1
     assert _mosse(scena) == [toppa] and _rimaste(scena) == []
     assert not os.path.lexists(toppa)
-
-
-def test_con_lo_scatto_solo_nell_archivio_non_si_fa_la_sfida(scena, monkeypatch):
-    chieste: list = []
-
-    def si_fa(archivio, genere):
-        chieste.append(genere)
-        return motori_togli.FINTO, motori_togli.FINTO
-
-    monkeypatch.setattr(sfida_togli, "si_fa", si_fa)
-    lavoro_id, _, _, togliere = _da_rivedere(scena)
-    assert chieste == [] and len(togliere.lavori) == 1
-    with scena.archivio.lettura() as connessione:
-        assert sfida_togli.del_lavoro(connessione, lavoro_id) == []
-    coda.approva(scena.archivio, lavoro_id)
-    assert _lavoro(scena, lavoro_id)["stato"] == coda.FATTO
 
 
 def test_il_nome_della_toppa_in_attesa_salta_quelli_rimasti(scena, tmp_path):

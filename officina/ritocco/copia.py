@@ -281,7 +281,9 @@ def toppa_in_attesa(connessione: sqlite3.Connection, dove: Path, ritocco_id: int
     nome, volta = nome_della_toppa(ritocco_id), 0
     while True:
         percorso = dove / (della_b(nome) if lato_b else nome)
-        if not in_chiaro.occupato(connessione, percorso):
+        preso = uno(connessione, "SELECT 1 FROM ritocchi WHERE risultato = ? "
+                    "AND (id != ? OR ?) LIMIT 1", str(percorso), int(ritocco_id), lato_b)
+        if preso is None and not in_chiaro.occupato(connessione, percorso):
             return percorso
         volta += 1
         nome = f"togli-{int(ritocco_id)}-a{volta}.png"

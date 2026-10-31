@@ -160,7 +160,8 @@ class Ritoccatore:
                     copia.via_la_pronta(self.archivio, fatto["file_id"],
                                         Path(fatto["pronta"]), fatto["impronta_pronta"])
                 if fatto.get("sfida"):
-                    sfida_togli.butta(sfida_togli.file_della_b(fatto["sfida"]))
+                    coda._butta(self.archivio,
+                                sfida_togli.file_della_b(fatto["sfida"], fatto["file_id"]))
             self.lavoro.di("i ritocchi sono cambiati mentre lavoravo: li rifaccio")
             return
         if not solo_tolti:
@@ -199,6 +200,9 @@ class Ritoccatore:
                 if fatto.get("pronta"):
                     copia.via_la_pronta(self.archivio, fatto["file_id"],
                                         Path(fatto["pronta"]), fatto["impronta_pronta"])
+                if fatto.get("sfida"):
+                    coda._butta(self.archivio,
+                                sfida_togli.file_della_b(fatto["sfida"], fatto["file_id"]))
             raise
         return fatti
 
@@ -255,7 +259,7 @@ class Ritoccatore:
             return fatto
         self.adesso.update(nome=da.copia.name, fatti=0, totale=0)
         self.lavoro.di(f"ritocco «{da.copia.name}»")
-        sfida = None if da.trovata is not None else self._la_sfida(media["genere"], ritocchi)
+        sfida = self._la_sfida(media["genere"], ritocchi)
         if media["genere"] != "video":
             ritocchi_b = None
             if any(ritocco["genere"] == elenco.TOGLI for ritocco in ritocchi):
@@ -266,12 +270,22 @@ class Ritoccatore:
                     self._motore_ora = None
                     if self.seguitore is not None:
                         self.seguitore.lascia(self.lavoro)
-            pronta = copia.prepara_per_la_coda(self.archivio, file_id, lavoro_id, ritocchi, da)
-            fatto = {**fatto, "pronta": str(pronta), "impronta_pronta": impronta.del_file(pronta)}
-            if ritocchi_b is not None:
-                pronta_b = copia.prepara_per_la_coda(self.archivio, file_id, lavoro_id,
-                                                     ritocchi_b, da, variante="b")
-                fatto["sfida"] = self._sfida_fatta(sfida, ritocchi_b, pronta_b)
+            pronte: list[Path] = []
+            try:
+                pronte.append(copia.prepara_per_la_coda(self.archivio, file_id, lavoro_id,
+                                                        ritocchi, da))
+                fatto = {**fatto, "pronta": str(pronte[0]),
+                         "impronta_pronta": impronta.del_file(pronte[0])}
+                if ritocchi_b is not None:
+                    pronte.append(copia.prepara_per_la_coda(
+                        self.archivio, file_id, lavoro_id, ritocchi_b, da, variante="b"))
+                    fatto["sfida"] = self._sfida_fatta(sfida, ritocchi_b, pronte[1])
+            except BaseException:
+                for pronta in pronte:
+                    copia.via_la_pronta(self.archivio, file_id, pronta,
+                                        _impronta_se_c_e(pronta))
+                self._butta_le_b(file_id, ritocchi_b)
+                raise
             return fatto
 
         if da.copia.suffix.casefold() not in video.CONTENITORI_TENUTI:
@@ -340,8 +354,19 @@ class Ritoccatore:
             return ritocchi, None
         self._motore_ora = sfida["motore_b"]
         ritocchi_b = [dict(ritocco) for ritocco in ritocchi]
-        togli(lavoro_id, file_id, ritocchi_b, da, lato_b=True)
+        try:
+            togli(lavoro_id, file_id, ritocchi_b, da, lato_b=True)
+        except BaseException:
+            self._butta_le_b(file_id, ritocchi_b)
+            raise
         return ritocchi, ritocchi_b
+
+    def _butta_le_b(self, file_id: int, ritocchi_b) -> None:
+        coda._butta(self.archivio, [
+            sfida_togli.DaButtare(Path(ritocco["risultato"]), file_id,
+                                  ritocco["impronta_risultato"], ritocco["id"])
+            for ritocco in ritocchi_b or ()
+            if ritocco.get("lato_b") and ritocco["risultato"]])
 
     def _sfida_fatta(self, sfida: dict, ritocchi_b, pronta_b: Path) -> dict:
         toppe = {str(ritocco["id"]): {chiave: ritocco[chiave] for chiave in (
@@ -376,6 +401,9 @@ class Ritoccatore:
             self.lavoro.di(f"tolgo una cosa da «{da.copia.name}»")
             try:
                 esito, traccia = self._togli_e_ricontrolla(base, forma, uscita, sotto, buco)
+            except BaseException:
+                uscita.unlink(missing_ok=True)
+                raise
             finally:
                 self._processo = None
                 base.unlink(missing_ok=True)
@@ -646,6 +674,13 @@ class Ritoccatore:
             if processo.is_alive():
                 processo.terminate()
                 processo.join(timeout=2.0)
+
+
+def _impronta_se_c_e(percorso: Path) -> str:
+    try:
+        return impronta.del_file(percorso)
+    except (OSError, ErroreOfficina):
+        return ""
 
 
 def _lancia_togli(lavoro: dict, ricorda) -> dict:

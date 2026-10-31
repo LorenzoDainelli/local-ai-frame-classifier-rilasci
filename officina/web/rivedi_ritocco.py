@@ -4,11 +4,14 @@ import sqlite3
 from pathlib import Path
 
 from officina.archivio.database import tutti, uno
+from officina.errori import ErroreOfficina
 from officina.miglioria import da_guardare
 from officina.modello import file_media, scatti
 from officina.ritocco import coda, elenco, racconto, sfida_togli
+from officina.sicuro.dall_archivio import CHIUSO, SI_APRE, DallArchivio
 from officina.web import coda_ritocco, lavori
 from officina.web.lavori import Lavoro
+from officina.web.miglioramento import MUTO
 
 QUANTI_IN_CODA = 200
 QUANTI_NON_RIUSCITI = 100
@@ -51,8 +54,10 @@ def _i_file(connessione: sqlite3.Connection, lavoro_id: int) -> list[dict]:
         if media is None:
             continue
         percorso = file_media.percorso_migliore(connessione, media["id"])
+        percorsi = file_media.percorsi_di(connessione, media["id"])
         fuori.append({"id": media["id"], "genere": media["genere"], "ruolo": media["ruolo"],
-                      "nome": percorso.name if percorso is not None else "",
+                      "nome": (percorso.name if percorso is not None
+                               else percorsi[0]["nome"] if percorsi else ""),
                       "durata": scatti.durata_a_parole(media["durata_ms"])})
     fuori.sort(key=lambda file: (file["genere"] == "video", file["id"]))
     return fuori
@@ -179,28 +184,56 @@ def _copia(archivio, lavoro: sqlite3.Row, file_id: int, lato: str) -> Path:
                                   f"{int(file_id)}-{lato}.mp4")
 
 
-def _lati(connessione: sqlite3.Connection, file_id: int,
-          pronto: sqlite3.Row | None) -> dict[str, Path | None]:
-    lati = _prima_e_dopo(connessione, file_id, pronto)
+def _lati(connessione: sqlite3.Connection, file_id: int, pronto: sqlite3.Row | None,
+          foto: bool = False) -> tuple[dict[str, Path | DallArchivio | None], str | None]:
+    lati, perche = _prima_e_dopo(connessione, file_id, pronto, foto)
     sfida = (sfida_togli.del_file(connessione, pronto["lavoro_id"], file_id)
              if pronto is not None else None)
     if sfida is not None and sfida["voto"] is None:
         lati[B] = Path(sfida["pronta_b"]) if sfida["pronta_b"] else None
-    return lati
+    return lati, perche
 
 
-def _prima_e_dopo(connessione: sqlite3.Connection, file_id: int,
-                  pronto: sqlite3.Row | None) -> dict[str, Path | None]:
-    prima, _ = file_media.da_mostrare(connessione, file_id)
-    if prima is None:
+def _dall_archivio(trova, connessione: sqlite3.Connection,
+                   file_id: int) -> tuple[Path | DallArchivio | None, str | None]:
+    from officina.programma import archivio_sicuro
+
+    try:
+        file, _ = trova(connessione, file_id, anche_dall_archivio=True)
+    except ErroreOfficina:
+        return None, MUTO
+    if isinstance(file, DallArchivio):
+        return (None, None) if file.diversa else (file, None)
+    if file is not None:
+        return Path(file), None
+    perche, _ = archivio_sicuro.per_le_foto()
+    return None, perche if perche in (CHIUSO, SI_APRE) else None
+
+
+def _prima_e_dopo(connessione: sqlite3.Connection, file_id: int, pronto: sqlite3.Row | None,
+                  foto: bool) -> tuple[dict[str, Path | DallArchivio | None], str | None]:
+    perche = sotto = None
+    if foto:
+        prima, perche = _dall_archivio(file_media.da_mostrare, connessione, file_id)
+    else:
+        prima, _ = file_media.da_mostrare(connessione, file_id)
+    if prima is None and perche is None:
         prima = file_media.percorso_migliore(connessione, file_id)
     if pronto is None:
         dopo = None
     elif pronto["pronta"]:
         dopo = Path(pronto["pronta"])
+    elif foto:
+        dopo, sotto = _dall_archivio(file_media.da_mostrare_sotto, connessione, file_id)
     else:
         dopo, _ = file_media.da_mostrare_sotto(connessione, file_id)
-    return {PRIMA: Path(prima) if prima else None, DOPO: Path(dopo) if dopo else None}
+    return {PRIMA: _un_lato(prima), DOPO: _un_lato(dopo)}, perche or sotto
+
+
+def _un_lato(file) -> Path | DallArchivio | None:
+    if isinstance(file, DallArchivio) or file is None:
+        return file
+    return Path(file)
 
 
 def _da_vedere(archivio, lavoro: sqlite3.Row, file_id: int, lato: str,
@@ -251,7 +284,8 @@ def da_rivedere(archivio, lavoro_id: int | None, file_id: int | None) -> dict | 
             return None
         quale = next((voce for voce in file if voce["id"] == file_id), file[0])
         pronti = {riga["file_id"]: riga for riga in coda.pronti(connessione, scelto)}
-        lati = _lati(connessione, quale["id"], pronti.get(quale["id"]))
+        lati, perche = _lati(connessione, quale["id"], pronti.get(quale["id"]),
+                             quale["genere"] != "video")
         sfida = sfida_togli.del_file(connessione, scelto, quale["id"])
         da_votare = len(sfida_togli.da_votare(connessione, scelto))
         votate = (sfida_togli.votate(connessione, sfida["genere"]) if sfida is not None else 0)
@@ -278,6 +312,8 @@ def da_rivedere(archivio, lavoro_id: int | None, file_id: int | None) -> dict | 
         "genere": quale["genere"],
         "proporzione": proporzione,
         "ci_sono": ci_sono,
+        "archivio": perche,
+        "dall_archivio": any(isinstance(lato, DallArchivio) for lato in lati.values()),
         "mancano_copie": mancano,
         "parti": parti,
         "finale": finale(file),
@@ -296,7 +332,8 @@ def _la_sfida(sfida, votate: int) -> dict:
             "quante": quante, "mancano": max(0, quante - votate)}
 
 
-def file_del_lato(archivio, lavoro_id: int, file_id: int, lato: str) -> tuple[str, Path] | None:
+def file_del_lato(archivio, lavoro_id: int, file_id: int,
+                  lato: str) -> tuple[str, Path | DallArchivio] | None:
     if lato not in LATI:
         return None
     with archivio.lettura() as connessione:
@@ -305,7 +342,7 @@ def file_del_lato(archivio, lavoro_id: int, file_id: int, lato: str) -> tuple[st
         if lavoro is None or voce is None:
             return None
         pronti = {riga["file_id"]: riga for riga in coda.pronti(connessione, lavoro_id)}
-        lati = _lati(connessione, file_id, pronti.get(file_id))
+        lati, _ = _lati(connessione, file_id, pronti.get(file_id), voce["genere"] != "video")
     scelto = lati.get(lato)
     if scelto is None or not scelto.is_file():
         return None
@@ -325,7 +362,7 @@ def fai_le_copie(archivio, lavoro_id: int) -> bool:
         for voce in file:
             if voce["genere"] != "video":
                 continue
-            lati = _lati(connessione, voce["id"], pronti.get(voce["id"]))
+            lati, _ = _lati(connessione, voce["id"], pronti.get(voce["id"]))
             for lato in lati:
                 sorgente = lati[lato]
                 if (sorgente is not None and sorgente.is_file()

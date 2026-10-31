@@ -1,4 +1,5 @@
-import { chiedi, leggiDatiIncorporati, manda, siStaScrivendo } from "./comune.js";
+import { aspettaLArchivio, chiedi, leggiDatiIncorporati, manda, seLArchivioSiChiude,
+         siStaScrivendo } from "./comune.js";
 import { confronta, suUnCursore } from "./confronto.js";
 
 const CHIAVE_DETTO = "officina.rivedi.detto";
@@ -67,6 +68,7 @@ async function vota(voto) {
     if (!scelta || staDecidendo) return;
     staDecidendo = true;
     const tasti = [...document.querySelectorAll("[data-vota]")];
+    const spenti = tasti.filter((tasto) => tasto.disabled);
     tasti.forEach((tasto) => { tasto.disabled = true; });
     confronto.suona(false);
     di("Segno il voto...");
@@ -78,7 +80,7 @@ async function vota(voto) {
     } catch (errore) {
         di(errore.message, true);
         staDecidendo = false;
-        tasti.forEach((tasto) => { tasto.disabled = false; });
+        tasti.forEach((tasto) => { tasto.disabled = spenti.includes(tasto); });
     }
 }
 
@@ -165,3 +167,6 @@ if (faiCopie && scelta) {
 
 const detto = ricordato();
 if (detto) di(detto);
+
+if (scelta) aspettaLArchivio(scelta.file_id);
+if (scelta && scelta.dall_archivio) seLArchivioSiChiude(scelta.file_id);

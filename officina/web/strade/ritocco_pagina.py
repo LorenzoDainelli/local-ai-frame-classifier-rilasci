@@ -6,9 +6,11 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from officina.archivio import accesso
 from officina.immagini import consegna, lettura
 from officina.ritocco import coda
+from officina.sicuro.dall_archivio import DallArchivio
 from officina.web import coda_ritocco, rivedi_ritocco, vista
 from officina.web.miglioramento import FORMATI_CHE_SI_APRONO
 from officina.web.strade import base
+from officina.web.strade import scatto as scatto_web
 
 strada = APIRouter()
 
@@ -95,7 +97,7 @@ def ritocco_rivedi(richiesta: Request, lavoro: str = "", file: str = ""):
 
 
 @strada.get("/ritocco/{lavoro_id}/mostra/{file_id}/{lato}")
-def ritocco_mostra(lavoro_id: int, file_id: int, lato: str):
+def ritocco_mostra(richiesta: Request, lavoro_id: int, file_id: int, lato: str):
     trovato = rivedi_ritocco.file_del_lato(accesso.aperto(), lavoro_id, file_id, lato)
     if trovato is None:
         return Response(status_code=404)
@@ -103,6 +105,8 @@ def ritocco_mostra(lavoro_id: int, file_id: int, lato: str):
     if genere == "video":
         return FileResponse(file, media_type="video/mp4", headers=SENZA_CACHE)
     tipo = FORMATI_CHE_SI_APRONO.get(file.suffix.casefold())
+    if tipo is not None and isinstance(file, DallArchivio):
+        return scatto_web._dall_archivio_a_pezzi(richiesta, file, tipo)
     if tipo is not None:
         return FileResponse(file, media_type=tipo, headers=SENZA_CACHE)
     dati, tipo = consegna.da_immagine(lettura.copia_di_lavoro(file, None), "JPEG")
