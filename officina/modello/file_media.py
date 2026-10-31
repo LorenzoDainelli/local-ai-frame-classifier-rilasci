@@ -172,6 +172,11 @@ def da_mostrare(connessione: sqlite3.Connection, file_id: int, *,
         percorso = Path(ritoccata["percorso_copia"])
         if percorso.exists():
             return percorso, ritoccata["impronta_copia"]
+        if anche_dall_archivio:
+            trovata = cerca_uguale(connessione, file_id, ritoccata["impronta_copia"],
+                                   percorso).trovata
+            if trovata is not None:
+                return trovata, ritoccata["impronta_copia"]
     return None, None
 
 
@@ -179,9 +184,19 @@ def da_mostrare_con_ricerca(
         connessione: sqlite3.Connection,
         file_id: int) -> tuple[Path | DallArchivio | None, str | None, Ricerca | None]:
     percorso, impronta = da_mostrare(connessione, file_id)
-    ritoccata = uno(connessione, "SELECT 1 AS c FROM ritoccate WHERE file_id = ?", file_id)
-    if percorso is not None or ritoccata is not None:
+    if percorso is not None:
         return percorso, impronta, None
+    ritoccata = uno(connessione,
+                    "SELECT stato, percorso_copia, impronta_copia FROM ritoccate "
+                    "WHERE file_id = ?", file_id)
+    if ritoccata is not None:
+        if ritoccata["stato"] != "fatta" or not ritoccata["impronta_copia"]:
+            return None, None, None
+        ricerca = cerca_uguale(connessione, file_id, ritoccata["impronta_copia"],
+                               ritoccata["percorso_copia"])
+        if ricerca.trovata is None:
+            return None, None, ricerca
+        return ricerca.trovata, ritoccata["impronta_copia"], ricerca
     ricerca, migliorata = cerca_la_versione(connessione, file_id)
     return ricerca.trovata, migliorata, ricerca
 
@@ -196,6 +211,11 @@ def da_mostrare_sotto(connessione: sqlite3.Connection, file_id: int, *,
         percorso = Path(ritoccata["percorso_base"])
         if percorso.exists():
             return percorso, ritoccata["impronta_base"]
+        if anche_dall_archivio:
+            trovata = cerca_uguale(connessione, file_id, ritoccata["impronta_base"],
+                                   percorso).trovata
+            if trovata is not None:
+                return trovata, ritoccata["impronta_base"]
     return senza_ritocchi(connessione, file_id, anche_dall_archivio=anche_dall_archivio)
 
 
@@ -212,8 +232,11 @@ def senza_ritocchi(connessione: sqlite3.Connection, file_id: int, *,
                 return None, None
             ricerca, impronta = cerca_la_versione(connessione, file_id)
             return ricerca.trovata, impronta
-    return percorso_migliore(connessione, file_id,
-                             anche_dall_archivio=anche_dall_archivio), None
+    sul_disco = percorso_migliore(connessione, file_id)
+    if sul_disco is not None or not anche_dall_archivio:
+        return sul_disco, None
+    ricerca, impronta = cerca_la_versione(connessione, file_id)
+    return ricerca.trovata, impronta
 
 
 def la_migliorata(connessione: sqlite3.Connection, file_id: int) -> sqlite3.Row | None:
@@ -227,26 +250,26 @@ def la_migliorata(connessione: sqlite3.Connection, file_id: int) -> sqlite3.Row 
 def cerca_la_versione(connessione: sqlite3.Connection,
                       file_id: int) -> tuple[Ricerca, str | None]:
     migliorata = la_migliorata(connessione, file_id)
-    if (migliorata is not None and migliorata["nell_archivio"]
-            and migliorata["percorso_migliorata"]):
-        ricerca = _cerca_la_migliorata(connessione, file_id, migliorata)
+    if migliorata is not None and migliorata["percorso_migliorata"]:
+        ricerca = cerca_uguale(connessione, file_id, migliorata["impronta_migliorata"],
+                               migliorata["percorso_migliorata"],
+                               anche_diversa=migliorata["nell_archivio"])
         if ricerca.trovata is not None:
             return ricerca, None if ricerca.diversa else migliorata["impronta_migliorata"]
     return cerca_nell_archivio(connessione, file_id), None
 
 
-def _cerca_la_migliorata(connessione: sqlite3.Connection, file_id: int,
-                         migliorata: sqlite3.Row) -> Ricerca:
+def cerca_uguale(connessione: sqlite3.Connection, file_id: int, impronta: str | None,
+                 percorso, *, anche_diversa: bool = False) -> Ricerca:
     from officina.programma import archivio_sicuro
 
     riga = per_id(connessione, file_id)
-    if riga is None or not migliorata["impronta_migliorata"]:
+    if riga is None or not impronta:
         return Ricerca(NON_C_E)
     perche, servizio = archivio_sicuro.per_le_foto()
     if servizio is None:
         return Ricerca(perche)
-    percorso = migliorata["percorso_migliorata"]
-    return servizio.cerca(migliorata["impronta_migliorata"], None, [percorso],
+    return servizio.cerca(impronta, None, [percorso] if anche_diversa else [],
                           nome=Path(percorso).name, intero=riga["genere"] == "immagine")
 
 

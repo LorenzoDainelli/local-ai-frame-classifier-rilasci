@@ -226,7 +226,8 @@ def test_un_si_dato_sul_disco_resta_sul_disco(pronta):
             for anche in (False, True):
                 assert quale(connessione, riga["file_id"], anche_dall_archivio=anche) == (
                     spostato, None), quale
-        assert file_media.cerca_la_versione(connessione, riga["file_id"])[1] is None
+        ricerca, sua = file_media.cerca_la_versione(connessione, riga["file_id"])
+    assert sua == riga["impronta_migliorata"] and not ricerca.diversa
 
 
 def test_la_miniatura_nuova_si_fa_dalla_migliorata(pronta):
