@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import io
 import json
 import os
 import time
@@ -9,6 +11,8 @@ import numpy
 from PIL import Image, ImageOps
 
 from officina.ritocco import maschere, scelta
+from officina.sicuro import formato
+from officina.sicuro.dall_archivio import per_av
 
 LATO = 10
 VISTI = "visti.jsonl"
@@ -38,6 +42,7 @@ class Finto:
         self.cartella = Path(cartella)
         self.dispositivo = None
         self.guardate: dict = {}
+        self.letti: dict = {}
         self.spenti = 0
         self.accesi: list[str] = []
 
@@ -68,8 +73,13 @@ class Finto:
                 raise ValueError("fotogramma fuori dal video")
             return pronto.larghezza, pronto.altezza
         if chiave not in self.guardate:
-            with Image.open(percorso) as immagine:
+            with per_av(percorso) as sorgente:
+                dati = (Path(sorgente).read_bytes() if isinstance(sorgente, str)
+                        else sorgente.read())
+            with Image.open(io.BytesIO(dati)) as immagine:
                 self.guardate[chiave] = ImageOps.exif_transpose(immagine).size
+            impronta = hashlib.blake2b(dati, digest_size=formato.IMPRONTA)
+            self.letti[chiave] = impronta.hexdigest()
         return self.guardate[chiave]
 
     def prepara(self, chiave: str, percorso: Path, al_passo=None, fermati=None):
@@ -127,7 +137,8 @@ class Finto:
         with open(self.cartella / VISTI, "a", encoding="utf-8") as scritto:
             scritto.write(json.dumps({"chiave": chiave, "percorso": str(percorso),
                                       "sulla_scheda": sulla_scheda, "dove": self._dove(),
-                                      "pid": os.getpid()}) + "\n")
+                                      "pid": os.getpid(),
+                                      "letto": self.letti.get(chiave)}) + "\n")
         maschera = numpy.zeros((alta, larga), dtype=bool)
         coordinate, etichette, scatola = scelta.in_pixel(punti, riquadro, larga, alta)
         if scatola is not None:

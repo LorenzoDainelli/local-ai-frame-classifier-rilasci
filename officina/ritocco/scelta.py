@@ -202,11 +202,14 @@ class Sceglitore:
         self._guardate.clear()
         torcia.libera()
 
-    def _immagine(self, chiave: str, percorso: Path, fotogramma: int | None):
+    def _immagine(self, chiave: str, percorso, fotogramma: int | None):
         from officina.miglioria import metadati
+        from officina.sicuro.dall_archivio import DallArchivio
 
         if fotogramma is None:
-            return metadati.apri(Path(percorso)).immagine
+            if not isinstance(percorso, DallArchivio):
+                percorso = Path(percorso)
+            return metadati.apri(percorso).immagine
         pronto = self.prepara(chiave, percorso)
         if not 0 <= fotogramma < pronto.quanti:
             raise ValueError

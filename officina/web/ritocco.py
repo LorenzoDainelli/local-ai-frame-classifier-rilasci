@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import itertools
 import multiprocessing
 import queue
@@ -10,7 +11,9 @@ from pathlib import Path
 from officina import registro
 from officina.descrittori import torcia
 from officina.errori import ErroreOfficina
-from officina.ritocco import filmato, scelta
+from officina.ritocco import copia, filmato, scelta
+from officina.sicuro import dall_archivio, sportello
+from officina.sicuro.dall_archivio import DallArchivio
 from officina.web import in_disparte, lavori
 
 A = "ritocco"
@@ -62,6 +65,50 @@ def _mai() -> bool:
     return False
 
 
+def _da_mandare(percorso):
+    if isinstance(percorso, DallArchivio):
+        return {"impronta": percorso.blake2b, "dimensione": percorso.dimensione,
+                "nome": percorso.nome, "intero": percorso.intero}
+    return str(percorso)
+
+
+def _servizio_delle_foto():
+    lontano = sportello.qui()
+    if lontano is not None:
+        return dall_archivio.TROVATA, lontano
+    from officina.programma import archivio_sicuro
+
+    return archivio_sicuro.per_le_foto()
+
+
+@contextlib.contextmanager
+def _la_foto(percorso):
+    if not isinstance(percorso, dict):
+        yield Path(percorso)
+        return
+    perche, servizio = _servizio_delle_foto()
+    trovata = copia.ritrova(perche, servizio, str(percorso["impronta"]),
+                            int(percorso["dimensione"]), str(percorso["nome"]),
+                            bool(percorso["intero"]))
+    with copia.leggendo(trovata):
+        yield trovata
+
+
+def _il_codice(guasto: ErroreOfficina) -> dict:
+    if isinstance(guasto, copia.RitoccoFermato):
+        return {"codice": guasto.codice}
+    return {}
+
+
+def _nome_dell_archivio() -> str | None:
+    from officina.archivio import accesso
+
+    try:
+        return accesso.aperto().dove.nome
+    except ErroreOfficina:
+        return None
+
+
 def _prepara(sceglitore, numero, chiave, percorso, notizia, fermati) -> tuple:
     def al_passo(fatti: int, attesi: int) -> None:
         if fatti % OGNI_QUANTI == 0:
@@ -107,18 +154,20 @@ def esegui(sceglitore, comando: tuple, notizia=None, fermati=None) -> tuple:
     try:
         if tipo == "guarda":
             chiave, percorso, fotogramma, sulla_scheda = resto
-            larga, alta, dove = _con_riserva(
-                sceglitore, lambda scheda: sceglitore.guarda(chiave, Path(percorso), scheda,
-                                                             **_sul_fotogramma(fotogramma)),
-                sulla_scheda)
+            with _la_foto(percorso) as foto:
+                larga, alta, dove = _con_riserva(
+                    sceglitore, lambda scheda: sceglitore.guarda(
+                        chiave, foto, scheda, **_sul_fotogramma(fotogramma)),
+                    sulla_scheda)
             return ("fatto", numero, {"larghezza": larga, "altezza": alta, "dove": dove})
         if tipo == "scegli":
             chiave, percorso, punti, riquadro, fotogramma, sulla_scheda = resto
-            fatta = _con_riserva(
-                sceglitore, lambda scheda: sceglitore.scegli(chiave, Path(percorso), punti,
-                                                             riquadro, scheda,
-                                                             **_sul_fotogramma(fotogramma)),
-                sulla_scheda)
+            with _la_foto(percorso) as foto:
+                fatta = _con_riserva(
+                    sceglitore, lambda scheda: sceglitore.scegli(
+                        chiave, foto, punti, riquadro, scheda,
+                        **_sul_fotogramma(fotogramma)),
+                    sulla_scheda)
             return ("fatto", numero, {"maschera": fatta.maschera, "punteggio": fatta.punteggio,
                                       "larghezza": fatta.larghezza, "altezza": fatta.altezza,
                                       "dove": fatta.dove})
@@ -132,7 +181,8 @@ def esegui(sceglitore, comando: tuple, notizia=None, fermati=None) -> tuple:
     except filmato.Fermato:
         return ("fatto", numero, {"fermato": True})
     except ErroreOfficina as guasto:
-        return ("guasto", numero, {"messaggio": guasto.messaggio, "dettaglio": ""})
+        return ("guasto", numero, {"messaggio": guasto.messaggio, "dettaglio": "",
+                                   **_il_codice(guasto)})
     except Exception as guasto:
         registro.errore("ritocco.scelta_rotta", **registro.dove_si_e_rotto(guasto))
         return ("guasto", numero, {"messaggio": messaggio,
@@ -141,9 +191,11 @@ def esegui(sceglitore, comando: tuple, notizia=None, fermati=None) -> tuple:
 
 
 def _figlio(cartella: str, fabbrica: str, dopo: float, dove_registro: str | None, comandi,
-            notizie) -> None:
+            notizie, linea: tuple | None = None) -> None:
     if dove_registro:
         registro.imposta(registro.Registro(Path(dove_registro)))
+    if linea is not None:
+        sportello.installa(notizie, *linea)
     try:
         sceglitore = in_disparte._trova(fabbrica)(Path(cartella))
         notizie.put(("pronto", None, {"scheda": bool(sceglitore.ha_la_scheda())}))
@@ -200,6 +252,7 @@ class AlClic:
         self._numeri = itertools.count(1)
         self._processo = None
         self._notizie = None
+        self._sportello = None
         self._in_casa = None
         self._cartella: Path | None = None
         self._scheda = False
@@ -227,14 +280,14 @@ class AlClic:
     def ha_una_scheda(self) -> bool:
         return self._scheda
 
-    def guarda(self, cartella: Path, chiave: str, percorso: Path,
+    def guarda(self, cartella: Path, chiave: str, percorso,
                fotogramma: int | None = None) -> dict:
-        return self._chiedi(cartella, "guarda", chiave, str(percorso), fotogramma)
+        return self._chiedi(cartella, "guarda", chiave, _da_mandare(percorso), fotogramma)
 
-    def scegli(self, cartella: Path, chiave: str, percorso: Path, punti: list,
+    def scegli(self, cartella: Path, chiave: str, percorso, punti: list,
                riquadro, fotogramma: int | None = None) -> dict:
-        return self._chiedi(cartella, "scegli", chiave, str(percorso), list(punti), riquadro,
-                            fotogramma)
+        return self._chiedi(cartella, "scegli", chiave, _da_mandare(percorso), list(punti),
+                            riquadro, fotogramma)
 
     def prepara(self, cartella: Path, chiave: str, percorso: Path, al_passo=None) -> dict:
         return self._chiedi(cartella, "prepara", chiave, str(percorso), al_passo=al_passo,
@@ -357,7 +410,8 @@ class AlClic:
         self._sorveglia()
         tipo_esito, _, dati = esito
         if tipo_esito != "fatto":
-            raise ErroreOfficina(dati.get("messaggio") or NON_GUARDA, codice="ritocco_scelta")
+            raise ErroreOfficina(dati.get("messaggio") or NON_GUARDA,
+                                 codice=dati.get("codice") or "ritocco_scelta")
         if scheda is None and sfondo is None and sulla_scheda and \
                 dati.get("dove") == scelta.PROCESSORE:
             lavori.turno.lascia(self.lavoro)
@@ -378,9 +432,10 @@ class AlClic:
                 raise ErroreOfficina(NON_PARTE, codice="ritocco_non_parte") from guasto
             return
         dove_registro = registro.attivo().cartella
-        self._processo, self._notizie = in_disparte._avvia(
+        self._processo, self._notizie, self._sportello = in_disparte._avvia_con_lo_sportello(
             A, _figlio, (str(cartella), self.fabbrica, SI_LIBERA_DOPO,
-                         str(dove_registro) if dove_registro else None))
+                         str(dove_registro) if dove_registro else None),
+            _nome_dell_archivio())
         tipo, _, dati = self._aspetta(None, PER_PARTIRE)
         if tipo != "pronto":
             self._spegni_tutto()
@@ -400,6 +455,8 @@ class AlClic:
     def _aspetta(self, numero: int | None, entro: float, al_passo=None) -> tuple:
         scadenza = time.monotonic() + entro
         while time.monotonic() < scadenza:
+            if self._sportello is not None:
+                self._sportello.controlla()
             try:
                 tipo, quale, dati = self._notizie.get(timeout=OGNI_QUANTO)
             except queue.Empty:
@@ -407,6 +464,10 @@ class AlClic:
                     self._spento()
                     registro.errore("ritocco.chiuso_da_solo")
                     raise ErroreOfficina(SI_E_CHIUSO, codice="ritocco_chiuso") from None
+                continue
+            if tipo == "archivio":
+                if self._sportello is not None:
+                    self._sportello.ricevi(dati)
                 continue
             if quale != numero:
                 continue
@@ -437,11 +498,18 @@ class AlClic:
         self._spento()
 
     def _spento(self) -> None:
+        allo_sportello, self._sportello = self._sportello, None
         self._in_casa = None
         self._processo = None
         self._notizie = None
         self._scheda = False
         lavori.turno.lascia(self.lavoro)
+        if allo_sportello is not None:
+            try:
+                allo_sportello.chiudi()
+            except Exception as guasto:
+                registro.avviso("ritocco.sportello_non_chiuso",
+                                **registro.dove_si_e_rotto(guasto))
 
     def _sorveglia(self) -> None:
         if self._sorvegliante is not None and self._sorvegliante.is_alive():

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-from pathlib import Path
 
 from PIL import Image
 
@@ -56,11 +55,13 @@ def corpo_per_lo_strumento(maschera: bytes, riquadro) -> tuple[bytes, list[float
                                    x + larga + passo_x, y + alta + passo_y]
 
 
-def misure_dritte(percorso: Path) -> tuple[int, int] | None:
+def misure_dritte(percorso) -> tuple[int, int] | None:
     from officina.immagini import lettura
+    from officina.sicuro.dall_archivio import per_av
 
     try:
-        with Image.open(percorso, formats=lettura.formati_aperti()) as immagine:
+        with per_av(percorso) as sorgente, \
+                Image.open(sorgente, formats=lettura.formati_aperti()) as immagine:
             larga, alta = immagine.size
             try:
                 girata = immagine.getexif().get(ORIENTAMENTO)

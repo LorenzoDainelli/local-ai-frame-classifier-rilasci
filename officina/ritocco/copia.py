@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import sqlite3
 import threading
@@ -122,16 +123,31 @@ def _non_risponde(errore: ErroreOfficina) -> RitoccoFermato:
     return _chiuso()
 
 
-def _trovata(ricerca: Ricerca, base: Base) -> Base:
+def trovata_o_fermo(ricerca: Ricerca, sua_impronta: str) -> DallArchivio:
     if ricerca.perche == SENZA_ARCHIVIO:
         raise RitoccoFermato(NON_SUL_DISCO)
     if ricerca.perche in (CHIUSO, SI_APRE):
         raise _chiuso()
     if ricerca.trovata is None:
         raise RitoccoFermato(DA_NESSUNA_PARTE)
-    if ricerca.diversa or ricerca.trovata.blake2b != base.impronta:
+    if ricerca.diversa or ricerca.trovata.blake2b != sua_impronta:
         raise RitoccoFermato(DIVERSA)
-    base.trovata = ricerca.trovata
+    return ricerca.trovata
+
+
+def ritrova(perche: str, servizio, sua_impronta: str, dimensione: int | None, nome: str,
+            intero: bool) -> DallArchivio:
+    if servizio is None:
+        return trovata_o_fermo(Ricerca(perche), sua_impronta)
+    try:
+        ricerca = servizio.cerca(sua_impronta, dimensione, [], nome=nome, intero=intero)
+    except ErroreOfficina as errore:
+        raise _non_risponde(errore) from None
+    return trovata_o_fermo(ricerca, sua_impronta)
+
+
+def _trovata(ricerca: Ricerca, base: Base) -> Base:
+    base.trovata = trovata_o_fermo(ricerca, base.impronta)
     return base
 
 
@@ -198,9 +214,24 @@ def _base_della_riga(archivio, riga: sqlite3.Row) -> DallArchivio | None:
         raise _chiuso()
     if ricerca.trovata is None:
         raise RitoccoFermato(DA_NESSUNA_PARTE)
-    if ricerca.trovata.blake2b != riga["impronta_base"]:
+    if ricerca.diversa or ricerca.trovata.blake2b != riga["impronta_base"]:
         raise RitoccoFermato(CAMBIATO)
     return ricerca.trovata
+
+
+def base_da_guardare(archivio, file_id: int) -> tuple[Path | DallArchivio | None,
+                                                      str | None]:
+    with archivio.lettura() as connessione:
+        riga = ritoccata(connessione, file_id)
+        percorso, sua_impronta = file_media.da_mostrare_sotto(connessione, file_id)
+    if riga is not None:
+        trovata = _base_della_riga(archivio, riga)
+        if trovata is not None:
+            return trovata, riga["impronta_base"]
+    if percorso is not None or riga is not None:
+        return percorso, sua_impronta
+    base = _base_nell_archivio(archivio, file_id)
+    return base.trovata, base.impronta
 
 
 def _date_nell_archivio(sua_impronta: str, dimensione: int | None, percorso) -> dict:
@@ -320,14 +351,20 @@ def _nome_libero(connessione: sqlite3.Connection, file_id: int, copia: Path,
     return nome
 
 
-def _apri(sorgente):
+@contextlib.contextmanager
+def leggendo(sorgente):
     try:
         with attento(sorgente):
-            return metadati.apri(sorgente)
+            yield sorgente
     except DaRifare as errore:
         if errore.codice == PERSA:
             raise RitoccoFermato(ROVINATA) from None
         raise _chiuso() from None
+
+
+def _apri(sorgente):
+    with leggendo(sorgente):
+        return metadati.apri(sorgente)
 
 
 def _prepara(file_id: int, sorgente, copia: Path, formato: str, ritocchi,

@@ -16,6 +16,7 @@ from officina.immagini import consegna
 from officina.modello import file_media
 from officina.ritocco import (coda, copia, elenco, maschere, pixela, racconto, scelta,
                               sfida_togli, strumento)
+from officina.sicuro.dall_archivio import DallArchivio
 from officina.web import coda_ritocco, rivedi_ritocco, sosta
 from officina.web import ritocco as ritocco_web
 
@@ -64,12 +65,13 @@ def _cartella_di_sam3() -> Path:
     return cartella
 
 
-def _da_guardare(file_id: int) -> tuple[Path, str]:
-    with accesso.aperto().lettura() as connessione:
+def _da_guardare(file_id: int) -> tuple[Path | DallArchivio, str]:
+    archivio = accesso.aperto()
+    with archivio.lettura() as connessione:
         riga = file_media.per_id(connessione, file_id)
-        if riga is None or riga["genere"] != "immagine":
-            raise ErroreOfficina(NON_SI_SCEGLIE, codice="ritocco_non_si_sceglie")
-        percorso, impronta = file_media.da_mostrare_sotto(connessione, file_id)
+    if riga is None or riga["genere"] != "immagine":
+        raise ErroreOfficina(NON_SI_SCEGLIE, codice="ritocco_non_si_sceglie")
+    percorso, impronta = copia.base_da_guardare(archivio, file_id)
     if percorso is None:
         raise ErroreOfficina(NON_C_E, codice="ritocco_senza_file")
     return percorso, impronta or riga["impronta"]
@@ -212,7 +214,8 @@ def pezzi_della_foto(archivio, file_id: int, larga: int, alta: int,
         volti = _volti_del_file(connessione, riga)
         corpi = {corpo["id"]: corpo["volto_id"] for corpo in _corpi_del_file(connessione, riga)}
     percorso, _ = _da_guardare(file_id)
-    base = strumento.misure_dritte(percorso)
+    with copia.leggendo(percorso):
+        base = strumento.misure_dritte(percorso)
     if base is None:
         raise ErroreOfficina(NON_C_E, codice="ritocco_senza_file")
     if not strumento.stessa_forma(larga, alta, base):
