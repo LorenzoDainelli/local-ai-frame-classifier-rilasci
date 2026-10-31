@@ -1534,6 +1534,26 @@ def _versione_68(connessione: sqlite3.Connection) -> None:
         "ALTER TABLE migliorie ADD COLUMN nell_archivio INTEGER NOT NULL DEFAULT 0")
 
 
+def _versione_69(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "ALTER TABLE ritoccate ADD COLUMN nell_archivio INTEGER NOT NULL DEFAULT 0")
+    connessione.execute("ALTER TABLE ritoccate ADD COLUMN dimensione_base INTEGER")
+    connessione.execute(
+        """
+        CREATE TABLE ritocchi_in_chiaro (
+            id        INTEGER PRIMARY KEY,
+            file_id   INTEGER NOT NULL,
+            percorso  TEXT NOT NULL UNIQUE,
+            impronta  TEXT NOT NULL,
+            guasto    TEXT,
+            messa_il  TEXT NOT NULL
+        )
+        """
+    )
+    connessione.execute("CREATE INDEX ritocchi_in_chiaro_per_file ON "
+                        "ritocchi_in_chiaro(file_id)")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1658,6 +1678,8 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_67),
     Migrazione(68, "il sì al miglioramento anche quando l'originale è solo nell'Archivio "
                "sicuro", _versione_68),
+    Migrazione(69, "il ritocco anche quando lo scatto senza ritocchi è solo nell'Archivio "
+               "sicuro", _versione_69),
 ]
 
 

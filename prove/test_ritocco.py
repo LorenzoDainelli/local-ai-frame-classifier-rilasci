@@ -590,6 +590,10 @@ def _scritta_fissa(modulo, pezzo) -> bool:
         return isinstance(getattr(modulo, pezzo.id, None), str)
     if isinstance(pezzo, ast.Attribute) and isinstance(pezzo.value, ast.Name):
         return isinstance(getattr(getattr(modulo, pezzo.value.id, None), pezzo.attr, None), str)
+    if isinstance(pezzo, ast.Subscript) and isinstance(pezzo.value, ast.Name):
+        scritte = getattr(modulo, pezzo.value.id, None)
+        return (isinstance(scritte, dict) and bool(scritte)
+                and all(isinstance(scritta, str) for scritta in scritte.values()))
     return False
 
 
