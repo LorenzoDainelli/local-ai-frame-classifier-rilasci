@@ -50,6 +50,8 @@ TOGLI_A_PAROLE = {
 DA_RIPRENDERE = {"memoria_scheda_finita", "memoria_finita", "stanza_caduta"}
 SI_E_CHIUSO = ("Il pixelato del video si è chiuso da solo. Il video non è stato toccato: "
                "rimettilo in coda.")
+ASPETTA = ("Serve l'Archivio sicuro, che è chiuso: il ritocco resta in coda finché lo apri. "
+           "Lo scatto non è stato toccato.")
 
 
 class _Rimanda(Exception):
@@ -71,6 +73,7 @@ class Ritoccatore:
         self._fermati = threading.Event()
         self.adesso: dict = {}
         self._motore_ora: str | None = None
+        self._salta: set[int] = set()
 
     @property
     def sta_lavorando(self) -> bool:
@@ -100,10 +103,11 @@ class Ritoccatore:
 
     def _gira(self) -> None:
         fatti = 0
+        self._salta = set()
         try:
             while not self._fermati.is_set():
                 with self.archivio.scrittura() as connessione:
-                    riga = coda.prossimo(connessione)
+                    riga = coda.prossimo(connessione, self._salta)
                     if riga is None:
                         break
                     coda.segna(connessione, riga["id"], coda.IN_LAVORO,
@@ -124,6 +128,9 @@ class Ritoccatore:
             self._rimetti(lavoro_id)
             return
         except ErroreOfficina as errore:
+            if errore.codice == copia.SICURO_CHIUSO:
+                self._aspetta_l_archivio(lavoro_id)
+                return
             coda.fallisci(self.archivio, lavoro_id, errore.messaggio)
             self.lavoro.di(f"non riuscito: {errore.messaggio}")
             return
@@ -150,7 +157,8 @@ class Ritoccatore:
         if cambiato:
             for fatto in fatti:
                 if fatto.get("pronta"):
-                    copia.butta(Path(fatto["pronta"]))
+                    copia.via_la_pronta(self.archivio, fatto["file_id"],
+                                        Path(fatto["pronta"]), fatto["impronta_pronta"])
                 if fatto.get("sfida"):
                     sfida_togli.butta(sfida_togli.file_della_b(fatto["sfida"]))
             self.lavoro.di("i ritocchi sono cambiati mentre lavoravo: li rifaccio")
@@ -164,11 +172,17 @@ class Ritoccatore:
         except (RitoccoFermato, OSError) as errore:
             self.lavoro.di(f"non sono riuscito a rimettere lo scatto: {errore}")
 
-    def _rimetti(self, lavoro_id: int) -> None:
+    def _rimetti(self, lavoro_id: int, **campi) -> None:
         with self.archivio.scrittura() as connessione:
             riga = coda.per_id(connessione, lavoro_id)
             if riga is not None and riga["stato"] == coda.IN_LAVORO:
-                coda.segna(connessione, lavoro_id, coda.IN_CODA, iniziato_il=None)
+                coda.segna(connessione, lavoro_id, coda.IN_CODA, iniziato_il=None, **campi)
+
+    def _aspetta_l_archivio(self, lavoro_id: int) -> None:
+        self._rimetti(lavoro_id, guasto=ASPETTA)
+        self._salta.add(lavoro_id)
+        registro.avviso("ritocco.aspetta_l_archivio", lavoro=lavoro_id)
+        self.lavoro.di(ASPETTA)
 
     def _fai(self, lavoro_id: int) -> list[dict]:
         with self.archivio.lettura() as connessione:
@@ -183,7 +197,8 @@ class Ritoccatore:
         except BaseException:
             for fatto in fatti:
                 if fatto.get("pronta"):
-                    copia.butta(Path(fatto["pronta"]))
+                    copia.via_la_pronta(self.archivio, fatto["file_id"],
+                                        Path(fatto["pronta"]), fatto["impronta_pronta"])
             raise
         return fatti
 
@@ -226,7 +241,10 @@ class Ritoccatore:
                 raise _Rimanda()
 
     def _un_file(self, lavoro_id: int, file_id: int) -> dict:
-        da = copia.partenza(self.archivio, file_id)
+        with self.archivio.lettura() as connessione:
+            media = file_media.per_id(connessione, file_id)
+        da = copia.partenza(self.archivio, file_id,
+                            media is not None and media["genere"] != "video")
         with self.archivio.lettura() as connessione:
             media = file_media.per_id(connessione, file_id)
             ritocchi = coda.da_disegnare(connessione, file_id, lavoro_id)
@@ -237,7 +255,7 @@ class Ritoccatore:
             return fatto
         self.adesso.update(nome=da.copia.name, fatti=0, totale=0)
         self.lavoro.di(f"ritocco «{da.copia.name}»")
-        sfida = self._la_sfida(media["genere"], ritocchi)
+        sfida = None if da.trovata is not None else self._la_sfida(media["genere"], ritocchi)
         if media["genere"] != "video":
             ritocchi_b = None
             if any(ritocco["genere"] == elenco.TOGLI for ritocco in ritocchi):
@@ -334,29 +352,24 @@ class Ritoccatore:
 
     def _togli_le_cose(self, lavoro_id: int, file_id: int, ritocchi, da,
                        lato_b: bool = False) -> None:
-        from officina.miglioria import metadati
-
-        with self.archivio.lettura() as connessione:
-            dove = attesa.cartella(connessione, da.copia)
+        dove = da.in_attesa(self.archivio)
         attesa.prepara(dove)
         toppe = copia.dove_le_toppe(da.copia)
         for indice, ritocco in enumerate(ritocchi):
             if (ritocco["genere"] != elenco.TOGLI or ritocco["stato"] != elenco.IN_CODA
-                    or (not lato_b and copia.toppa_pronta(ritocco))):
+                    or (not lato_b and copia.toppa_gia_fatta(ritocco))):
                 continue
             if self._fermati.is_set():
                 raise pellicola.Fermato()
-            if not da.sorgente.is_file() or impronta.del_file(da.sorgente) != da.impronta_base:
-                raise RitoccoFermato(copia.CAMBIATO)
-            sotto = copia.disegna(metadati.apri(da.sorgente).immagine, ritocchi[:indice])
+            da.ancora_lei()
+            sotto = copia.disegna(copia.apri(da.sorgente).immagine, ritocchi[:indice])
             pezzo = maschere.apri(ritocco["maschera"])
             if pezzo is None:
                 raise RitoccoFermato(coda.NIENTE)
             buco = maschere.intera(maschere.per_misura(pezzo, *sotto.size))
             base = dove / f"{copia.PREFISSO}-{int(file_id)}-{int(lavoro_id)}-sotto.png"
             forma = base.with_name(base.name.replace("-sotto", "-buco"))
-            toppe.mkdir(parents=True, exist_ok=True)
-            uscita = toppe / self._nome_della_toppa(copia.nome_della_toppa(ritocco["id"]), lato_b)
+            uscita = self._dove_la_toppa(da, dove, toppe, ritocco["id"], lato_b)
             sotto.convert("RGB").save(base)
             Image.fromarray(buco.astype("uint8") * 255, "L").save(forma)
             self.adesso.update(nome=da.copia.name, fatti=indice, totale=len(ritocchi))
@@ -367,6 +380,7 @@ class Ritoccatore:
                 self._processo = None
                 base.unlink(missing_ok=True)
                 forma.unlink(missing_ok=True)
+                uscita.with_name(uscita.name + ".parziale").unlink(missing_ok=True)
             if self._fermati.is_set():
                 uscita.unlink(missing_ok=True)
                 raise pellicola.Fermato()
@@ -459,6 +473,14 @@ class Ritoccatore:
     @staticmethod
     def _nome_della_toppa(nome: str, lato_b: bool) -> str:
         return copia.della_b(nome) if lato_b else nome
+
+    def _dove_la_toppa(self, da, dove: Path, toppe: Path, ritocco_id: int,
+                       lato_b: bool) -> Path:
+        if da.trovata is not None:
+            with self.archivio.lettura() as connessione:
+                return copia.toppa_in_attesa(connessione, dove, ritocco_id, lato_b)
+        toppe.mkdir(parents=True, exist_ok=True)
+        return toppe / self._nome_della_toppa(copia.nome_della_toppa(ritocco_id), lato_b)
 
     def _segna_la_toppa(self, ritocco, lato_b: bool, **campi):
         if lato_b:

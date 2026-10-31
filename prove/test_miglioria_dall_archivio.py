@@ -78,10 +78,17 @@ def _spia(monkeypatch) -> list:
     return mandate
 
 
+def _letto(percorso: Path) -> bytes:
+    try:
+        return percorso.read_bytes()
+    except FileNotFoundError:
+        return b""
+
+
 def _mai_in_chiaro(cartella: Path, dati: bytes) -> None:
     for percorso in cartella.rglob("*"):
         if percorso.is_file() and not percorso.is_symlink():
-            assert dati not in percorso.read_bytes(), percorso
+            assert dati not in _letto(percorso), percorso
 
 
 @pytest.mark.parametrize("genere, relativo, intero", [("immagine", FOTO, True),

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import statistics
 from pathlib import Path
 
 from officina import registro
 from officina.archivio.database import adesso, inserisci, tutti, uno
-from officina.miglioria import video
+from officina.miglioria import attesa, video
 from officina.modello import file_media
-from officina.ritocco import copia, elenco, pellicola, pixela, seguiti, sfida_togli
+from officina.ritocco import (copia, elenco, in_chiaro, pellicola, pixela, seguiti,
+                              sfida_togli)
 from officina.ritocco import tolti as persone_tolte
 from officina.ritocco.copia import RitoccoFermato
 
@@ -79,13 +81,15 @@ def in_stato(connessione: sqlite3.Connection, stato: str,
                  stato, quanti)
 
 
-def prossimo(connessione: sqlite3.Connection) -> sqlite3.Row | None:
+def prossimo(connessione: sqlite3.Connection, salta=()) -> sqlite3.Row | None:
     return uno(
         connessione,
-        "SELECT l.* FROM ritocchi_lavori AS l WHERE l.stato = ? ORDER BY EXISTS ("
+        "SELECT l.* FROM ritocchi_lavori AS l WHERE l.stato = ? AND l.id NOT IN ("
+        "SELECT value FROM json_each(?)) ORDER BY EXISTS ("
         "SELECT 1 FROM ritocchi AS r JOIN seguiti AS s ON s.id = r.seguito_id "
         "WHERE r.lavoro_id = l.id AND r.stato = ? AND s.stato <> ?), l.id LIMIT 1",
-        IN_CODA, elenco.IN_CODA, seguiti.SEGUITO)
+        IN_CODA, json.dumps(sorted({int(numero) for numero in salta})), elenco.IN_CODA,
+        seguiti.SEGUITO)
 
 
 def conteggi(connessione: sqlite3.Connection) -> dict[str, int]:
@@ -148,20 +152,25 @@ def scrivi_i_pronti(connessione: sqlite3.Connection, lavoro_id: int,
           fatto["impronta_base"], fatto.get("fotogrammi")) for fatto in fatti])
 
 
-def _togli_i_pronti(connessione: sqlite3.Connection, lavoro_id: int) -> list[Path]:
-    buttare = [Path(riga["pronta"]) for riga in pronti(connessione, lavoro_id)
-               if riga["pronta"]]
-    buttare += sfida_togli.lascia_il_lavoro(connessione, lavoro_id)
+def _togli_i_pronti(connessione: sqlite3.Connection, lavoro_id: int) -> list[tuple]:
+    buttare = [(Path(riga["pronta"]), riga["file_id"], riga["impronta_pronta"])
+               for riga in pronti(connessione, lavoro_id) if riga["pronta"]]
+    buttare += [(percorso, None, None)
+                for percorso in sfida_togli.lascia_il_lavoro(connessione, lavoro_id)]
     connessione.execute("DELETE FROM ritocchi_lavori_file WHERE lavoro_id = ?", (lavoro_id,))
     return buttare
 
 
-def _butta(pronte: list[Path]) -> None:
-    for pronta in pronte:
+def _butta(archivio, pronte: list[tuple]) -> None:
+    for pronta, file_id, sua in pronte:
         try:
             sfida_togli.butta([pronta])
         except OSError as errore:
             registro.avviso("ritocco.pronta_non_tolta", **registro.dove_si_e_rotto(errore))
+            if (file_id is not None and sua and attesa.e_dentro(pronta)
+                    and pronta.name.startswith(copia.PREFISSO)):
+                with archivio.scrittura() as connessione:
+                    in_chiaro.segna(connessione, file_id, pronta, sua)
 
 
 def _nuovo_lavoro(connessione: sqlite3.Connection, scatto_id: int) -> int:
@@ -170,13 +179,13 @@ def _nuovo_lavoro(connessione: sqlite3.Connection, scatto_id: int) -> int:
                      scatto_id, IN_CODA, adesso())
 
 
-def _per_aggiungere(connessione: sqlite3.Connection, scatto_id: int) -> tuple[int, list[Path]]:
+def _per_aggiungere(connessione: sqlite3.Connection, scatto_id: int) -> tuple[int, list]:
     lavoro = aperto_dello_scatto(connessione, scatto_id)
     if lavoro is None:
         return _nuovo_lavoro(connessione, scatto_id), []
     if lavoro["stato"] == IN_SCAMBIO:
         raise RitoccoFermato(SI_SALVA)
-    buttare: list[Path] = []
+    buttare: list[tuple] = []
     if lavoro["stato"] == DA_RIVEDERE:
         buttare = _togli_i_pronti(connessione, lavoro["id"])
         segna(connessione, lavoro["id"], IN_CODA, finito_il=None, guasto=None)
@@ -261,7 +270,7 @@ def metti(archivio, nuovi_ritocchi: list[dict]) -> int:
                     connessione.execute("UPDATE ritocchi SET gemello_id = ? WHERE id = ?",
                                         (secondo_id, primo_id))
             segna(connessione, lavoro_id, IN_CODA, stima=stima(connessione, lavoro_id))
-    _butta(buttare)
+    _butta(archivio, buttare)
     registro.evento("ritocco.in_coda", lavoro=lavoro_id, quanti=len(preparati))
     return lavoro_id
 
@@ -310,7 +319,7 @@ def togli(archivio, ritocco_id: int) -> int | None:
                              lavoro_id=lavoro_id if lavoro_id is not None else riga["lavoro_id"])
             if lavoro_id is not None:
                 segna(connessione, lavoro_id, IN_CODA, stima=stima(connessione, lavoro_id))
-        _butta(buttare)
+        _butta(archivio, buttare)
         if not subito:
             registro.evento("ritocco.da_togliere_in_coda", lavoro=lavoro_id)
             return lavoro_id
@@ -346,12 +355,13 @@ def approva(archivio, lavoro_id: int) -> None:
             try:
                 if riga["pronta"]:
                     copia.scambia(archivio, riga["file_id"], Path(riga["pronta"]),
-                                  riga["impronta_pronta"], riga["impronta_base"])
+                                  riga["impronta_pronta"], riga["impronta_base"], lavoro_id)
                 else:
                     copia.torna(archivio, riga["file_id"])
             except (RitoccoFermato, OSError) as errore:
                 perche = errore.messaggio if isinstance(errore, RitoccoFermato) else str(errore)
-                indietro = prima_volta and cambiati == 0
+                indietro = (prima_volta and cambiati == 0 and not copia.fermo_a_meta(
+                    archivio, riga["file_id"], riga["pronta"]))
                 with archivio.scrittura() as connessione:
                     segna(connessione, lavoro_id, DA_RIVEDERE if indietro else IN_SCAMBIO,
                           guasto=perche, deciso_il=None if indietro else adesso())
@@ -392,8 +402,8 @@ def _scarta(archivio, lavoro_id: int, da: str) -> None:
                             (elenco.RIFIUTATO, lavoro_id, elenco.IN_CODA))
         _rimetti_i_tolti(connessione, lavoro_id)
         segna(connessione, lavoro_id, RIFIUTATO, deciso_il=adesso())
-    _butta(buttare)
-    copia.butta_le_toppe(toppe)
+    _butta(archivio, buttare)
+    copia.butta_le_toppe(toppe, archivio)
 
 
 def rifiuta(archivio, lavoro_id: int) -> None:
@@ -418,12 +428,18 @@ def lascia_stare(archivio, lavoro_id: int) -> None:
 def fallisci(archivio, lavoro_id: int, perche: str) -> None:
     with archivio.scrittura() as connessione:
         buttare = _togli_i_pronti(connessione, lavoro_id)
+        toppe = [riga for riga in nuovi(connessione, lavoro_id)
+                 if copia.toppa_in_attesa_da_buttare(riga)]
+        connessione.executemany(
+            "UPDATE ritocchi SET risultato = NULL, impronta_risultato = NULL WHERE id = ?",
+            [(riga["id"],) for riga in toppe])
         connessione.execute(
             "UPDATE ritocchi SET stato = ?, guasto = ? WHERE lavoro_id = ? AND stato = ?",
             (elenco.FALLITO, perche, lavoro_id, elenco.IN_CODA))
         _rimetti_i_tolti(connessione, lavoro_id)
         segna(connessione, lavoro_id, FALLITO, guasto=perche, finito_il=adesso())
-    _butta(buttare)
+    _butta(archivio, buttare)
+    copia.butta_le_toppe(toppe, archivio)
     registro.errore("ritocco.lavoro_fallito", lavoro=lavoro_id)
 
 
@@ -449,13 +465,13 @@ def rimetti(archivio, lavoro_id: int) -> None:
 
 def ripara(archivio) -> dict:
     with archivio.scrittura() as connessione:
-        buttare: list[Path] = []
+        buttare: list[tuple] = []
         lasciati = in_stato(connessione, IN_LAVORO)
         for lavoro in lasciati:
             buttare += _togli_i_pronti(connessione, lavoro["id"])
             segna(connessione, lavoro["id"], IN_CODA, iniziato_il=None)
         da_finire = [lavoro["id"] for lavoro in in_stato(connessione, IN_SCAMBIO)]
-    _butta(buttare)
+    _butta(archivio, buttare)
     finiti = fermi = 0
     for lavoro_id in da_finire:
         try:

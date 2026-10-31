@@ -267,3 +267,32 @@ def test_nella_revisione_si_legge_il_ricontrollo(importato):
         [parte] = racconto.del_lavoro(connessione, lavoro_id, _file_id(importato))
     assert "rifatto 2 volte" in parte["dettaglio"]
     assert parte["avviso"].endswith("in alto a sinistra")
+
+
+class _CambiaLoScatto(Togliere):
+
+    def __init__(self, scatto: Path):
+        super().__init__()
+        self.scatto = scatto
+
+    def __call__(self, lavoro_togli: dict, ricorda) -> dict:
+        fatto = super().__call__(lavoro_togli, ricorda)
+        with self.scatto.open("ab") as file:
+            file.write(b"x")
+        return fatto
+
+
+def test_se_lo_scatto_cambia_mentre_si_tolgono_le_cose_si_ferma(importato, cartella):
+    scatto = cartella / "2019" / "gita.png"
+    piena = numpy.zeros((ALTA, LARGA), dtype=bool)
+    piena[10:40, 10:40] = True
+    seconda = {**_da_togliere(), "maschera": maschere.comprimi(piena, (0, 0), LARGA, ALTA)}
+    file_id = _file_id(importato)
+    lavoro_id = coda.metti(importato, [{"file_id": file_id, **_da_togliere()},
+                                       {"file_id": file_id, **seconda}])
+    togliere = _CambiaLoScatto(scatto)
+    _gira(importato, togliere)
+    with importato.lettura() as connessione:
+        riga = coda.per_id(connessione, lavoro_id)
+    assert riga["stato"] == coda.FALLITO and riga["guasto"] == copia.CAMBIATO
+    assert len(togliere.lavori) == 1

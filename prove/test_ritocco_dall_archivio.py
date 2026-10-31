@@ -31,7 +31,7 @@ from prove import test_miglioria_coda_dall_archivio as coda_di_prova
 from prove import test_miglioria_mostra_dall_archivio as mostra
 from prove import test_miglioria_scambio_dall_archivio as scambio_di_prova
 from prove.test_miglioria_coda_dall_archivio import ALTRA, FOTO, _file_id
-from prove.test_miglioria_dall_archivio import _mai_in_chiaro
+from prove.test_miglioria_dall_archivio import _letto, _mai_in_chiaro
 from prove.test_miglioria_scambio_dall_archivio import _Accoglie, _estrai, _eventi, _percorsi
 from prove.test_sicuro_cestino import CestinoFinto, Crollo
 from prove.test_sicuro_dall_archivio import (_impronta, _jpeg, _rovina, _Situazione,
@@ -189,7 +189,7 @@ def test_il_primo_ritocco_va_solo_nell_archivio(scena, tmp_path, monkeypatch):
     for percorso in tmp_path.rglob("*"):
         if (percorso.is_file() and not str(percorso).startswith(dentro)
                 and not str(percorso).startswith(str(tmp_path / "fuori"))):
-            assert percorso.read_bytes() != ritoccata, percorso
+            assert _letto(percorso) != ritoccata, percorso
 
 
 def test_la_copia_ritoccata_nell_archivio_ha_le_date_dello_scatto(scena):
@@ -1152,7 +1152,7 @@ def _mai_fuori_dal_cestino(scena, tmp_path, *tutti: bytes) -> None:
                 or str(percorso).startswith(dentro)
                 or percorso.relative_to(tmp_path).parts[0] in ("fuori", "dopo")):
             continue
-        contenuto = percorso.read_bytes()
+        contenuto = _letto(percorso)
         for dati in tutti:
             assert dati not in contenuto, percorso
 

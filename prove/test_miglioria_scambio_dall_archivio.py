@@ -28,7 +28,7 @@ from prove import test_miglioria_coda_dall_archivio as coda_di_prova
 from prove.test_miglioria import _riga
 from prove.test_miglioria_coda_dall_archivio import (ALTRA, FILMATO, FOTO, SOLE, _finta,
                                                      _gira, _metti)
-from prove.test_miglioria_dall_archivio import _mai_in_chiaro
+from prove.test_miglioria_dall_archivio import _letto, _mai_in_chiaro
 from prove.test_miglioria_sopra import _pronta as _pronta_sopra
 from prove.test_miglioria_sopra import _ritocca
 from prove.test_sicuro_cestino import CestinoFinto, Crollo
@@ -118,7 +118,7 @@ def test_il_si_mette_la_migliorata_nell_archivio_come_sul_disco(pronta, tmp_path
     dentro = pronta.casa.cestino.dentro
     for percorso in tmp_path.rglob("*"):
         if percorso.is_file() and not str(percorso).startswith(dentro):
-            assert percorso.read_bytes() != migliorata, percorso
+            assert _letto(percorso) != migliorata, percorso
     estratti = _estrai(pronta, tmp_path / "fuori")
     nome = f"foto/{relativo}"
     assert estratti[nome] == migliorata

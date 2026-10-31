@@ -13,7 +13,8 @@ from officina.importazione import impronta
 from officina.importazione.motore import Motore
 from officina.miglioria import attesa
 from officina.modello import file_media
-from officina.ritocco import coda, copia, elenco, lavoro, maschere, pellicola, pixela, seguiti
+from officina.ritocco import (coda, copia, elenco, in_chiaro, lavoro, maschere, pellicola,
+                              pixela, seguiti)
 from officina.ritocco.copia import RitoccoFermato
 from officina.web import coda_ritocco, in_disparte, lavori
 from officina.web import ritocco as ritocco_web
@@ -312,6 +313,38 @@ def test_se_la_copia_sparisce_il_si_non_tocca_niente(importato, cartella):
     riga = _lavoro(importato, lavoro_id)
     assert riga["stato"] == coda.DA_RIVEDERE and riga["guasto"]
     assert impronta.del_file(scatto) == prima
+
+
+def test_sul_disco_una_copia_rimasta_che_non_si_cancella_ferma_il_si(importato, cartella,
+                                                                      monkeypatch):
+    scatto = cartella / "2018" / "giro.mp4"
+    file_id = _file_di(importato, "giro.mp4")
+    lavoro_id = coda.metti(importato, [{"file_id": file_id,
+                                        "seguito_id": _seguito(importato, file_id)}])
+    _gira(_ritoccatore(importato))
+    pronta = Path(_pronti(importato, lavoro_id)[0]["pronta"])
+    dati = pronta.read_bytes()
+    coda.approva(importato, lavoro_id)
+    dopo = impronta.del_file(scatto)
+    with importato.scrittura() as connessione:
+        coda.segna(connessione, lavoro_id, coda.IN_SCAMBIO)
+    pronta.write_bytes(dati)
+
+    def non_si_cancella(percorso):
+        raise PermissionError(str(percorso))
+
+    with monkeypatch.context() as cambio:
+        cambio.setattr(copia, "butta", non_si_cancella)
+        with pytest.raises(PermissionError):
+            coda.approva(importato, lavoro_id)
+    riga = _lavoro(importato, lavoro_id)
+    assert riga["stato"] == coda.IN_SCAMBIO and riga["guasto"]
+    assert pronta.read_bytes() == dati and impronta.del_file(scatto) == dopo
+    with importato.lettura() as connessione:
+        assert in_chiaro.rimaste(connessione) == []
+    coda.approva(importato, lavoro_id)
+    assert _lavoro(importato, lavoro_id)["stato"] == coda.FATTO
+    assert not pronta.exists() and impronta.del_file(scatto) == dopo
 
 
 def test_all_avvio_la_coda_si_ripara_e_riparte(importato, cartella):
