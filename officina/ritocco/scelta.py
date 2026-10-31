@@ -166,7 +166,7 @@ class Sceglitore:
             return self._filmato
         self._filmato, self._chiave_del_filmato = None, None
         self._guardate.clear()
-        pronto = filmato.Filmato(Path(percorso), fermati=fermati or filmato._mai,
+        pronto = filmato.Filmato(percorso, fermati=fermati or filmato._mai,
                                  al_passo=al_passo)
         self._filmato, self._chiave_del_filmato = pronto, chiave
         return pronto

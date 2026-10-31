@@ -83,7 +83,7 @@ class Inseguitore:
         with self._lucchetto:
             self._lasciati.discard(seguito_id)
             self._ultimo_video = chiave
-            self._richieste[seguito_id] = (Path(cartella), Path(percorso), chiave)
+            self._richieste[seguito_id] = (Path(cartella), percorso, chiave)
             if self._gira:
                 if self._chi == seguito_id:
                     self.al_clic.ferma()

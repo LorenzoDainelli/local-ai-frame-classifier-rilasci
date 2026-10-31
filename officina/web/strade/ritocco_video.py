@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import binascii
 import time
-from pathlib import Path
 
 from fastapi import APIRouter, Request
 
@@ -12,7 +11,7 @@ from officina.errori import ErroreOfficina
 from officina.immagini import consegna
 from officina.miglioria import video
 from officina.modello import file_media
-from officina.ritocco import coda, elenco, scelta, seguiti, strumento
+from officina.ritocco import coda, copia, elenco, scelta, seguiti, strumento
 from officina.web import coda_ritocco, seguire
 from officina.web import ritocco as ritocco_web
 from officina.web.strade import ritocco as ritocco_strade
@@ -37,16 +36,18 @@ PARTI_AL_MASSIMO = 30
 COSE = ritocco_strade.COSE
 
 
-def _il_video(connessione, file_id: int) -> tuple:
-    riga = file_media.per_id(connessione, file_id)
+def _il_video(file_id: int) -> tuple:
+    archivio = accesso.aperto()
+    with archivio.lettura() as connessione:
+        riga = file_media.per_id(connessione, file_id)
     if riga is None or riga["genere"] != "video":
         raise ErroreOfficina(NON_E_UN_VIDEO, codice="ritocco_non_video")
-    percorso, impronta = file_media.da_mostrare_sotto(connessione, file_id)
-    if percorso is None or not Path(percorso).is_file():
+    percorso, impronta = copia.base_da_guardare(archivio, file_id)
+    if percorso is None or not percorso.is_file():
         raise ErroreOfficina(ritocco_strade.NON_C_E, codice="ritocco_senza_file")
-    if Path(percorso).suffix.casefold() not in video.CONTENITORI_TENUTI:
+    if percorso.suffix.casefold() not in video.CONTENITORI_TENUTI:
         raise ErroreOfficina(coda.FORMATO, codice="ritocco_formato")
-    return riga, Path(percorso), impronta or riga["impronta"]
+    return riga, percorso, impronta or riga["impronta"]
 
 
 def _foto_della_live(connessione, riga) -> int | None:
@@ -70,9 +71,9 @@ def _gia_fatti(connessione, file_id: int) -> list[dict]:
 
 def _pronto(file_id: int) -> dict:
     cartella = ritocco_strade._cartella_di_sam3()
+    riga, percorso, chiave = _il_video(file_id)
     archivio = accesso.aperto()
     with archivio.lettura() as connessione:
-        riga, percorso, chiave = _il_video(connessione, file_id)
         foto = _foto_della_live(connessione, riga)
         gia = _gia_fatti(connessione, file_id)
         bozze = seguiti.bozze(connessione, file_id, chiave)
@@ -87,14 +88,12 @@ def _pronto(file_id: int) -> dict:
 
 
 def _preparato(file_id: int) -> dict:
-    with accesso.aperto().lettura() as connessione:
-        _il_video(connessione, file_id)
+    _il_video(file_id)
     return seguire.inseguitore.video(file_id)
 
 
 def _pronto_per_scegliere(file_id: int) -> tuple:
-    with accesso.aperto().lettura() as connessione:
-        riga, percorso, chiave = _il_video(connessione, file_id)
+    riga, percorso, chiave = _il_video(file_id)
     preparato = seguire.inseguitore.video(file_id)
     if preparato.get("stato") != seguire.PRONTO or preparato.get("chiave") != chiave:
         raise ErroreOfficina(NON_PRONTO, codice="ritocco_video_non_pronto")
@@ -190,12 +189,13 @@ def _una_bozza(connessione, seguito_id: int):
 
 def _togli_correzione(seguito_id: int, fotogramma: int) -> dict:
     archivio = accesso.aperto()
-    with archivio.scrittura() as connessione:
+    with archivio.lettura() as connessione:
         riga = _una_bozza(connessione, seguito_id)
+    _, percorso, chiave = _il_video(riga["file_id"])
+    with archivio.scrittura() as connessione:
+        _una_bozza(connessione, seguito_id)
         if not seguiti.togli_scelta(connessione, seguito_id, fotogramma):
             raise ErroreOfficina(NON_SI_TOGLIE, codice="ritocco_ultima_scelta")
-    with archivio.lettura() as connessione:
-        _, percorso, chiave = _il_video(connessione, riga["file_id"])
     seguire.inseguitore.parti(seguito_id, ritocco_strade._cartella_di_sam3(), percorso, chiave)
     with archivio.lettura() as connessione:
         return _come_sta(connessione, seguito_id)
@@ -205,7 +205,7 @@ def _riprendi(seguito_id: int) -> dict:
     archivio = accesso.aperto()
     with archivio.lettura() as connessione:
         riga = _una_bozza(connessione, seguito_id)
-        _, percorso, chiave = _il_video(connessione, riga["file_id"])
+    _, percorso, chiave = _il_video(riga["file_id"])
     seguire.inseguitore.parti(seguito_id, ritocco_strade._cartella_di_sam3(), percorso, chiave)
     with archivio.lettura() as connessione:
         return _come_sta(connessione, seguito_id)
@@ -246,8 +246,8 @@ def _le_parti(connessione, file_id: int, chiave: str, parti: list[dict]) -> list
 
 
 def _stima(file_id: int, parti: list[dict], con_la_foto: bool) -> dict:
+    _, _, chiave = _il_video(file_id)
     with accesso.aperto().lettura() as connessione:
-        _, _, chiave = _il_video(connessione, file_id)
         quali = _le_parti(connessione, file_id, chiave, parti)
         scheda = ritocco_web.al_clic.ha_una_scheda
         secondi = coda.stima_prima(connessione, file_id, quali, con_la_foto=con_la_foto,
@@ -256,9 +256,9 @@ def _stima(file_id: int, parti: list[dict], con_la_foto: bool) -> dict:
 
 
 def _salva(file_id: int, parti: list[dict], foto: dict | None) -> dict:
+    riga, _, chiave = _il_video(file_id)
     archivio = accesso.aperto()
     with archivio.lettura() as connessione:
-        riga, _, chiave = _il_video(connessione, file_id)
         foto_della_live = _foto_della_live(connessione, riga)
         _le_parti(connessione, file_id, chiave, parti)
     pezzi: list[dict | None] = []
@@ -297,8 +297,8 @@ def _chiudi(file_id: int, butta: bool) -> dict:
             riga = file_media.per_id(connessione, file_id)
             bozze = []
             if riga is not None:
-                _, impronta = file_media.da_mostrare_sotto(connessione, file_id)
-                bozze = seguiti.bozze(connessione, file_id, impronta or riga["impronta"])
+                _, chiave = copia.base_per_la_coda(connessione, file_id)
+                bozze = seguiti.bozze(connessione, file_id, chiave)
         for seguito_id in bozze:
             seguire.inseguitore.aspetta(seguito_id, 10.0)
         with archivio.scrittura() as connessione:

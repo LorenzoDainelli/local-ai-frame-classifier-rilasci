@@ -242,6 +242,25 @@ def base_da_guardare(archivio, file_id: int) -> tuple[Path | DallArchivio | None
     return base.trovata, base.impronta
 
 
+def base_per_la_coda(connessione: sqlite3.Connection,
+                     file_id: int) -> tuple[str | None, str | None]:
+    riga = ritoccata(connessione, file_id)
+    if riga is not None:
+        return Path(riga["percorso_copia"]).name, riga["impronta_base"]
+    base = base_di_adesso(connessione, file_id)
+    if base is not None:
+        return base.percorso.name, base.impronta
+    migliorata = file_media.la_migliorata(connessione, file_id)
+    if migliorata is not None and migliorata["percorso_migliorata"]:
+        nome = Path(migliorata["percorso_migliorata"]).name
+        return nome, migliorata["impronta_migliorata"]
+    media = file_media.per_id(connessione, file_id)
+    percorsi = file_media.percorsi_di(connessione, file_id)
+    if media is None or not percorsi:
+        return None, None
+    return percorsi[0]["nome"] or Path(percorsi[0]["percorso"]).name, media["impronta"]
+
+
 def _date_nell_archivio(sua_impronta: str, dimensione: int | None, percorso) -> dict:
     from officina.programma import archivio_sicuro
 

@@ -8,6 +8,7 @@ from PIL import Image
 
 from officina.errori import ErroreOfficina
 from officina.immagini import fotogrammi
+from officina.sicuro.dall_archivio import DallArchivio, per_av
 
 LATO = 1008
 MISURE = ((2400, 1008, 90), (7200, 1008, 82), (18000, 720, 78), (None, 512, 72))
@@ -43,7 +44,7 @@ class Filmato:
     def __init__(self, percorso: Path, lato: int | None = None,
                  fermati: Callable[[], bool] = _mai,
                  al_passo: Callable[[int, int], None] | None = None):
-        self.percorso = Path(percorso)
+        self.percorso = percorso if isinstance(percorso, DallArchivio) else Path(percorso)
         self._quadri: list[bytes] = []
         self.istanti: list[int] = []
         self.inizio = 0
@@ -65,7 +66,7 @@ class Filmato:
             raise ErroreOfficina(NON_SI_APRE, codice="ritocco_video_non_si_apre")
         av = fotogrammi.decodificatore()
         try:
-            with av.open(str(self.percorso)) as contenitore:
+            with per_av(self.percorso) as sorgente, av.open(sorgente) as contenitore:
                 traccia = fotogrammi._la_traccia(contenitore)
                 if traccia is None:
                     raise ErroreOfficina(SENZA_FOTOGRAMMI, codice="ritocco_video_vuoto")

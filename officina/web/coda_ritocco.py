@@ -5,7 +5,7 @@ from pathlib import Path
 from officina import registro
 from officina.archivio.database import leggi_stato, scrivi_stato
 from officina.modello import file_media
-from officina.ritocco import coda, seguiti
+from officina.ritocco import coda, copia, seguiti
 from officina.ritocco.copia import RitoccoFermato
 from officina.web import lavori, sosta
 
@@ -36,7 +36,7 @@ class Seguitore:
 
         return ritocco_strade._cartella_di_sam3()
 
-    def _dove(self, seguito_id: int) -> tuple[Path, Path, str]:
+    def _dove(self, seguito_id: int) -> tuple:
         with self.archivio.lettura() as connessione:
             seguito = seguiti.per_id(connessione, seguito_id)
             if seguito is None:
@@ -44,12 +44,12 @@ class Seguitore:
             media = file_media.per_id(connessione, seguito["file_id"])
             if media is None:
                 raise RitoccoFermato(coda.NON_C_E)
-            percorso, chiave = file_media.da_mostrare_sotto(connessione, seguito["file_id"])
-        if percorso is None or not Path(percorso).is_file():
+        percorso, chiave = copia.base_da_guardare(self.archivio, seguito["file_id"])
+        if percorso is None or not percorso.is_file():
             raise RitoccoFermato(coda.NON_C_E)
         if (chiave or media["impronta"]) != seguito["impronta"]:
             raise RitoccoFermato(coda.SEGUITO_VECCHIO)
-        return self._la_cartella(), Path(percorso), seguito["impronta"]
+        return self._la_cartella(), percorso, seguito["impronta"]
 
     def _prendi(self, lavoro) -> bool:
         turno = lavori.turno

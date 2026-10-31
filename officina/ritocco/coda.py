@@ -195,8 +195,10 @@ def _per_aggiungere(connessione: sqlite3.Connection, scatto_id: int) -> tuple[in
 
 def _dal_seguito(connessione: sqlite3.Connection, media: sqlite3.Row, campi: dict) -> dict:
     file_id = media["id"]
-    percorso = file_media.percorso_migliore(connessione, file_id)
-    if percorso is None or percorso.suffix.casefold() not in video.CONTENITORI_TENUTI:
+    nome, chiave = copia.base_per_la_coda(connessione, file_id)
+    if nome is None:
+        raise RitoccoFermato(NON_C_E)
+    if Path(nome).suffix.casefold() not in video.CONTENITORI_TENUTI:
         raise RitoccoFermato(FORMATO)
     genere = campi.get("genere") or elenco.PIXELA
     if genere not in (elenco.PIXELA, elenco.TOGLI):
@@ -204,8 +206,7 @@ def _dal_seguito(connessione: sqlite3.Connection, media: sqlite3.Row, campi: dic
     seguito = seguiti.per_id(connessione, int(campi.get("seguito_id") or 0))
     if seguito is None or seguito["file_id"] != file_id:
         raise RitoccoFermato(NON_SEGUITO)
-    _, chiave = file_media.da_mostrare_sotto(connessione, file_id)
-    if seguito["impronta"] != (chiave or media["impronta"]):
+    if seguito["impronta"] != chiave:
         raise RitoccoFermato(SEGUITO_VECCHIO)
     scelte = seguiti.scelte(connessione, seguito["id"])
     if not scelte:

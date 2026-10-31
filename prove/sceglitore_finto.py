@@ -87,7 +87,7 @@ class Finto:
 
         if getattr(self, "_filmato", None) is not None and self._chiave_del_filmato == chiave:
             return self._filmato
-        self._filmato = filmato.Filmato(Path(percorso), fermati=fermati or filmato._mai,
+        self._filmato = filmato.Filmato(percorso, fermati=fermati or filmato._mai,
                                         al_passo=al_passo)
         self._chiave_del_filmato = chiave
         return self._filmato
@@ -98,7 +98,9 @@ class Finto:
         pronto = self.prepara(chiave, percorso, al_passo, fermati)
         with open(self.cartella / SEGUITI, "a", encoding="utf-8") as scritto:
             scritto.write(json.dumps({"tratti": [[t.da, t.inizio, t.fine] for t in tratti],
-                                      "dove": self._dove(), "pid": os.getpid()}) + "\n")
+                                      "dove": self._dove(), "pid": os.getpid(),
+                                      "percorso": str(percorso), "quanti": pronto.quanti})
+                          + "\n")
         fatti = 0
         for tratto in tratti:
             pezzo = maschere.per_misura(maschere.apri(scelte[tratto.da]), pronto.larghezza,

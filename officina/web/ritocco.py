@@ -114,7 +114,8 @@ def _prepara(sceglitore, numero, chiave, percorso, notizia, fermati) -> tuple:
         if fatti % OGNI_QUANTI == 0:
             notizia(("passo", numero, {"preparati": fatti, "attesi": attesi}))
 
-    pronto = sceglitore.prepara(chiave, Path(percorso), al_passo, fermati)
+    with _la_foto(percorso) as video:
+        pronto = sceglitore.prepara(chiave, video, al_passo, fermati)
     return ("fatto", numero, {"quanti": pronto.quanti, "larghezza": pronto.larghezza,
                               "altezza": pronto.altezza, "istanti": list(pronto.istanti),
                               "inizio": int(getattr(pronto, "inizio", 0))})
@@ -137,10 +138,11 @@ def _segui(sceglitore, numero, chiave, percorso, scelte, tratti, sulla_scheda, n
             notizia(("passo", numero, {"preparati": fatti, "attesi": attesi}))
 
     pezzi = [segui.Tratto(*tratto) for tratto in tratti]
-    dati = _con_riserva(
-        sceglitore, lambda scheda: sceglitore.segui(chiave, Path(percorso), scelte, pezzi,
-                                                    scheda, al_fotogramma, al_passo, fermati),
-        sulla_scheda)
+    with _la_foto(percorso) as video:
+        dati = _con_riserva(
+            sceglitore, lambda scheda: sceglitore.segui(chiave, video, scelte, pezzi, scheda,
+                                                        al_fotogramma, al_passo, fermati),
+            sulla_scheda)
     if pila:
         notizia(("passo", numero, {"fotogrammi": list(pila)}))
     return ("fatto", numero, {**dati, "fermato": bool(fermati())})
@@ -290,14 +292,14 @@ class AlClic:
                             riquadro, fotogramma)
 
     def prepara(self, cartella: Path, chiave: str, percorso: Path, al_passo=None) -> dict:
-        return self._chiedi(cartella, "prepara", chiave, str(percorso), al_passo=al_passo,
-                            scheda=False)
+        return self._chiedi(cartella, "prepara", chiave, _da_mandare(percorso),
+                            al_passo=al_passo, scheda=False)
 
     def segui(self, cartella: Path, chiave: str, percorso: Path, scelte: dict, tratti: list,
               al_passo=None, scheda: bool | None = None, sfondo=None) -> dict:
         pezzi = [(tratto.da, tratto.inizio, tratto.fine) for tratto in tratti]
-        return self._chiedi(cartella, "segui", chiave, str(percorso), dict(scelte), pezzi,
-                            al_passo=al_passo, scheda=scheda, sfondo=sfondo)
+        return self._chiedi(cartella, "segui", chiave, _da_mandare(percorso), dict(scelte),
+                            pezzi, al_passo=al_passo, scheda=scheda, sfondo=sfondo)
 
     def ferma(self) -> None:
         self._fermo.set()
