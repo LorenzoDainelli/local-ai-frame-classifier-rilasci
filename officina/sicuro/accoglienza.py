@@ -19,6 +19,9 @@ from officina.sicuro.sottofondo import PAUSA_SE_USI, Sottofondo
 VERSIONE_DIVERSA = "versione_diversa"
 NON_C_E = "non_c_e"
 SENZA_CASA = "senza_casa"
+SOSTITUISCI = "sostituisci"
+RIMETTI = "rimetti"
+AGGIUNGI = "aggiungi"
 DATE = ("modifica", "accesso", "creazione")
 _IMPRONTA = re.compile(r"[0-9a-f]{64}")
 DOPO = " Non ho cambiato niente nell'archivio."
@@ -43,6 +46,12 @@ MESSAGGI = {
                   "in modi diversi, con maiuscole e minuscole: non scelgo io quale usare."
                   + DOPO),
     "non_portato": NON_PORTATO,
+    "base_non_c_e": ("Nell'Archivio sicuro non trovo lo scatto senza ritocchi al suo posto."
+                     + DOPO),
+    "al_posto_della_base_c_e_altro": ("Nell'Archivio sicuro, al posto dello scatto senza "
+                                      "ritocchi, adesso c'è un altro file." + DOPO),
+    "al_posto_della_copia_c_e_altro": ("Nell'Archivio sicuro, al posto della copia "
+                                       "ritoccata, adesso c'è un altro file." + DOPO),
 }
 
 
@@ -135,6 +144,18 @@ class _Domanda:
         return domanda
 
 
+def _campi(richiesta: dict, percorsi: tuple[str, ...], impronte: tuple[str, ...]) -> dict:
+    try:
+        campi = {nome: richiesta[nome] for nome in (*percorsi, *impronte)}
+    except KeyError as errore:
+        raise _rifiuta("richiesta_strana") from errore
+    if (not all(isinstance(campi[nome], str) and campi[nome] for nome in percorsi)
+            or not all(isinstance(campi[nome], str) and _IMPRONTA.fullmatch(campi[nome])
+                       for nome in impronte)):
+        raise _rifiuta("richiesta_strana")
+    return campi
+
+
 def _assoluto(radice: dict, relativo: str) -> str:
     return os.path.join(radice["percorso"], *relativo.split("/"))
 
@@ -172,77 +193,167 @@ class Accoglitore:
     def accogli(self, richiesta: dict) -> dict:
         self.scritto = False
         self.esito = None
-        domanda = _Domanda.da(richiesta)
+        come = richiesta.get("come") if isinstance(richiesta, dict) else None
+        if come is None:
+            return self._scambia(_Domanda.da(richiesta))
+        if come == SOSTITUISCI:
+            return self._sostituisci(_campi(richiesta, ("copia", "nuova", "base"), (
+                "impronta", "impronta_nuova", "impronta_base")))
+        if come == RIMETTI:
+            return self._rimetti(_campi(richiesta, ("copia", "base"),
+                                        ("impronta", "impronta_base")))
+        if come == AGGIUNGI:
+            return self._aggiungi(_campi(richiesta, ("nuova", "verso", "base"),
+                                         ("impronta_nuova", "impronta_base")))
+        raise _rifiuta("richiesta_strana")
+
+    def _scambia(self, domanda: _Domanda) -> dict:
         numeri = set(self.elenco.con_impronta(domanda.impronta, domanda.dimensione))
         if not numeri:
             raise _rifiuta(NON_C_E)
-        radice, (originale, verso, spostato) = self._radice(domanda, numeri)
-        verso, spostato = self._nomi(radice["id"], originale, verso, spostato)
+        radice, (originale, verso, spostato) = self._radice(
+            (domanda.originale, domanda.verso, domanda.spostato), numeri,
+            "originale_non_c_era")
+        verso, spostato = self._nomi(radice["id"], {originale}, verso, spostato)
         prima = self.elenco.attuale(radice["id"], originale)
         dove_va = self.elenco.attuale(radice["id"], verso)
         gia = self.elenco.attuale(radice["id"], spostato)
         if gia is not None:
             if (_e_lei(gia, numeri) and CUSTODITO in gia.segni
                     and self._e_la_nuova(dove_va, domanda.impronta_nuova)):
-                self.scritto = True
-                self.elenco.salva()
-                return self._fatto(radice, dove_va.contenuto, verso, spostato, True)
+                return self._gia_fatto(radice, dove_va.contenuto, verso, spostato)
             raise _rifiuta("c_e_gia")
         ritrovata = dove_va if self._e_la_nuova(dove_va, domanda.impronta_nuova) else None
         if dove_va is not None and ritrovata is None and verso != originale:
             raise _rifiuta("c_e_gia")
-        vecchio = self._vecchio(radice, originale, prima, ritrovata, numeri)
-        self._disco_libero(radice, domanda, verso, spostato)
-        portato = None
-        if ritrovata is None:
-            self._basta_lo_spazio(domanda.nuova)
-            portato = self.copiatore.porta_intero(radice, verso, domanda.nuova,
-                                                  domanda.impronta_nuova,
-                                                  segni=(CUSTODITO,))
-        chiave = registro.nuova_chiave()
-        try:
-            fatti = self._fatti(radice["id"], originale, spostato, chiave, vecchio, portato,
-                                ritrovata)
-            self.elenco.registra(fatti)
-        except BaseException:
-            self.scritto = self._forse_scritto(chiave)
-            if not self.scritto and portato is not None and portato.nuovo:
-                self.copiatore.togli_il_nuovo(portato.numero)
-            raise
-        self.scritto = True
-        self.elenco.scrivi_nota(fatti)
-        self.elenco.salva()
+        vecchio = self._vecchio(radice, originale, prima, ritrovata, numeri,
+                                "al_posto_c_e_altro", "originale_non_c_era")
+        self._disco_libero(radice, (domanda.originale,), (
+            domanda.verso, domanda.spostato, _assoluto(radice, verso),
+            _assoluto(radice, spostato)))
+        portato = self._porta(radice, verso, domanda.nuova, domanda.impronta_nuova,
+                              ritrovata)
+
+        def fatti(adesso: float) -> list[dict]:
+            return [*self._portati(portato),
+                    *self._trasloco(radice["id"], spostato, vecchio, adesso),
+                    *self._spariti(radice["id"], originale, ritrovata, adesso)]
+
+        self._scrivi(fatti, portato)
         numero = portato.numero if portato is not None else ritrovata.contenuto
         return self._fatto(radice, numero, verso, spostato, False)
 
-    def _fatto(self, radice: dict, numero: str, verso: str, spostato: str,
+    def _sostituisci(self, campi: dict) -> dict:
+        radice, numeri, copia, verso, base = self._della_base(campi, "copia")
+        ora = self.elenco.attuale(radice["id"], base)
+        if ora is not None and not _e_lei(ora, numeri):
+            raise _rifiuta("al_posto_della_base_c_e_altro")
+        dove_va = self.elenco.attuale(radice["id"], verso)
+        ritrovata = dove_va if self._e_la_nuova(dove_va, campi["impronta_nuova"]) else None
+        self._prima_la_copia(radice, campi, copia, verso, dove_va, ritrovata)
+        if ritrovata is not None and not self._altri(radice["id"], copia, ritrovata):
+            return self._gia_fatto(radice, ritrovata.contenuto, verso, None)
+        self._disco_libero(radice, (), (campi["copia"], _assoluto(radice, verso)))
+        portato = self._porta(radice, verso, campi["nuova"], campi["impronta_nuova"],
+                              ritrovata)
+
+        def fatti(adesso: float) -> list[dict]:
+            return [*self._portati(portato),
+                    *self._spariti(radice["id"], copia, ritrovata, adesso)]
+
+        self._scrivi(fatti, portato)
+        numero = portato.numero if portato is not None else ritrovata.contenuto
+        return self._fatto(radice, numero, verso, None, False)
+
+    def _rimetti(self, campi: dict) -> dict:
+        radice, numeri, copia, verso, base = self._della_base(campi, "copia")
+        dove_va = self.elenco.attuale(radice["id"], verso)
+        ritrovata = (dove_va if _e_lei(dove_va, numeri) and CUSTODITO in dove_va.segni
+                     else None)
+        self._prima_la_copia(radice, campi, copia, verso, dove_va, ritrovata)
+        ora = self.elenco.attuale(radice["id"], base)
+        vecchio = self._vecchio(radice, base, ora, None, numeri,
+                                "al_posto_della_base_c_e_altro", "base_non_c_e")
+        if (ritrovata is not None and ora is None
+                and not self._altri(radice["id"], copia, ritrovata)):
+            return self._gia_fatto(radice, ritrovata.contenuto, verso, None)
+        self._disco_libero(radice, (campi["base"],), (campi["copia"],
+                                                      _assoluto(radice, verso)))
+
+        def fatti(adesso: float) -> list[dict]:
+            tornato = ([] if ritrovata is not None
+                       else self._trasloco(radice["id"], verso, vecchio, adesso))
+            return [*tornato, *self._spariti(radice["id"], copia, ritrovata, adesso),
+                    *self._spariti(radice["id"], base, None, adesso)]
+
+        self._scrivi(fatti, None)
+        numero = vecchio.contenuto if ritrovata is None else ritrovata.contenuto
+        return self._fatto(radice, numero, verso, None, False)
+
+    def _aggiungi(self, campi: dict) -> dict:
+        radice, _, _, verso, _ = self._della_base(campi, "verso", nuovo=True)
+        dove_va = self.elenco.attuale(radice["id"], verso)
+        if dove_va is not None:
+            if self._e_la_nuova(dove_va, campi["impronta_nuova"]):
+                return self._gia_fatto(radice, dove_va.contenuto, verso, None)
+            raise _rifiuta("c_e_gia")
+        self._disco_libero(radice, (), (campi["verso"], _assoluto(radice, verso)))
+        portato = self._porta(radice, verso, campi["nuova"], campi["impronta_nuova"], None)
+        self._scrivi(lambda adesso: self._portati(portato), portato)
+        return self._fatto(radice, portato.numero, verso, None, False)
+
+    def _della_base(self, campi: dict, dove: str, nuovo: bool = False) -> tuple:
+        numeri = set(self.elenco.con_impronta(campi["impronta_base"]))
+        if not numeri:
+            raise _rifiuta("base_non_c_e")
+        radice, (base, percorso) = self._radice((campi["base"], campi[dove]), numeri,
+                                                "base_non_c_e")
+        verso, = self._nomi(radice["id"], set() if nuovo else {percorso}, percorso)
+        return radice, numeri, percorso, verso, base
+
+    def _prima_la_copia(self, radice: dict, campi: dict, copia: str, verso: str, dove_va,
+                        ritrovata) -> None:
+        if dove_va is not None and ritrovata is None and verso != copia:
+            raise _rifiuta("c_e_gia")
+        prima = self.elenco.attuale(radice["id"], copia)
+        if (prima is not None and (ritrovata is None or prima.chiave != ritrovata.chiave)
+                and not _e_lei(prima, set(self.elenco.con_impronta(campi["impronta"])))):
+            raise _rifiuta("al_posto_della_copia_c_e_altro")
+
+    def _gia_fatto(self, radice: dict, numero: str, verso: str,
+                   spostato: str | None) -> dict:
+        self.scritto = True
+        self.elenco.salva()
+        return self._fatto(radice, numero, verso, spostato, True)
+
+    def _fatto(self, radice: dict, numero: str, verso: str, spostato: str | None,
                gia_fatto: bool) -> dict:
         self.esito = {"numero": numero, "gia_fatto": gia_fatto,
                       "verso": _assoluto(radice, verso),
-                      "spostato": _assoluto(radice, spostato)}
+                      "spostato": None if spostato is None else _assoluto(radice, spostato)}
         return self.esito
 
-    def _radice(self, domanda: _Domanda, numeri: set[str]) -> tuple[dict, tuple]:
+    def _radice(self, percorsi: tuple[str, ...], numeri: set[str],
+                mai: str) -> tuple[dict, tuple]:
         dentro = False
         for radice in self.elenco.radici():
             if radice["tolta"]:
                 continue
             relativi = tuple(_dentro_la_radice(radice["percorso"], percorso)
-                             for percorso in (domanda.originale, domanda.verso,
-                                              domanda.spostato))
+                             for percorso in percorsi)
             if not relativi[0]:
                 continue
             dentro = True
             if not all(relativi) or not all(self._pulito(relativo)
                                             for relativo in relativi):
                 raise _rifiuta("richiesta_strana")
-            originale, verso, spostato = map(registro.piegato, relativi)
-            if spostato in (originale, verso):
+            *prima, ultimo = map(registro.piegato, relativi)
+            if ultimo in prima:
                 raise _rifiuta("richiesta_strana")
             storia = self.elenco.storia(radice["id"], relativi[0])
             if any(_e_lei(posto, numeri) for posto in storia):
                 return radice, relativi
-        raise _rifiuta("originale_non_c_era" if dentro else "fuori_dall_archivio")
+        raise _rifiuta(mai if dentro else "fuori_dall_archivio")
 
     @staticmethod
     def _pulito(relativo: str) -> bool:
@@ -259,27 +370,26 @@ class Accoglitore:
         return (informazioni is not None and informazioni["blake2b"] == impronta
                 and informazioni["stato"] in STATI_BUONI)
 
-    def _vecchio(self, radice: dict, originale: str, prima, ritrovata,
-                 numeri: set[str]) -> registro.Posto:
+    def _vecchio(self, radice: dict, percorso: str, prima, ritrovata, numeri: set[str],
+                 altro: str, mai: str) -> registro.Posto:
         if prima is not None and (ritrovata is None or prima.chiave != ritrovata.chiave):
             if not _e_lei(prima, numeri):
-                raise _rifiuta("al_posto_c_e_altro")
+                raise _rifiuta(altro)
             return prima
-        storia = self.elenco.storia(radice["id"], originale)
+        storia = self.elenco.storia(radice["id"], percorso)
         vecchio = next((posto for posto in reversed(storia) if _e_lei(posto, numeri)),
                        None)
         if vecchio is None:
-            raise _rifiuta("originale_non_c_era")
+            raise _rifiuta(mai)
         return vecchio
 
-    def _nomi(self, radice: str, originale: str, verso: str,
-              spostato: str) -> tuple[str, str]:
-        sopra = {"/".join(parti[:fine]) for parti in (verso.split("/"), spostato.split("/"))
+    def _nomi(self, radice: str, gia: set[str], *nuovi: str) -> tuple[str, ...]:
+        sopra = {"/".join(parti[:fine]) for parti in (nuovo.split("/") for nuovo in nuovi)
                  for fine in range(1, len(parti))}
         piegati = {registro.piegato(percorso) for percorso in sopra}
         cartelle: dict[str, set[str]] = {}
         uguali = set()
-        for posto in self.elenco.omonimi(radice, (*sopra, verso, spostato)):
+        for posto in self.elenco.omonimi(radice, (*sopra, *nuovi)):
             piegato = registro.piegato(posto.percorso)
             if piegato not in piegati:
                 uguali.add(posto.percorso)
@@ -287,8 +397,8 @@ class Accoglitore:
                 raise _rifiuta("c_e_gia")
             else:
                 cartelle.setdefault(piegato, set()).add(posto.percorso.rsplit("/", 1)[-1])
-        nomi = (self._come(verso, cartelle), self._come(spostato, cartelle))
-        if uguali - {originale, *nomi}:
+        nomi = tuple(self._come(nuovo, cartelle) for nuovo in nuovi)
+        if uguali - {*gia, *nomi}:
             raise _rifiuta("c_e_gia")
         return nomi
 
@@ -304,13 +414,11 @@ class Accoglitore:
         return "/".join(parti)
 
     @staticmethod
-    def _disco_libero(radice: dict, domanda: _Domanda, verso: str, spostato: str) -> None:
+    def _disco_libero(radice: dict, liberi: tuple[str, ...], nuovi: tuple[str, ...]) -> None:
         cima = Path(radice["percorso"]).anchor
         if cima and not os.path.isdir(percorso_lungo(cima)):
             raise _rifiuta("disco_staccato")
-        nuovi = (domanda.verso, domanda.spostato, _assoluto(radice, verso),
-                 _assoluto(radice, spostato))
-        for percorso in (domanda.originale, *nuovi):
+        for percorso in (*liberi, *nuovi):
             if os.path.lexists(percorso_lungo(percorso)):
                 raise _rifiuta("sul_disco")
         if not all(_sopra_c_e_una_cartella(percorso) for percorso in nuovi):
@@ -325,24 +433,57 @@ class Accoglitore:
         if libero - formato.peso_previsto(dimensione) < margine(totale):
             raise _rifiuta("spazio_archivio")
 
-    def _fatti(self, radice: str, originale: str, spostato: str, chiave: str,
-               vecchio: registro.Posto, portato, ritrovata) -> list[dict]:
-        adesso = self._adesso()
-        fatti = list(portato.fatti) if portato is not None else []
-        fatti.append(registro.fatto_posto(
-            radice, spostato, metadati.FILE, vecchio.contenuto, vecchio.metadati,
-            segni=(*vecchio.segni, CUSTODITO), chiave=chiave, quando=adesso))
-        fatti += [registro.fatto_flusso(chiave, nome, numero)
-                  for nome, numero in self.elenco.flussi_di(vecchio.chiave)]
-        resta = None if ritrovata is None else ritrovata.chiave
-        fatti += [registro.fatto_sparito(posto.chiave, adesso)
-                  for posto in self.elenco.storia(radice, originale)
-                  if posto.sparito is None and posto.chiave != resta]
-        return fatti
+    def _porta(self, radice: dict, verso: str, nuova: str, impronta: str, ritrovata):
+        if ritrovata is not None:
+            return None
+        self._basta_lo_spazio(nuova)
+        return self.copiatore.porta_intero(radice, verso, nuova, impronta,
+                                           segni=(CUSTODITO,))
 
-    def _forse_scritto(self, chiave: str) -> bool:
+    @staticmethod
+    def _portati(portato) -> list[dict]:
+        return [] if portato is None else list(portato.fatti)
+
+    def _trasloco(self, radice: str, percorso: str, vecchio: registro.Posto,
+                  adesso: float) -> list[dict]:
+        chiave = registro.nuova_chiave()
+        return [registro.fatto_posto(radice, percorso, metadati.FILE, vecchio.contenuto,
+                                     vecchio.metadati, segni=(*vecchio.segni, CUSTODITO),
+                                     chiave=chiave, quando=adesso),
+                *(registro.fatto_flusso(chiave, nome, numero)
+                  for nome, numero in self.elenco.flussi_di(vecchio.chiave))]
+
+    def _altri(self, radice: str, percorso: str, resta) -> list[registro.Posto]:
+        tieni = None if resta is None else resta.chiave
+        return [posto for posto in self.elenco.storia(radice, percorso)
+                if posto.sparito is None and posto.chiave != tieni]
+
+    def _spariti(self, radice: str, percorso: str, resta, adesso: float) -> list[dict]:
+        return [registro.fatto_sparito(posto.chiave, adesso)
+                for posto in self._altri(radice, percorso, resta)]
+
+    def _scrivi(self, fai, portato) -> None:
+        fatti: list[dict] = []
         try:
-            return self.elenco.posto(chiave) is not None
+            fatti = fai(self._adesso())
+            self.elenco.registra(fatti)
+        except BaseException:
+            self.scritto = self._forse_scritto(fatti)
+            if not self.scritto and portato is not None and portato.nuovo:
+                self.copiatore.togli_il_nuovo(portato.numero)
+            raise
+        self.scritto = True
+        self.elenco.scrivi_nota(fatti)
+        self.elenco.salva()
+
+    def _forse_scritto(self, fatti: list[dict]) -> bool:
+        try:
+            for fatto in fatti:
+                if fatto["fatto"] == "posto":
+                    return self.elenco.posto(fatto["chiave"]) is not None
+                if fatto["fatto"] == "sparito":
+                    return self.elenco.posto(fatto["chiave"]).sparito is not None
+            return False
         except Exception:
             return True
 
@@ -374,5 +515,5 @@ class Accoglienza(Sottofondo):
                 "esito": None if esito is None else dict(esito)}
 
 
-__all__ = ["Accoglienza", "Accoglitore", "MESSAGGI", "NON_C_E", "Rifiutata", "SENZA_CASA",
-           "VERSIONE_DIVERSA", "casa"]
+__all__ = ["AGGIUNGI", "Accoglienza", "Accoglitore", "MESSAGGI", "NON_C_E", "RIMETTI",
+           "Rifiutata", "SENZA_CASA", "SOSTITUISCI", "VERSIONE_DIVERSA", "casa"]
