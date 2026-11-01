@@ -229,28 +229,24 @@ def test_un_file_che_non_si_cancella_al_voto_resta_segnato(in_due, monkeypatch, 
     assert _mosse(in_due) == [bloccato] and _rimaste(in_due) == []
 
 
-def test_rifatto_dopo_la_b_il_nome_della_nuova_b_non_tocca_la_toppa_scelta(in_due,
-                                                                          monkeypatch):
+def test_rifatto_dopo_la_b_resta_il_voto_e_la_toppa_scelta(in_due, monkeypatch):
     lavoro_id, _, ritocco, _, togli = _in_sfida(in_due)
     cliente = _cliente(in_due, monkeypatch)
     _vota(cliente, lavoro_id, in_due.file_id, "B")
+    votata = dict(_sfida(in_due, lavoro_id))
     scelta = Path(_ritocco(in_due, ritocco["id"])["risultato"])
     dati_scelta = scelta.read_bytes()
     assert scelta.name == copia.della_b(copia.nome_della_toppa(ritocco["id"]))
+    fatti = len(togli.lavori)
     assert coda.metti(in_due.archivio, [_da_togliere(in_due, ALTRA_ZONA)]) == lavoro_id
     _gira(in_due, togli)
     assert _lavoro(in_due, lavoro_id)["stato"] == coda.DA_RIVEDERE
+    assert len(togli.lavori) == fatti + 1
     primo, secondo = _del_lavoro(in_due, lavoro_id)
     assert primo["id"] == ritocco["id"] and primo["risultato"] == str(scelta)
     assert scelta.read_bytes() == dati_scelta
-    riga = _sfida(in_due, lavoro_id)
-    assert riga["voto"] is None
-    nuove = {chiave: Path(toppa["risultato"]).name
-             for chiave, toppa in json.loads(riga["toppe_b"]).items()}
-    assert nuove == {str(primo["id"]): f"togli-{primo['id']}-a1-b.png",
-                     str(secondo["id"]): f"togli-{secondo['id']}-b.png"}
-    _vota(cliente, lavoro_id, in_due.file_id, "A")
-    assert scelta.read_bytes() == dati_scelta
+    assert dict(_sfida(in_due, lavoro_id)) == votata
+    assert Path(secondo["risultato"]).name == f"togli-{secondo['id']}.png"
     assert sorted(_in_attesa(in_due)) == sorted(
         [scelta, Path(secondo["risultato"]), *_pronte(in_due, lavoro_id)])
     coda.approva(in_due.archivio, lavoro_id)
@@ -272,29 +268,34 @@ def test_la_b_votata_non_butta_la_toppa_a_che_sta_nell_archivio(in_due, monkeypa
     spia.prima = spia.modo = None
     verso = _nell_archivio(in_due, ritocco)
     assert _ritocco(in_due, ritocco["id"])["risultato"] == str(verso)
+    votata = dict(_sfida(in_due, lavoro_id))
     coda.metti(in_due.archivio, [_da_togliere(in_due, ALTRA_ZONA)])
     _gira(in_due, togli)
-    riga = _sfida(in_due, lavoro_id)
-    assert riga["voto"] is None and str(ritocco["id"]) in json.loads(riga["toppe_b"])
+    assert dict(_sfida(in_due, lavoro_id)) == votata
     assert _ritocco(in_due, ritocco["id"])["risultato"] == str(verso)
+    [_, secondo] = _del_lavoro(in_due, lavoro_id)
+    assert attesa.e_dentro(Path(secondo["risultato"]))
     verso.parent.mkdir(parents=True)
     verso.write_bytes(b"un altro")
-    _vota(_cliente(in_due, monkeypatch), lavoro_id, in_due.file_id, "B")
+    with in_due.archivio.lettura() as connessione:
+        buttare = [voce for voce in sfida_togli.file_della_a(
+            connessione, _sfida(in_due, lavoro_id)) if voce.percorso == verso]
+    assert [voce.ritocco_id for voce in buttare] == [ritocco["id"]]
+    sfida_togli.butta(buttare)
     assert verso.read_bytes() == b"un altro"
     verso.unlink()
     verso.parent.rmdir()
     verso.parent.parent.rmdir()
-    nuova = _ritocco(in_due, ritocco["id"])
-    assert attesa.e_dentro(Path(nuova["risultato"])) and Path(nuova["risultato"]).is_file()
+    assert _ritocco(in_due, ritocco["id"])["risultato"] == str(verso)
     coda.approva(in_due.archivio, lavoro_id)
     assert _lavoro(in_due, lavoro_id)["stato"] == coda.FATTO
     assert _in_attesa(in_due) == [] and _rimaste(in_due) == []
     assert _storia(in_due, _relativo(in_due, verso)) == [
         (ritocco["impronta_risultato"], True)]
-    nuovo_verso = _nell_archivio(in_due, nuova)
+    nuovo_verso = _nell_archivio(in_due, secondo)
     assert nuovo_verso != verso
     assert _storia(in_due, _relativo(in_due, nuovo_verso)) == [
-        (nuova["impronta_risultato"], True)]
+        (secondo["impronta_risultato"], True)]
 
 
 def test_al_voto_si_buttano_solo_i_file_di_lavoro_di_quel_ritocco(tmp_path):
@@ -345,13 +346,16 @@ def test_il_nome_della_toppa_in_attesa_salta_i_risultati_dei_ritocchi(scena):
     with scena.archivio.scrittura() as connessione:
         connessione.execute("UPDATE ritocchi SET risultato = ? WHERE id = ?",
                             (str(dove / f"togli-{numero}-b.png"), numero))
+    assert toppa.is_file()
     with scena.archivio.lettura() as connessione:
-        assert copia.toppa_in_attesa(connessione, dove, numero) == toppa
+        assert copia.toppa_in_attesa(connessione, dove, numero) == dove / (
+            f"togli-{numero}-a1.png")
         assert copia.toppa_in_attesa(connessione, dove, numero, True) == dove / (
             f"togli-{numero}-a1-b.png")
     with scena.archivio.scrittura() as connessione:
         connessione.execute("UPDATE ritocchi SET risultato = ? WHERE id = ?",
                             (str(dove / f"togli-{numero + 1}.png"), numero))
+    toppa.unlink()
     with scena.archivio.lettura() as connessione:
         assert copia.toppa_in_attesa(connessione, dove, numero) == toppa
         assert copia.toppa_in_attesa(connessione, dove, numero + 1) == dove / (

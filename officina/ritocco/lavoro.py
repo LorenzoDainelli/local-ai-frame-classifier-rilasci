@@ -260,7 +260,7 @@ class Ritoccatore:
             return fatto
         self.adesso.update(nome=da.copia.name, fatti=0, totale=0)
         self.lavoro.di(f"ritocco «{da.copia.name}»")
-        sfida = self._la_sfida(media["genere"], ritocchi)
+        sfida = self._la_sfida(lavoro_id, file_id, media["genere"], ritocchi)
         if media["genere"] != "video":
             ritocchi_b = None
             if any(ritocco["genere"] == elenco.TOGLI for ritocco in ritocchi):
@@ -339,9 +339,14 @@ class Ritoccatore:
             raise
         return pronta
 
-    def _la_sfida(self, genere_media: str, ritocchi) -> dict | None:
+    def _la_sfida(self, lavoro_id: int, file_id: int, genere_media: str,
+                  ritocchi) -> dict | None:
         if not any(ritocco["genere"] == elenco.TOGLI and ritocco["stato"] == elenco.IN_CODA
                    for ritocco in ritocchi):
+            return None
+        with self.archivio.lettura() as connessione:
+            votata = sfida_togli.del_file(connessione, lavoro_id, file_id)
+        if votata is not None and votata["voto"] is not None:
             return None
         genere = sfida_togli.genere_del_file(genere_media)
         due = sfida_togli.si_fa(self.archivio, genere)
@@ -456,9 +461,7 @@ class Ritoccatore:
                 strato = self._strato(connessione, ritocco, da.impronta_base)
             base = dove / f"{copia.PREFISSO}-{int(file_id)}-{int(lavoro_id)}-strato.json"
             base.write_text(json.dumps(strato_in_json(strato)), encoding="utf-8")
-            toppe.mkdir(parents=True, exist_ok=True)
-            uscita = toppe / self._nome_della_toppa(copia.nome_della_toppa_video(ritocco["id"]),
-                                                    lato_b)
+            uscita = self._dove_la_toppa(da, dove, toppe, ritocco["id"], lato_b, True)
             self.adesso.update(nome=da.copia.name, fatti=0, totale=strato.quanti)
             self.lavoro.di(f"tolgo una cosa dal video «{da.copia.name}»")
             esito: dict = {}
@@ -504,17 +507,13 @@ class Ritoccatore:
                                                         int(fatto["larghezza"]),
                                                         int(fatto["altezza"])]}))
 
-    @staticmethod
-    def _nome_della_toppa(nome: str, lato_b: bool) -> str:
-        return copia.della_b(nome) if lato_b else nome
-
     def _dove_la_toppa(self, da, dove: Path, toppe: Path, ritocco_id: int,
-                       lato_b: bool) -> Path:
-        if da.trovata is not None:
-            with self.archivio.lettura() as connessione:
-                return copia.toppa_in_attesa(connessione, dove, ritocco_id, lato_b)
-        toppe.mkdir(parents=True, exist_ok=True)
-        return toppe / self._nome_della_toppa(copia.nome_della_toppa(ritocco_id), lato_b)
+                       lato_b: bool, video: bool = False) -> Path:
+        if da.trovata is None:
+            toppe.mkdir(parents=True, exist_ok=True)
+            dove = toppe
+        with self.archivio.lettura() as connessione:
+            return copia.toppa_in_attesa(connessione, dove, ritocco_id, lato_b, video)
 
     def _segna_la_toppa(self, ritocco, lato_b: bool, **campi):
         if lato_b:

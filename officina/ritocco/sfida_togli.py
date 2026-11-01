@@ -78,8 +78,13 @@ def sorteggia(due: tuple[str, str], caso: random.Random | None = None) -> dict:
 def registra(connessione: sqlite3.Connection, lavoro_id: int, file_id: int, genere: str,
              sfida: dict) -> None:
     connessione.execute(
-        "INSERT OR REPLACE INTO sfide_togli (lavoro_id, file_id, genere, motore_a, motore_b, "
-        "sinistra, pronta_b, impronta_b, toppe_b, messa_il) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO sfide_togli (lavoro_id, file_id, genere, motore_a, motore_b, sinistra, "
+        "pronta_b, impronta_b, toppe_b, messa_il) VALUES (?,?,?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(lavoro_id, file_id) DO UPDATE SET genere = excluded.genere, "
+        "motore_a = excluded.motore_a, motore_b = excluded.motore_b, "
+        "sinistra = excluded.sinistra, pronta_b = excluded.pronta_b, "
+        "impronta_b = excluded.impronta_b, toppe_b = excluded.toppe_b, "
+        "messa_il = excluded.messa_il WHERE sfide_togli.voto IS NULL",
         (lavoro_id, file_id, genere, sfida["motore_a"], sfida["motore_b"], sfida["sinistra"],
          sfida.get("pronta_b"), sfida.get("impronta_b"), json.dumps(sfida.get("toppe_b") or {}),
          adesso()))
@@ -180,12 +185,7 @@ def si_butta(voce: DaButtare) -> bool:
     percorso = Path(voce.percorso)
     if voce.ritocco_id is None:
         return attesa.e_dentro(percorso) and percorso.name.startswith(copia.PREFISSO)
-    nomi = {copia.nome_della_toppa(voce.ritocco_id),
-            copia.nome_della_toppa_video(voce.ritocco_id)}
-    if percorso.parent.name == copia.CARTELLA and percorso.name in nomi | {
-            copia.della_b(nome) for nome in nomi}:
-        return True
-    return attesa.e_dentro(percorso) and copia._e_una_toppa(percorso, voce.ritocco_id)
+    return copia._e_una_toppa(percorso, voce.ritocco_id)
 
 
 def butta(file: list) -> None:

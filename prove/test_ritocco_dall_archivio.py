@@ -1404,7 +1404,7 @@ def _com_e_adesso(scena, migliorata) -> dict:
     (dall_archivio.DIVERSA, copia.MIGLIORATA_PERSA),
     (CHIUSO, copia.SOLO_NELL_ARCHIVIO),
     (SI_APRE, copia.SOLO_NELL_ARCHIVIO),
-    (SENZA_ARCHIVIO, copia.NON_SUL_DISCO)])
+    (SENZA_ARCHIVIO, copia.MIGLIORATA_SPARITA)])
 def test_se_la_migliorata_non_si_trova_non_si_ritocca_l_originale(scena, monkeypatch,
                                                                   perche, messaggio):
     migliorata = mostra._approvata(scena)
@@ -1422,6 +1422,12 @@ def test_il_messaggio_della_migliorata_che_non_si_trova():
     assert copia.MIGLIORATA_PERSA == ("Non trovo la versione migliorata di questo scatto né "
                                       "sul disco né nell'Archivio sicuro: non lo ritocco. "
                                       "Nessun file è stato toccato.")
+
+
+def test_il_messaggio_della_migliorata_sparita_dal_disco():
+    assert copia.MIGLIORATA_SPARITA == (
+        "Non trovo sul disco la versione migliorata di questo scatto: non lo ritocco e non "
+        "uso l'originale al suo posto. Nessun file è stato toccato.")
 
 
 @pytest.mark.parametrize("cambi", [{"diversa": True}, {"blake2b": ALTRA}])

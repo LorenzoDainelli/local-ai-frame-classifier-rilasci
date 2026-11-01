@@ -628,10 +628,11 @@ def test_buttare_le_toppe_tocca_solo_le_toppe_di_quel_ritocco(tmp_path):
     dove = tmp_path / attesa.NOME
     toppe = tmp_path / attesa.ORIGINALI / copia.CARTELLA
     via = [dove / "togli-5.png", dove / "togli-5-a2.png", dove / "togli-5-a2-b.png",
-           dove / "togli-5-b.png", dove / "togli-5-a10.png", toppe / "togli-5.png"]
+           dove / "togli-5-b.png", dove / "togli-5-a10.png", toppe / "togli-5.png",
+           toppe / "togli-5-a1.png"]
     restano = [dove / "togli-6.png", dove / "togli-5-a.png", dove / "togli-5-a٣.png",
                dove / "togli-5-abc.png", dove / "togli-5.jpg", tmp_path / "togli-5.png",
-               toppe / "togli-5-a12345678901.png", toppe / "togli-5-a1.png",
+               toppe / "togli-5-a12345678901.png",
                dove / "togli-15.png", dove / "xtogli-5.png", dove / "12.png",
                dove / "togli-5-12.png"]
     for percorso in via + restano:

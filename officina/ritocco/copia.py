@@ -32,6 +32,7 @@ MIGLIORATA = "migliorata"
 
 CARTELLA = ".ritocchi"
 PREFISSO = "ritocco"
+VOLTE_NEL_NOME = 4
 
 CAMBIATO = ("Lo scatto non è più quello che c'è in archivio: non lo ritocco. Nessun file "
             "è stato toccato.")
@@ -46,6 +47,8 @@ DIVERSA = ("Nell'Archivio sicuro c'è solo una versione cambiata di questo scatt
            "ritocco." + NIENTE_TOCCATO)
 MIGLIORATA_PERSA = ("Non trovo la versione migliorata di questo scatto né sul disco né "
                     "nell'Archivio sicuro: non lo ritocco." + NIENTE_TOCCATO)
+MIGLIORATA_SPARITA = ("Non trovo sul disco la versione migliorata di questo scatto: non lo "
+                      "ritocco e non uso l'originale al suo posto." + NIENTE_TOCCATO)
 SENZA_CARTELLA = ("Questo scatto è nell'Archivio sicuro, ma non so in che cartella stava: "
                   "non lo ritocco." + NIENTE_TOCCATO)
 ROVINATA = ("Nell'Archivio sicuro lo scatto senza ritocchi è rovinato: non lo ritocco."
@@ -104,9 +107,10 @@ def base_di_adesso(connessione: sqlite3.Connection, file_id: int) -> Base | None
         "WHERE file_id = ? AND stato = 'approvata' ORDER BY id DESC LIMIT 1", file_id)
     if migliorata is not None and migliorata["percorso_migliorata"]:
         percorso = Path(migliorata["percorso_migliorata"])
-        if percorso.is_file():
-            return Base(percorso, migliorata["impronta_migliorata"], MIGLIORATA,
-                        migliorata["id"])
+        if not percorso.is_file():
+            return None
+        return Base(percorso, migliorata["impronta_migliorata"], MIGLIORATA,
+                    migliorata["id"])
     riga = file_media.per_id(connessione, file_id)
     percorso = file_media.percorso_migliore(connessione, file_id)
     if riga is None or percorso is None:
@@ -174,8 +178,9 @@ def _base_nell_archivio(archivio, file_id: int) -> Base:
                     connessione, file_id, migliorata["impronta_migliorata"],
                     migliorata["percorso_migliorata"],
                     anche_diversa=bool(migliorata["nell_archivio"]))
-                if ricerca.trovata is None and ricerca.perche not in (
-                        CHIUSO, SI_APRE, SENZA_ARCHIVIO):
+                if ricerca.perche == SENZA_ARCHIVIO:
+                    raise RitoccoFermato(MIGLIORATA_SPARITA)
+                if ricerca.trovata is None and ricerca.perche not in (CHIUSO, SI_APRE):
                     raise RitoccoFermato(MIGLIORATA_PERSA)
                 return _trovata(ricerca, Base(
                     percorso, migliorata["impronta_migliorata"], MIGLIORATA,
@@ -296,16 +301,19 @@ def nome_della_toppa_nell_archivio(ritocco_id: int, sua_impronta: str) -> str:
 
 
 def toppa_in_attesa(connessione: sqlite3.Connection, dove: Path, ritocco_id: int,
-                    lato_b: bool = False) -> Path:
-    nome, volta = nome_della_toppa(ritocco_id), 0
+                    lato_b: bool = False, video: bool = False) -> Path:
+    estensione = ".mkv" if video else ".png"
+    nome, volta = f"togli-{int(ritocco_id)}{estensione}", 0
     while True:
         percorso = dove / (della_b(nome) if lato_b else nome)
-        preso = uno(connessione, "SELECT 1 FROM ritocchi WHERE risultato = ? "
-                    "AND (id != ? OR ?) LIMIT 1", str(percorso), int(ritocco_id), lato_b)
-        if preso is None and not in_chiaro.occupato(connessione, percorso):
+        di_chi = {riga["id"] for riga in tutti(
+            connessione, "SELECT id FROM ritocchi WHERE risultato = ?", str(percorso))}
+        sua = not lato_b and di_chi == {int(ritocco_id)}
+        if ((sua or not di_chi) and not in_chiaro.occupato(connessione, percorso)
+                and (sua or not os.path.lexists(percorso))):
             return percorso
         volta += 1
-        nome = f"togli-{int(ritocco_id)}-a{volta}.png"
+        nome = f"togli-{int(ritocco_id)}-a{volta}{estensione}"
 
 
 def toppa_pronta(ritocco) -> bool:
@@ -383,13 +391,16 @@ def _metti_la_toppa(immagine: Image.Image, ritocco) -> Image.Image:
 
 
 def _e_una_toppa(percorso: Path, ritocco_id: int) -> bool:
-    if percorso.parent.name == CARTELLA and percorso.name == nome_della_toppa(ritocco_id):
-        return True
-    nome = percorso.name.removesuffix(".png").removesuffix("-b")
+    if percorso.parent.name != CARTELLA and not attesa.e_dentro(percorso):
+        return False
+    nome, _, estensione = percorso.name.rpartition(".")
+    if estensione not in ("png", "mkv"):
+        return False
+    nome = nome.removesuffix("-b")
     prima = f"togli-{int(ritocco_id)}"
     volta = nome.removeprefix(prima + "-a")
-    return attesa.e_dentro(percorso) and (nome == prima or (
-        nome.startswith(prima + "-a") and volta.isdigit() and volta.isascii()))
+    return nome == prima or (nome.startswith(prima + "-a") and volta.isdigit()
+                             and volta.isascii() and len(volta) <= VOLTE_NEL_NOME)
 
 
 def butta_le_toppe(righe, archivio=None) -> None:
@@ -939,7 +950,15 @@ def _segui_in_miglioria(connessione: sqlite3.Connection, file_id: int, prima: Pa
 
 def _togli_la_preparazione(riga: sqlite3.Row) -> None:
     if riga["in_preparazione"]:
-        butta(Path(riga["in_preparazione"]))
+        butta_o_avvisa(riga["file_id"], Path(riga["in_preparazione"]))
+
+
+def butta_o_avvisa(file_id: int, pronta: Path) -> None:
+    try:
+        butta(pronta)
+    except OSError as errore:
+        registro.avviso("ritocco.copia_non_tolta", file=file_id,
+                        **registro.dove_si_e_rotto(errore))
 
 
 def _via_la_preparazione(archivio, riga: sqlite3.Row) -> None:
@@ -959,14 +978,32 @@ def via_la_pronta(archivio, file_id: int, pronta: Path, sua_impronta: str) -> No
     except OSError as errore:
         registro.avviso("ritocco.copia_non_tolta", file=file_id,
                         **registro.dove_si_e_rotto(errore))
+        parziale = pronta.with_name(pronta.name + attesa.PARZIALE)
+        rimaste = [(file, sua) for file, sua in (
+            (pronta, sua_impronta), (parziale, _impronta_o_niente(parziale)))
+            if sua and os.path.lexists(file)]
         with archivio.scrittura() as connessione:
-            in_chiaro.segna(connessione, file_id, pronta, sua_impronta)
+            for file, sua in rimaste:
+                in_chiaro.segna(connessione, file_id, file, sua)
+
+
+def _impronta_o_niente(percorso: Path) -> str | None:
+    try:
+        return impronta.del_file(percorso) if percorso.is_file() else None
+    except OSError:
+        return None
 
 
 def butta(pronta: Path) -> None:
+    primo: OSError | None = None
     for file in (pronta, pronta.with_name(pronta.name + attesa.PARZIALE)):
         if file.is_file() and attesa.e_dentro(file) and file.name.startswith(PREFISSO):
-            file.unlink()
+            try:
+                file.unlink()
+            except OSError as errore:
+                primo = primo or errore
+    if primo is not None:
+        raise primo
 
 
 def _annulla(archivio, riga: sqlite3.Row, tieni: bool = False) -> None:
@@ -1146,7 +1183,7 @@ def scambia(archivio, file_id: int, pronta: Path, impronta_pronta: str,
             if riga["nell_archivio"]:
                 via_la_pronta(archivio, file_id, pronta, impronta_pronta)
             else:
-                butta(pronta)
+                butta_o_avvisa(file_id, pronta)
             return Path(riga["percorso_copia"])
         if not pronta.is_file() or impronta.del_file(pronta) != impronta_pronta:
             raise RitoccoFermato("La copia ritoccata che aspettava di essere approvata è "

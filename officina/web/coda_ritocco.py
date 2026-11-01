@@ -5,7 +5,7 @@ from pathlib import Path
 from officina import registro
 from officina.archivio.database import leggi_stato, scrivi_stato
 from officina.modello import file_media
-from officina.ritocco import coda, copia, seguiti
+from officina.ritocco import coda, copia, rimaste, seguiti
 from officina.ritocco.copia import RitoccoFermato
 from officina.web import lavori, sosta
 
@@ -215,6 +215,10 @@ def ripara(archivio) -> dict:
     with archivio.scrittura() as connessione:
         lasciati = seguiti.ferma_i_lasciati(connessione)
     fatto = coda.ripara(archivio)
+    try:
+        rimaste.butta(archivio)
+    except Exception as guasto:
+        registro.errore("ritocco.rimaste_guasto", **registro.dove_si_e_rotto(guasto))
     ripartita = riparti_se_accesa(archivio)
     if lasciati or ripartita:
         registro.evento("ritocco.coda_ripresa", seguiti=lasciati, ripartita=ripartita)

@@ -13,3 +13,4 @@ Non chiederle di nuovo: se cambiano, l'utente lo dice.
 
 - Si parla con l'utente in italiano.
 - Niente commenti nel codice, in nessuna lingua.
+- Qualità prima di quantità: ore di calcolo in più vanno bene se il risultato è migliore.
