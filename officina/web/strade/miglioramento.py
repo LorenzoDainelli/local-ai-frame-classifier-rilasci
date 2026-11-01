@@ -191,6 +191,25 @@ def miglioramento_togli(miglioria_id: int):
     return RedirectResponse("/miglioramento", status_code=303)
 
 
+@strada.post("/miglioramento/coda/togli-tutte")
+def miglioramento_togli_tutte(fino_a: int = Form(...)):
+    from pathlib import Path
+
+    from officina.miglioria import attesa, pezzi
+    from officina.miglioria import coda as miglioria_coda
+
+    archivio = accesso.aperto()
+    with archivio.scrittura() as connessione:
+        tolte = miglioria_coda.togli_quelle_in_coda(connessione, fino_a)
+        cantieri = [(attesa.cartella(connessione, Path(riga["percorso_originale"]),
+                                     archivio.dove.radice), riga["id"]) for riga in tolte]
+    for dove, miglioria_id in cantieri:
+        pezzi.butta_quelli_di(dove, miglioria_id)
+    if tolte:
+        registro.evento("miglioria.coda_svuotata", tolte=len(tolte))
+    return RedirectResponse("/miglioramento", status_code=303)
+
+
 @strada.post("/miglioramento/{miglioria_id}/rimetti")
 def miglioramento_rimetti(miglioria_id: int):
     with accesso.aperto().scrittura() as connessione:

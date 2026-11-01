@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import sys
 import types
@@ -49,6 +50,31 @@ def quanti_ne_stanno(pesi: list[int], posto: int) -> int:
     return len(pesi)
 
 
+def ram_libera() -> int | None:
+    try:
+        import psutil
+    except ImportError:
+        return None
+    return int(psutil.virtual_memory().available)
+
+
+def dove_vanno(pesi: list[int], posto: int, libera: int | None,
+               dal_disco: bool = True) -> tuple[int, int]:
+    dentro = quanti_ne_stanno(pesi, max(0, posto))
+    fuori = pesi[dentro:]
+    if libera is None:
+        return dentro, dentro if dal_disco else len(pesi)
+    serve = MARGINE_RAM + (max(fuori, default=0) if dal_disco else sum(fuori))
+    if libera < serve:
+        raise RamPoca(f"Per LucidFlux servono almeno {math.ceil(serve / GIGA)} GB di RAM "
+                      f"libera e ce ne sono {libera // GIGA}.")
+    return dentro, dentro + quanti_ne_stanno(fuori, libera - MARGINE_RAM)
+
+
+def in_giga(quanti: int) -> float:
+    return round(quanti / GIGA, 1)
+
+
 class Scambiatore:
 
     def __init__(self, dispositivo, fissa: bool = True) -> None:
@@ -57,12 +83,12 @@ class Scambiatore:
         self.fuori: list = []
         self._ganci: list = []
 
-    def metti_fuori(self, blocco) -> None:
+    def metti_fuori(self, blocco, in_ram: bool = True) -> None:
         import torch
 
         for parte in list(blocco.parameters()) + list(blocco.buffers()):
             copia = parte.data.to("cpu")
-            if self.fissa and torch.cuda.is_available():
+            if in_ram and self.fissa and torch.cuda.is_available():
                 try:
                     copia = copia.pin_memory()
                 except RuntimeError:
@@ -154,6 +180,7 @@ class LucidFlux:
         self.pesi = self.casa / lucidflux_pesi.PESI
         self._pezzi = None
         self._scambio: Scambiatore | None = None
+        self.dove_stanno: dict | None = None
 
     def _dispositivo(self):
         import torch
@@ -182,17 +209,6 @@ class LucidFlux:
                 "posto di quella di LucidFlux: per sicurezza non lo uso.")
         return moduli
 
-    def _controlla_la_ram(self, serve: int) -> None:
-        try:
-            import psutil
-        except ImportError:
-            return
-        libera = psutil.virtual_memory().available
-        if libera < serve + MARGINE_RAM:
-            raise RamPoca(
-                f"Per LucidFlux servono circa {(serve + MARGINE_RAM) / GIGA:.0f} GB "
-                f"di RAM libera e ce ne sono {libera / GIGA:.0f}.")
-
     def _flusso(self, s, dispositivo, posto: int):
         import torch
         from safetensors import safe_open
@@ -209,9 +225,13 @@ class LucidFlux:
             for prefisso in prefissi:
                 pesi_blocchi.append(sum(_conta(file.get_slice(n).get_shape()) * 2
                                         for n in nomi if n.startswith(prefisso)))
-            dentro = quanti_ne_stanno(pesi_blocchi, max(0, posto)) \
-                if dispositivo.type == "cuda" else len(blocchi)
-            self._controlla_la_ram(sum(pesi_blocchi[dentro:]))
+            dentro = in_ram = len(blocchi)
+            if dispositivo.type == "cuda":
+                dal_disco = all(file.get_slice(n).get_dtype() == "BF16" for n in nomi)
+                dentro, in_ram = dove_vanno(pesi_blocchi, posto, ram_libera(), dal_disco)
+                self.dove_stanno = {"scheda": in_giga(sum(pesi_blocchi[:dentro])),
+                                    "ram": in_giga(sum(pesi_blocchi[dentro:in_ram])),
+                                    "disco": in_giga(sum(pesi_blocchi[in_ram:]))}
             stato = {}
             for n in nomi:
                 indice = next((i for i, p in enumerate(prefissi) if n.startswith(p)), None)
@@ -220,8 +240,8 @@ class LucidFlux:
         modello.load_state_dict(stato, strict=False, assign=True)
         del stato
         self._scambio = Scambiatore(dispositivo)
-        for blocco in blocchi[dentro:]:
-            self._scambio.metti_fuori(blocco)
+        for numero, blocco in enumerate(blocchi[dentro:], start=dentro):
+            self._scambio.metti_fuori(blocco, in_ram=numero < in_ram)
         modello.eval()
         return modello, dentro, len(blocchi)
 

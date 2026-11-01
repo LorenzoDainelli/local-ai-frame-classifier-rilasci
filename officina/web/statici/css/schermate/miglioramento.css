@@ -104,6 +104,11 @@
 .mg-tutte > summary::-webkit-details-marker { display: none; }
 .mg-tutte[open] > summary { display: none; }
 .mg-carta .righe-coda .miniatura-coda { width: 40px; height: 30px; }
+.mg-togli-tutte { display: grid; gap: 6px; margin-top: 6px; }
+.mg-togli-tutte > summary { list-style: none; justify-self: start; cursor: pointer; }
+.mg-togli-tutte > summary::-webkit-details-marker { display: none; }
+.mg-togli-tutte form { display: grid; gap: 6px; justify-items: start; }
+.mg-togli-tutte p { margin: 0; }
 .mg-in-chiaro { display: grid; gap: 6px; padding: 14px 16px; border-color: var(--attenzione); }
 .mg-in-chiaro h2 { margin: 0; display: flex; align-items: baseline; gap: 8px; font: 400 17px/1.25 var(--serif); }
 .mg-in-chiaro p { margin: 0; }

@@ -107,6 +107,8 @@ def test_la_stanza_vera_migliora_un_originale_che_sta_solo_nell_archivio(
     dall_archivio = nell_archivio.attesa / f"2-{nome}"
     esito = _lancia(_lavoro(genere, originale, dall_archivio, date=DATE,
                             dall_archivio=_cercata(dati, [originale], relativo)))
+    for uscita in (fatto, esito):
+        assert isinstance(uscita.get("fatto", {}).pop("secondi", 0.0), float)
     assert esito == fatto
     misure = os.stat(dall_archivio)
     assert (misure.st_mtime_ns, misure.st_atime_ns) == (DATE["modifica"], DATE["accesso"])

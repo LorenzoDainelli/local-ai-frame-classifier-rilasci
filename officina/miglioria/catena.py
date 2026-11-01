@@ -71,13 +71,18 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
     _passo(al_passo, 0, passi)
 
     usati = []
+    misura_del_motore = {}
     motore = motori.apri(motori.FOTO, lavoro["motori"]["foto"],
                          **lavoro.get("opzioni", {}))
     try:
         partito = time.monotonic()
         grande = motore.foto(aperta.immagine, nuova_larghezza, nuova_altezza)
+        durata = time.monotonic() - partito
         usati.append({"nome": motore.nome, "versione": motore.versione})
-        _riposa(freno, time.monotonic() - partito)
+        misura_del_motore["secondi"] = round(durata, 1)
+        if getattr(motore, "dove_stanno", None):
+            misura_del_motore["dove_stanno"] = dict(motore.dove_stanno)
+        _riposa(freno, durata)
     finally:
         motore.spegni()
     _passo(al_passo, 1, passi)
@@ -106,7 +111,7 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
     _date(originale, uscita, lavoro)
     _passo(al_passo, 3, passi)
     return {"larghezza": nuova_larghezza, "altezza": nuova_altezza,
-            "motori": usati}
+            "motori": usati, **misura_del_motore}
 
 
 def filmato(lavoro: dict, al_passo=None, freno=None, racconta=None) -> dict:

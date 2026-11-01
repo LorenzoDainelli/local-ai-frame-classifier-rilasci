@@ -295,6 +295,20 @@ def togli(connessione: sqlite3.Connection, miglioria_id: int) -> bool:
         (miglioria_id, IN_CODA)).rowcount > 0
 
 
+def ultima_in_coda(connessione: sqlite3.Connection) -> int | None:
+    return uno(connessione, "SELECT MAX(id) AS id FROM migliorie WHERE stato = ?",
+               IN_CODA)["id"]
+
+
+def togli_quelle_in_coda(connessione: sqlite3.Connection,
+                         fino_a: int) -> list[sqlite3.Row]:
+    tolte = tutti(connessione, "SELECT * FROM migliorie WHERE stato = ? AND id <= ? "
+                  "ORDER BY id", IN_CODA, int(fino_a))
+    connessione.execute("DELETE FROM migliorie WHERE stato = ? AND id <= ?",
+                        (IN_CODA, int(fino_a)))
+    return tolte
+
+
 def riprendi_interrotte(connessione: sqlite3.Connection) -> list[sqlite3.Row]:
     interrotte = in_stato(connessione, IN_LAVORO)
     connessione.execute(

@@ -152,6 +152,7 @@ def la_coda(archivio) -> dict:
                 connessione, coda.DA_RIVEDERE, QUANTE_A_VISTA + len(aspettano))
                 if riga["id"] not in aspettano][:QUANTE_A_VISTA],
             "in_coda": righe(connessione, coda.IN_CODA, QUANTI_IN_CODA),
+            "ultima_in_coda": coda.ultima_in_coda(connessione),
             "fallite": righe(connessione, coda.FALLITA, QUANTE_FALLITE),
             "ferme": righe(connessione, coda.IN_SCAMBIO, QUANTE_FALLITE),
             "in_chiaro": in_chiaro(connessione),

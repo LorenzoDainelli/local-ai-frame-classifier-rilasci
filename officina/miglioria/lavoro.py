@@ -71,6 +71,30 @@ def perche_saltata(esito: dict | None) -> str:
     return detto.strip().rstrip(".")
 
 
+def tempo_a_parole(secondi: float) -> str:
+    tondi = max(0, round(secondi))
+    ore, resto = divmod(tondi, 3600)
+    minuti, secondi = divmod(resto, 60)
+    if ore:
+        return f"{ore} h {minuti} min"
+    if minuti:
+        return f"{minuti} min {secondi} s"
+    return f"{secondi} s"
+
+
+def misura_di_lucidflux(fatto: dict) -> str:
+    stanno = fatto.get("dove_stanno")
+    secondi = fatto.get("secondi")
+    if not isinstance(stanno, dict) or not isinstance(secondi, (int, float)):
+        return ""
+    giga = {dove: float(stanno.get(dove) or 0) for dove in ("scheda", "ram", "disco")}
+    registro.evento("miglioria.lucidflux_misura", secondi=float(secondi), **giga)
+    detto = f"LucidFlux ci ha messo {tempo_a_parole(secondi)}"
+    if giga["disco"]:
+        detto += ", " + f"{giga['disco']:.1f}".replace(".", ",") + " GB letti dal disco"
+    return f" ({detto})"
+
+
 def percorsi_della_stanza() -> list[str]:
     from officina.programma import librerie
 
@@ -386,7 +410,7 @@ class Miglioratore:
                        altezza_dopo=int(fatto.get("altezza") or 0) or None,
                        motori=json.dumps(fatto.get("motori") or []),
                        finita_il=adesso())
-        self.lavoro.di(f"pronto da rivedere: «{originale.name}»")
+        self.lavoro.di(f"pronto da rivedere: «{originale.name}»{misura_di_lucidflux(fatto)}")
 
     def _originale(self, riga, originale: Path):
         if originale.is_file():
@@ -543,7 +567,8 @@ class Miglioratore:
                     motore: (dati[0], dati[1], dati[2].get("motori"))
                     for motore, dati in fatte.items()})
                 sfida.segna_il_salto(connessione, None)
-                self.lavoro.di(f"pronto da votare: «{originale.name}»")
+                misura = misura_di_lucidflux(fatte[motori.LUCIDFLUX][2])
+                self.lavoro.di(f"pronto da votare: «{originale.name}»{misura}")
                 return
             arrivo, sua_impronta, _fatto = fatte[motori.SEEDVR2]
             coda.segna(connessione, miglioria_id, coda.DA_RIVEDERE,
@@ -657,7 +682,8 @@ class Miglioratore:
             self.lavoro.di(f"«{originale.name}» era già stata decisa: la versione di "
                            "LucidFlux non serve più")
             return
-        self.lavoro.di(f"pronto da votare: «{originale.name}»")
+        misura = misura_di_lucidflux(esito["fatto"])
+        self.lavoro.di(f"pronto da votare: «{originale.name}»{misura}")
 
     def _non_ripresa(self, originale: Path, codice: str, perche: str) -> None:
         registro.avviso("miglioria.sfida_non_ripresa", motivo=registro.Parola(codice))

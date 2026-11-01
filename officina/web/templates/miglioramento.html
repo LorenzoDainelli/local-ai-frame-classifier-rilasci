@@ -39,6 +39,21 @@
 </li>
 {% endmacro %}
 
+{% macro togli_tutte() %}
+{% if conti.in_coda > 1 and ultima_in_coda %}
+<details class="mg-togli-tutte">
+    <summary class="tasto-comando nudo piccolo">Togli tutti</summary>
+    <form method="post" action="/miglioramento/coda/togli-tutte">
+        <input type="hidden" name="fino_a" value="{{ ultima_in_coda }}">
+        <p class="minuscolo tenue">Escono dalla coda tutti i {{ conti.in_coda|numero }} file in attesa.
+            {% if lavoro.sta_lavorando and al_lavoro %}Quello che si sta migliorando adesso finisce normalmente.{% endif %}
+            Le foto e i video restano come sono.</p>
+        <button class="tasto-comando piccolo" type="submit">Sì, toglili tutti</button>
+    </form>
+</details>
+{% endif %}
+{% endmacro %}
+
 {% macro riga_fallita(riga) %}
 <li>
     <img class="miniatura-coda" src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">
@@ -282,6 +297,7 @@
             {% if conti.in_coda > in_coda|length %}
             <p class="minuscolo tenue">e altri {{ (conti.in_coda - in_coda|length)|numero }}</p>
             {% endif %}
+            {{ togli_tutte() }}
             {% else %}
             <p class="piccolo tenue">{{ cosa_fa() }}</p>
             {% endif %}
@@ -391,6 +407,7 @@
                 {% endif %}
             </details>
             {% endif %}
+            {{ togli_tutte() }}
             {% else %}
             <p class="piccolo tenue">Vuota.</p>
             {% endif %}
