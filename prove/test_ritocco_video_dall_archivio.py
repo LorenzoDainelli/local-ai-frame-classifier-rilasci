@@ -522,7 +522,7 @@ def test_ad_archivio_chiuso_si_mette_in_coda_e_la_coda_aspetta_la_password(clic,
     assert seguito["percorso"] == DALL_ARCHIVIO
     with scena.archivio.lettura() as connessione:
         riga = coda.per_id(connessione, lavoro_id)
-    assert (riga["stato"], riga["guasto"]) == (coda.FALLITO, copia.NON_SUL_DISCO)
+    assert (riga["stato"], riga["guasto"]) == (coda.DA_RIVEDERE, None)
 
 
 def test_in_coda_un_formato_che_non_si_riscrive_si_riconosce_dal_nome(scena, filmato_id):

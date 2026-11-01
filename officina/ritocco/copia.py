@@ -1097,6 +1097,12 @@ class Partenza:
                 or impronta.del_file(self.sorgente) != self.impronta_base):
             raise RitoccoFermato(CAMBIATO)
 
+    def le_date(self) -> dict | None:
+        if self.trovata is None:
+            return None
+        return _date_nell_archivio(self.impronta_base, self.trovata.dimensione,
+                                   self.dove_le_date)
+
 
 def partenza(archivio, file_id: int, anche_nell_archivio: bool = False) -> Partenza:
     with _UNO_ALLA_VOLTA:
@@ -1124,10 +1130,7 @@ def prepara_per_la_coda(archivio, file_id: int, lavoro_id: int, ritocchi,
         raise RitoccoFermato("Questo formato non si può ritoccare: lo scatto non è "
                              "stato toccato.") from errore
     da.ancora_lei()
-    quando = None
-    if da.trovata is not None:
-        quando = _date_nell_archivio(da.impronta_base, da.trovata.dimensione,
-                                     da.dove_le_date)
+    quando = da.le_date()
     return _prepara(file_id, da.sorgente, da.copia, formato, ritocchi,
                     da.in_attesa(archivio), lavoro_id, variante, quando=quando)
 

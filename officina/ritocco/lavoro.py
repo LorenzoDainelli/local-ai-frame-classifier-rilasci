@@ -23,6 +23,8 @@ from officina.modello import file_media
 from officina.ritocco import (coda, copia, elenco, maschere, pellicola, ricontrollo, seguiti,
                               sfida_togli, togliere)
 from officina.ritocco.copia import RitoccoFermato
+from officina.sicuro import sportello
+from officina.sicuro.dall_archivio import DallArchivio
 from officina.web import in_disparte
 from officina.web.lavori import GUASTO_IMPREVISTO, Lavoro
 
@@ -247,8 +249,7 @@ class Ritoccatore:
     def _un_file(self, lavoro_id: int, file_id: int) -> dict:
         with self.archivio.lettura() as connessione:
             media = file_media.per_id(connessione, file_id)
-        da = copia.partenza(self.archivio, file_id,
-                            media is not None and media["genere"] != "video")
+        da = copia.partenza(self.archivio, file_id, media is not None)
         with self.archivio.lettura() as connessione:
             media = file_media.per_id(connessione, file_id)
             ritocchi = coda.da_disegnare(connessione, file_id, lavoro_id)
@@ -290,8 +291,7 @@ class Ritoccatore:
 
         if da.copia.suffix.casefold() not in video.CONTENITORI_TENUTI:
             raise RitoccoFermato(coda.FORMATO)
-        if not da.sorgente.is_file() or impronta.del_file(da.sorgente) != da.impronta_base:
-            raise RitoccoFermato(copia.CAMBIATO)
+        da.ancora_lei()
         ritocchi_b = None
         if any(ritocco["genere"] == elenco.TOGLI for ritocco in ritocchi):
             try:
@@ -302,19 +302,20 @@ class Ritoccatore:
                 if self.seguitore is not None:
                     self.seguitore.lascia(self.lavoro)
         strati = self._strati(ritocchi, da.impronta_base)
-        with self.archivio.lettura() as connessione:
-            dove = attesa.cartella(connessione, da.copia)
+        quando = da.le_date()
+        dove = da.in_attesa(self.archivio)
         attesa.prepara(dove)
         serve = da.sorgente.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
         if shutil.disk_usage(dove).free < serve:
             raise RitoccoFermato(SPAZIO)
-        pronta = self._fai_il_video(dove, file_id, lavoro_id, da, strati, "")
+        pronta = self._fai_il_video(dove, file_id, lavoro_id, da, strati, "", quando)
         fatto = {**fatto, "pronta": str(pronta), "impronta_pronta": impronta.del_file(pronta),
                  "fotogrammi": strati[0].quanti}
         if ritocchi_b is not None:
             try:
-                pronta_b = self._fai_il_video(dove, file_id, lavoro_id, da,
-                                              self._strati(ritocchi_b, da.impronta_base), "b")
+                strati_b = self._strati(ritocchi_b, da.impronta_base)
+                pronta_b = self._fai_il_video(dove, file_id, lavoro_id, da, strati_b, "b",
+                                              quando)
             except BaseException:
                 copia.butta(pronta)
                 raise
@@ -322,14 +323,17 @@ class Ritoccatore:
         return fatto
 
     def _fai_il_video(self, dove: Path, file_id: int, lavoro_id: int, da, strati,
-                      variante: str) -> Path:
+                      variante: str, quando: dict | None) -> Path:
         pronta = dove / copia.nome_in_attesa(file_id, da.copia, lavoro_id, variante)
         parziale = pronta.with_name(pronta.name + attesa.PARZIALE)
         copia.butta(pronta)
         try:
             self._pellicola(da.sorgente, parziale, strati)
             os.replace(parziale, pronta)
-            date.copia(da.sorgente, pronta)
+            if quando is None:
+                date.copia(da.sorgente, pronta)
+            else:
+                date.rimetti(pronta, quando)
         except BaseException:
             copia.butta(pronta)
             raise
@@ -434,6 +438,8 @@ class Ritoccatore:
                          lato_b: bool = False) -> None:
         from officina.ritocco.togli_stanza import strato_in_json
 
+        if da.trovata is not None:
+            raise RitoccoFermato(copia.NON_SUL_DISCO)
         with self.archivio.lettura() as connessione:
             dove = attesa.cartella(connessione, da.copia)
         attesa.prepara(dove)
@@ -630,18 +636,26 @@ class Ritoccatore:
     def _intensita(self) -> int:
         return int(self.archivio.impostazione("intensita_scheda") or 100)
 
-    def _pellicola(self, sorgente: Path, verso: Path, strati: list[pellicola.Strato]) -> None:
+    def _pellicola(self, sorgente, verso: Path, strati: list[pellicola.Strato]) -> None:
+        from officina.web import ritocco as ritocco_web
+
         a_parte = in_disparte.A_PARTE if self._a_parte is None else self._a_parte
         if not a_parte:
             freno = torcia.Freno(self._intensita(), fermato=self._fermati.is_set)
-            pellicola.pixela_il_video(sorgente, verso, strati, self._al_passo,
-                                      self._fermati.is_set, freno)
+            with copia.leggendo(sorgente):
+                pellicola.pixela_il_video(sorgente, verso, strati, self._al_passo,
+                                          self._fermati.is_set, freno)
             return
         dove_registro = registro.attivo().cartella
-        processo, notizie = in_disparte._avvia(
-            A, _figlio, (str(sorgente), str(verso), strati, self._intensita(),
-                         str(dove_registro) if dove_registro else None))
-        esito = self._ascolta(processo, notizie)
+        argomenti = (ritocco_web._da_mandare(sorgente), str(verso), strati,
+                     self._intensita(), str(dove_registro) if dove_registro else None)
+        allo_sportello = None
+        if isinstance(sorgente, DallArchivio):
+            processo, notizie, allo_sportello = in_disparte._avvia_con_lo_sportello(
+                A, _figlio, argomenti, self.archivio.dove.nome)
+        else:
+            processo, notizie = in_disparte._avvia(A, _figlio, argomenti)
+        esito = self._ascolta(processo, notizie, allo_sportello)
         if esito is None:
             registro.errore("ritocco.pellicola_chiusa", uscita=processo.exitcode)
             raise ErroreOfficina(SI_E_CHIUSO, codice="ritocco_pellicola_chiusa")
@@ -652,13 +666,15 @@ class Ritoccatore:
             guasto.dettaglio = esito.get("dettaglio", "")
             raise guasto
 
-    def _ascolta(self, processo, notizie) -> dict | None:
+    def _ascolta(self, processo, notizie, allo_sportello=None) -> dict | None:
         mandato = False
         try:
             while True:
                 if self._fermati.is_set() and not mandato:
                     in_disparte.manda("ferma", a=A)
                     mandato = True
+                if allo_sportello is not None:
+                    allo_sportello.controlla()
                 try:
                     tipo, _, dati = notizie.get(timeout=OGNI_QUANTO)
                 except queue.Empty:
@@ -667,9 +683,13 @@ class Ritoccatore:
                     continue
                 if tipo == "passo":
                     self._al_passo(dati["fatti"], dati["totale"])
+                elif tipo == "archivio" and allo_sportello is not None:
+                    allo_sportello.ricevi(dati)
                 elif tipo == "fine":
                     return dati
         finally:
+            if allo_sportello is not None:
+                allo_sportello.chiudi()
             processo.join(timeout=PER_CHIUDERSI)
             if processo.is_alive():
                 processo.terminate()
@@ -689,10 +709,14 @@ def _lancia_togli(lavoro: dict, ricorda) -> dict:
     return lancia_la_stanza(lavoro, lambda *_: None, ricorda, "officina.ritocco.togli_stanza")
 
 
-def _figlio(sorgente: str, verso: str, strati: list, intensita: int,
-            dove_registro: str | None, comandi, notizie) -> None:
+def _figlio(sorgente, verso: str, strati: list, intensita: int,
+            dove_registro: str | None, comandi, notizie, linea: tuple | None = None) -> None:
+    from officina.web import ritocco as ritocco_web
+
     if dove_registro:
         registro.imposta(registro.Registro(Path(dove_registro)))
+    if linea is not None:
+        sportello.installa(notizie, *linea)
     genitore = multiprocessing.parent_process()
     fermato = [False]
     ultimo = [0.0]
@@ -715,8 +739,9 @@ def _figlio(sorgente: str, verso: str, strati: list, intensita: int,
             notizie.put(("passo", None, {"fatti": fatti, "totale": totale}))
 
     try:
-        pellicola.pixela_il_video(Path(sorgente), Path(verso), strati, al_passo, fermati,
-                                  torcia.Freno(intensita, fermato=fermati))
+        with ritocco_web._la_foto(sorgente) as letto:
+            pellicola.pixela_il_video(letto, Path(verso), strati, al_passo, fermati,
+                                      torcia.Freno(intensita, fermato=fermati))
         esito: dict = {}
     except pellicola.Fermato:
         esito = {"fermato": True}

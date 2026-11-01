@@ -181,7 +181,7 @@ def pixela_il_video(sorgente: Path, verso: Path, strati: list[Strato],
             al_passo(fatti, attesi)
 
     try:
-        fatto = video.lavora(Path(sorgente), Path(verso), piano.larghezza, piano.altezza,
+        fatto = video.lavora(sorgente, Path(verso), piano.larghezza, piano.altezza,
                              trasforma, passo)
     finally:
         for toppa in toppe:
