@@ -149,6 +149,19 @@ class Motore:
         self.importazione_id = riga["id"]
         return self.importazione_id
 
+    def rimetti_in_corso(self, importazione_id: int) -> bool:
+        with self.archivio.scrittura() as connessione:
+            cambiate = connessione.execute(
+                "UPDATE importazioni SET stato = 'in_corso' WHERE id = ? "
+                "AND stato IN ('in_corso', 'interrotta') "
+                "AND id = (SELECT max(id) FROM importazioni)",
+                (importazione_id,)).rowcount
+        if not cambiate:
+            return False
+        self.importazione_id = importazione_id
+        registro.evento("importazione.rimessa_in_corso")
+        return True
+
 
     def prossimi(self, quanti: int = 1) -> list[sqlite3.Row]:
         with self.archivio.lettura() as connessione:

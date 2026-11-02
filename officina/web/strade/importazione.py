@@ -6,18 +6,22 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+from officina import registro
 from officina.archivio import accesso
-from officina.archivio.database import tutti
+from officina.archivio.database import tutti, uno, valore
 from officina.errori import ErroreOfficina
-from officina.importazione import raddrizza, rileggi_date, rileggi_fps, rileggi_macchine
+from officina.importazione import (raddrizza, rileggi_date, rileggi_fps, rileggi_macchine,
+                                   scansione)
 from officina.importazione.motore import InSottofondo, Motore
-from officina.web import vista
+from officina.web import sosta, vista
 
 from officina.web.strade import base, comune, doppioni
 
 strada = APIRouter()
 
 solo_qui = [Depends(base.solo_da_questo_computer)]
+
+FERMATA_DA_TE = "importazione_fermata_da_te"
 
 
 def raddrizza_i_video_in_sottofondo(archivio) -> bool:
@@ -71,6 +75,64 @@ def motore_attuale() -> Motore:
     return comune.lavoro.motore
 
 
+def _rimasta_a_meta(archivio) -> dict | None:
+    with archivio.lettura() as connessione:
+        riga = uno(connessione, "SELECT id, stato FROM importazioni "
+                                "ORDER BY id DESC LIMIT 1")
+        if riga is None or riga["stato"] not in ("in_corso", "interrotta"):
+            return None
+        prossimo = valore(connessione, "SELECT percorso FROM coda_importazione "
+                                       "WHERE importazione_id = ? AND stato = 'in_attesa' "
+                                       "ORDER BY id LIMIT 1", riga["id"])
+        if prossimo is None:
+            return None
+        resta = valore(connessione, "SELECT sum(dimensione) FROM coda_importazione "
+                                    "WHERE importazione_id = ? AND stato = 'in_attesa'",
+                       riga["id"])
+    return {"id": riga["id"], "resta": int(resta), "prossimo": prossimo}
+
+
+def _perche_non_riparte(archivio, rimasta: dict) -> str | None:
+    if archivio.stato(FERMATA_DA_TE) == rimasta["id"]:
+        return "tu"
+    try:
+        if not Path(rimasta["prossimo"]).exists():
+            return "disco"
+    except OSError:
+        return "disco"
+    try:
+        basta = scansione.controlla_spazio(rimasta["resta"], archivio.dove.radice).basta
+    except OSError:
+        return "spazio"
+    return None if basta else "spazio"
+
+
+def riprendi_l_importazione_in_sottofondo(archivio) -> bool:
+    if accesso.in_prova():
+        return False
+    rimasta = _rimasta_a_meta(archivio)
+    if rimasta is None:
+        return False
+    perche = _perche_non_riparte(archivio, rimasta)
+    if perche is not None:
+        registro.evento("importazione.non_ripresa", perche=registro.Parola(perche))
+        return False
+    if sosta.per_la_copia.aspetta(sosta.IMPORTAZIONE):
+        return False
+    motore = motore_attuale()
+    if comune.lavoro.sta_lavorando or not motore.rimetti_in_corso(rimasta["id"]):
+        return False
+    comune.lavoro.parti()
+    registro.evento("importazione.ripresa_da_sola")
+    return True
+
+
+def _perche_e_ferma(archivio, rimasta: dict) -> str | None:
+    if sosta.per_la_copia.aspetta_la_copia(sosta.IMPORTAZIONE):
+        return "copia"
+    return _perche_non_riparte(archivio, rimasta)
+
+
 @strada.get("/importazione", response_class=HTMLResponse)
 def pagina_importazione(richiesta: Request):
     from officina.importazione import annulla, gruppi, scansione, storico
@@ -86,6 +148,9 @@ def pagina_importazione(richiesta: Request):
                    if mandata.id != motore.importazione_id]
 
     piano_mostrato = piano_a_parole()
+    sta_lavorando = comune.lavoro is not None and comune.lavoro.sta_lavorando
+    rimasta = None if sta_lavorando or piano_mostrato else _rimasta_a_meta(motore.archivio)
+    perche_e_ferma = None if rimasta is None else _perche_e_ferma(motore.archivio, rimasta)
 
     return base.pagine.TemplateResponse(richiesta, "importazione.html", {
         **base.comune(richiesta, "importazione"),
@@ -96,6 +161,9 @@ def pagina_importazione(richiesta: Request):
         "gruppo_ultimo": gruppo_ultimo,
         "piano": piano_mostrato,
         "stato": motore.stato(),
+        "sta_lavorando": sta_lavorando,
+        "rimasta_a_meta": rimasta is not None,
+        "perche_e_ferma": perche_e_ferma,
         "mandate": mandate,
         "mai_importato": motore.importazione_id is None,
         "piano_raccolta": comune.piano_raccolta,
@@ -234,7 +302,7 @@ def raccolta_come_va():
 
 
 @strada.post("/importazione/prepara")
-def prepara(dove_torno: str = Form("")):
+def prepara(dove_torno: str = Form(""), parti_da_sola: str = Form("")):
     from officina.importazione import scansione
 
     if comune.lavoro is not None and comune.lavoro.sta_lavorando:
@@ -247,29 +315,43 @@ def prepara(dove_torno: str = Form("")):
     if not elenco:
         raise ErroreOfficina("Aggiungi almeno una cartella prima di contare.")
     comune.piano_pronto = motore_attuale().prepara(elenco)
+    piano = comune.piano_pronto
+    if parti_da_sola == "si" and piano["file"] and piano["spazio"].basta:
+        _parti_adesso()
     return RedirectResponse(base.torna_a(dove_torno, "/importazione"), status_code=303)
+
+
+def _parti_adesso() -> None:
+    comune.lavoro.motore.archivio.salva_stato(FERMATA_DA_TE, None)
+    comune.lavoro.parti()
+    comune.piano_pronto = None
 
 
 @strada.post("/importazione/parti")
 def parti(dove_torno: str = Form("")):
     motore_attuale()
-    comune.lavoro.parti()
-    comune.piano_pronto = None
+    _parti_adesso()
     return RedirectResponse(base.torna_a(dove_torno, "/importazione"), status_code=303)
 
 
 @strada.post("/importazione/riprendi")
 def riprendi():
     motore = motore_attuale()
-    motore.riprendi()
-    comune.lavoro.parti()
+    rimasta = _rimasta_a_meta(motore.archivio)
+    if not comune.lavoro.sta_lavorando and rimasta is not None:
+        motore.rimetti_in_corso(rimasta["id"])
+        _parti_adesso()
     return RedirectResponse("/importazione", status_code=303)
 
 
 @strada.post("/importazione/ferma")
 def ferma():
+    sosta.per_la_copia.fermato_da_te(sosta.IMPORTAZIONE)
     if comune.lavoro is not None:
         comune.lavoro.ferma()
+        motore = comune.lavoro.motore
+        if motore.importazione_id is not None:
+            motore.archivio.salva_stato(FERMATA_DA_TE, motore.importazione_id)
     return RedirectResponse("/importazione", status_code=303)
 
 

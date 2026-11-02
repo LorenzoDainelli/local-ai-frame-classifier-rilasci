@@ -515,7 +515,7 @@ def test_si_fermano_dice_chi_si_fermerebbe(banco, scritti):
 
 
 def test_i_nomi_si_possono_dire():
-    assert set(NOMI) == set(ORDINE) and len(ORDINE) == len(set(ORDINE)) == 11
+    assert set(NOMI) == set(ORDINE) and len(ORDINE) == len(set(ORDINE)) == 12
     assert ORDINE[0] == IA
     assert NOMI[GARA] == "la gara dei video"
     assert sosta.ASPETTA_LA_COPIA.format(chi=NOMI[IA]) == (
@@ -681,7 +681,7 @@ def test_di_serie_ci_sono_tutti():
     di_serie = sosta._di_serie()
     assert list(di_serie) == list(ORDINE)
     assert [type(lavoro).__name__ for lavoro in di_serie.values()] == [
-        "_Ia", *["_DaSolo"] * 7, "_Miglioramento", "_Ritocco", "_Gara"]
+        "_Ia", *["_DaSolo"] * 7, "_Miglioramento", "_Ritocco", "_Gara", "_Importazione"]
 
 
 def test_l_intelligenza_si_guarda_si_ferma_e_riparte(monkeypatch):

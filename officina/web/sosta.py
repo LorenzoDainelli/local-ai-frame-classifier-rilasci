@@ -20,14 +20,15 @@ QUALITA = "qualita"
 MIGLIORAMENTO = "miglioramento"
 RITOCCO = "ritocco"
 GARA = "gara_video"
+IMPORTAZIONE = "importazione"
 ORDINE = (IA, IMPRONTE, VOLTI, SCRITTE, CHI_E, FACCE, DOPPIONI, QUALITA, MIGLIORAMENTO,
-          RITOCCO, GARA)
+          RITOCCO, GARA, IMPORTAZIONE)
 NOMI = {IA: "l'intelligenza artificiale", IMPRONTE: "il calcolo delle impronte",
         VOLTI: "la ricerca dei volti", SCRITTE: "la lettura delle scritte",
         CHI_E: "la ricerca di chi è senza volto", FACCE: "lo studio delle facce insegnate",
         DOPPIONI: "la ricerca dei doppioni", QUALITA: "il controllo degli scatti",
         MIGLIORAMENTO: "il miglioramento", RITOCCO: "la coda del ritocco",
-        GARA: "la gara dei video"}
+        GARA: "la gara dei video", IMPORTAZIONE: "l'importazione rimasta a metà"}
 
 ASPETTA_LA_COPIA = ("L'Archivio sicuro sta facendo la prima copia: {chi} parte appena "
                     "la copia è finita.")
@@ -120,6 +121,23 @@ class _Gara:
         coda_ritocco.parti_la_gara(archivio)
 
 
+class _Importazione:
+
+    def acceso(self) -> bool:
+        return False
+
+    def memoria(self) -> dict:
+        return {}
+
+    def ferma(self) -> None:
+        return None
+
+    def riparti(self, archivio, memoria: dict) -> None:
+        from officina.web.strade import importazione
+
+        importazione.riprendi_l_importazione_in_sottofondo(archivio)
+
+
 class _DaSolo:
 
     def __init__(self, modulo: str, lavoro: str, ferma: str, parti: str,
@@ -179,7 +197,8 @@ def _di_serie() -> dict:
                           "ferma_i_doppioni", "cerca_i_doppioni", "doppioni_chiesti"),
         QUALITA: _DaSolo("officina.web.strade.miglioramento", "lavoro_qualita",
                          "ferma_il_controllo", "controlla_la_qualita_in"),
-        MIGLIORAMENTO: _Miglioramento(), RITOCCO: _Ritocco(), GARA: _Gara()}
+        MIGLIORAMENTO: _Miglioramento(), RITOCCO: _Ritocco(), GARA: _Gara(),
+        IMPORTAZIONE: _Importazione()}
 
 
 def _dalla_carta():

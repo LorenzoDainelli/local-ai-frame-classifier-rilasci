@@ -36,6 +36,7 @@ def galleria(richiesta: Request):
         importazione.rileggi_le_date_in_sottofondo(archivio)
         importazione.rileggi_le_macchine_in_sottofondo(archivio)
         importazione.rileggi_gli_fps_in_sottofondo(archivio)
+        importazione.riprendi_l_importazione_in_sottofondo(archivio)
         if not archivio.stato("guida_fatta"):
             with archivio.lettura() as connessione:
                 vuoto = uno(connessione, "SELECT count(*) AS q FROM scatti")["q"] == 0

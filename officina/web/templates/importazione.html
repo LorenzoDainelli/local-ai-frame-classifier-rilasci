@@ -33,7 +33,7 @@
 {%- endmacro %}
 
 {% block corpo %}
-{% set sta_importando = stato.stato == 'in_corso' %}
+{% set sta_importando = sta_lavorando %}
 <div class="corpo">
 <main class="zona-principale">
 <div class="pagina pagina-aggiungi">
@@ -52,42 +52,50 @@
             {% include "_cartella_nuova.html" %}
         </li>
 
-        <li class="carta ag-passo {{ 'fatto' if piano else ('qui' if cartelle else 'dopo') }}">
-            <div class="ag-passo-testa"><span class="ag-numero">{{ icona('spunta', 13) if piano else '2' }}</span><h2>Cosa ho trovato</h2></div>
+        <li class="carta ag-passo {{ 'fatto' if piano or sta_importando else ('qui' if cartelle else 'dopo') }}">
+            <div class="ag-passo-testa"><span class="ag-numero">{{ icona('spunta', 13) if piano or sta_importando else '2' }}</span><h2>Cosa ho trovato</h2></div>
             {% if piano %}
             <div class="ag-trovato">
                 <span class="ag-grosso numeri">{{ piano.file|numero }}</span>
                 <span class="piccolo attenuato">file · <span class="numeri">{{ piano.peso }}</span></span>
             </div>
             <p class="piccolo attenuato">{{ piano.spazio }}</p>
-            {% if not piano.spazio_basta %}
+            {% if not piano.file %}
+            <p class="piccolo attenuato">Qui dentro non ho trovato foto né video da importare.</p>
+            {% elif not piano.spazio_basta %}
             <div class="avviso forte">
-                Lo spazio potrebbe non bastare. Meglio liberarne prima:
-                un'importazione che si ferma a metà non perde niente, ma è
-                tempo buttato.
+                Non è partita da sola: lo spazio potrebbe non bastare. Meglio
+                liberarne prima: un'importazione che si ferma a metà non perde
+                niente, ma è tempo buttato. Se vuoi farla partire lo stesso,
+                premi «Importa».
             </div>
             {% endif %}
             <form method="post" action="/importazione/prepara">
+                <input type="hidden" name="parti_da_sola" value="si">
                 <button class="tasto-comando nudo piccolo" type="submit">Conta di nuovo</button>
             </form>
             {% else %}
-            <p class="piccolo attenuato">Prima si conta, poi si decide. Non viene elaborato niente finché non lo dici tu.</p>
-            <form method="post" action="/importazione/prepara">
+            {% if sta_importando %}
+            <p class="piccolo attenuato" data-mentre-lavora>Contati: l'importazione è partita. Per contare di nuovo aspetta che finisca, oppure fermala.</p>
+            {% endif %}
+            <p class="piccolo attenuato"{% if sta_importando %} data-dopo-il-lavoro hidden{% endif %}>Conto i file e, se lo spazio sul disco basta, l'importazione parte da sola.</p>
+            <form method="post" action="/importazione/prepara"{% if sta_importando %} data-dopo-il-lavoro hidden{% endif %}>
+                <input type="hidden" name="parti_da_sola" value="si">
                 <button class="tasto-comando {{ 'principale' if cartelle }}" type="submit">Conta i file</button>
             </form>
             {% endif %}
         </li>
 
-        <li class="carta ag-passo {{ 'qui' if piano or sta_importando else 'dopo' }}" id="pannello-avanzamento">
+        <li class="carta ag-passo {{ 'qui' if piano or sta_importando or rimasta_a_meta else 'dopo' }}" id="pannello-avanzamento">
             <div class="ag-passo-testa"><span class="ag-numero">3</span><h2>Dentro l'archivio</h2></div>
-            {% if piano and not sta_importando %}
+            {% if piano and piano.file and not sta_importando %}
             <form method="post" action="/importazione/parti">
                 <button class="tasto-comando accento" type="submit">Importa {{ piano.file|numero }} file</button>
             </form>
             {% endif %}
             {% if mai_importato %}
             {% if not piano %}
-            <p class="piccolo tenue">Quando hai contato, da qui parte l'importazione.</p>
+            <p class="piccolo tenue">Dopo il conteggio l'importazione parte da qui.</p>
             {% endif %}
             {% else %}
             <div class="ag-trovato">
@@ -101,15 +109,30 @@
                 <dt>Già presenti</dt><dd class="numeri" id="conto-gia">{{ stato.gia_presenti|numero }}</dd>
                 <dt>Saltati</dt><dd class="numeri" id="conto-saltati">{{ stato.saltati|numero }}</dd>
             </dl>
+            {% if rimasta_a_meta and perche_e_ferma == 'copia' %}
+            <p class="piccolo attenuato">L'Archivio sicuro sta facendo la prima copia: l'importazione riparte da sola appena la copia è finita.</p>
+            {% elif rimasta_a_meta and perche_e_ferma == 'tu' %}
+            <p class="piccolo attenuato">L'hai fermata tu: riparte quando premi «Riprendi».</p>
+            {% elif rimasta_a_meta and perche_e_ferma == 'disco' %}
+            <p class="piccolo attenuato">Non è ripartita da sola: non trovo i file da importare. Se stanno su un disco esterno, attaccalo e premi «Riprendi».</p>
+            {% elif rimasta_a_meta and perche_e_ferma == 'spazio' %}
+            <p class="piccolo attenuato">Non è ripartita da sola: lo spazio sul disco potrebbe non bastare. Liberane un po', poi premi «Riprendi».</p>
+            {% endif %}
+            {% if sta_importando or rimasta_a_meta %}
             <div class="in-fila">
+                {% if rimasta_a_meta %}
                 <form method="post" action="/importazione/riprendi">
-                    <button class="tasto-comando piccolo" type="submit">Riprendi</button>
+                    <button class="tasto-comando principale piccolo" type="submit">Riprendi</button>
                 </form>
-                <form method="post" action="/importazione/ferma">
+                {% endif %}
+                {% if sta_importando %}
+                <form method="post" action="/importazione/ferma" data-mentre-lavora>
                     <button class="tasto-comando piccolo" type="submit">Fermati</button>
                 </form>
+                {% endif %}
             </div>
-            <p class="minuscolo tenue">Si può chiudere tutto a metà: ogni scatto finito è già scritto, e alla riapertura si riprende dalla riga dopo.</p>
+            {% endif %}
+            <p class="minuscolo tenue">Si può chiudere tutto a metà: ogni scatto finito è già scritto, e alla riapertura riparte da sola dalla riga dopo.</p>
             {% if stato.percentuale >= 100 %}
             <p class="piccolo attenuato">
                 Adesso le foto si guardano. Il passo dopo è calcolare le
@@ -272,6 +295,12 @@
             scrivi("conto-live", numeroAParole(dati.coppie_live));
             scrivi("conto-gia", numeroAParole(dati.gia_presenti));
             scrivi("conto-saltati", numeroAParole(dati.saltati));
+            if (!dati.sta_lavorando) {
+                document.querySelectorAll("[data-mentre-lavora]").forEach((pezzo) => pezzo.remove());
+                document.querySelectorAll("[data-dopo-il-lavoro]").forEach((pezzo) => {
+                    pezzo.hidden = false;
+                });
+            }
 
             const nuove = [];
             (dati.ultime || []).forEach((voce) => {

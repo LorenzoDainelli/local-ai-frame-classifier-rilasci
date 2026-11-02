@@ -22,14 +22,22 @@
             <button class="tasto-comando nudo piccolo cn-annulla" type="button" data-apri-annulla="annulla-{{ cartella.id }}"
                     title="Toglie dall'app la cartella e gli scatti arrivati da lì. I file sul disco restano.">Annulla importazione</button>
             {% endif %}
-            <form method="post" action="/importazione/cartella/{{ cartella.id }}/togli">
-                {% if dove_torno %}
-                <input type="hidden" name="dove_torno" value="{{ dove_torno }}">
-                {% endif %}
-                <button class="tasto-comando nudo cn-togli" type="submit"
-                        title="Toglie la cartella dall'elenco. Gli scatti restano."
-                        aria-label="Togli la cartella">{{ icona('x', 14) }}</button>
-            </form>
+            <button class="tasto-comando nudo cn-togli" type="button" data-apri-annulla="togli-{{ cartella.id }}"
+                    title="Toglie la cartella dall'elenco. Gli scatti restano."
+                    aria-label="Togli la cartella">{{ icona('x', 14) }}</button>
+            <dialog class="finestra" id="togli-{{ cartella.id }}" aria-label="Togli la cartella dall'elenco">
+                <header><h2>Togli dall'elenco?</h2><button class="tasto-comando nudo piccolo" type="button" data-chiudi-annulla aria-label="Chiudi">{{ icona('x', 18) }}</button></header>
+                <div class="finestra-dentro">
+                    <p class="nome-di-file">{{ cartella.percorso }}</p>
+                    <p>Le prossime importazioni non guarderanno più dentro questa cartella.</p>
+                    <p class="piccolo attenuato">Gli scatti già arrivati da qui restano nell'app e i file sul disco non si toccano. Se cambi idea, basta aggiungerla di nuovo.</p>
+                    <form method="post" action="/importazione/cartella/{{ cartella.id }}/togli" class="riga-fra">
+                        {% if dove_torno %}<input type="hidden" name="dove_torno" value="{{ dove_torno }}">{% endif %}
+                        <button class="tasto-comando" type="button" data-chiudi-annulla autofocus>Lascia stare</button>
+                        <button class="tasto-comando principale" type="submit">Togli dall'elenco</button>
+                    </form>
+                </div>
+            </dialog>
         </li>
         {% else %}
         <li class="cn-vuoto">Nessuna cartella, ancora.</li>
