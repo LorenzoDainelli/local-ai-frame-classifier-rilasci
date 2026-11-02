@@ -36,6 +36,8 @@ lavoro_date = lavori.Lavoro("le date da rileggere")
 date_basta = threading.Event()
 lavoro_macchine = lavori.Lavoro("le macchine da rileggere")
 macchine_basta = threading.Event()
+lavoro_fps = lavori.Lavoro("gli FPS dei video da leggere")
+fps_basta = threading.Event()
 passata_volti = None
 passata_corpi = None
 

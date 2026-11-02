@@ -12,6 +12,12 @@ from officina.modello.luoghi import coordinate_valide
 MESI = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
         "agosto", "settembre", "ottobre", "novembre", "dicembre")
 
+FASCE_FPS = {
+    "ridotti": "ROUND(f.fps) <= 55",
+    "medi": "ROUND(f.fps) BETWEEN 56 AND 85",
+    "alti": "ROUND(f.fps) >= 86",
+}
+
 
 @dataclass
 class Filtro:
@@ -22,6 +28,7 @@ class Filtro:
     dal: str | None = None
     al: str | None = None
     genere: str | None = None
+    fps: str | None = None
     senza_etichetta: bool = False
     senza_data: bool = False
     data_indovinata: bool = False
@@ -46,7 +53,8 @@ class Filtro:
     def e_vuoto(self) -> bool:
         return not any([
             self.nodi_e, self.nodi_o, self.nodi_meno, self.dal, self.al,
-            self.genere, self.senza_etichetta, self.senza_data, self.data_indovinata,
+            self.genere, self.fps, self.senza_etichetta, self.senza_data,
+            self.data_indovinata,
             self.solo_schermate, self.escludi_schermate, self.fuori_archivio,
             self.col_cuore, self.evidenziati,
             self.persone, self.luogo, self.simili_a, self.importazione, self.parole,
@@ -113,6 +121,10 @@ def _condizioni(connessione: sqlite3.Connection, filtro: Filtro) -> tuple[str, l
     if filtro.genere:
         pezzi.append("s.genere = ?")
         parametri.append(filtro.genere)
+    if filtro.fps in FASCE_FPS:
+        pezzi.append("s.genere = 'video' AND EXISTS (SELECT 1 FROM file_media f "
+                     "WHERE f.scatto_id = s.id AND f.ruolo = 'principale' "
+                     f"AND f.genere = 'video' AND f.fps > 0 AND {FASCE_FPS[filtro.fps]})")
     if filtro.senza_data:
         pezzi.append("s.data_locale IS NULL")
     if filtro.data_indovinata:

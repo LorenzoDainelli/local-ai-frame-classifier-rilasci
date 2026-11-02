@@ -15,7 +15,7 @@ _peso_dei_nodi = memoria.Ricordo("il peso dei nodi")
 def chiave(filtro: Filtro) -> tuple:
     return (
         tuple(filtro.nodi_e), tuple(filtro.nodi_o), tuple(filtro.nodi_meno),
-        filtro.ramo, filtro.dal, filtro.al, filtro.genere,
+        filtro.ramo, filtro.dal, filtro.al, filtro.genere, filtro.fps,
         filtro.senza_etichetta, filtro.senza_data, filtro.solo_schermate,
         filtro.escludi_schermate, filtro.fuori_archivio, filtro.col_cuore,
         filtro.evidenziati, filtro.senza_evidenziati,
@@ -60,6 +60,8 @@ def _conta_la_colonna(connessione: sqlite3.Connection, filtro: Filtro) -> dict:
         "generi": {chiave_genere: scatti.conta(
             connessione, filtro.copia_con(genere=chiave_genere))
             for chiave_genere in ("foto", "live", "video")},
+        "fps": {fascia: scatti.conta(connessione, filtro.copia_con(fps=fascia))
+                for fascia in scatti.FASCE_FPS},
         "cosa_vedi": {
             "tutti": scatti.conta(connessione, filtro.copia_con(senza_etichetta=False)),
             "senza_etichetta": scatti.conta(

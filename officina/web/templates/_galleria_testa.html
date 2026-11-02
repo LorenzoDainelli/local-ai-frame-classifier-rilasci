@@ -102,6 +102,18 @@
             </div>
         {% endcall %}
 
+        {% call tendina('fps', 'FPS dei video', 'video', 1 if filtro.fps else 0) %}
+            <div class="tendina-voci">
+                {% for voce in fasce_fps %}
+                <a class="voce-filtro {{ 'piena' if filtro.fps == voce.chiave }}" href="{{ voce.collegamento }}">
+                    <span class="casella-filtro" aria-hidden="true"></span>
+                    <span class="voce-filtro-nome">{{ voce.nome }} <span class="tenue">· {{ voce.quanti }}</span></span>
+                    <span class="conto numeri aspetta" data-numero="fps:{{ voce.chiave }}" data-svuota>&middot;</span>
+                </a>
+                {% endfor %}
+            </div>
+        {% endcall %}
+
         {% if gruppi_archivio %}
         {% call tendina('gruppi', 'Gruppi', 'cartella', 1 if filtro.gruppo else 0) %}
             <div class="tendina-voci">

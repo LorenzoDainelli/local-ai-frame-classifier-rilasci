@@ -14,8 +14,8 @@ from officina.archivio.database import tutti, uno
 from officina.errori import (DaRifare, ErroreOfficina, FileNonLeggibile, PasswordSbagliata,
                              perche_saltato)
 from officina.immagini import lettura
-from officina.importazione import (metadati, raddrizza, rileggi_date, rileggi_macchine,
-                                    ripasso)
+from officina.importazione import (metadati, raddrizza, rileggi_date, rileggi_fps,
+                                    rileggi_macchine, ripasso)
 from officina.modello import file_media, segnalazioni
 from officina.programma import archivio_sicuro
 from officina.sicuro.dall_archivio import (CHIUSO_ADESSO, DIVERSA, PERSA, SENZA_ARCHIVIO,
@@ -654,6 +654,15 @@ def _dritto(connessione, pronta) -> bool:
     return (riga["larghezza"], riga["altezza"]) == (ALTA, LARGA)
 
 
+def _senza_fps(connessione, pronta) -> None:
+    connessione.execute("UPDATE file_media SET fps = NULL WHERE id = ?", (pronta.file_id,))
+
+
+def _con_gli_fps(connessione, pronta) -> bool:
+    return uno(connessione, "SELECT fps FROM file_media WHERE id = ?",
+               pronta.file_id)["fps"] == 8.0
+
+
 RILETTORI = {
     "date": ("scheda_nell_archivio", rileggi_date, rileggi_date.tutti_i_file,
              rileggi_date.RIMANDATE, _senza_data, _con_la_data),
@@ -661,6 +670,8 @@ RILETTORI = {
                  rileggi_macchine.RIMANDATE, _senza_macchina, _con_la_macchina),
     "video": ("girato_nell_archivio", raddrizza, raddrizza.tutti_i_video,
               raddrizza.RIMANDATI, _storto, _dritto),
+    "fps": ("girato_nell_archivio", rileggi_fps, rileggi_fps.tutti_i_file,
+            rileggi_fps.RIMANDATI, _senza_fps, _con_gli_fps),
 }
 
 
@@ -934,7 +945,7 @@ def test_aperto_mentre_si_chiude_non_fa_ripartire_niente(posto, monkeypatch):
 
 
 RIPASSI = ("raddrizza_i_video_in_sottofondo", "rileggi_le_date_in_sottofondo",
-           "rileggi_le_macchine_in_sottofondo")
+           "rileggi_le_macchine_in_sottofondo", "rileggi_gli_fps_in_sottofondo")
 
 
 def _ripassi(cambia, rotto: str | None = None) -> tuple[object, list]:

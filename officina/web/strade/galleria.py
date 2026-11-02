@@ -35,6 +35,7 @@ def galleria(richiesta: Request):
         importazione.raddrizza_i_video_in_sottofondo(archivio)
         importazione.rileggi_le_date_in_sottofondo(archivio)
         importazione.rileggi_le_macchine_in_sottofondo(archivio)
+        importazione.rileggi_gli_fps_in_sottofondo(archivio)
         if not archivio.stato("guida_fatta"):
             with archivio.lettura() as connessione:
                 vuoto = uno(connessione, "SELECT count(*) AS q FROM scatti")["q"] == 0
@@ -75,6 +76,11 @@ def galleria(richiesta: Request):
                  genere=None if filtro.genere == genere else genere))}
             for genere, nome in (("foto", "Foto"), ("live", "Live"),
                                  ("video", "Video"))]
+        fasce_fps = [
+            {"chiave": fascia, "nome": nome, "quanti": quanti,
+             "collegamento": vista.indirizzo(filtro.copia_con(
+                 fps=None if filtro.fps == fascia else fascia))}
+            for fascia, (nome, quanti) in vista.FPS.items()]
 
         pillole = vista.pillole_attive(connessione, filtro)
         frase = vista.frase(connessione, filtro, quanti)
@@ -101,6 +107,7 @@ def galleria(richiesta: Request):
         "quanti": quanti,
         "nodi_filtro": elenco_nodi,
         "generi": generi,
+        "fasce_fps": fasce_fps,
         "pillole_attive": pillole,
         "frase_filtri": frase,
         "oltre_la_soglia": oltre_la_soglia,

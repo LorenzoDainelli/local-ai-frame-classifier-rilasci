@@ -618,7 +618,8 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             return
         for riparti in (importazione.raddrizza_i_video_in_sottofondo,
                         importazione.rileggi_le_date_in_sottofondo,
-                        importazione.rileggi_le_macchine_in_sottofondo):
+                        importazione.rileggi_le_macchine_in_sottofondo,
+                        importazione.rileggi_gli_fps_in_sottofondo):
             try:
                 riparti(archivio)
             except Exception as guasto:

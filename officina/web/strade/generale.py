@@ -34,7 +34,8 @@ def _tutti_i_lavori() -> list:
              comune.lavoro_corpi, comune.lavoro_chi_e,
              comune.lavoro_parole, comune.lavoro_riferimento, comune.lavoro_raccolta,
              comune.lavoro_copia_video, comune.lavoro_doppioni, comune.lavoro_raddrizza,
-             comune.lavoro_date, comune.lavoro_macchine, comune.lavoro_misura,
+             comune.lavoro_date, comune.lavoro_macchine, comune.lavoro_fps,
+             comune.lavoro_misura,
              telefono_web.in_corso.lavoro, sincronia_web.in_corso.lavoro,
              comune.lavoro_qualita, comune.lavoro_ia]
     ritocchi = coda_ritocco.il_lavoro()
@@ -117,6 +118,7 @@ def ferma_tutto(entro: float = 5.0) -> None:
     comune.raddrizza_basta.set()
     comune.date_basta.set()
     comune.macchine_basta.set()
+    comune.fps_basta.set()
     comune.ferma_la_qualita.set()
     try:
         if base.la_porta().chiusura is None:

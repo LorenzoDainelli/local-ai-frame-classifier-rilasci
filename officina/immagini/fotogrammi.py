@@ -210,6 +210,25 @@ def misure_dal_decodificatore(percorso: Path) -> tuple[int | None, int | None]:
     return (alta, larga) if gradi in (90, 270) else (larga, alta)
 
 
+FPS_MASSIMI = 1000
+
+
+def fps_dal_decodificatore(percorso) -> float | None:
+    if not c_e_il_decodificatore():
+        return None
+    try:
+        with per_av(percorso) as sorgente, _av().open(sorgente) as contenitore:
+            traccia = next((t for t in contenitore.streams if t.type == "video"), None)
+            if traccia is None:
+                return None
+            al_secondo = _quanti_e_ritmo(contenitore, traccia)[1]
+    except Exception:
+        return None
+    if not 0 < al_secondo <= FPS_MASSIMI:
+        return None
+    return round(al_secondo, 3)
+
+
 def _quanti_e_ritmo(contenitore, traccia) -> tuple[int, float]:
     al_secondo = float(traccia.average_rate or 0) or float(traccia.guessed_rate or 0)
 

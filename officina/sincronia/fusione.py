@@ -10,6 +10,7 @@ from typing import Callable
 
 from officina.archivio.database import adesso, inserisci, tutti, uno
 from officina.errori import ErroreOfficina
+from officina.importazione import rileggi_fps
 from officina.impostazioni import PREDEFINITE, VIAGGIANO, valore_ammesso
 from officina.modello import cambiamenti, persone as modello_persone, telefoni
 from officina.modello.nodi import SEPARATORE
@@ -400,6 +401,8 @@ def _porta_dentro_le_cose(archivio, pacchetto: lettore.Aperto,
                 riga["longitudine"], riga["sembra_schermata"] or 0,
                 scatto_id, riga["ruolo"], adesso())
             esito.file_nuovi += 1
+            if riga["genere"] == "video":
+                rileggi_fps.da_leggere(connessione, file_id)
         else:
             file_id = gia["id"]
 

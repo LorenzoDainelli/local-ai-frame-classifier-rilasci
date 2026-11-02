@@ -59,12 +59,20 @@ def fuso_a_parole(minuti: int | None) -> str:
 
 TIPI = {"foto": "fotografia", "live": "live photo", "video": "video"}
 
+FPS = {"ridotti": ("Ridotti", "fino a 55 FPS"), "medi": ("Medi", "da 56 a 85 FPS"),
+       "alti": ("Alti", "da 86 FPS in su")}
+
 
 def _intero(grezzo) -> int | None:
     testo = str(grezzo or "").strip()
     if testo.isascii() and testo.isdecimal() and len(testo) <= 18:
         return int(testo)
     return None
+
+
+def _fascia_fps(grezzo) -> str | None:
+    testo = str(grezzo or "")
+    return testo if testo in FPS else None
 
 
 def filtro_da_parametri(parametri) -> Filtro:
@@ -83,6 +91,7 @@ def filtro_da_parametri(parametri) -> Filtro:
         dal=(parametri.get("dal") or None),
         al=(parametri.get("al") or None),
         genere=(parametri.get("genere") or None),
+        fps=_fascia_fps(parametri.get("fps")),
         senza_etichetta=acceso("da_fare"),
         senza_data=acceso("senza_data"),
         solo_schermate=acceso("schermate"),
@@ -118,6 +127,8 @@ def parametri_da_filtro(filtro: Filtro) -> dict:
         parametri["al"] = filtro.al
     if filtro.genere:
         parametri["genere"] = filtro.genere
+    if filtro.fps:
+        parametri["fps"] = filtro.fps
     if filtro.senza_etichetta:
         parametri["da_fare"] = "1"
     if filtro.senza_data:
@@ -188,6 +199,9 @@ def pillole_attive(connessione: sqlite3.Connection, filtro: Filtro) -> list[dict
 
     if filtro.genere:
         aggiungi(TIPI.get(filtro.genere, filtro.genere), filtro.copia_con(genere=None))
+    if filtro.fps in FPS:
+        nome, quanti = FPS[filtro.fps]
+        aggiungi(f"FPS {nome.lower()} · {quanti}", filtro.copia_con(fps=None))
     if filtro.senza_etichetta:
         aggiungi("senza etichetta", filtro.copia_con(senza_etichetta=False))
     if filtro.senza_data:

@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from officina.archivio import accesso
 from officina.archivio.database import tutti
 from officina.errori import ErroreOfficina
-from officina.importazione import raddrizza, rileggi_date, rileggi_macchine
+from officina.importazione import raddrizza, rileggi_date, rileggi_fps, rileggi_macchine
 from officina.importazione.motore import InSottofondo, Motore
 from officina.web import vista
 
@@ -45,6 +45,15 @@ def rileggi_le_macchine_in_sottofondo(archivio) -> bool:
     return comune.lavoro_macchine.parti(
         lambda: rileggi_macchine.tutti_i_file(archivio, comune.macchine_basta.is_set),
         "rileggi_macchine")
+
+
+def rileggi_gli_fps_in_sottofondo(archivio) -> bool:
+    if accesso.in_prova() or not archivio.stato(rileggi_fps.FINO_A):
+        return False
+    comune.fps_basta.clear()
+    return comune.lavoro_fps.parti(
+        lambda: rileggi_fps.tutti_i_file(archivio, comune.fps_basta.is_set),
+        "rileggi_fps")
 
 
 def motore_attuale() -> Motore:

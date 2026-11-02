@@ -37,6 +37,7 @@ class Metadati:
     altezza: int | None = None
     orientamento: int | None = None
     durata_ms: int | None = None
+    fps: float | None = None
 
     data_locale: str | None = None
     fuso_minuti: int | None = None
@@ -254,10 +255,11 @@ def _leggi_immagine(immagine) -> Metadati:
 
 
 def da_video(percorso: Path) -> Metadati:
+    from officina.immagini import fotogrammi
+
     video = quicktime.leggi(percorso)
     larghezza, altezza = quicktime.misure_raddrizzate(video)
     if not larghezza or not altezza:
-        from officina.immagini import fotogrammi
         larghezza, altezza = fotogrammi.misure_dal_decodificatore(percorso)
     dati = Metadati(
         genere="video",
@@ -265,6 +267,7 @@ def da_video(percorso: Path) -> Metadati:
         larghezza=larghezza,
         altezza=altezza,
         durata_ms=video.durata_ms,
+        fps=fotogrammi.fps_dal_decodificatore(percorso),
         data_locale=video.data_locale,
         fuso_minuti=video.fuso_minuti,
         istante_utc=video.istante_utc,
