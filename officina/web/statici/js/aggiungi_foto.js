@@ -1,9 +1,8 @@
 import { comeSiScorre, numeroAParole } from "./comune.js";
 import { sceltaDelGruppo } from "./scelta_gruppo.js";
+import { disponi, tagliaPer } from "./tessere.js";
 import "./cartella_nuova.js";
 import "./aggiungi_foto_segue.js";
-
-const TESSERA_MINIMA = 240;
 
 function dilloSopra(testo) {
     let avviso = document.getElementById("guasto-pagina");
@@ -21,12 +20,9 @@ function dilloSopra(testo) {
 function proporziona(griglia) {
     const pezzi = [...griglia.children];
     if (!pezzi.length) return;
+    griglia.dataset.taglia = tagliaPer(pezzi.length).nome;
     const spazio = parseFloat(getComputedStyle(griglia).columnGap) || 0;
-    const massimo = Math.max(1, Math.floor(
-        (griglia.clientWidth + spazio) / (TESSERA_MINIMA + spazio)));
-    const file = Math.ceil(pezzi.length / massimo);
-    const colonne = Math.ceil(pezzi.length / file);
-    const avanzo = colonne * file - pezzi.length;
+    const { colonne, avanzo } = disponi(pezzi.length, griglia.clientWidth, spazio);
     griglia.style.gridTemplateColumns = `repeat(${colonne}, minmax(0, 1fr))`;
     pezzi.forEach((pezzo) => { pezzo.style.gridColumn = ""; });
     if (avanzo) pezzi[pezzi.length - 1].style.gridColumn = `span ${avanzo + 1}`;

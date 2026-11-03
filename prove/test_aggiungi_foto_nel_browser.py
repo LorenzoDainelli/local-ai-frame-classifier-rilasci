@@ -109,19 +109,28 @@ def _righe(pagina) -> list[int]:
     }""")
 
 
-@pytest.mark.parametrize("quante, larga, colonne, allarga, righe", [
-    (1, 1440, 2, "", [2]),
-    (3, 1440, 2, "", [2, 2]),
-    (4, 1440, 3, "span 2", [3, 2]),
-    (5, 1440, 3, "", [3, 3]),
-    (3, 390, 1, "", [1, 1, 1, 1]),
+@pytest.mark.parametrize("quante, larga, colonne, allarga, righe, taglia", [
+    (1, 1440, 2, "", [2], "grande"),
+    (2, 1440, 3, "", [3], "grande"),
+    (3, 1440, 2, "", [2, 2], "media"),
+    (4, 1440, 3, "span 2", [3, 2], "media"),
+    (5, 1440, 3, "", [3, 3], "media"),
+    (7, 1440, 4, "", [4, 4], "media"),
+    (8, 1440, 4, "span 4", [4, 4, 1], "piccola"),
+    (10, 1440, 4, "span 2", [4, 4, 3], "piccola"),
+    (12, 1440, 4, "span 4", [4, 4, 4, 1], "piccola"),
+    (2, 1150, 2, "span 2", [2, 1], "grande"),
+    (7, 1270, 4, "", [4, 4], "media"),
+    (3, 390, 1, "", [1, 1, 1, 1], "media"),
 ])
 def test_le_tessere_si_dividono_in_file_uguali(apri, archivio, tmp_path, quante, larga,
-                                              colonne, allarga, righe):
+                                              colonne, allarga, righe, taglia):
     _cartelle(archivio, tmp_path, quante)
     pagina = apri("/importazione", larga)
     assert _griglia(pagina) == [colonne, allarga]
     assert _righe(pagina) == righe
+    assert pagina.evaluate(
+        "() => document.querySelector('[data-proporziona]').dataset.taglia") == taglia
     assert pagina.evaluate("() => document.documentElement.scrollWidth "
                            "<= document.documentElement.clientWidth")
 

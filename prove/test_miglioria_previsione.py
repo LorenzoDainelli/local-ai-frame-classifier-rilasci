@@ -861,8 +861,9 @@ def test_la_pagina_dice_quanto_manca_e_quanto_sbaglia(cliente, importato, versio
     _metti_davvero(importato, "piccola.jpg")
     _impara_le_foto(importato, secondi=7200.0, prevista=6480.0, quante=5)
     testo = _pagina(cliente)
-    assert re.search(r"Alla foto in coda mancano circa \d (ora|ore) e \d+ minuti "
-                     r"\(se lo avvii adesso, finisce verso le \d\d:\d0\)\.", testo)
+    assert re.search(r"Alla foto in coda mancano circa \d (ora|ore)( e \d+ minut[oi])? "
+                     r"\(se lo avvii adesso, finisce (domani )?verso le \d\d:\d0\)\.",
+                     testo)
     assert "Sugli ultimi 5 file finiti la previsione ha sbagliato di circa il 10%." in testo
     assert testo.count('id="previsione-miglioramento"') == 1
 

@@ -49,6 +49,21 @@
 .ag-rosso small { color: var(--tenue); font-size: 11.5px; }
 
 .ag-aggiungi.ag-tessera { justify-content: center; gap: 10px; min-height: 150px; border-style: dashed; background: transparent; }
+.ag-tessere[data-taglia="grande"] { gap: 16px; }
+.ag-tessere[data-taglia="grande"] > .ag-tessera { gap: 10px; padding: 18px; border-radius: 14px; }
+.ag-tessere[data-taglia="grande"] .ag-icona { width: 42px; height: 42px; border-radius: 11px; }
+.ag-tessere[data-taglia="grande"] .ag-nome { font-size: 16.5px; }
+.ag-tessere[data-taglia="grande"] .ag-dove { font-size: 12.5px; }
+.ag-tessere[data-taglia="grande"] > .ag-aggiungi.ag-tessera { min-height: 180px; }
+.ag-tessere[data-taglia="piccola"] { gap: 10px; }
+.ag-tessere[data-taglia="piccola"] > .ag-tessera { gap: 6px; padding: 11px; border-radius: 10px; }
+.ag-tessere[data-taglia="piccola"] .ag-icona { width: 28px; height: 28px; border-radius: 8px; }
+.ag-tessere[data-taglia="piccola"] .ag-nome { font-size: 13.5px; }
+.ag-tessere[data-taglia="piccola"] .ag-dove { font-size: 11.5px; }
+.ag-tessere[data-taglia="piccola"] > .ag-aggiungi.ag-tessera { min-height: 120px; }
+.ag-tessere[data-taglia="piccola"] .ag-tessera > .piccolo { font-size: 12px; }
+.ag-tessere[data-taglia="piccola"] .ag-vanno { flex-wrap: nowrap; gap: 6px; padding-top: 2px; }
+.ag-tessere[data-taglia="piccola"] .ag-gruppo { height: 26px; padding: 0 6px 0 9px; font-size: 12px; }
 .ag-aggiungi.primo { width: min(100%, 460px); text-align: left; }
 .ag-vuoto { display: grid; justify-items: center; gap: 10px; padding: 18px 12px 6px; text-align: center; color: var(--attenuato); }
 .ag-vuoto > p { max-width: 46ch; }
