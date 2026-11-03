@@ -148,7 +148,8 @@ def aggiungi_cartella(connessione: sqlite3.Connection, percorso: Path,
     )
     if esistente:
         connessione.execute(
-            "UPDATE cartelle_sorgente SET attiva = 1 WHERE id = ?", (esistente["id"],)
+            "UPDATE cartelle_sorgente SET attiva = 1, tolta_il = NULL WHERE id = ?",
+            (esistente["id"],)
         )
         if cambia_gruppo:
             connessione.execute(
@@ -164,8 +165,18 @@ def aggiungi_cartella(connessione: sqlite3.Connection, percorso: Path,
 
 def togli_cartella(connessione: sqlite3.Connection, cartella_id: int) -> None:
     connessione.execute(
-        "UPDATE cartelle_sorgente SET attiva = 0 WHERE id = ?", (cartella_id,)
+        "UPDATE cartelle_sorgente SET attiva = 0, tolta_il = ? WHERE id = ? AND attiva = 1",
+        (adesso(), cartella_id)
     )
+
+
+def rimetti_cartella(connessione: sqlite3.Connection, cartella_id: int) -> bool:
+    cambiate = connessione.execute(
+        "UPDATE cartelle_sorgente SET attiva = 1, tolta_il = NULL "
+        "WHERE id = ? AND attiva = 0",
+        (cartella_id,)
+    ).rowcount
+    return cambiate == 1
 
 
 def cartella_di(connessione: sqlite3.Connection, percorso: Path) -> int | None:

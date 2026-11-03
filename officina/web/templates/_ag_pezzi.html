@@ -1,0 +1,110 @@
+{% from "_icone.html" import icona %}
+
+{% macro scelte_gruppo(gruppi, scelto) -%}
+<fieldset class="ag-scelte">
+    <legend class="etichetta">Dove vanno le foto</legend>
+    <label class="ag-scelta">
+        <input type="radio" name="gruppo" value="" {{ 'checked' if not scelto }}>
+        <span><span>Archivio generale</span><span class="piccolo tenue">Nessun gruppo: stanno in Galleria con tutte le altre.</span></span>
+    </label>
+    {% for gruppo in gruppi %}
+    <label class="ag-scelta">
+        <input type="radio" name="gruppo" value="{{ gruppo.id }}" {{ 'checked' if scelto == gruppo.id }}>
+        <span><span>Gruppo {{ gruppo.nome }}</span><span class="piccolo tenue">
+            {%- if gruppo.cartelle == 1 %}1 cartella{% elif gruppo.cartelle %}{{ gruppo.cartelle }} cartelle
+            {%- else %}Ancora nessuna cartella{% endif %}</span></span>
+    </label>
+    {% endfor %}
+    <label class="ag-scelta">
+        <input type="radio" name="gruppo" value="nuovo">
+        <span><span>Nuovo gruppo…</span>
+        <input class="campo" name="gruppo_nuovo" maxlength="40" autocomplete="off" data-nome-gruppo
+               placeholder="Nome del gruppo, per esempio Snapchat" aria-label="Nome del gruppo nuovo"></span>
+    </label>
+</fieldset>
+<p class="cn-nota">Tutto resta nello stesso archivio. Il gruppo serve a vederle anche da sole, con il filtro «Gruppi» della galleria.</p>
+<p class="cn-errore" data-errore-gruppo role="alert" hidden></p>
+{%- endmacro %}
+
+{% macro chiedi_gruppo(gruppi, gruppo_ultimo) -%}
+<dialog class="finestra ag-finestra-gruppo" data-chiedi-gruppo aria-label="Dove vanno le foto">
+    <header><h2>Dove vanno le foto di «<span data-nome></span>»?</h2><button class="tasto-comando nudo piccolo" type="button" data-chiudi-finestra aria-label="Chiudi">{{
+        icona('x', 18) }}</button></header>
+    <form class="finestra-dentro" data-gruppo-modulo>
+        <p class="nome-di-file ag-percorso" data-dove></p>
+        {{ scelte_gruppo(gruppi, gruppo_ultimo) }}
+        <div class="ag-tasti-fine">
+            <button class="tasto-comando" type="button" data-chiudi-finestra>Lascia stare</button>
+            <button class="tasto-comando principale" type="submit">Aggiungi la cartella</button>
+        </div>
+    </form>
+</dialog>
+{%- endmacro %}
+
+{% macro aggiungi(primo, da_questo_computer, si_puo_sfogliare, gruppi, gruppo_ultimo) -%}
+{% if da_questo_computer %}
+<div class="cn ag-aggiungi{{ ' primo' if primo else ' ag-tessera' }}" data-cartella-nuova-riquadro {% if primo %}data-autofocus{% endif %}>
+    {% if si_puo_sfogliare %}
+    <button class="tasto-comando cn-sfoglia {{ 'principale' if primo }}" type="button"
+            data-sfoglia hidden title="Apre la finestra di Windows per scegliere la cartella.">
+        <span class="gira-poco" data-gira hidden></span>
+        <span data-icona>{{ icona('cartella' if primo else 'piu', 16) }}</span>
+        <span data-scritta>{{ "Scegli una cartella…" if primo else "Scegli un'altra cartella…" }}</span>
+    </button>
+    <p class="cn-nota" data-finestra-aperta hidden>La finestra per scegliere è aperta. Se non la vedi, è finita dietro a questa.</p>
+    <div class="cn-oppure" data-oppure hidden><span></span>oppure scrivi il percorso<span></span></div>
+    {% else %}
+    <p class="piccolo attenuato">{{ "Scrivi il percorso della cartella" if primo else "Scrivi il percorso di un'altra cartella" }}</p>
+    {% endif %}
+    <form method="post" action="/importazione/cartella" class="cn-scrivi" data-cartella-nuova>
+        <label class="campo cn-campo">
+            <input name="percorso" placeholder="C:\Users\…\Foto" required
+                   autocomplete="off" spellcheck="false" aria-label="Percorso della cartella"
+                   {% if primo and not si_puo_sfogliare %}autofocus{% endif %}>
+            <button class="tasto-comando nudo cn-dentro" type="button" data-incolla hidden
+                    title="Mette nella casella il percorso che hai copiato."
+                    aria-label="Incolla">{{ icona('incolla', 15) }}</button>
+        </label>
+        <button class="tasto-comando cn-entra" type="submit"
+                title="Aggiunge la cartella. Si può anche premere Invio."
+                aria-label="Aggiungi la cartella">{{ icona('freccia', 16) }}</button>
+    </form>
+    <p class="cn-errore" data-errore role="alert" hidden></p>
+    {% if not si_puo_sfogliare %}
+    <p class="cn-nota" data-a-mano>In Esplora risorse il percorso si copia dalla barra in cima alla finestra.</p>
+    {% endif %}
+    {{ chiedi_gruppo(gruppi, gruppo_ultimo) }}
+</div>
+{% else %}
+<div class="ag-aggiungi{{ ' primo' if primo else ' ag-tessera' }}">
+    <p class="cn-nota">Le cartelle si aggiungono dal computer dove gira il programma.</p>
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro conta(scritta, classe) -%}
+<form method="post" action="/importazione/prepara" data-conta>
+    <input type="hidden" name="parti_da_sola" value="si">
+    <button class="tasto-comando {{ classe }}" type="submit">{{ icona('scarica', 16) }} <span data-scritta>{{ scritta }}</span></button>
+</form>
+{%- endmacro %}
+
+{% macro conti(nuovi, live, gia, saltati, vivi) -%}
+<dl class="ag-conti">
+    <div><dt>Scatti nuovi</dt><dd class="numeri"{% if vivi %} id="conto-scatti"{% endif %}>{{ nuovi|numero }}</dd></div>
+    <div><dt>Coppie live</dt><dd class="numeri"{% if vivi %} id="conto-live"{% endif %}>{{ live|numero }}</dd></div>
+    <div><dt>Già presenti</dt><dd class="numeri"{% if vivi %} id="conto-gia"{% endif %}>{{ gia|numero }}</dd></div>
+    <div><dt>Saltati</dt><dd class="numeri"{% if vivi %} id="conto-saltati"{% endif %}>{{ saltati|numero }}</dd></div>
+</dl>
+{%- endmacro %}
+
+{% macro menu(etichetta) -%}
+<details class="ag-menu">
+    <summary class="tasto-comando nudo piccolo" aria-label="{{ etichetta }}" title="Altro">{{ icona('puntini', 16) }}</summary>
+    <div class="ag-menu-dentro">{{ caller() }}</div>
+</details>
+{%- endmacro %}
+
+{% macro scatti_a_parole(n) -%}
+{{ '1 scatto' if n == 1 else (n|numero ~ ' scatti') }}
+{%- endmacro %}

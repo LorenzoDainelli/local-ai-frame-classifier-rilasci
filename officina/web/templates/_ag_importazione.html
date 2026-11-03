@@ -1,0 +1,136 @@
+{% from "_icone.html" import icona %}
+{% from "_ag_pezzi.html" import conta, conti, scatti_a_parole %}
+{% set quante = tessere|length %}
+<section class="carta ag-fascia ag-importa" id="pannello-avanzamento" data-momento="{{ momento }}" aria-labelledby="ag-titolo-importazione">
+    <div class="ag-fascia-testa">
+        <h2 id="ag-titolo-importazione">L'importazione</h2>
+        {% if momento == 'pronta' %}<span class="ag-bollo">Pronta</span>
+        {% elif momento == 'piano' and piano.file and not piano.spazio_basta %}<span class="ag-bollo giallo">Ferma: spazio</span>
+        {% elif momento == 'piano' %}<span class="ag-bollo">Contati</span>
+        {% elif momento == 'lavora' %}<span class="ag-bollo arancio" id="bollo-importazione">In corso · {{ (stato.percentuale + 0.5)|int }}%</span>
+        {% elif momento == 'ferma' %}<span class="ag-bollo giallo">Ferma</span>
+        {% elif momento == 'finita' %}<span class="ag-bollo verde">Finita</span>
+        {% endif %}
+    </div>
+
+    {% if momento == 'vuota' %}
+    <p class="attenuato">Quando c'è almeno una cartella, qui conto i file e li porto dentro l'archivio.</p>
+    <div class="in-fila"><button class="tasto-comando principale grande" type="button" disabled>{{ icona('scarica', 16) }} Conta e importa</button></div>
+
+    {% elif momento == 'pronta' %}
+    <div class="ag-su">
+        <div class="ag-testo">
+            <h3>Pronta a partire</h3>
+            <p class="attenuato">Conto i file nuovi {{ 'nella cartella' if quante == 1
+                else 'nelle ' ~ quante ~ ' cartelle' }}. Se lo spazio sul disco basta, l'importazione parte da sola.</p>
+        </div>
+        {{ conta("Conta e importa", "principale grande") }}
+    </div>
+    {% if finita_prima %}
+    <p class="piccolo tenue numeri">L'ultima volta, {{ finita_prima.il_giorno }}: {{
+        scatti_a_parole(finita_prima.nuovi_scatti) }} {{ 'nuovo' if finita_prima.nuovi_scatti == 1
+        else 'nuovi' }}.</p>
+    {% endif %}
+
+    {% elif momento == 'piano' %}
+    <div class="ag-trovato">
+        <span class="ag-grosso numeri">{{ piano.file|numero }}</span>
+        <span class="attenuato">file da importare · <span class="numeri">{{ piano.peso }}</span></span>
+    </div>
+    {% if not piano.file %}
+    <p class="attenuato">Qui dentro non ho trovato foto né video da importare.</p>
+    <div class="in-fila">{{ conta("Conta di nuovo", "") }}</div>
+    {% elif not piano.spazio_basta %}
+    <div class="avviso forte"><div>
+        <b>Non è partita da sola</b>
+        <p>Lo spazio potrebbe non bastare: {{
+            piano.spazio }}. Libera un po' di spazio, poi premi «Conta e importa». Un'importazione che si ferma a metà non perde niente, ma è tempo buttato.</p>
+    </div></div>
+    <div class="in-fila">
+        {{ conta("Conta e importa", "principale") }}
+        <form method="post" action="/importazione/parti"><button class="tasto-comando" type="submit">Importa lo stesso</button></form>
+    </div>
+    {% else %}
+    <p class="piccolo tenue">Lo spazio basta: {{ piano.spazio }}.</p>
+    <div class="in-fila">
+        <form method="post" action="/importazione/parti"><button class="tasto-comando principale" type="submit">Importa {{ piano.file|numero }} file</button></form>
+        {{ conta("Conta di nuovo", "nudo") }}
+    </div>
+    {% endif %}
+
+    {% elif momento == 'lavora' %}
+    <div class="ag-su">
+        <div class="ag-trovato">
+            <span class="ag-grosso numeri" id="numero-fatti">{{ stato.fatti|numero }}</span>
+            <span class="attenuato" id="riga-stato">di {{ stato.totale|numero }} file · {{ stato.quanto_manca() }}</span>
+        </div>
+        <form method="post" action="/importazione/ferma"><button class="tasto-comando" type="submit">{{ icona('ferma', 15) }} Fermati</button></form>
+    </div>
+    <span class="barretta" aria-hidden="true"><span id="barra" style="width: {{ stato.percentuale }}%"></span></span>
+    {{ conti(stato.nuovi_scatti, stato.coppie_live, stato.gia_presenti, stato.saltati, true) }}
+    <div class="ag-arrivo" hidden>
+        <h3 class="etichetta">Quello che sta arrivando</h3>
+        <div class="ag-mosaico" id="mosaico"></div>
+    </div>
+    <p class="piccolo tenue">Si può chiudere tutto a metà: ogni scatto finito è già scritto, e alla riapertura riparte da sola.</p>
+
+    {% elif momento == 'ferma' %}
+    <div class="ag-trovato">
+        <span class="ag-grosso numeri">{{ stato.fatti|numero }}</span>
+        <span class="attenuato">di {{ stato.totale|numero }} file · ferma</span>
+    </div>
+    <span class="barretta ferma" aria-hidden="true"><span style="width: {{ stato.percentuale }}%"></span></span>
+    <div class="avviso forte"><div>
+        {% if perche_e_ferma == 'copia' %}
+        <b>Aspetta l'Archivio sicuro</b>
+        <p>Sta facendo la prima copia: l'importazione riparte da sola appena la copia è finita.</p>
+        {% elif perche_e_ferma == 'tu' %}
+        <b>L'hai fermata tu</b>
+        <p>Riparte quando premi «Riprendi», dalla riga dopo l'ultima finita.</p>
+        {% elif perche_e_ferma == 'disco' %}
+        <b>Non è ripartita da sola</b>
+        <p>Non trovo i prossimi file da importare. Se stanno su un disco esterno, attaccalo e premi «Riprendi».</p>
+        {% elif perche_e_ferma == 'spazio' %}
+        <b>Non è ripartita da sola</b>
+        <p>Lo spazio sul disco potrebbe non bastare. Liberane un po', poi premi «Riprendi».</p>
+        {% else %}
+        <b>Rimasta a metà</b>
+        <p>Premi «Riprendi»: continua dalla riga dopo l'ultima finita, non da capo.</p>
+        {% endif %}
+    </div></div>
+    <div class="in-fila">
+        <form method="post" action="/importazione/riprendi"><button class="tasto-comando principale" type="submit">Riprendi</button></form>
+    </div>
+    {{ conti(stato.nuovi_scatti, stato.coppie_live, stato.gia_presenti, stato.saltati, false) }}
+
+    {% elif momento == 'finita' %}
+    <div class="ag-trovato">
+        <span class="ag-grosso numeri">{{ ultima.totale|numero }}</span>
+        <span class="attenuato">file · finita{% if ultima.durata %} in {{ ultima.durata }}{% endif %}</span>
+    </div>
+    <span class="barretta finita" aria-hidden="true"><span style="width: 100%"></span></span>
+    {{ conti(ultima.nuovi_scatti, ultima.coppie_live, ultima.gia_presenti, ultima.saltati, false) }}
+    {% if ultima.nuovi_scatti %}
+    <div class="ag-arrivo" hidden>
+        <h3 class="etichetta">Le ultime arrivate</h3>
+        <div class="ag-mosaico" id="mosaico"></div>
+    </div>
+    <div class="avviso"><div>
+        <b>Adesso le foto si guardano</b>
+        <p>Il passo dopo sono le <b>impronte</b>: si calcolano una volta sola e servono a proposte, somiglianza e ricerca.</p>
+    </div></div>
+    {% else %}
+    <p class="attenuato">Niente di nuovo: questi file erano già tutti nell'archivio.</p>
+    {% endif %}
+    <div class="in-fila">
+        {% if ultima.quanti_scatti %}
+        <a class="tasto-comando principale" href="/?importazione={{ ultima.id }}"
+           title="Apre nella galleria solo gli scatti arrivati con questa importazione.">Apri {{
+               'lo scatto nuovo' if ultima.quanti_scatti == 1
+               else 'i ' ~ ultima.quanti_scatti|numero ~ ' scatti nuovi' }}</a>
+        {% endif %}
+        {% if ultima.nuovi_scatti %}<a class="tasto-comando" href="/stato#misura">Vai alla misura</a>{% endif %}
+        {{ conta("Conta e importa", "nudo") }}
+    </div>
+    {% endif %}
+</section>

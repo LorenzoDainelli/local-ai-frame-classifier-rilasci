@@ -18,8 +18,8 @@ RIPRENDI = 'action="/importazione/riprendi"'
 FERMA = 'action="/importazione/ferma"'
 NOTE = {"copia": "riparte da sola appena la copia è finita",
         "tu": "L'hai fermata tu",
-        "disco": "non trovo i file da importare",
-        "spazio": "lo spazio sul disco potrebbe non bastare"}
+        "disco": "Non trovo i prossimi file da importare",
+        "spazio": "Lo spazio sul disco potrebbe non bastare"}
 
 
 @pytest.fixture
@@ -184,18 +184,21 @@ def test_finita_non_ci_sono_tasti(cliente, foto):
 
 
 def test_i_conteggi_della_pagina_fanno_partire_da_soli(cliente, foto, monkeypatch):
-    moduli = r'<form method="post" action="/importazione/prepara">(.*?)</form>'
+    moduli = r'<form method="post" action="/importazione/prepara"[^>]*>(.*?)</form>'
     da_sola = '<input type="hidden" name="parti_da_sola" value="si">'
     cliente.post("/importazione/cartella", data={"percorso": str(foto)})
-    pagina = cliente.get("/importazione").text
-    primo = re.findall(moduli, pagina, re.S)
-    assert " data-dopo-il-lavoro hidden" not in pagina and "Contati:" not in pagina
+    primo = re.findall(moduli, cliente.get("/importazione").text, re.S)
     _poco_spazio(monkeypatch)
     cliente.post("/importazione/prepara", data={"parti_da_sola": "si"})
     secondo = re.findall(moduli, cliente.get("/importazione").text, re.S)
-    assert len(primo) == len(secondo) == 1
-    assert "Conta i file" in primo[0] and "Conta di nuovo" in secondo[0]
-    assert da_sola in primo[0] and da_sola in secondo[0]
+    monkeypatch.setattr(scansione, "controlla_spazio",
+                        lambda byte, dove: scansione.Spazio(servono=1, liberi=10 ** 12))
+    cliente.post("/importazione/prepara", data={"dove_torno": "/benvenuto/cartella"})
+    terzo = re.findall(moduli, cliente.get("/importazione").text, re.S)
+    assert len(primo) == len(secondo) == len(terzo) == 1
+    assert "Conta e importa" in primo[0] and "Conta e importa" in secondo[0]
+    assert "Conta di nuovo" in terzo[0]
+    assert all(da_sola in modulo for modulo in primo + secondo + terzo)
 
 
 def test_la_ripresa_torna_in_corso(cliente, foto, archivio, monkeypatch):
@@ -378,9 +381,8 @@ def test_mentre_corre_gia_non_riparte_due_volte(cliente, foto, archivio, monkeyp
     assert _tasti(cliente) == {"ferma"}
     assert _note(cliente) == set()
     pagina = cliente.get("/importazione").text
-    assert "<p class=\"piccolo attenuato\" data-mentre-lavora>Contati:" in pagina
-    conta = re.search(r'<form method="post" action="/importazione/prepara"([^>]*)>', pagina)
-    assert conta.group(1) == " data-dopo-il-lavoro hidden"
+    assert 'data-sta-lavorando="si"' in pagina and 'data-momento="lavora"' in pagina
+    assert 'action="/importazione/prepara"' not in pagina
 
 
 def test_nella_prova_non_riparte(cliente, foto, archivio, monkeypatch):
@@ -456,9 +458,10 @@ def test_la_x_chiede_prima_di_togliere_la_cartella(cliente, foto, archivio):
                          pagina, re.S)
     assert finestra is not None and azione in finestra.group(0)
     assert "Lascia stare" in finestra.group(0)
-    assert "data-chiudi-annulla" in finestra.group(0)
-    tasto = re.search(r'<button class="tasto-comando nudo cn-togli"[^>]*>', pagina).group(0)
-    assert 'type="button"' in tasto and f'data-apri-annulla="togli-{cartella_id}"' in tasto
+    assert "data-chiudi-finestra" in finestra.group(0)
+    tasto = re.search(r'<button[^>]*data-apri-finestra="togli-%d"[^>]*>' % cartella_id,
+                      pagina).group(0)
+    assert 'type="button"' in tasto
     cliente.post(f"/importazione/cartella/{cartella_id}/togli")
     with archivio.lettura() as connessione:
         assert scansione.cartelle(connessione) == []

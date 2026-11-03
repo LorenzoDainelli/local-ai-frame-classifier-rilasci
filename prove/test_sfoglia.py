@@ -131,9 +131,17 @@ def test_un_file_non_e_una_cartella(da_questa_macchina, tmp_path):
     assert "è un file" in risposta.json()["messaggio"]
 
 
-def test_le_cartelle_scelte_stanno_nel_riquadro(da_questa_macchina, monkeypatch):
+def test_le_cartelle_scelte_stanno_nel_riquadro(da_questa_macchina, monkeypatch, tmp_path):
     monkeypatch.setattr(sfoglia, "si_puo", lambda: True)
+    for nome in ("Vacanze", "Telefono"):
+        (tmp_path / nome).mkdir()
+        da_questa_macchina.post("/importazione/cartella",
+                                data={"percorso": str(tmp_path / nome), "gruppo": ""})
     pagina = da_questa_macchina.get("/importazione").text
-    riquadro = pagina.split("data-cartella-nuova-riquadro", 1)[1].split("data-a-mano", 1)[0]
-    assert "cn-elenco" in riquadro
-    assert "Scegli" in riquadro
+    griglia = pagina.split("data-proporziona>", 1)[1].split("</section>", 1)[0]
+    riquadro = griglia.split("data-cartella-nuova-riquadro", 1)[1]
+    assert griglia.count('<article class="ag-tessera') >= 2
+    assert ">Vacanze</b>" in griglia and ">Telefono</b>" in griglia
+    assert "<article" not in riquadro
+    assert ("Scegli un&#39;altra cartella…" in riquadro
+            or "Scegli un'altra cartella…" in riquadro)

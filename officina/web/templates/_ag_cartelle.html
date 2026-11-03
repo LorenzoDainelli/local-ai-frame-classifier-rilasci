@@ -1,0 +1,71 @@
+{% from "_icone.html" import icona %}
+{% from "_ag_pezzi.html" import aggiungi, menu, scatti_a_parole %}
+<section class="carta ag-fascia" id="cartelle" aria-labelledby="ag-titolo-cartelle">
+    <div class="ag-fascia-testa">
+        <h2 id="ag-titolo-cartelle">Le cartelle</h2>
+        {% if tessere|length == 1 %}
+        <span class="piccolo tenue">1 cartella · ogni importazione guarda qui dentro</span>
+        {% elif tessere %}
+        <span class="piccolo tenue">{{ tessere|length }} cartelle · ogni importazione guarda dentro tutte</span>
+        {% endif %}
+    </div>
+
+    {% if tessere %}
+    <div class="ag-tessere" data-proporziona>
+        {% for tessera in tessere %}
+        <article class="ag-tessera{{ ' spenta' if tessera.staccata }}{{ ' nuova' if tessera.id == aggiunta }}" data-cartella="{{ tessera.id }}">
+            <div class="ag-cima">
+                <span class="ag-icona">{{ icona('cartella', 17) }}</span>
+                {% call menu("Altro per «" ~ tessera.nome ~ "»") %}
+                    {% if da_questo_computer and not tessera.staccata %}
+                    <form method="post" action="/importazione/cartella/{{ tessera.id }}/apri" data-senza-ricarica>
+                        <button type="submit">{{ icona('fuori', 15) }} Apri in Esplora risorse</button>
+                    </form>
+                    {% endif %}
+                    <button type="button" data-apri-finestra="togli-{{ tessera.id }}">{{ icona('x', 15) }} Togli dall'elenco…</button>
+                    {% if tessera.conto.file %}
+                    <hr>
+                    <button type="button" class="ag-rosso" data-apri-finestra="annulla-{{ tessera.id }}">
+                        <b>Annulla importazione…</b>
+                        <small>{% if tessera.conto.spariscono %}Toglie dall'app anche {{
+                            'lo scatto arrivato' if tessera.conto.spariscono == 1
+                            else 'i ' ~ tessera.conto.spariscono|numero ~ ' scatti arrivati'
+                        }} da qui{% else %}Gli scatti restano: sono anche in un'altra cartella
+                        {%- endif %}</small>
+                    </button>
+                    {% endif %}
+                {% endcall %}
+            </div>
+            <b class="ag-nome" title="{{ tessera.percorso }}">{{ tessera.nome }}</b>
+            <span class="ag-dove" title="{{ tessera.percorso }}">{{ tessera.sopra or tessera.percorso }}</span>
+            {% if tessera.staccata %}
+            <span class="ag-bollo giallo">{{ tessera.staccata }}</span>
+            {% elif tessera.scatti %}
+            <span class="piccolo tenue numeri">{{ scatti_a_parole(tessera.scatti) }}
+                {%- if tessera.arrivati %} · {{ 'arrivato' if tessera.scatti == 1
+                    else 'ultimi arrivati' }} {{ tessera.arrivati }}{% endif %}</span>
+            {% elif tessera.importata %}
+            <span class="piccolo tenue">Qui dentro non ho trovato foto né video</span>
+            {% else %}
+            <span class="piccolo tenue">Appena aggiunta, da importare</span>
+            {% endif %}
+            <div class="ag-vanno">
+                <span class="piccolo tenue">Vanno in</span>
+                <button class="ag-gruppo{{ ' con-gruppo' if tessera.gruppo_id }}" type="button" data-cambia-gruppo="{{ tessera.id }}"
+                        data-nome="{{ tessera.nome }}" data-percorso="{{ tessera.percorso }}" data-gruppo="{{ tessera.gruppo_id or '' }}"
+                        data-scatti="{{ tessera.scatti }}" title="Cambia dove vanno le foto di questa cartella.">
+                    <span>{{ 'Gruppo ' ~ tessera.gruppo if tessera.gruppo_id else 'Archivio generale' }}</span>{{ icona('giu', 13) }}
+                </button>
+            </div>
+        </article>
+        {% endfor %}
+        {{ aggiungi(false, da_questo_computer, si_puo_sfogliare, gruppi, gruppo_ultimo) }}
+    </div>
+    {% else %}
+    <div class="ag-vuoto">
+        <span class="ag-icona grande">{{ icona('cartella', 26) }}</span>
+        <p>Ancora nessuna cartella. Scegli dove stanno le tue foto: anche più di una, anche su dischi diversi.</p>
+        {{ aggiungi(true, da_questo_computer, si_puo_sfogliare, gruppi, gruppo_ultimo) }}
+    </div>
+    {% endif %}
+</section>

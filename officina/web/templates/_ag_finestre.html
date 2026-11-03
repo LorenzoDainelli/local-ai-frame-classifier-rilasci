@@ -1,0 +1,75 @@
+{% from "_icone.html" import icona %}
+{% from "_ag_pezzi.html" import scelte_gruppo %}
+{% macro chiudi() -%}
+<button class="tasto-comando nudo piccolo" type="button" data-chiudi-finestra aria-label="Chiudi">{{ icona('x', 18) }}</button>
+{%- endmacro %}
+
+{% for tessera in tessere %}
+<dialog class="finestra" id="togli-{{ tessera.id }}" aria-label="Togli la cartella dall'elenco">
+    <header><h2>Togli dall'elenco?</h2>{{ chiudi() }}</header>
+    <div class="finestra-dentro">
+        <p class="nome-di-file ag-percorso">{{ tessera.percorso }}</p>
+        <p>Le prossime importazioni non guarderanno più dentro questa cartella.</p>
+        <p class="piccolo attenuato">
+            {%- if tessera.scatti == 1 %}Lo scatto già arrivato da qui resta nell'app e i file sul disco non si toccano.
+            {%- elif tessera.scatti %}I {{ tessera.scatti|numero }} scatti già arrivati da qui restano nell'app e i file sul disco non si toccano.
+            {%- else %}I file sul disco non si toccano.
+            {%- endif %} La ritrovi in «Cartelle tolte», dove la puoi rimettere.</p>
+        <form method="post" action="/importazione/cartella/{{ tessera.id }}/togli" class="ag-tasti-fine">
+            <button class="tasto-comando" type="button" data-chiudi-finestra autofocus>Lascia stare</button>
+            <button class="tasto-comando principale" type="submit">Togli dall'elenco</button>
+        </form>
+    </div>
+</dialog>
+{% endfor %}
+
+{% set da_annullare = [] %}
+{% for tessera in tessere if tessera.conto.file %}{% set _ = da_annullare.append(tessera.conto) %}{% endfor %}
+{% for tolta in tolte if tolta.conto.file %}{% set _ = da_annullare.append(tolta.conto) %}{% endfor %}
+{% for conto in da_annullare %}
+<dialog class="finestra" id="annulla-{{ conto.cartella_id }}" aria-label="Annulla importazione">
+    <header><h2>Annulla importazione</h2>{{ chiudi() }}</header>
+    <div class="finestra-dentro">
+        <p class="nome-di-file ag-percorso">{{ conto.percorso }}</p>
+        <p>Escono dall'app <b class="numeri">{{ conto.spariscono|numero }}</b> scatti, con etichette, volti e scritte.</p>
+        {% if conto.restano %}
+        <p class="piccolo attenuato"><span class="numeri">{{ conto.restano|numero }}</span> scatti restano, perché sono anche in un'altra cartella: tolgo solo il legame con questa.</p>
+        {% endif %}
+        <p class="piccolo attenuato">I file sul disco non si toccano. Non si può tornare indietro.</p>
+        <form method="post" action="/importazione/cartella/{{ conto.cartella_id }}/annulla" class="ag-tasti-fine">
+            <button class="tasto-comando" type="button" data-chiudi-finestra autofocus>Lascia stare</button>
+            <button class="tasto-comando pericolo" type="submit">Annulla importazione</button>
+        </form>
+    </div>
+</dialog>
+{% endfor %}
+
+{% if tessere %}
+<dialog class="finestra ag-finestra-gruppo" id="cambia-gruppo" aria-label="Dove vanno le foto">
+    <header><h2>Dove vanno le foto di «<span data-nome></span>»?</h2>{{ chiudi() }}</header>
+    <form method="post" class="finestra-dentro" data-gruppo-modulo>
+        <p class="nome-di-file ag-percorso" data-dove></p>
+        {{ scelte_gruppo(gruppi, none) }}
+        <p class="piccolo attenuato" data-avviso-scatti hidden></p>
+        <div class="ag-tasti-fine">
+            <button class="tasto-comando" type="button" data-chiudi-finestra>Lascia stare</button>
+            <button class="tasto-comando principale" type="submit">Cambia</button>
+        </div>
+    </form>
+</dialog>
+{% endif %}
+
+{% if appena_tolta %}
+<div class="ag-avviso-tolta" role="status" data-avviso-tolta>
+    <div>
+        <b>Hai tolto «{{ appena_tolta.nome }}» dall'elenco</b>
+        <span class="piccolo tenue">La ritrovi in <button type="button" class="ag-collegamento" data-vai-alle-tolte>«Cartelle tolte»</button>.</span>
+    </div>
+    {% if da_questo_computer %}
+    <form method="post" action="/importazione/cartella/{{ appena_tolta.id }}/rimetti">
+        <button class="tasto-comando principale piccolo" type="submit">{{ icona('annulla', 14) }} Rimetti</button>
+    </form>
+    {% endif %}
+    <button class="tasto-comando nudo piccolo" type="button" data-chiudi-avviso aria-label="Chiudi l'avviso">{{ icona('x', 14) }}</button>
+</div>
+{% endif %}

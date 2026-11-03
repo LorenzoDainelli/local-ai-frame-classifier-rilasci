@@ -117,10 +117,13 @@ def test_i_gruppi_decisi_si_rileggono(archivio_pieno):
     assert deciso["tenuto_id"] == gruppo["copie"][0]["file_id"]
 
 
-def test_aggiungi_foto_e_tre_passi_in_fila(cliente):
+def test_aggiungi_foto_e_due_fasce_larghe(cliente):
     pagina = cliente.get("/importazione").text
-    for passo in ("Le cartelle", "Cosa ho trovato", "Dentro l'archivio"):
-        assert f"<h2>{passo}</h2>" in pagina, passo
+    for quale, titolo in (("cartelle", "Le cartelle"), ("importazione", "L'importazione")):
+        assert f'<h2 id="ag-titolo-{quale}">{titolo}</h2>' in pagina, titolo
+    ordine = [pagina.index(f'id="{quale}"')
+              for quale in ("cartelle", "pannello-avanzamento", "storico")]
+    assert ordine == sorted(ordine)
     assert 'data-apri-finestra="raccolta"' in pagina
     assert '<dialog class="finestra" id="raccolta"' in pagina
 

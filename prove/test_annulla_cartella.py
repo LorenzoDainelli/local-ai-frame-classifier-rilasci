@@ -92,7 +92,10 @@ def test_il_gruppo_scelto_resta_ovunque(archivio, tmp_path):
     assert gruppi.scelto(archivio.connessione, "intelligenza") == gruppo_id
     assert gruppi.scelto(archivio.connessione, "etichetta") == gruppo_id
     pagina = cliente.get("/importazione").text
-    assert f'<option value="{gruppo_id}" selected>Snap</option>' in pagina
+    domanda = pagina.split("data-chiedi-gruppo", 1)[1].split("</dialog>", 1)[0]
+    assert f'<input type="radio" name="gruppo" value="{gruppo_id}" checked>' in domanda
+    assert domanda.count(" checked>") == 1
+    assert '<span>Gruppo Snap</span>' in pagina.split('id="cartelle"', 1)[1]
 
 
 def test_piu_gruppi_di_persone_si_uniscono_in_uno(archivio):

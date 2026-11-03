@@ -182,8 +182,8 @@ def _a_versione_69() -> sqlite3.Connection:
 
 
 def test_la_migrazione_mette_in_fila_solo_i_video():
-    assert migrazioni.MIGRAZIONI[-1].versione == 70
-    assert migrazioni.MIGRAZIONI[-1].applica is migrazioni._versione_70
+    settanta = [m for m in migrazioni.MIGRAZIONI if m.versione == 70]
+    assert len(settanta) == 1 and settanta[0].applica is migrazioni._versione_70
     connessione = _a_versione_69()
     connessione.executemany("INSERT INTO file_media (id, genere) VALUES (?, ?)",
                             [(3, "video"), (7, "video"), (9, "immagine")])

@@ -25,7 +25,7 @@
         {% else %}
         <div class="numero-grosso" id="numero-fatti">{{ stato.fatti }}</div>
         <div class="piccolo attenuato" id="riga-stato">
-            di {{ stato.totale }} file · {{ stato.quanto_manca }}
+            di {{ stato.totale }} file · {{ stato.quanto_manca() }}
         </div>
         <div class="avanzamento" style="margin-top:var(--s3)">
             <div class="fatto" id="barra" style="width: {{ stato.percentuale }}%"></div>

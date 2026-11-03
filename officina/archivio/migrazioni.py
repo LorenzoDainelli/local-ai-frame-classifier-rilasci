@@ -1563,6 +1563,10 @@ def _versione_70(connessione: sqlite3.Connection) -> None:
         "HAVING max(id) IS NOT NULL")
 
 
+def _versione_71(connessione: sqlite3.Connection) -> None:
+    connessione.execute("ALTER TABLE cartelle_sorgente ADD COLUMN tolta_il TEXT")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1691,6 +1695,8 @@ MIGRAZIONI: list[Migrazione] = [
                "sicuro", _versione_69),
     Migrazione(70, "gli FPS di ogni video, per trovare i video a FPS ridotti, medi e alti",
                _versione_70),
+    Migrazione(71, "le cartelle tolte ricordano quando, e si rimettono nell'elenco "
+                   "con un tasto", _versione_71),
 ]
 
 

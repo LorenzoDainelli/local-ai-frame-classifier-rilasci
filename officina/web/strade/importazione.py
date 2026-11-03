@@ -134,38 +134,48 @@ def _perche_e_ferma(archivio, rimasta: dict) -> str | None:
 
 
 @strada.get("/importazione", response_class=HTMLResponse)
-def pagina_importazione(richiesta: Request):
-    from officina.importazione import annulla, gruppi, scansione, storico
+def pagina_importazione(richiesta: Request, aggiunta: int | None = None,
+                        tolta: int | None = None):
+    from officina.importazione import gruppi, pagina, storico
 
     motore = motore_attuale()
     with accesso.aperto().lettura() as connessione:
-        elenco_cartelle = scansione.cartelle(connessione)
+        tessere = pagina.tessere(connessione)
+        tolte = pagina.tolte(connessione)
         elenco_gruppi = gruppi.elenco(connessione)
-        conti = {c["id"]: annulla.conta(connessione, c["id"]) for c in elenco_cartelle}
-        tolte = annulla.tolte_con_scatti(connessione)
         gruppo_ultimo = gruppi.ultimo(connessione)
-        mandate = [mandata for mandata in storico.mandate(connessione)
-                   if mandata.id != motore.importazione_id]
+        tutte = storico.mandate(connessione)
 
     piano_mostrato = piano_a_parole()
     sta_lavorando = comune.lavoro is not None and comune.lavoro.sta_lavorando
     rimasta = None if sta_lavorando or piano_mostrato else _rimasta_a_meta(motore.archivio)
     perche_e_ferma = None if rimasta is None else _perche_e_ferma(motore.archivio, rimasta)
+    stato = motore.stato()
+    ultima = next((m for m in tutte if m.id == motore.importazione_id), None)
+    momento = pagina.momento(
+        cartelle=len(tessere), piano=piano_mostrato, sta_lavorando=sta_lavorando,
+        rimasta_a_meta=rimasta is not None, stato=stato.stato,
+        finita_il=ultima.finita_il if ultima else None)
+    in_mostra = momento in ("lavora", "piano", "ferma")
+    mandate = [m for m in tutte if not (in_mostra and m.id == motore.importazione_id)]
+    finita_prima = next((m for m in tutte if m.stato == "finita"), None)
 
     return base.pagine.TemplateResponse(richiesta, "importazione.html", {
         **base.comune(richiesta, "importazione"),
-        "cartelle": elenco_cartelle,
-        "gruppi": elenco_gruppi,
-        "conti": conti,
+        "tessere": tessere,
         "tolte": tolte,
+        "gruppi": elenco_gruppi,
         "gruppo_ultimo": gruppo_ultimo,
         "piano": piano_mostrato,
-        "stato": motore.stato(),
+        "stato": stato,
+        "momento": momento,
         "sta_lavorando": sta_lavorando,
-        "rimasta_a_meta": rimasta is not None,
         "perche_e_ferma": perche_e_ferma,
+        "ultima": ultima,
+        "finita_prima": finita_prima,
         "mandate": mandate,
-        "mai_importato": motore.importazione_id is None,
+        "aggiunta": aggiunta,
+        "appena_tolta": next((t for t in tolte if t.id == tolta), None),
         "piano_raccolta": comune.piano_raccolta,
     })
 
@@ -178,11 +188,13 @@ def aggiungi_cartella(percorso: str = Form(...), dove_torno: str = Form(""),
     base.cartella_per_intero(percorso)
     with accesso.aperto().scrittura() as connessione:
         gruppo_id = gruppi.scegli(connessione, gruppo, gruppo_nuovo) if gruppo is not None else None
-        scansione.aggiungi_cartella(connessione, Path(percorso), gruppo_id,
-                                    cambia_gruppo=gruppo is not None)
+        cartella_id = scansione.aggiungi_cartella(connessione, Path(percorso), gruppo_id,
+                                                  cambia_gruppo=gruppo is not None)
         if gruppo is not None:
             gruppi.ricorda_ultimo(connessione, gruppo_id)
-    return RedirectResponse(base.torna_a(dove_torno, "/importazione"), status_code=303)
+    return RedirectResponse(
+        base.torna_a(dove_torno, f"/importazione?aggiunta={cartella_id}#cartelle"),
+        status_code=303)
 
 
 @strada.post("/importazione/cartella/{cartella_id}/gruppo")
@@ -214,7 +226,37 @@ def togli_cartella(cartella_id: int, dove_torno: str = Form("")):
 
     with accesso.aperto().scrittura() as connessione:
         scansione.togli_cartella(connessione, cartella_id)
-    return RedirectResponse(base.torna_a(dove_torno, "/importazione"), status_code=303)
+    return RedirectResponse(
+        base.torna_a(dove_torno, f"/importazione?tolta={cartella_id}#cartelle"),
+        status_code=303)
+
+
+@strada.post("/importazione/cartella/{cartella_id}/rimetti", dependencies=solo_qui)
+def rimetti_cartella(cartella_id: int):
+    from officina.importazione import scansione
+
+    with accesso.aperto().scrittura() as connessione:
+        scansione.rimetti_cartella(connessione, cartella_id)
+    return RedirectResponse(f"/importazione?aggiunta={cartella_id}#cartelle",
+                            status_code=303)
+
+
+@strada.post("/importazione/cartella/{cartella_id}/apri", dependencies=solo_qui)
+def apri_cartella(cartella_id: int):
+    from officina.importazione import pagina
+
+    with accesso.aperto().lettura() as connessione:
+        percorso = valore(connessione, "SELECT percorso FROM cartelle_sorgente WHERE id = ?",
+                          cartella_id)
+    if percorso is None:
+        raise ErroreOfficina("Questa cartella non è più nell'elenco.")
+    if pagina.perche_staccata(percorso):
+        raise ErroreOfficina("Non trovo la cartella: forse il disco non è attaccato.")
+    try:
+        pagina.apri_in_esplora(percorso)
+    except OSError:
+        raise ErroreOfficina("Esplora risorse non si è aperto.") from None
+    return RedirectResponse("/importazione#cartelle", status_code=303)
 
 
 @strada.post("/api/sfoglia-cartella")

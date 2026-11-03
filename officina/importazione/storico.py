@@ -10,6 +10,9 @@ QUANTE = 20
 MESI = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
         "agosto", "settembre", "ottobre", "novembre", "dicembre")
 
+MESI_CORTI = ("gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov",
+              "dic")
+
 
 @dataclass
 class Mandata:
@@ -39,6 +42,14 @@ class Mandata:
     @property
     def quando(self) -> str:
         return quando_a_parole(self.iniziata_il)
+
+    @property
+    def giorno(self) -> str:
+        return giorno_corto(self.iniziata_il)
+
+    @property
+    def il_giorno(self) -> str:
+        return il_giorno(self.finita_il or self.iniziata_il)
 
     @property
     def durata(self) -> str:
@@ -100,6 +111,47 @@ def quando_a_parole(istante: str | None) -> str:
         return ""
     qui = momento.astimezone()
     return f"{qui.day} {MESI[qui.month - 1]}, {qui:%H:%M}"
+
+
+def il_giorno(istante: str | None, oggi=None) -> str:
+    qui, vicino = _giorno(istante, oggi)
+    if qui is None:
+        return ""
+    if vicino:
+        return vicino
+    articolo = "l'" if qui.day in (8, 11) else "il "
+    numero = "1º" if qui.day == 1 else str(qui.day)
+    return f"{articolo}{numero} {MESI[qui.month - 1]}{_anno(qui, oggi)}"
+
+
+def giorno_corto(istante: str | None, oggi=None) -> str:
+    qui, vicino = _giorno(istante, oggi)
+    if qui is None:
+        return ""
+    if vicino:
+        return vicino
+    return f"{qui.day} {MESI_CORTI[qui.month - 1]}{_anno(qui, oggi)}"
+
+
+def _giorno(istante: str | None, oggi):
+    from datetime import date, timedelta
+
+    momento = _quando(istante)
+    if momento is None:
+        return None, ""
+    qui = momento.astimezone()
+    oggi = oggi or date.today()
+    if qui.date() == oggi:
+        return qui, "oggi"
+    if qui.date() == oggi - timedelta(days=1):
+        return qui, "ieri"
+    return qui, ""
+
+
+def _anno(qui, oggi) -> str:
+    from datetime import date
+
+    return "" if qui.year == (oggi or date.today()).year else f" {qui.year}"
 
 
 def durata_a_parole(iniziata: str | None, finita: str | None) -> str:

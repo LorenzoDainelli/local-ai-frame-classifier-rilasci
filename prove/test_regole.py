@@ -96,7 +96,7 @@ NASCOSTO_A_RIPOSO = re.compile(
     r"|\{%\s*call\s+spiega\(.*?\{%\s*endcall\s*%\}"
     r"|<details\b.*?</details>", re.S)
 UN_RAMO = re.compile(
-    r"\{%\s*(?:el)?if\b.*?%\}|\{%\s*else\s*%\}|\{%\s*endif\s*%\}", re.S)
+    r"\{%-?\s*(?:el)?if\b.*?%\}|\{%-?\s*else\s*-?%\}|\{%-?\s*endif\s*-?%\}", re.S)
 
 QUANTO_SI_LEGGE = 190
 

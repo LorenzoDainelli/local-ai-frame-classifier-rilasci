@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -148,7 +150,8 @@ def test_la_stessa_azione_dall_importazione_torna_all_importazione(cliente, tmp_
     risposta = cliente.post("/importazione/cartella",
                             data={"percorso": str(tmp_path)},
                             follow_redirects=False)
-    assert risposta.headers["location"] == "/importazione"
+    assert re.fullmatch(r"/importazione\?aggiunta=\d+#cartelle",
+                        risposta.headers["location"])
 
 
 @pytest.mark.parametrize("furbata", [
@@ -162,7 +165,8 @@ def test_non_si_finisce_dove_dice_il_modulo(cliente, tmp_path, furbata):
                             data={"percorso": str(tmp_path),
                                   "dove_torno": furbata},
                             follow_redirects=False)
-    assert risposta.headers["location"] == "/importazione"
+    assert re.fullmatch(r"/importazione\?aggiunta=\d+#cartelle",
+                        risposta.headers["location"])
 
 
 def test_il_conto_viene_prima_del_tasto_che_comincia(cliente, tmp_path):
@@ -187,6 +191,12 @@ def test_senza_scatti_l_ultimo_passo_rimanda_indietro(cliente_vuoto):
     testo = cliente_vuoto.get("/benvenuto/pronto").text
     assert "/benvenuto/cartella" in testo
     assert "Comincia a etichettare" not in testo
+
+
+def test_il_passo_del_lavoro_dice_quanto_manca_a_parole(cliente):
+    testo = cliente.get("/benvenuto/lavoro").text
+    assert "bound method" not in testo
+    assert re.search(r"di \d+ file · finito\s", testo)
 
 
 def test_l_ultimo_passo_apre_uno_scatto_vero(cliente, archivio_pieno):

@@ -142,8 +142,9 @@ def test_la_pagina_mostra_le_mandate_di_prima_e_non_i_percorsi(archivio, tmp_pat
     cliente = TestClient(app, client=("127.0.0.1", 51000))
     pagina = cliente.get("/importazione").text
 
-    assert "Le importazioni di prima" in pagina
-    storico_in_pagina = pagina.split("Le importazioni di prima", 1)[1]
+    assert "Importazioni di prima" in pagina
+    storico_in_pagina = pagina.split('id="storico"', 1)[1].split("</section>", 1)[0]
+    assert "Importazioni di prima" in storico_in_pagina
     assert "vacanze" in storico_in_pagina
     assert str(tmp_path) not in storico_in_pagina, (
         "regola 106: il percorso non ha ragione di comparire nello storico")

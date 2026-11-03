@@ -261,8 +261,9 @@ def test_il_dispositivo_approvato_non_vede_i_tasti_che_non_puo_premere(remoto, a
 
     importazione = _pagine(remoto, "/importazione")
     assert 'action="/raccolta/conta"' not in importazione
-    assert 'action="/importazione/cartella" class="cn-scrivi" id="cn-modulo" ' \
-           'data-cartella-nuova hidden' in importazione
+    assert 'action="/importazione/cartella"' not in importazione
+    assert "/rimetti" not in importazione and "data-sfoglia" not in importazione
+    assert "Le cartelle si aggiungono dal computer dove gira il programma." in importazione
 
 
 def test_il_computer_stesso_vede_tutti_i_tasti(locale, archivio_pieno):
@@ -285,7 +286,9 @@ def test_il_computer_stesso_vede_tutti_i_tasti(locale, archivio_pieno):
 
     importazione = _pagine(locale, "/importazione")
     assert 'action="/raccolta/conta"' in importazione
-    assert 'id="cn-modulo" data-cartella-nuova>' in importazione
+    assert 'action="/importazione/cartella" class="cn-scrivi" data-cartella-nuova>' \
+        in importazione
+    assert "Le cartelle si aggiungono dal computer" not in importazione
 
 
 def test_il_portatile_non_vede_i_tasti_del_fisso(portatile):

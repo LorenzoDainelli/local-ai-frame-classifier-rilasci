@@ -103,8 +103,10 @@ def test_la_galleria_filtrata_si_apre_davvero(cliente, archivio_pieno):
 
 
 def test_il_tasto_per_aprire_il_gruppo_esiste_nella_pagina():
-    pagina = (pathlib.Path("officina/web/templates/importazione.html")
-              .read_text(encoding="utf-8"))
+    cartella = pathlib.Path("officina/web/templates")
+    assert '{% include "_ag_storico.html" %}' in (cartella / "importazione.html").read_text(
+        encoding="utf-8")
+    pagina = (cartella / "_ag_storico.html").read_text(encoding="utf-8")
     assert "/?importazione={{ mandata.id }}" in pagina, (
         "la riga della mandata è tornata a essere numeri veri su una riga morta")
     assert "mandata.quanti_scatti" in pagina

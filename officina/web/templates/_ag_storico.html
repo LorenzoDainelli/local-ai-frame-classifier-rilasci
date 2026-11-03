@@ -1,0 +1,92 @@
+{% from "_icone.html" import icona %}
+{% from "_ag_pezzi.html" import menu, scatti_a_parole %}
+{% if mandate or tolte %}
+{% set prima_le_tolte = not mandate %}
+<section class="carta ag-fascia" id="storico" aria-labelledby="ag-titolo-storico">
+    <div class="ag-fascia-testa">
+        <h2 id="ag-titolo-storico">Lo storico</h2>
+        <span class="piccolo tenue">dalla più recente</span>
+    </div>
+    <nav class="st-linguette ag-linguette" role="tablist" aria-label="Lo storico">
+        <button type="button" role="tab" id="ag-linguetta-importazioni" aria-controls="ag-importazioni"
+                aria-selected="{{ 'false' if prima_le_tolte else 'true' }}">Importazioni di prima <b class="numeri">{{ mandate|length }}</b></button>
+        <button type="button" role="tab" id="ag-linguetta-tolte" aria-controls="ag-tolte"
+                aria-selected="{{ 'true' if prima_le_tolte else 'false' }}">Cartelle tolte <b class="numeri">{{ tolte|length }}</b>
+                {%- if appena_tolta %}<i class="ag-punto" aria-hidden="true"></i>{% endif %}</button>
+    </nav>
+
+    <div class="ag-pannello" role="tabpanel" id="ag-importazioni" aria-labelledby="ag-linguetta-importazioni" {{ 'hidden' if prima_le_tolte }}>
+        {% if mandate %}
+        <div class="ag-storia">
+            {% for mandata in mandate %}
+            <div class="ag-evento">
+                <span class="ag-quando numeri" title="{{ mandata.quando }}">{{ mandata.giorno }}</span>
+                <span class="ag-segno arancio">{{ icona('scarica', 14) }}</span>
+                <div class="ag-cosa">
+                    <span><b>Importazione {{ mandata.id }}</b>{% if mandata.come_si_chiama != 'Importazione ' ~ mandata.id %} · {{ mandata.come_si_chiama }}{% endif %}</span>
+                    <span class="piccolo tenue numeri">{{ mandata.totale|numero }} file: {{ mandata.nuovi_scatti|numero }} nuovi, {{
+                        mandata.coppie_live|numero }} live, {{ mandata.gia_presenti|numero }} già presenti
+                        {%- if mandata.saltati %}, {{ mandata.saltati|numero }} saltati{% endif %}
+                        {%- if mandata.durata %} · {{ mandata.durata }}{% endif %}
+                        {%- if mandata.stato != 'finita' %} · {{ mandata.come_e_finita }}{% endif %}</span>
+                </div>
+                <span class="ag-azioni">
+                    {% if mandata.quanti_scatti %}
+                    <a class="tasto-comando piccolo" href="/?importazione={{ mandata.id }}"
+                       title="Apre nella galleria solo gli scatti arrivati con questa importazione.">Apri {{ mandata.quanti_scatti|numero }}</a>
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="piccolo tenue">I doppioni sono contati sull'archivio intero, non sulla singola cartella.</p>
+        {% else %}
+        <p class="piccolo tenue">Ancora nessuna importazione finita.</p>
+        {% endif %}
+    </div>
+
+    <div class="ag-pannello" role="tabpanel" id="ag-tolte" aria-labelledby="ag-linguetta-tolte" {{ '' if prima_le_tolte else 'hidden' }}>
+        {% if tolte %}
+        <div class="ag-storia">
+            {% for tolta in tolte %}
+            {% set scatti = tolta.conto.spariscono + tolta.conto.restano %}
+            <div class="ag-evento{{ ' nuova' if appena_tolta and tolta.id == appena_tolta.id }}">
+                <span class="ag-quando numeri">{{ tolta.quando }}</span>
+                <span class="ag-segno giallo">{{ icona('x', 14) }}</span>
+                <div class="ag-cosa">
+                    <span>Hai tolto <b>{{ tolta.nome }}</b> dall'elenco</span>
+                    <span class="piccolo tenue numeri">
+                        {%- if scatti == 1 %}Il suo scatto è ancora nell'app.
+                        {%- elif scatti %}I suoi {{ scatti|numero }} scatti sono ancora nell'app.
+                        {%- else %}Da qui non era arrivato nessuno scatto.
+                        {%- endif %}</span>
+                </div>
+                <span class="ag-azioni">
+                    {% if da_questo_computer %}
+                    <form method="post" action="/importazione/cartella/{{ tolta.id }}/rimetti">
+                        <button class="tasto-comando piccolo" type="submit">{{ icona('annulla', 14) }} Rimetti nell'elenco</button>
+                    </form>
+                    {% endif %}
+                    {% if tolta.conto.file %}
+                    {% call menu("Altro per «" ~ tolta.nome ~ "»") %}
+                        <button type="button" class="ag-rosso" data-apri-finestra="annulla-{{ tolta.id }}">
+                            <b>Annulla importazione…</b>
+                            <small>{% if tolta.conto.spariscono %}Toglie dall'app anche {{
+                                'lo scatto arrivato' if tolta.conto.spariscono == 1
+                                else 'i ' ~ tolta.conto.spariscono|numero ~ ' scatti arrivati'
+                            }} da qui{% else %}Gli scatti restano: sono anche in un'altra cartella
+                            {%- endif %}</small>
+                        </button>
+                    {% endcall %}
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="piccolo tenue">Gli scatti di una cartella tolta restano nell'app. «Rimetti» la fa tornare nell'elenco, con lo stesso gruppo.</p>
+        {% else %}
+        <p class="piccolo tenue">Nessuna cartella tolta. Quando ne togli una dall'elenco, la ritrovi qui e la puoi rimettere.</p>
+        {% endif %}
+    </div>
+</section>
+{% endif %}

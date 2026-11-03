@@ -1,3 +1,5 @@
+import { sceltaDelGruppo, ultimoPezzo } from "./scelta_gruppo.js";
+
 const riquadri = document.querySelectorAll("[data-cartella-nuova-riquadro]");
 
 for (const riquadro of riquadri) {
@@ -13,6 +15,10 @@ for (const riquadro of riquadri) {
 
     const sceltaGruppo = riquadro.querySelector("[data-gruppo-scelta]");
     const nomeGruppo = riquadro.querySelector("[data-gruppo-nuovo]");
+    const domanda = riquadro.querySelector("[data-chiedi-gruppo]");
+    const moduloGruppo = domanda?.querySelector("[data-gruppo-modulo]");
+    const gruppo = moduloGruppo ? sceltaDelGruppo(moduloGruppo) : null;
+    const confermaGruppo = moduloGruppo?.querySelector("[type=submit]");
 
     modulo.noValidate = true;
 
@@ -50,7 +56,34 @@ for (const riquadro of riquadri) {
         casella.classList.remove("sbagliato");
     }
 
-    async function invia() {
+    function chiediIlGruppo(percorso) {
+        gruppo.daCapo();
+        domanda.querySelector("[data-nome]").textContent = ultimoPezzo(percorso);
+        moduloGruppo.querySelector("[data-dove]").textContent = percorso;
+        domanda.showModal();
+        gruppo.fuoco();
+    }
+
+    function conIlGruppo(corpo) {
+        if (!moduloGruppo) return corpo;
+        for (const [chiave, valore] of new FormData(moduloGruppo)) {
+            corpo.append(chiave, valore);
+        }
+        return corpo;
+    }
+
+    function mandaComeUnaVolta() {
+        if (moduloGruppo) {
+            for (const [chiave, valore] of new FormData(moduloGruppo)) {
+                const nascosto = document.createElement("input");
+                Object.assign(nascosto, { type: "hidden", name: chiave, value: valore });
+                modulo.append(nascosto);
+            }
+        }
+        HTMLFormElement.prototype.submit.call(modulo);
+    }
+
+    async function invia(gruppoDetto = false) {
         const percorso = campo.value.trim();
         if (!percorso) {
             sgrida(sfoglia && !sfoglia.hidden
@@ -60,6 +93,10 @@ for (const riquadro of riquadri) {
             return;
         }
         campo.value = percorso;
+        if (domanda && !gruppoDetto) {
+            chiediIlGruppo(percorso);
+            return;
+        }
         if (sceltaGruppo && sceltaGruppo.value === "nuovo" && !nomeGruppo.value.trim()) {
             sgrida("Scrivi il nome del gruppo nuovo, per esempio Snapchat.");
             nomeGruppo.focus();
@@ -68,9 +105,10 @@ for (const riquadro of riquadri) {
         try {
             const risposta = await fetch(modulo.action, {
                 method: "POST",
-                body: new FormData(modulo),
+                body: gruppoDetto ? conIlGruppo(new FormData(modulo)) : new FormData(modulo),
                 headers: { Accept: "application/json" },
             });
+            if (domanda?.open) domanda.close();
             if (risposta.ok) {
                 if (window.movimenti?.cartellaAperta) {
                     await window.movimenti.cartellaAperta(sfoglia && !sfoglia.hidden ? sfoglia : campo);
@@ -82,8 +120,23 @@ for (const riquadro of riquadri) {
             sgrida(detto.messaggio || "La cartella non si è potuta aggiungere.");
             campo.focus();
         } catch (e) {
-            HTMLFormElement.prototype.submit.call(modulo);
+            mandaComeUnaVolta();
         }
+    }
+
+    if (moduloGruppo) {
+        moduloGruppo.addEventListener("submit", async (evento) => {
+            evento.preventDefault();
+            if (!gruppo.va() || confermaGruppo.disabled) return;
+            confermaGruppo.disabled = true;
+            confermaGruppo.setAttribute("aria-busy", "true");
+            try {
+                await invia(true);
+            } finally {
+                confermaGruppo.disabled = false;
+                confermaGruppo.removeAttribute("aria-busy");
+            }
+        });
     }
 
     modulo.addEventListener("submit", evento => {
