@@ -7,7 +7,7 @@ from PIL import Image
 
 from officina.descrittori import torcia
 from officina.errori import ErroreOfficina
-from officina.miglioria import scaricamento
+from officina.miglioria import scaricamento, seedvr2_blocchi
 
 NOME = "seedvr2"
 DIT = "seedvr2_ema_7b_fp16.safetensors"
@@ -50,7 +50,7 @@ class SeedVR2:
     resta_acceso = True
 
     def __init__(self, cartella_modelli: str | None = None, stretto: bool = False,
-                 **_opzioni) -> None:
+                 disco: bool = False, **_opzioni) -> None:
         if not cartella_modelli or not scaricamento.e_in_casa(Path(cartella_modelli)):
             raise MancaSeedVR2("Il modello che migliora foto e video non è ancora "
                                "stato scaricato.")
@@ -61,6 +61,7 @@ class SeedVR2:
         self._s = None
         self._avanza = None
         self.tempi: list[dict] = []
+        self._blocchi = seedvr2_blocchi.Blocchi(disco=disco)
 
     quadri_per_volta = QUADRI_PER_VOLTA
 
@@ -83,7 +84,8 @@ class SeedVR2:
         with scaricamento.senza_scrivere_bytecode():
             moduli = [importlib.import_module(nome) for nome in (
                 "src.core.generation_utils", "src.core.generation_phases",
-                "src.optimization.memory_manager", "src.utils.debug")]
+                "src.optimization.memory_manager", "src.utils.debug",
+                "src.core.model_configuration", "src.optimization.blockswap")]
         if scaricamento.moduli_fuori_dal_codice(moduli, self.casa):
             scaricamento.butta_i_moduli_di_un_altro_posto()
             raise MancaSeedVR2(
@@ -96,7 +98,27 @@ class SeedVR2:
             "memoria": moduli[2],
             "debug": moduli[3].Debug(enabled=False),
         }
+        self._aggancia(moduli[4], moduli[5])
         return self._s
+
+    @property
+    def dove_stanno(self) -> dict | None:
+        return self._blocchi.dove_stanno()
+
+    def _aggancia(self, configurazione, blockswap) -> None:
+        originale = getattr(configurazione, "_officina_originale", None)
+        if originale is None:
+            originale = configurazione.apply_block_swap_to_dit
+            configurazione._officina_originale = originale
+        blocchi = self._blocchi
+
+        def applica(runner, config, debug) -> None:
+            originale(runner, config, debug)
+            modello = getattr(runner.dit, "dit_model", runner.dit)
+            blocchi.prendi(modello, seedvr2_blocchi.ram_libera())
+
+        configurazione.apply_block_swap_to_dit = applica
+        blockswap._wrap_block_forward = seedvr2_blocchi.non_avvolgere
 
     def _dispositivo(self) -> str:
         s = self._carica()
@@ -148,6 +170,7 @@ class SeedVR2:
         self.stretto = True
         self._ctx = None
         self._pronto = False
+        self._blocchi.togli()
         self._s["memoria"].clear_memory(debug=self._s["debug"], deep=True, force=True)
         return self._una_volta(quadri, larghezza, altezza)
 
@@ -187,6 +210,7 @@ class SeedVR2:
             torch.cuda.reset_peak_memory_stats()
         tempi: dict = {"quadri": int(len(quadri)), "stretto": self.stretto}
         partito = time.monotonic()
+        self._blocchi.ribilancia(seedvr2_blocchi.ram_libera())
         esecutore = self._prepara()
         partito = self._misura(torch, tempi, "prepara", partito)
         tensore = torch.from_numpy(quadri).to(torch.float16).div_(255.0)
@@ -217,6 +241,10 @@ class SeedVR2:
             tempi.update(picco_mb=torch.cuda.max_memory_allocated() // 2 ** 20,
                          riservata_mb=torch.cuda.max_memory_reserved() // 2 ** 20,
                          libera_mb=libera // 2 ** 20, scheda_mb=tutta // 2 ** 20)
+        stanno = self._blocchi.dove_stanno()
+        if stanno is not None:
+            tempi.update({f"{dove}_gb": giga for dove, giga in stanno.items()})
+        self._blocchi.girato = True
         self.tempi.append(tempi)
         uscita = ctx["final_video"].detach().to("cpu", torch.float32)
         uscita = uscita[..., :3].clamp_(0, 1).mul_(255).round_().to(torch.uint8).numpy()
@@ -269,5 +297,6 @@ class SeedVR2:
                                             force=True)
         except Exception:
             pass
+        self._blocchi.togli()
         self._ctx = None
         self._s = None

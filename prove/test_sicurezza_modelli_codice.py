@@ -22,6 +22,10 @@ CODICE_DI_SEEDVR2 = {
     "src/core/generation_phases.py": b"NOME = 'fasi'\n",
     "src/optimization/__init__.py": b"",
     "src/optimization/memory_manager.py": b"NOME = 'memoria'\n",
+    "src/core/model_configuration.py": (b"def apply_block_swap_to_dit(runner, config, "
+                                        b"debug):\n    return None\n"),
+    "src/optimization/blockswap.py": b"def _wrap_block_forward(*argomenti):\n"
+                                     b"    return None\n",
     "src/utils/__init__.py": b"",
     "src/utils/debug.py": b"class Debug:\n    def __init__(self, enabled=False):\n"
                           b"        self.enabled = enabled\n",
