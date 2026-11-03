@@ -21,6 +21,7 @@ NON_C_E = "non_c_e"
 SENZA_CASA = "senza_casa"
 SOSTITUISCI = "sostituisci"
 RIMETTI = "rimetti"
+RIPORTA = "riporta"
 AGGIUNGI = "aggiungi"
 DATE = ("modifica", "accesso", "creazione")
 _IMPRONTA = re.compile(r"[0-9a-f]{64}")
@@ -202,6 +203,9 @@ class Accoglitore:
         if come == RIMETTI:
             return self._rimetti(_campi(richiesta, ("copia", "base"),
                                         ("impronta", "impronta_base")))
+        if come == RIPORTA:
+            return self._rimetti(_campi(richiesta, ("copia", "base", "verso"),
+                                        ("impronta", "impronta_base")))
         if come == AGGIUNGI:
             return self._aggiungi(_campi(richiesta, ("nuova", "verso", "base"),
                                          ("impronta_nuova", "impronta_base")))
@@ -266,7 +270,8 @@ class Accoglitore:
         return self._fatto(radice, numero, verso, None, False)
 
     def _rimetti(self, campi: dict) -> dict:
-        radice, numeri, copia, verso, base = self._della_base(campi, "copia")
+        radice, numeri, copia, verso, base = self._della_base(campi, "copia",
+                                                              torna=campi.get("verso"))
         dove_va = self.elenco.attuale(radice["id"], verso)
         ritrovata = (dove_va if _e_lei(dove_va, numeri) and CUSTODITO in dove_va.segni
                      else None)
@@ -277,7 +282,8 @@ class Accoglitore:
         if (ritrovata is not None and ora is None
                 and not self._altri(radice["id"], copia, ritrovata)):
             return self._gia_fatto(radice, ritrovata.contenuto, verso, None)
-        self._disco_libero(radice, (campi["base"],), (campi["copia"],
+        torna = (campi["verso"],) if "verso" in campi else ()
+        self._disco_libero(radice, (campi["base"],), (campi["copia"], *torna,
                                                       _assoluto(radice, verso)))
 
         def fatti(adesso: float) -> list[dict]:
@@ -302,13 +308,15 @@ class Accoglitore:
         self._scrivi(lambda adesso: self._portati(portato), portato)
         return self._fatto(radice, portato.numero, verso, None, False)
 
-    def _della_base(self, campi: dict, dove: str, nuovo: bool = False) -> tuple:
+    def _della_base(self, campi: dict, dove: str, nuovo: bool = False,
+                    torna: str | None = None) -> tuple:
         numeri = set(self.elenco.con_impronta(campi["impronta_base"]))
         if not numeri:
             raise _rifiuta("base_non_c_e")
-        radice, (base, percorso) = self._radice((campi["base"], campi[dove]), numeri,
-                                                "base_non_c_e")
-        verso, = self._nomi(radice["id"], set() if nuovo else {percorso}, percorso)
+        percorsi = (campi["base"], campi[dove], *(() if torna is None else (torna,)))
+        radice, (base, percorso, *altrove) = self._radice(percorsi, numeri, "base_non_c_e")
+        verso, = self._nomi(radice["id"], set() if nuovo else {percorso},
+                            *(altrove or (percorso,)))
         return radice, numeri, percorso, verso, base
 
     def _prima_la_copia(self, radice: dict, campi: dict, copia: str, verso: str, dove_va,
@@ -516,4 +524,4 @@ class Accoglienza(Sottofondo):
 
 
 __all__ = ["AGGIUNGI", "Accoglienza", "Accoglitore", "MESSAGGI", "NON_C_E", "RIMETTI",
-           "Rifiutata", "SENZA_CASA", "SOSTITUISCI", "VERSIONE_DIVERSA", "casa"]
+           "RIPORTA", "Rifiutata", "SENZA_CASA", "SOSTITUISCI", "VERSIONE_DIVERSA", "casa"]

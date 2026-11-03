@@ -270,15 +270,12 @@ def _ritoccata(archivio, riga) -> None:
 
 
 @pytest.mark.parametrize(("come", "perche"), [
-    ("archivio", rifai.NELL_ARCHIVIO),
     ("ritocco", rifai.RITOCCATO),
     ("sfida", rifai.IN_SFIDA),
 ])
 def test_quelle_che_restano_si_saltano_e_si_dicono(importato, come, perche, monkeypatch):
     riga = _rifiutata(importato)
-    if come == "archivio":
-        _cambia(importato, riga["id"], nell_archivio=1)
-    elif come == "ritocco":
+    if come == "ritocco":
         _ritoccata(importato, riga)
     else:
         _in_sfida(importato, riga)
@@ -411,11 +408,12 @@ def test_una_data_vuota_si_riscrive(importato):
 
 def test_l_elenco_delle_saltate_si_rifa_a_ogni_giro(importato):
     riga = _rifiutata(importato)
-    _cambia(importato, riga["id"], nell_archivio=1)
+    _ritoccata(importato, riga)
     rifai.tutto(importato, NUOVA)
     with importato.lettura() as connessione:
         assert len(rifai.saltate(connessione)) == 1
-    _cambia(importato, riga["id"], nell_archivio=0)
+    with importato.scrittura() as connessione:
+        connessione.execute("DELETE FROM ritoccate WHERE file_id = ?", (riga["file_id"],))
     rifai.tutto(importato, NUOVA)
     with importato.lettura() as connessione:
         assert rifai.saltate(connessione) == []
@@ -451,7 +449,7 @@ def test_senza_versione_usa_quella_di_adesso(importato):
 
 def test_il_giro_rifa_da_solo_con_la_versione_nuova(importato, monkeypatch):
     riga = _approvata(importato)
-    _scritta(importato, "breve.MOV", coda.RIFIUTATA, VECCHIA, nell_archivio=1)
+    _in_sfida(importato, _scritta(importato, "breve.MOV", coda.RIFIUTATA, VECCHIA))
     monkeypatch.setattr(preparazione, "e_pronto", lambda *argomenti: True)
     miglioratore = _gira(importato, _fatta_con(NUOVA), pronti=False)
     rifatta = _di(importato, riga["id"])
