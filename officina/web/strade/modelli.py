@@ -99,7 +99,7 @@ def come_stanno_i_modelli(dove: Path) -> list[dict]:
         "peso": vista.peso_a_parole(scarica_miglioria.byte_circa()),
         "pesa_davvero": False,
         "licenza": "Apache-2.0",
-        "si_chiama": "SeedVR2 7B FP8 · numz/ComfyUI-SeedVR2_VideoUpscaler",
+        "si_chiama": "SeedVR2 7B FP16 · numz/ComfyUI-SeedVR2_VideoUpscaler",
         "a_cosa_serve": ("porta foto e video piccoli alla misura FHD; nei video "
                          "guarda più fotogrammi insieme, così non tremolano "
                          "(regole 472 e 476)"),

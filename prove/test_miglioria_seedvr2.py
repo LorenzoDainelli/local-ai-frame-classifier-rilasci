@@ -60,7 +60,65 @@ def test_il_manifesto_vero_e_completo():
     assert not any(n.startswith("src/interfaces/") for n in atteso["file"])
     assert {p["nome"] for p in atteso["pesi"]} == {seedvr2.DIT, seedvr2.VAE}
     assert all(len(p["sha256"]) == 64 for p in atteso["pesi"])
-    assert scaricamento.byte_circa() > 8 * 10 ** 9
+    assert scaricamento.byte_circa() > 16 * 10 ** 9
+
+
+def test_il_manifesto_chiede_la_versione_piena_a_sedici_bit():
+    from strumenti.manifesto_seedvr2 import PESI
+
+    dit = next(p for p in scaricamento.manifesto()["pesi"] if p["nome"] == seedvr2.DIT)
+    assert seedvr2.DIT == "seedvr2_ema_7b_fp16.safetensors"
+    assert dit["sha256"] == ("7b8241aa957606ab6cfb66edabc96d43"
+                             "234f9819c5392b44d2492d9f0b0bbe4a")
+    assert dit["byte_circa"] > 16 * 10 ** 9
+    assert scaricamento.manifesto()["pesi"] == PESI
+    assert seedvr2.SeedVR2.versione == "7b-fp16"
+
+
+def test_nella_scheda_restano_dieci_blocchi_su_trentasei():
+    assert seedvr2.BLOCCHI_NORMALI == 26
+    assert seedvr2.BLOCCHI_STRETTI == 36
+
+
+def _pronto_scritto(finto, contenuto: str) -> None:
+    casa = scaricamento.dove(finto["modelli"])
+    casa.mkdir(parents=True, exist_ok=True)
+    (casa / scaricamento.PRONTO).write_text(contenuto, encoding="utf-8")
+
+
+def test_la_versione_vecchia_si_riconosce_dai_nomi_dei_pesi(finto):
+    assert not scaricamento.ha_una_versione_vecchia(finto["modelli"])
+    vecchi = {"seedvr2_ema_7b_fp8_e4m3fn.safetensors": "a" * 64, seedvr2.VAE: "b" * 64}
+    _pronto_scritto(finto, json.dumps({"commit": "abc", "pesi": vecchi}))
+    assert scaricamento.ha_una_versione_vecchia(finto["modelli"])
+    assert not scaricamento.e_in_casa(finto["modelli"])
+
+
+def test_un_peso_nuovo_nel_manifesto_rende_vecchia_la_versione_in_casa(finto):
+    _pronto_scritto(finto, json.dumps({"pesi": {seedvr2.VAE: "b" * 64}}))
+    assert scaricamento.ha_una_versione_vecchia(finto["modelli"])
+
+
+def test_dopo_lo_scaricamento_la_versione_non_e_piu_vecchia(finto):
+    _pronto_scritto(finto, json.dumps({"pesi": {"vecchio.safetensors": "a" * 64}}))
+    scaricamento.scarica(finto["modelli"], prendi_testo=finto["prendi_testo"],
+                         prendi_peso=finto["prendi_peso"])
+    assert scaricamento.e_in_casa(finto["modelli"])
+    assert not scaricamento.ha_una_versione_vecchia(finto["modelli"])
+
+
+@pytest.mark.parametrize("contenuto", [
+    "non è json", "[]", "{}", '{"pesi": null}', '{"pesi": {}}', '{"pesi": []}',
+    '{"pesi": ["vecchio.safetensors"]}', '{"pesi": "vecchio.safetensors"}'])
+def test_un_pronto_strano_non_e_una_versione_vecchia(finto, contenuto):
+    _pronto_scritto(finto, contenuto)
+    assert not scaricamento.ha_una_versione_vecchia(finto["modelli"])
+
+
+def test_gli_stessi_pesi_rotti_non_sono_una_versione_vecchia(finto):
+    _pronto_scritto(finto, json.dumps({"pesi": {seedvr2.DIT: "x", seedvr2.VAE: "y"}}))
+    assert not scaricamento.ha_una_versione_vecchia(finto["modelli"])
+    assert not scaricamento.e_in_casa(finto["modelli"])
 
 
 def test_scarica_verifica_e_mette_al_posto(finto):

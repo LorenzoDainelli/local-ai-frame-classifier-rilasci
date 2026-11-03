@@ -52,6 +52,18 @@ def e_in_casa(cartella_modelli: Path, nome: str = "seedvr2") -> bool:
                for p in atteso["pesi"])
 
 
+def ha_una_versione_vecchia(cartella_modelli: Path, nome: str = "seedvr2") -> bool:
+    try:
+        scritto = json.loads((dove(cartella_modelli, nome) / PRONTO).read_text(
+            encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    avuti = scritto.get("pesi") if isinstance(scritto, dict) else None
+    if not isinstance(avuti, dict) or not avuti:
+        return False
+    return set(avuti) != {p["nome"] for p in manifesto(nome)["pesi"]}
+
+
 def _pesa_come_prima(file: Path, scritto: int | None) -> bool:
     if scritto is None:
         return True

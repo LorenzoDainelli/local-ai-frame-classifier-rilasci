@@ -55,6 +55,19 @@ _MG_DICE = {
 }
 
 
+VERSIONE_NUOVA = ("C'è la versione piena (fp16), più fine: scaricala. Quella vecchia "
+                  "si cancella quando la nuova è arrivata ed è stata controllata.")
+
+
+def _dice(quale: str, dove) -> str:
+    from officina.miglioria import scaricamento
+
+    if (quale == "seedvr2" and not scaricamento.e_in_casa(dove)
+            and scaricamento.ha_una_versione_vecchia(dove)):
+        return VERSIONE_NUOVA
+    return _MG_DICE[quale]
+
+
 def _scaricatore_web():
     from officina import modelli_in_casa
 
@@ -67,7 +80,7 @@ def _i_modelli_del_miglioramento(archivio) -> dict:
     from officina import modelli_in_casa
 
     dove = archivio.dove.modelli
-    voci = [{"quale": q, "nome": modelli_in_casa.nome(q), "dice": _MG_DICE[q],
+    voci = [{"quale": q, "nome": modelli_in_casa.nome(q), "dice": _dice(q, dove),
              "peso": vista.peso_a_parole(modelli_in_casa.peso(q)),
              "byte": modelli_in_casa.peso(q),
              "in_casa": modelli_in_casa.in_casa(q, dove),
@@ -146,6 +159,12 @@ def avvia_il_miglioramento(archivio) -> None:
     from officina.miglioria import preparazione
 
     if not preparazione.e_pronto(archivio.dove.modelli):
+        from officina.miglioria import scaricamento
+
+        if scaricamento.ha_una_versione_vecchia(archivio.dove.modelli):
+            raise ErroreOfficina(
+                "SeedVR2 è passato alla versione piena (fp16): il Miglioramento aspetta "
+                "che la scarichi, qui sopra.")
         raise ErroreOfficina(
             "Per migliorare serve SeedVR2, che non è ancora sul computer: "
             "si scarica da Stato, nella parte «La salute».")

@@ -12,10 +12,10 @@ FUORI = ("src/interfaces/",)
 ARRIVO = Path(__file__).resolve().parent.parent / "officina" / "miglioria" / "terzi" / "seedvr2.json"
 
 PESI = [
-    {"nome": "seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors",
-     "repo": "AInVFX/SeedVR2_comfyUI",
-     "sha256": "3d68b5ec0b295ae28092e355c8cad870edd00b817b26587d0cb8f9dd2df19bb2",
-     "byte_circa": 8_500_000_000},
+    {"nome": "seedvr2_ema_7b_fp16.safetensors",
+     "repo": "numz/SeedVR2_comfyUI",
+     "sha256": "7b8241aa957606ab6cfb66edabc96d43234f9819c5392b44d2492d9f0b0bbe4a",
+     "byte_circa": 16_500_000_000},
     {"nome": "ema_vae_fp16.safetensors",
      "repo": "numz/SeedVR2_comfyUI",
      "sha256": "20678548f420d98d26f11442d3528f8b8c94e57ee046ef93dbb7633da8612ca1",

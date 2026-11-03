@@ -10,13 +10,13 @@ from officina.errori import ErroreOfficina
 from officina.miglioria import scaricamento
 
 NOME = "seedvr2"
-DIT = "seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors"
+DIT = "seedvr2_ema_7b_fp16.safetensors"
 VAE = "ema_vae_fp16.safetensors"
 SEME = 42
 MUCCHIO = 5
 QUADRI_PER_VOLTA = 41
 CONTESTO = 4
-BLOCCHI_NORMALI = 16
+BLOCCHI_NORMALI = 26
 BLOCCHI_STRETTI = 36
 TESSERA = 1024
 SOVRAPPOSTA = 128
@@ -46,7 +46,7 @@ def lati(larghezza: int, altezza: int) -> tuple[int, int]:
 class SeedVR2:
 
     nome = NOME
-    versione = "7b-fp8"
+    versione = "7b-fp16"
 
     def __init__(self, cartella_modelli: str | None = None, stretto: bool = False,
                  **_opzioni) -> None:

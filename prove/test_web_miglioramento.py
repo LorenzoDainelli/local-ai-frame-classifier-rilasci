@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 import time
 from pathlib import Path
 
@@ -105,6 +106,52 @@ def test_avvia_senza_seedvr2_rimanda_alla_salute(cliente, importato):
     assert "SeedVR2" in risposta.json()["messaggio"]
     assert "La salute" in risposta.json()["messaggio"]
     assert "disabled" in _pagina(cliente, "/miglioramento")
+
+
+def _versione_vecchia(importato) -> None:
+    from officina.miglioria import scaricamento
+
+    casa = scaricamento.dove(importato.dove.modelli)
+    casa.mkdir(parents=True, exist_ok=True)
+    vecchi = {"seedvr2_ema_7b_fp8_e4m3fn.safetensors": "a" * 64,
+              "ema_vae_fp16.safetensors": "b" * 64}
+    scritto = json.dumps({"commit": "vecchio", "pesi": vecchi})
+    (casa / scaricamento.PRONTO).write_text(scritto, encoding="utf-8")
+
+
+def test_con_la_versione_vecchia_avvia_aspetta_la_nuova(cliente, importato):
+    from officina.web.strade import miglioramento
+
+    _versione_vecchia(importato)
+    _metti(importato, "piccola.jpg")
+    risposta = cliente.post("/miglioramento/avvia", headers=JSON)
+    assert risposta.status_code == 400
+    assert "versione piena (fp16)" in risposta.json()["messaggio"]
+    assert "aspetta che la scarichi" in risposta.json()["messaggio"]
+    testo = _pagina(cliente, "/miglioramento")
+    assert testo.count(miglioramento.VERSIONE_NUOVA) == 1
+    assert miglioramento._MG_DICE["seedvr2"] not in testo
+    assert miglioramento._MG_DICE["codeformer"] in testo
+
+
+def test_senza_versione_vecchia_la_pagina_dice_il_solito(cliente):
+    from officina.web.strade import miglioramento
+
+    testo = _pagina(cliente, "/miglioramento")
+    assert miglioramento.VERSIONE_NUOVA not in testo
+    assert miglioramento._MG_DICE["seedvr2"] in testo
+
+
+def test_con_seedvr2_in_casa_non_chiede_la_versione_nuova(monkeypatch, tmp_path):
+    from officina.miglioria import scaricamento
+    from officina.web.strade import miglioramento
+
+    monkeypatch.setattr(scaricamento, "ha_una_versione_vecchia", lambda *argomenti: True)
+    monkeypatch.setattr(scaricamento, "e_in_casa", lambda *argomenti: True)
+    assert miglioramento._dice("seedvr2", tmp_path) == miglioramento._MG_DICE["seedvr2"]
+    monkeypatch.setattr(scaricamento, "e_in_casa", lambda *argomenti: False)
+    assert miglioramento._dice("seedvr2", tmp_path) == miglioramento.VERSIONE_NUOVA
+    assert miglioramento._dice("faceme", tmp_path) == miglioramento._MG_DICE["faceme"]
 
 
 def test_togli_leva_dalla_coda(cliente, importato):

@@ -199,17 +199,21 @@ risultato sbagliato, ed è per questo che ha un file suo, tre prove al pixel, e
 una pagina — «Le facce raddrizzate», da Stato — dove lo si guarda con gli occhi
 su facce inventate.
 
-### SeedVR2 7B FP8 — quello che migliora foto e video
+### SeedVR2 7B FP16 — quello che migliora foto e video
 
-- **si chiama:** SeedVR2 7B, nella versione a otto bit preparata da
+- **si chiama:** SeedVR2 7B, nella versione piena a sedici bit preparata da
   `numz/ComfyUI-SeedVR2_VideoUpscaler`
-- **pesa:** circa 9 GB da scaricare, fra pesi e decodificatore
+- **pesa:** circa 17 GB da scaricare, fra pesi e decodificatore
 - **licenza:** Apache 2.0, libera
 - **esegue codice di terzi:** sì, ed è scritto nella sua riga
 
 Porta foto e video piccoli alla misura FHD (regola 472). Nei video guarda più
 fotogrammi insieme — pezzi da 41, e ognuno riparte dagli ultimi 4 del pezzo
 prima — così i dettagli restano fermi invece di tremolare (regola 476).
+
+Nei 12 GB della scheda ne sta circa un terzo: gli altri blocchi aspettano
+nella RAM e passano nella scheda a turno, quindi è più lento della versione a
+otto bit usata prima, ma più fine nei dettagli (regola 571).
 
 Il suo codice è troppo per copiarlo in casa, quindi entra come dice la regola
 477: 93 file scaricati a una versione precisa, ognuno con la sua impronta, e
