@@ -825,10 +825,13 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         from officina.archivio import accesso
         from officina.miglioria import scambio, sopra
         from officina.ritocco import copia, in_chiaro, tolti
-        from officina.web import coda_ritocco
+        from officina.web import coda_ritocco, miglioramento
 
         try:
             archivio = accesso.aperto()
+        except ErroreOfficina:
+            return
+        try:
             copia.ripara(archivio)
             tolti.ripara(archivio)
             sopra.rifai_i_lasciati(archivio)
@@ -836,9 +839,10 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             scambio.butta_le_copie_rimaste(archivio)
             in_chiaro.butta_tutte(archivio)
         except ErroreOfficina:
-            return
+            pass
         except Exception as guasto:
             registro.errore("programma.ritocchi_non_riparati", **registro.dove_si_e_rotto(guasto))
+        miglioramento.rifai_se_serve(archivio)
 
     def _parti_le_copie_in_sottofondo(self) -> None:
         if getattr(self, "_copie", None) is not None:

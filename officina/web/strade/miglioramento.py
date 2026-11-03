@@ -57,7 +57,8 @@ _MG_DICE = {
 
 
 VERSIONE_NUOVA = ("C'è la versione piena (fp16), più fine: scaricala. Quella vecchia "
-                  "si cancella quando la nuova è arrivata ed è stata controllata.")
+                  "si cancella quando la nuova è arrivata ed è stata controllata, e i "
+                  "file già fatti con la vecchia si rifanno da soli.")
 
 
 def _dice(quale: str, dove) -> str:

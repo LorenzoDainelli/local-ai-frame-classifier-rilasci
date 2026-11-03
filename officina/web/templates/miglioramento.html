@@ -253,6 +253,17 @@
     </section>
     {% endif %}
 
+    {% if non_rifatte %}
+    <section class="carta mg-non-rifatte" id="non-rifatte" aria-labelledby="mg-non-rifatte-titolo">
+        <h2 id="mg-non-rifatte-titolo">Restano fatti con la versione vecchia <span class="tenue numeri">{{ non_rifatte|length }}</span></h2>
+        <p class="piccolo attenuato">SeedVR2 è passato alla versione piena (fp16) e il programma rifà da solo i file migliorati con quella vecchia.
+        Questi li ha lasciati com'erano, per il motivo scritto accanto.</p>
+        <ul class="mg-non-rifatte-elenco minuscolo">
+            {% for voce in non_rifatte %}<li>{{ voce }}</li>{% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
     {% set velo = not pronto or modelli_mg.scarica %}
     {% if velo %}
     <div class="mg-velato" data-mg-modelli data-scarica="{{ 1 if modelli_mg.scarica else 0 }}">

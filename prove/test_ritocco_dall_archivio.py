@@ -27,6 +27,7 @@ from officina.sicuro.accoglienza import SENZA_CASA, VERSIONE_DIVERSA
 from officina.sicuro.cestino import CHIAVETTA, PROBLEMI, RETE
 from officina.sicuro.dall_archivio import (CHIUSO, NON_C_E, SENZA_ARCHIVIO, SI_APRE,
                                            TROVATA, Ricerca)
+from officina.web import miglioramento as miglioramento_web
 from prove import test_miglioria_coda_dall_archivio as coda_di_prova
 from prove import test_miglioria_mostra_dall_archivio as mostra
 from prove import test_miglioria_scambio_dall_archivio as scambio_di_prova
@@ -1123,6 +1124,7 @@ def test_all_avvio_un_guasto_delle_copie_ritoccate_rimaste_si_scrive(monkeypatch
                          (coda_ritocco, "ripara"), (scambio, "butta_le_copie_rimaste")):
         monkeypatch.setattr(modulo, nome, lambda archivio: None)
     monkeypatch.setattr(in_chiaro, "butta_tutte", rotto)
+    monkeypatch.setattr(miglioramento_web, "rifai_se_serve", lambda archivio: None)
     avvio.Programma._ripara_i_ritocchi(None)
     assert [nome for nome, _ in errori] == ["programma.ritocchi_non_riparati"]
 

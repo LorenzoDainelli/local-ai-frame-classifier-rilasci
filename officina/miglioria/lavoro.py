@@ -374,6 +374,7 @@ class Miglioratore:
 
     def _gira(self) -> None:
         riparato = scambio.ripara(self.archivio)
+        self._rifai_con_la_nuova()
         with self.archivio.lettura() as connessione:
             tenute = {riga["id"] for riga in coda.in_stato(connessione, coda.DA_RIVEDERE)}
         da_guardare.pulisci(self.archivio.dove, tenute)
@@ -400,6 +401,20 @@ class Miglioratore:
             self.adesso = {}
             registro.evento("miglioria.giro", fatti=fatti,
                             fermato=self._fermati.is_set())
+
+    def _rifai_con_la_nuova(self) -> None:
+        from officina.miglioria import preparazione, rifai
+
+        if not preparazione.e_pronto(self.archivio.dove.modelli):
+            return
+        esito = rifai.tutto(self.archivio)
+        if esito.rimesse:
+            self.lavoro.di(f"rimetto in coda {esito.rimesse} file fatti con la versione "
+                           "vecchia di SeedVR2, per rifarli con quella nuova")
+        if esito.saltate:
+            quanti = len(esito.saltate)
+            self.lavoro.di(f"{quanti} file fatti con la versione vecchia restano come sono: "
+                           "l'elenco è nella pagina")
 
     def _conta_la_memoria(self, miglioria_id: int, senza_memoria: list[int]) -> list[int]:
         with self.archivio.lettura() as connessione:

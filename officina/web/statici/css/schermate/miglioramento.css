@@ -117,6 +117,10 @@
 .mg-ram p { margin: 0; }
 .mg-ram-scelte { display: flex; flex-wrap: wrap; gap: 8px; }
 .mg-in-chiaro .mg-dove { overflow-wrap: anywhere; }
+.mg-non-rifatte { display: grid; gap: 6px; padding: 14px 16px; }
+.mg-non-rifatte h2 { margin: 0; display: flex; align-items: baseline; gap: 8px; font: 400 17px/1.25 var(--serif); }
+.mg-non-rifatte p { margin: 0; }
+.mg-non-rifatte-elenco { margin: 0; padding-left: 18px; display: grid; gap: 2px; overflow-wrap: anywhere; }
 
 .mg-col-testa h2 { margin: 0; font-size: 13.5px; font-weight: 500; font-family: var(--sans); }
 .mg-col p { margin: 0; padding: 0 4px; }

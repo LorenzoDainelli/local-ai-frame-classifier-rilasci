@@ -245,6 +245,17 @@ def _prima_dei_corpi(dove: Path, chiave: str | None) -> None:
                              codice="permesso_corpi")
 
 
+def _rifai_con_la_nuova() -> None:
+    from officina.archivio import accesso
+    from officina.web import miglioramento
+
+    try:
+        archivio = accesso.aperto()
+    except ErroreOfficina:
+        return
+    miglioramento.rifai_se_serve(archivio)
+
+
 def porta_in_casa(quale: str, dove: Path, lavoro) -> None:
     from officina.descrittori import scaricamento as scarica_descrittore
     from officina.programma import segreti
@@ -324,6 +335,7 @@ def porta_in_casa(quale: str, dove: Path, lavoro) -> None:
         preparazione.prepara(dove, di=lavoro.di, chiave=chiave,
                              a_che_punto=lavoro.a_che_punto)
         finito()
+        _rifai_con_la_nuova()
         return
 
     carta = tutte_le_carte().get(quale)

@@ -9,7 +9,7 @@ from pathlib import Path
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
 from officina.miglioria import (attesa, coda, da_guardare, fedelta, misura, ricomincia,
-                                scambio, sfida)
+                                rifai, scambio, sfida)
 from officina.modello import file_media, scatti
 from officina.sicuro.dall_archivio import CHIUSO, SI_APRE, TROVATA, DallArchivio
 from officina.web.lavori import Lavoro
@@ -102,6 +102,24 @@ def rispondi_per_la_ram(archivio, scelta: str) -> bool:
     return il_miglioratore(archivio).rispondi_per_la_ram(scelta)
 
 
+def rifai_se_serve(archivio) -> bool:
+    from officina import registro
+    from officina.miglioria import preparazione
+    from officina.web.strade import miglioramento
+
+    try:
+        if not preparazione.e_pronto(archivio.dove.modelli) or sta_lavorando():
+            return False
+        with archivio.lettura() as connessione:
+            if not rifai.ci_sono(connessione, rifai.versione_di_adesso()):
+                return False
+        miglioramento.avvia_il_miglioramento(archivio)
+    except Exception as guasto:
+        registro.errore("miglioria.rifai_non_partito", **registro.dove_si_e_rotto(guasto))
+        return False
+    return True
+
+
 def misura_a_parole(larghezza, altezza) -> str:
     if not larghezza or not altezza:
         return ""
@@ -173,6 +191,7 @@ def la_coda(archivio) -> dict:
             "fallite": righe(connessione, coda.FALLITA, QUANTE_FALLITE),
             "ferme": righe(connessione, coda.IN_SCAMBIO, QUANTE_FALLITE),
             "in_chiaro": in_chiaro(connessione),
+            "non_rifatte": rifai.saltate(connessione),
         }
 
 
