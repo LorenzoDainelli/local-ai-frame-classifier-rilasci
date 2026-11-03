@@ -4,12 +4,13 @@ import json
 import os
 import re
 import sqlite3
+import time
 from pathlib import Path
 
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
-from officina.miglioria import (attesa, coda, da_guardare, fedelta, misura, ricomincia,
-                                rifai, scambio, sfida)
+from officina.miglioria import (attesa, coda, da_guardare, fedelta, misura, motori,
+                                previsione, ricomincia, rifai, scambio, sfida)
 from officina.modello import file_media, scatti
 from officina.sicuro.dall_archivio import CHIUSO, SI_APRE, TROVATA, DallArchivio
 from officina.web.lavori import Lavoro
@@ -174,6 +175,35 @@ def righe(connessione: sqlite3.Connection, stato: str, quante: int) -> list[dict
         stato, quante)]
 
 
+def _sfidanti_pronti(archivio) -> bool:
+    from officina.miglioria import preparazione
+
+    return (preparazione.e_pronto(archivio.dove.modelli)
+            and preparazione.e_pronto(archivio.dove.modelli, motori.LUCIDFLUX))
+
+
+def quanto_manca(archivio, connessione: sqlite3.Connection) -> dict | None:
+    from officina import registro
+
+    try:
+        miglioratore = il_miglioratore(archivio)
+        stato = miglioratore.come_va()
+        lavoro = stato.get("adesso") or {}
+        posti = 0
+        if sfida.si_fa(connessione, True) and not sfida.in_pausa(connessione):
+            if _sfidanti_pronti(archivio):
+                posti = sfida.QUANTE - sfida.quante_fatte(connessione)
+        return previsione.quanto_manca(
+            connessione, rifai.versione_di_adesso(), ora=time.time(),
+            sta_lavorando=bool(stato.get("sta_lavorando")), lavoro=lavoro,
+            faceme=miglioratore._scelti().get("volti") == motori.FACEME,
+            posti_in_sfida=posti, disco=bool(lavoro.get("disco")),
+            intensita=int(archivio.impostazione("intensita_scheda") or 100))
+    except Exception as guasto:
+        registro.avviso("miglioria.previsione", **registro.dove_si_e_rotto(guasto))
+        return None
+
+
 def la_coda(archivio) -> dict:
     with archivio.lettura() as connessione:
         al_lavoro = righe(connessione, coda.IN_LAVORO, 1)
@@ -192,6 +222,7 @@ def la_coda(archivio) -> dict:
             "ferme": righe(connessione, coda.IN_SCAMBIO, QUANTE_FALLITE),
             "in_chiaro": in_chiaro(connessione),
             "non_rifatte": rifai.saltate(connessione),
+            "previsione": quanto_manca(archivio, connessione),
         }
 
 

@@ -109,6 +109,7 @@
 .mg-togli-tutte > summary::-webkit-details-marker { display: none; }
 .mg-togli-tutte form { display: grid; gap: 6px; justify-items: start; }
 .mg-togli-tutte p { margin: 0; }
+.mg-previsione { margin: 0 0 8px; line-height: 1.45; }
 .mg-in-chiaro { display: grid; gap: 6px; padding: 14px 16px; border-color: var(--attenzione); }
 .mg-in-chiaro h2 { margin: 0; display: flex; align-items: baseline; gap: 8px; font: 400 17px/1.25 var(--serif); }
 .mg-in-chiaro p { margin: 0; }

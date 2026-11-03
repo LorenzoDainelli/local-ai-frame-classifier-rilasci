@@ -254,8 +254,10 @@ def test_il_miglioramento_legge_l_originale_dall_archivio_e_non_lo_rimette_sul_d
                                         "percorsi": percorsi, "nome": originale.name}
     assert da_fare["originale"] == str(originale)
     assert os.stat(in_attesa).st_mtime_ns == pronta.misure[relativo].st_mtime_ns
-    assert adesso == [{"id": riga["id"], "nome": originale.name, "fatti": 0, "totale": 0,
-                       "dall_archivio": True}]
+    assert [{chiave: valore for chiave, valore in visto.items() if chiave != "partito_il"}
+            for visto in adesso] == [{"id": riga["id"], "nome": originale.name, "fatti": 0,
+                                      "totale": 0, "disco": False, "dall_archivio": True}]
+    assert isinstance(adesso[0]["partito_il"], float)
     assert json.loads(riga["fedelta"])["fatto"]
     prima = da_guardare.percorso(pronta.archivio.dove, riga["id"], da_guardare.PRIMA)
     assert not prima.exists()
@@ -287,7 +289,8 @@ def test_con_l_originale_sul_disco_non_si_chiede_all_archivio(solo_nell_archivio
     assert not miglioratore.lavoro.guasto, miglioratore.lavoro.dettaglio
     [da_fare] = spia.visti
     assert "dall_archivio" not in da_fare and "date" not in da_fare
-    assert [set(visto) for visto in adesso] == [{"id", "nome", "fatti", "totale"}]
+    assert [set(visto) for visto in adesso] == [{"id", "nome", "fatti", "totale",
+                                                 "partito_il", "disco"}]
     assert _stati(pronta.archivio) == {"sole.jpg": (coda.DA_RIVEDERE, None)}
 
 

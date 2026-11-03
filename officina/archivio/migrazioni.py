@@ -1567,6 +1567,25 @@ def _versione_71(connessione: sqlite3.Connection) -> None:
     connessione.execute("ALTER TABLE cartelle_sorgente ADD COLUMN tolta_il TEXT")
 
 
+def _versione_72(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE tempi_miglioria (
+            id            INTEGER PRIMARY KEY,
+            miglioria_id  INTEGER NOT NULL,
+            genere        TEXT NOT NULL,
+            versione      TEXT NOT NULL,
+            secondi       REAL NOT NULL,
+            prevista      REAL,
+            fattori       TEXT NOT NULL,
+            finita_il     TEXT NOT NULL
+        )
+        """
+    )
+    connessione.execute("CREATE INDEX tempi_miglioria_per_genere ON "
+                        "tempi_miglioria(genere, versione, id)")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1697,6 +1716,8 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_70),
     Migrazione(71, "le cartelle tolte ricordano quando, e si rimettono nell'elenco "
                    "con un tasto", _versione_71),
+    Migrazione(72, "i secondi veri di ogni file migliorato, per prevedere quanto manca "
+                   "alla coda", _versione_72),
 ]
 
 

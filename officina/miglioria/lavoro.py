@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -13,7 +14,7 @@ from officina.archivio.database import adesso
 from officina.errori import ErroreOfficina
 from officina.importazione import impronta
 from officina.miglioria import (attesa, catena, coda, da_guardare, fedelta, motori, persone, pezzi,
-                                scambio, sfida, video)
+                                previsione, scambio, sfida, video)
 from officina.modello import file_media
 from officina.sicuro.dall_archivio import CHIUSO, CHIUSO_ADESSO, DIVERSA, PERSA, SI_APRE
 from officina.web.lavori import Lavoro
@@ -288,6 +289,12 @@ def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
     return esito_della_stanza(esito, rotto, codice_di_uscita)
 
 
+def _versione_di_seedvr2() -> str:
+    from officina.miglioria.rifai import versione_di_adesso
+
+    return versione_di_adesso()
+
+
 class Miglioratore:
 
     def __init__(self, archivio, lancia: Callable[..., dict] | None = None,
@@ -307,6 +314,7 @@ class Miglioratore:
         self._saltate_in_sfida: set[int] = set()
         self._salta: set[int] = set()
         self._disco = False
+        self._misura: dict | None = None
         self._scelta: str | None = None
         self._risposta = threading.Event()
 
@@ -440,8 +448,10 @@ class Miglioratore:
         with self.archivio.lettura() as connessione:
             file = file_media.per_id(connessione, riga["file_id"])
             dove = attesa.cartella(connessione, originale, self.archivio.dove.radice)
+        partito = time.monotonic()
         self.adesso = {"id": miglioria_id, "nome": originale.name,
-                       "fatti": 0, "totale": 0}
+                       "fatti": 0, "totale": 0, "partito_il": time.time(),
+                       "disco": self._disco}
         self.lavoro.di(f"lavoro «{originale.name}»")
 
         if file is None:
@@ -473,8 +483,10 @@ class Miglioratore:
 
         lavoro = self._il_lavoro(genere, originale, riga["file_id"], piu)
         al_passo = self._al_passo
+        in_sfida = self._in_sfida(genere)
+        self._prevedi(partito, file, lavoro, in_sfida)
 
-        if self._in_sfida(genere):
+        if in_sfida:
             self._due_versioni(miglioria_id, originale, lavoro, finale, al_passo)
             return
 
@@ -506,6 +518,7 @@ class Miglioratore:
                        altezza_dopo=int(fatto.get("altezza") or 0) or None,
                        motori=json.dumps(fatto.get("motori") or []),
                        finita_il=adesso())
+            self._misurato(connessione, miglioria_id, fatto)
         self.lavoro.di(f"pronto da rivedere: «{originale.name}»{misura_del_motore(fatto)}")
 
     def _originale(self, riga, originale: Path):
@@ -616,6 +629,36 @@ class Miglioratore:
             **(piu or {}),
         }
 
+    def _prevedi(self, partito: float, file, lavoro: dict, in_sfida: bool) -> None:
+        dati = previsione.fattori(
+            file, volti=len(lavoro["persone"]), dall_archivio="dall_archivio" in lavoro,
+            sfida=in_sfida, disco=bool(lavoro["opzioni"].get("disco")),
+            a_freddo=not self._accesa.accesa, intensita=lavoro["intensita"])
+        versione = _versione_di_seedvr2()
+        try:
+            with self.archivio.lettura() as connessione:
+                prevista = previsione.prevedi(connessione, versione, dati)
+        except Exception as guasto:
+            registro.avviso("miglioria.previsione", **registro.dove_si_e_rotto(guasto))
+            prevista = None
+        self._misura = {"partito": partito, "fattori": dati, "prevista": prevista,
+                        "versione": versione}
+        if prevista is not None:
+            self.adesso["prevista"] = prevista
+
+    def _misurato(self, connessione, miglioria_id: int, fatto: dict) -> None:
+        misura, self._misura = self._misura, None
+        if misura is None or not any(
+                isinstance(motore, dict) and motore.get("nome") == motori.SEEDVR2
+                and motore.get("versione") == misura["versione"]
+                for motore in fatto.get("motori") or []):
+            return
+        secondi = time.monotonic() - misura["partito"]
+        previsione.registra(connessione, miglioria_id, misura["versione"], secondi,
+                            misura["prevista"], misura["fattori"])
+        registro.evento("miglioria.secondi", secondi=round(secondi, 1),
+                        prevista=round(misura["prevista"] or 0, 1))
+
     def _al_passo(self, fatti: int, totale: int) -> None:
         self.adesso.update(fatti=fatti, totale=totale)
         self.lavoro.a_che_punto(fatti, totale)
@@ -715,6 +758,7 @@ class Miglioratore:
                     motore: (dati[0], dati[1], dati[2].get("motori"))
                     for motore, dati in fatte.items()})
                 sfida.segna_il_salto(connessione, None)
+                self._misurato(connessione, miglioria_id, base)
                 misura = misura_di_lucidflux(fatte[motori.LUCIDFLUX][2])
                 self.lavoro.di(f"pronto da votare: «{originale.name}»{misura}")
                 return
@@ -726,6 +770,7 @@ class Miglioratore:
                        motori=json.dumps(base.get("motori") or []),
                        finita_il=adesso())
             self._lucidflux_saltato(connessione, miglioria_id, saltata)
+            self._misurato(connessione, miglioria_id, base)
         self.lavoro.di(f"pronto da rivedere: «{originale.name}», senza sfida: "
                        f"LucidFlux non è riuscito ({perche_saltata(saltata)})")
         self._se_in_pausa()

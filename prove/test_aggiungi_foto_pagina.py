@@ -69,8 +69,9 @@ def _tra(testo: str, inizio: str, fine: str) -> str:
 
 
 def test_la_migrazione_71_aggiunge_il_giorno_in_cui_e_stata_tolta():
-    assert migrazioni.MIGRAZIONI[-1].versione == 71
-    assert migrazioni.MIGRAZIONI[-1].applica is migrazioni._versione_71
+    applica = {migrazione.versione: migrazione.applica
+               for migrazione in migrazioni.MIGRAZIONI}
+    assert applica[71] is migrazioni._versione_71
     connessione = sqlite3.connect(":memory:")
     connessione.row_factory = sqlite3.Row
     connessione.execute("CREATE TABLE cartelle_sorgente (id INTEGER PRIMARY KEY, "

@@ -39,6 +39,12 @@
 </li>
 {% endmacro %}
 
+{% macro quanto_manca() %}
+{% if previsione %}
+<p class="minuscolo mg-previsione" id="previsione-miglioramento">{{ previsione.riga }}{% if previsione.errore %}<br><span class="tenue">{{ previsione.errore }}</span>{% endif %}</p>
+{% endif %}
+{% endmacro %}
+
 {% macro togli_tutte() %}
 {% if conti.in_coda > 1 and ultima_in_coda %}
 <details class="mg-togli-tutte">
@@ -336,6 +342,7 @@
     <div class="mg-colonne">
         <section class="mg-col">
             <div class="mg-col-testa"><h2>In coda</h2><span class="tenue numeri">{{ conti.in_coda|numero }}</span></div>
+            {{ quanto_manca() }}
             {% if in_coda %}
             <ul class="righe-coda">
                 {% for riga in in_coda %}{{ riga_in_coda(riga) }}{% endfor %}
@@ -438,6 +445,7 @@
     <div class="mg-tre">
         <section class="carta mg-carta">
             <h2>In coda <span class="tenue numeri">{{ conti.in_coda|numero }}</span></h2>
+            {{ quanto_manca() }}
             {% if in_coda %}
             <ul class="righe-coda">
                 {% for riga in in_coda[:5] %}{{ riga_in_coda(riga) }}{% endfor %}
