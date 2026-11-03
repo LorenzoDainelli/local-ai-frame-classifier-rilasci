@@ -165,16 +165,61 @@ def _chiudi(entrata) -> None:
         pass
 
 
-def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
-                     ricorda: Callable[[subprocess.Popen], None],
-                     modulo: str = "officina.miglioria.stanza") -> dict:
+def apri_la_stanza(modulo: str) -> subprocess.Popen:
     from officina.programma import librerie, scheda
 
     comando = [librerie.python_per_i_comandi(), "-m", modulo]
-    processo = subprocess.Popen(
+    return subprocess.Popen(
         comando, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL, cwd=str(librerie.RADICE), text=True,
         encoding="utf-8", creationflags=scheda.SENZA_FINESTRA)
+
+
+def ascolta_la_stanza(processo: subprocess.Popen, allo_sportello,
+                      al_passo: Callable[[int, int], None]) -> tuple:
+    esito: dict | None = None
+    rotto = None
+    for riga in processo.stdout:
+        try:
+            messaggio = json.loads(riga)
+        except ValueError:
+            continue
+        if not isinstance(messaggio, dict):
+            continue
+        if allo_sportello is not None:
+            allo_sportello.controlla()
+            if "archivio" in messaggio:
+                _allo_sportello(allo_sportello, messaggio["archivio"])
+                continue
+            if isinstance(messaggio.get("tubo_rotto"), dict):
+                rotto = _tubo_rotto(messaggio["tubo_rotto"])
+                continue
+        if isinstance(messaggio.get("tempi"), dict):
+            registro.evento("miglioria.tempi", **{
+                chiave: valore for chiave, valore in messaggio["tempi"].items()
+                if isinstance(valore, (int, float))})
+        if "fatti" in messaggio:
+            al_passo(int(messaggio["fatti"]), int(messaggio.get("totale") or 0))
+        elif "fatto" in messaggio or "guasto" in messaggio:
+            esito = messaggio
+        elif messaggio.get("accesa") is True and esito is not None and "fatto" in esito:
+            return esito, rotto, messaggio
+    return esito, rotto, None
+
+
+def esito_della_stanza(esito: dict | None, rotto: dict | None,
+                       codice_di_uscita: int) -> dict:
+    if esito is None:
+        esito = {"guasto": "stanza_muta" if codice_di_uscita == 0 else "stanza_caduta"}
+    if rotto is not None and "guasto" in esito:
+        esito = rotto
+    return esito
+
+
+def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
+                     ricorda: Callable[[subprocess.Popen], None],
+                     modulo: str = "officina.miglioria.stanza") -> dict:
+    processo = apri_la_stanza(modulo)
     ricorda(processo)
     esito: dict | None = None
     allo_sportello = None
@@ -186,37 +231,13 @@ def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
             allo_sportello = _sportello(processo)
         else:
             processo.stdin.close()
-        for riga in processo.stdout:
-            try:
-                messaggio = json.loads(riga)
-            except ValueError:
-                continue
-            if allo_sportello is not None:
-                allo_sportello.controlla()
-                if "archivio" in messaggio:
-                    _allo_sportello(allo_sportello, messaggio["archivio"])
-                    continue
-                if isinstance(messaggio.get("tubo_rotto"), dict):
-                    rotto = _tubo_rotto(messaggio["tubo_rotto"])
-                    continue
-            if isinstance(messaggio.get("tempi"), dict):
-                registro.evento("miglioria.tempi", **{
-                    chiave: valore for chiave, valore in messaggio["tempi"].items()
-                    if isinstance(valore, (int, float))})
-            if "fatti" in messaggio:
-                al_passo(int(messaggio["fatti"]), int(messaggio.get("totale") or 0))
-            elif "fatto" in messaggio or "guasto" in messaggio:
-                esito = messaggio
+        esito, rotto, _accesa = ascolta_la_stanza(processo, allo_sportello, al_passo)
     finally:
         if allo_sportello is not None:
             allo_sportello.chiudi()
         _chiudi(processo.stdin)
         codice_di_uscita = processo.wait()
-    if esito is None:
-        esito = {"guasto": "stanza_muta" if codice_di_uscita == 0 else "stanza_caduta"}
-    if rotto is not None and "guasto" in esito:
-        esito = rotto
-    return esito
+    return esito_della_stanza(esito, rotto, codice_di_uscita)
 
 
 class Miglioratore:
@@ -224,8 +245,11 @@ class Miglioratore:
     def __init__(self, archivio, lancia: Callable[..., dict] | None = None,
                  motori_scelti: dict | None = None,
                  sfidanti_pronti: Callable[[], bool] | None = None):
+        from officina.miglioria import accesa
+
         self.archivio = archivio
-        self._lancia = lancia or lancia_la_stanza
+        self._accesa = accesa.StanzaAccesa()
+        self._lancia = lancia or self._accesa.lancia
         self.motori_scelti = motori_scelti
         self._sfidanti_pronti = sfidanti_pronti or self._ci_sono_tutti_e_due
         self.lavoro = Lavoro("miglioramento", scheda=True)
@@ -319,6 +343,7 @@ class Miglioratore:
                 senza_memoria = self._conta_la_memoria(riga["id"], senza_memoria)
             fatti += self._riprendi_la_sfida()
         finally:
+            self._accesa.spegni()
             self.adesso = {}
             registro.evento("miglioria.giro", fatti=fatti,
                             fermato=self._fermati.is_set())

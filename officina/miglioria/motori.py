@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 from typing import Iterable, Iterator
 
 from PIL import Image
@@ -37,6 +38,7 @@ class Finto:
 
     nome = FINTO
     versione = "1"
+    resta_acceso = True
 
     def __init__(self, **_opzioni) -> None:
         self.spento = False
@@ -63,8 +65,60 @@ def _classe(indirizzo: str):
     return getattr(importlib.import_module(modulo), nome)
 
 
+class Acceso:
+
+    def __init__(self, motore) -> None:
+        self.motore = motore
+
+    def __getattr__(self, nome: str):
+        return getattr(self.motore, nome)
+
+    def spegni(self) -> None:
+        pass
+
+
+_accesi: dict | None = None
+caricati = 0
+
+
+def tieni_accesi() -> None:
+    global _accesi
+    _accesi = {}
+
+
+def resta_acceso(elenco: dict[str, str], nome: str) -> bool:
+    indirizzo = elenco.get(nome)
+    if indirizzo is None:
+        return False
+    return getattr(_classe(indirizzo), "resta_acceso", False) is True
+
+
+def ancora_buoni() -> bool:
+    return not any(getattr(acceso.motore, "stretto", False)
+                   for acceso in (_accesi or {}).values())
+
+
+def spegni_tutti() -> None:
+    accesi = list((_accesi or {}).values())
+    if _accesi is not None:
+        _accesi.clear()
+    for acceso in accesi:
+        try:
+            acceso.motore.spegni()
+        except Exception:
+            pass
+
+
 def apri(elenco: dict[str, str], nome: str, **opzioni):
+    global caricati
     indirizzo = elenco.get(nome)
     if indirizzo is None:
         raise MotoreSconosciuto(nome)
-    return _classe(indirizzo)(**opzioni)
+    classe = _classe(indirizzo)
+    if _accesi is None or getattr(classe, "resta_acceso", False) is not True:
+        return classe(**opzioni)
+    chiave = json.dumps([indirizzo, opzioni], sort_keys=True, default=str)
+    if chiave not in _accesi:
+        _accesi[chiave] = Acceso(classe(**opzioni))
+        caricati += 1
+    return _accesi[chiave]

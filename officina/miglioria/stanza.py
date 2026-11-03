@@ -14,14 +14,14 @@ def _canale():
     return uscita
 
 
-def _dall_archivio(lavoro: dict, manda) -> dict:
+def _dall_archivio(lavoro: dict, manda, entrata=None) -> dict:
     cercata = lavoro.get("dall_archivio")
     if not cercata:
         return lavoro
     from officina.errori import ErroreOfficina
     from officina.sicuro import dall_archivio, sportello, tubo
 
-    filo = tubo.DaVerso(sys.stdin, manda)
+    filo = tubo.DaVerso(sys.stdin if entrata is None else entrata, manda)
     lontano = sportello.DaLontano(filo, filo, filo)
     ricerca = lontano.cerca(cercata["impronta"], cercata["dimensione"], cercata["percorsi"],
                             nome=cercata["nome"], intero=lavoro["genere"] == "immagine")
@@ -39,7 +39,17 @@ def _dall_archivio(lavoro: dict, manda) -> dict:
 
 
 def main() -> int:
-    canale = _canale()
+    manda = manda_su(_canale())
+
+    try:
+        lavoro = json.loads(sys.stdin.readline() or "{}")
+    except ValueError:
+        manda({"guasto": "lavoro_illeggibile"})
+        return 2
+    return un_lavoro(lavoro, manda, sys.stdin)
+
+
+def manda_su(canale):
     serratura = threading.Lock()
 
     def manda(messaggio: dict) -> None:
@@ -47,13 +57,10 @@ def main() -> int:
         with serratura:
             canale.write(riga)
             canale.flush()
+    return manda
 
-    try:
-        lavoro = json.loads(sys.stdin.readline() or "{}")
-    except ValueError:
-        manda({"guasto": "lavoro_illeggibile"})
-        return 2
 
+def un_lavoro(lavoro: dict, manda, entrata) -> int:
     for percorso in lavoro.get("percorsi", []):
         if Path(percorso).is_dir() and percorso not in sys.path:
             sys.path.append(percorso)
@@ -73,7 +80,7 @@ def main() -> int:
         manda({"fatti": int(fatti), "totale": int(totale or 0)})
 
     try:
-        lavoro = _dall_archivio(lavoro, manda)
+        lavoro = _dall_archivio(lavoro, manda, entrata)
         with attento(lavoro.get("originale")):
             esito = catena.esegui(lavoro, al_passo, freno, manda)
     except ErroreOfficina as errore:

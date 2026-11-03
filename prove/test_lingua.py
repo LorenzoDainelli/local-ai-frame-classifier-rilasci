@@ -276,6 +276,10 @@ def test_nessun_filo_puo_morire_in_silenzio():
             "chiude finisce e basta, se si rompe lo manda al programma, che lo "
             "scrive nel registro; comunque vada la stanza smette di leggere "
             "dall'archivio",
+        "officina/miglioria/stanza_accesa.py":
+            "`Smistatore._ascolta`, comunque finisca, chiude il filo del file "
+            "in corso e spegne la stanza: il programma la vede caduta, il file "
+            "torna non riuscito e il guasto finisce nel registro",
         "officina/web/sosta.py":
             "`Sosta._gira` prende dentro qualunque errore di un giro, lo scrive "
             "nel registro e riprova al giro dopo: chi aspetta la fine della "

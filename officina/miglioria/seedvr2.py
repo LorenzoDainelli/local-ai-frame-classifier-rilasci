@@ -47,6 +47,7 @@ class SeedVR2:
 
     nome = NOME
     versione = "7b-fp16"
+    resta_acceso = True
 
     def __init__(self, cartella_modelli: str | None = None, stretto: bool = False,
                  **_opzioni) -> None:
