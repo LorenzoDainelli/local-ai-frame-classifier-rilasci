@@ -407,4 +407,5 @@ def test_la_ripresa_e_il_lavoro_normale_dicono_la_misura_solo_di_lucidflux(impor
 def test_il_lavoro_normale_con_la_misura_la_dice(importato):
     _metti(importato, "piccola.jpg")
     miglioratore = _gira(importato, _con_la_misura(MISURA), pronti=False)
-    assert f"pronto da rivedere: «piccola.jpg»{DETTO}" in miglioratore.lavoro.righe
+    detto = " (SeedVR2: scheda 7,1 GB · RAM 9 GB · disco 6,2 GB)"
+    assert f"pronto da rivedere: «piccola.jpg»{detto}" in miglioratore.lavoro.righe

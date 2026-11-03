@@ -109,6 +109,39 @@
     <p>Il riquadro sparisce da solo quando le copie non ci sono più.</p>
 {% endcall %}{% endmacro %}
 
+{% macro riquadro_ram(ram) %}
+<section class="carta mg-ram" id="riquadro-ram" role="alert" aria-labelledby="mg-ram-titolo">
+    <h2 id="mg-ram-titolo">La RAM non basta per SeedVR2{% call spiega("Cosa vuol dire") %}
+        <p>SeedVR2 tiene nella scheda video solo una parte dei suoi blocchi: gli altri
+        aspettano nella RAM e passano nella scheda a turno. Se la RAM libera non basta,
+        il file torna in coda e non si perde niente: i pezzi di video già fatti restano.</p>
+        <p><b>Aspetto</b>: chiudi qualche programma, e appena la RAM si libera il
+        Miglioramento riparte da solo. Se non rispondi, fa così.</p>
+        <p><b>Usa il disco</b>: i blocchi che non ci stanno nella RAM si leggono dal
+        disco. Va più piano, e vale fino alla fine del giro. Ogni tanto controlla se la
+        RAM si è liberata, e allora ci rimette i blocchi senza ricaricare il modello.</p>
+    {% endcall %}</h2>
+    <p>Servono almeno <b class="numeri">{{ ram.serve }} GB</b> di RAM libera e ce ne sono
+        <span class="numeri">{{ ram.libera }} GB</span>.
+        {% if ram.anche_col_disco %}Anche col disco non è bastata: ci deve stare almeno un blocco, oltre a quello che resta fisso.{% endif %}</p>
+    <p class="piccolo tenue">{% if ram.aspetto or ram.anche_col_disco %}Aspetto che la RAM si liberi: riparto da solo.{% else %}Se non scegli, aspetto che la RAM si liberi e riparto da solo.{% endif %}</p>
+    <div class="mg-ram-scelte">
+        {% if not ram.aspetto and not ram.anche_col_disco %}
+        <form method="post" action="/miglioramento/ram">
+            <input type="hidden" name="scelta" value="aspetto">
+            <button class="tasto-comando piccolo" type="submit">Aspetto</button>
+        </form>
+        {% endif %}
+        {% if not ram.anche_col_disco and not ram.disco %}
+        <form method="post" action="/miglioramento/ram">
+            <input type="hidden" name="scelta" value="disco">
+            <button class="tasto-comando accento piccolo" type="submit">Usa il disco</button>
+        </form>
+        {% endif %}
+    </div>
+</section>
+{% endmacro %}
+
 {% macro la_sfida() %}
 <div class="carta mg-sfida" id="riquadro-sfida">
     <h2>Sfida alla cieca <span class="tenue numeri">{{ sfida.votate|numero }} di {{ sfida.quante|numero }}</span>{% call spiega("Come funziona") %}
@@ -284,6 +317,8 @@
     {% if lavoro.guasto %}
     <p class="avviso" role="alert">{{ lavoro.guasto }}</p>
     {% endif %}
+
+    {% if lavoro.sta_lavorando and lavoro.adesso and lavoro.adesso.ram %}{{ riquadro_ram(lavoro.adesso.ram) }}{% endif %}
 
     {% if versione == 'B' %}
 

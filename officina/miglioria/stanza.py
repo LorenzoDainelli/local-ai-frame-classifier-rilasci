@@ -85,6 +85,10 @@ def un_lavoro(lavoro: dict, manda, entrata) -> int:
             esito = catena.esegui(lavoro, al_passo, freno, manda)
     except ErroreOfficina as errore:
         messaggio = {"guasto": errore.codice}
+        from officina.miglioria.seedvr2_blocchi import RamPoca
+
+        if isinstance(errore, RamPoca):
+            messaggio.update(errore.dati())
         if getattr(errore, "senza_nomi", False):
             messaggio["spiegazione"] = str(errore)
         manda(messaggio)

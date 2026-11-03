@@ -85,6 +85,23 @@ def applica_di_qua(adesso: dict) -> None:
     il_miglioratore(accesso.aperto()).adesso = dict(adesso)
 
 
+def ascolta_di_la(*comando) -> None:
+    if _miglioratore is not None and len(comando) == 2 and comando[0] == "ram":
+        _miglioratore.rispondi_per_la_ram(str(comando[1]))
+
+
+def rispondi_per_la_ram(archivio, scelta: str) -> bool:
+    from officina.miglioria import lavoro
+    from officina.web import in_disparte
+
+    if scelta not in lavoro.RISPOSTE_PER_LA_RAM:
+        return False
+    if in_disparte.sta_girando("miglioramento"):
+        in_disparte.manda("ram", scelta, a="miglioramento")
+        return True
+    return il_miglioratore(archivio).rispondi_per_la_ram(scelta)
+
+
 def misura_a_parole(larghezza, altezza) -> str:
     if not larghezza or not altezza:
         return ""

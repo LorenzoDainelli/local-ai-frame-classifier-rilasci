@@ -349,16 +349,18 @@ def ponte(nome: str, scelti: list[str], come: str = FILA_VERA) -> None:
 
 
 def lancia(lavoro, a: str, nome: str, avvio: str, argomenti: tuple = (),
-           ferma_con: str = "", racconta: str = "", applica: str = "") -> bool:
+           ferma_con: str = "", racconta: str = "", applica: str = "",
+           ascolta: str = "") -> bool:
     def fai() -> None:
-        _ponte_di(lavoro, a, nome, avvio, list(argomenti), ferma_con, racconta, applica)
+        _ponte_di(lavoro, a, nome, avvio, list(argomenti), ferma_con, racconta, applica,
+                  ascolta)
     return lavoro.parti(fai, a)
 
 
 def _ponte_di(lavoro, a: str, nome: str, avvio: str, argomenti: list,
-              ferma_con: str, racconta: str, applica: str) -> None:
+              ferma_con: str, racconta: str, applica: str, ascolta: str = "") -> None:
     processo, notizie, allo_sportello = _avvia_con_lo_sportello(
-        a, _figlio_di, (nome, avvio, argomenti, ferma_con, racconta), nome)
+        a, _figlio_di, (nome, avvio, argomenti, ferma_con, racconta, ascolta), nome)
     metti = _trova(applica) if applica else None
 
     def ogni_foto(foto: dict | None) -> None:
@@ -376,7 +378,7 @@ def _ponte_di(lavoro, a: str, nome: str, avvio: str, argomenti: list,
 
 
 def _figlio_di(nome: str, avvio: str, argomenti: list, ferma_con: str, racconta: str,
-               comandi, notizie, linea: tuple | None = None) -> None:
+               ascolta: str, comandi, notizie, linea: tuple | None = None) -> None:
     from officina.archivio import accesso
 
     if linea is not None:
@@ -386,6 +388,7 @@ def _figlio_di(nome: str, avvio: str, argomenti: list, ferma_con: str, racconta:
         lavoro = _trova(avvio)(archivio, *argomenti)
         ferma_qui = _trova(ferma_con) if ferma_con else None
         dimmi = _trova(racconta) if racconta else None
+        senti = _trova(ascolta) if ascolta else None
     except ErroreOfficina as errore:
         notizie.put(("fine", None, {"guasto": errore.messaggio, "codice": errore.codice,
                                     "dettaglio": getattr(errore, "dettaglio", "") or ""}))
@@ -421,6 +424,12 @@ def _figlio_di(nome: str, avvio: str, argomenti: list, ferma_con: str, racconta:
                 ferma_qui()
             except Exception as guasto:
                 registro.avviso("intelligenza.non_fermata", **registro.dove_si_e_rotto(guasto))
+        if senti is not None and comando and comando[0] != "ferma":
+            try:
+                senti(*comando)
+            except Exception as guasto:
+                registro.avviso("intelligenza.comando_non_capito",
+                                **registro.dove_si_e_rotto(guasto))
         notizie.put(("passo", foto(), None))
     ultima = foto()
     notizie.put(("fine", ultima, {} if lavoro is None else {

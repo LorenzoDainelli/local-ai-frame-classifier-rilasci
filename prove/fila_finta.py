@@ -167,3 +167,9 @@ def dalla_fila(archivio) -> None:
     sotto.parti(leggi, "scritte")
     while sotto.sta_lavorando:
         time.sleep(0.05)
+
+
+def sentito(*comando) -> None:
+    if comando[1:] == ("rompi",):
+        raise ValueError("comando rotto")
+    _lavoro.di("sentito " + " ".join(str(parte) for parte in comando))

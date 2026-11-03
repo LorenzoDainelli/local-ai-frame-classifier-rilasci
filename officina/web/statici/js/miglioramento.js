@@ -39,7 +39,9 @@ async function comeVa() {
         setTimeout(comeVa, OGNI_QUANTO * 3);
         return;
     }
-    if (stato.sta_lavorando !== dati.sta_lavorando || cambiati(dati.conti, stato.conti)) {
+    const ram = JSON.stringify((stato.adesso || {}).ram || null);
+    if (stato.sta_lavorando !== dati.sta_lavorando || cambiati(dati.conti, stato.conti)
+        || ram !== JSON.stringify(dati.ram || null)) {
         window.location.reload();
         return;
     }

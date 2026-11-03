@@ -124,11 +124,13 @@ def filmato(lavoro: dict, al_passo=None, freno=None, racconta=None) -> dict:
 
     motore = motori.apri(motori.VIDEO, lavoro["motori"]["video"],
                          **lavoro.get("opzioni", {}))
+    stanno = None
     try:
         fatti = pezzi.Pezzi(pezzi.cartella(uscita), _firma(originale, motore, larghezza, altezza))
         if not fatti.finito:
             _fai_i_pezzi(originale, piano, motore, fatti, larghezza, altezza,
                          Frenato(freno), al_passo, racconta)
+            stanno = getattr(motore, "dove_stanno", None)
     finally:
         motore.spegni()
 
@@ -140,7 +142,8 @@ def filmato(lavoro: dict, al_passo=None, freno=None, racconta=None) -> dict:
     _date(originale, uscita, lavoro)
     pezzi.butta(fatti.dove)
     return {"larghezza": larghezza, "altezza": altezza,
-            "motori": [{"nome": motore.nome, "versione": motore.versione}]}
+            "motori": [{"nome": motore.nome, "versione": motore.versione}],
+            **({"dove_stanno": dict(stanno)} if stanno else {})}
 
 
 def _firma(originale, motore, larghezza: int, altezza: int) -> dict:

@@ -42,6 +42,7 @@ def pagina_miglioramento(richiesta: Request):
             "sta_lavorando": stato["sta_lavorando"],
             "conti": stato["conti"],
             "genere": (coda_adesso["al_lavoro"] or {}).get("genere", ""),
+            "ram": (stato.get("adesso") or {}).get("ram"),
         }),
     })
 
@@ -176,7 +177,8 @@ def avvia_il_miglioramento(archivio) -> None:
                            "officina.web.miglioramento:miglioramento_di_la",
                            ferma_con="officina.web.miglioramento:ferma_di_la",
                            racconta="officina.web.miglioramento:racconta_di_la",
-                           applica="officina.web.miglioramento:applica_di_qua")
+                           applica="officina.web.miglioramento:applica_di_qua",
+                           ascolta="officina.web.miglioramento:ascolta_di_la")
     else:
         miglioratore.parti()
 
@@ -184,6 +186,12 @@ def avvia_il_miglioramento(archivio) -> None:
 def ferma_il_miglioramento(archivio) -> None:
     in_disparte.ferma("miglioramento")
     miglioramento_web.il_miglioratore(archivio).ferma(aspetta=2.0)
+
+
+@strada.post("/miglioramento/ram")
+def miglioramento_ram(scelta: str = Form("")):
+    miglioramento_web.rispondi_per_la_ram(accesso.aperto(), scelta)
+    return RedirectResponse("/miglioramento", status_code=303)
 
 
 @strada.post("/miglioramento/ferma")

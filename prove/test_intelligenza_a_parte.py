@@ -165,3 +165,26 @@ def test_il_conto_dei_doppioni_gira_di_la(a_parte):
     assert comune.lavoro_doppioni.guasto == ""
     assert comune.lavoro_doppioni.numeri.get("gruppi") is not None
     assert cliente.get("/api/doppioni").json()["sta_lavorando"] is False
+
+
+def test_i_comandi_di_qua_arrivano_a_chi_ascolta_di_la(a_parte):
+    from officina.web import in_disparte
+    from officina.web.lavori import Lavoro
+
+    lavoro = Lavoro("finto")
+    in_disparte.lancia(lavoro, "finto", a_parte, "prove.fila_finta:lavoro_finto", (500,),
+                       ferma_con="prove.fila_finta:basta", ascolta="prove.fila_finta:sentito")
+    scadenza = time.monotonic() + 60
+    while not lavoro.numeri.get("fatti") and time.monotonic() < scadenza:
+        time.sleep(0.05)
+    in_disparte.manda("ram", "rompi", a="finto")
+    in_disparte.manda("ram", "disco", a="finto")
+    while "sentito ram disco" not in lavoro.righe and time.monotonic() < scadenza:
+        time.sleep(0.05)
+    assert "sentito ram disco" in lavoro.righe
+    assert in_disparte.sta_girando("finto")
+    in_disparte.ferma("finto")
+    assert lavoro.aspetta_che_finisca(30)
+    assert "fermato" in lavoro.righe
+    assert not any(riga.startswith("sentito ferma") or "rompi" in riga
+                   for riga in lavoro.righe)

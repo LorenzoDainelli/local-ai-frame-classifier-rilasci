@@ -22,7 +22,13 @@ MARGINE_DI_SPAZIO = 512 * 1024 * 1024
 QUANTO_PUO_CRESCERE = 12
 BYTE_PER_PIXEL_DEI_PEZZI = 2
 DA_RIFARE_DOPO = {CHIUSO_ADESSO, PERSA}
-DA_RIPRENDERE = {"memoria_scheda_finita", "memoria_finita", "stanza_caduta"} | DA_RIFARE_DOPO
+RAM_POCA = "ram_poca"
+RAM_POCA_COL_DISCO = "ram_poca_anche_col_disco"
+RAM_POCHE = {RAM_POCA, RAM_POCA_COL_DISCO}
+RISPOSTE_PER_LA_RAM = ("aspetto", "disco")
+OGNI_QUANTO_LA_RAM = 10.0
+DA_RIPRENDERE = ({"memoria_scheda_finita", "memoria_finita", "stanza_caduta"} | DA_RIFARE_DOPO
+                 | RAM_POCHE)
 SCHEDA_FINITA = "memoria_scheda_finita"
 DI_FILA_SENZA_MEMORIA = 3
 SCHEDA_OCCUPATA = ("La scheda video ha finito la memoria su tre file di fila: di solito vuol dire "
@@ -37,6 +43,9 @@ MESSAGGI = {
     "gia_grande": "è già FHD o più",
     "memoria_finita": "è finita la memoria del computer",
     "memoria_scheda_finita": "è finita la memoria della scheda video",
+    RAM_POCA: "per SeedVR2 la RAM libera non basta",
+    RAM_POCA_COL_DISCO: ("per SeedVR2 la RAM libera non basta, anche tenendo una parte dei "
+                         "pesi sul disco"),
     "motore_mancante": "il modello che serve non è ancora stato preparato",
     "stanza_caduta": "il modello si è fermato di colpo",
     "stanza_muta": "il modello non ha detto com'è andata",
@@ -71,6 +80,23 @@ def perche_saltata(esito: dict | None) -> str:
     return detto.strip().rstrip(".")
 
 
+GIGA = 2 ** 30
+
+
+def _byte(valore) -> int:
+    if isinstance(valore, bool) or not isinstance(valore, (int, float)):
+        return 0
+    return max(int(valore), 0)
+
+
+def in_giga(quanti: int) -> float:
+    return round(quanti / GIGA, 1)
+
+
+def giga_in_su(quanti: int) -> int:
+    return -(-quanti // GIGA)
+
+
 def tempo_a_parole(secondi: float) -> str:
     tondi = max(0, round(secondi))
     ore, resto = divmod(tondi, 3600)
@@ -93,6 +119,28 @@ def misura_di_lucidflux(fatto: dict) -> str:
     if giga["disco"]:
         detto += ", " + f"{giga['disco']:.1f}".replace(".", ",") + " GB letti dal disco"
     return f" ({detto})"
+
+
+def _giga_a_parole(giga: float) -> str:
+    return f"{giga:.1f}".removesuffix(".0").replace(".", ",") + " GB"
+
+
+def misura_di_seedvr2(fatto: dict) -> str:
+    stanno = fatto.get("dove_stanno")
+    if not isinstance(stanno, dict):
+        return ""
+    giga = {dove: float(stanno.get(dove) or 0) for dove in ("scheda", "ram", "disco")}
+    registro.evento("miglioria.seedvr2_pesi", **giga)
+    return (f" (SeedVR2: scheda {_giga_a_parole(giga['scheda'])} · RAM "
+            f"{_giga_a_parole(giga['ram'])} · disco {_giga_a_parole(giga['disco'])})")
+
+
+def misura_del_motore(fatto: dict) -> str:
+    nomi = [motore.get("nome") for motore in fatto.get("motori") or []
+            if isinstance(motore, dict)]
+    if nomi[:1] == ["seedvr2"]:
+        return misura_di_seedvr2(fatto)
+    return misura_di_lucidflux(fatto)
 
 
 def percorsi_della_stanza() -> list[str]:
@@ -258,6 +306,9 @@ class Miglioratore:
         self.adesso: dict = {}
         self._saltate_in_sfida: set[int] = set()
         self._salta: set[int] = set()
+        self._disco = False
+        self._scelta: str | None = None
+        self._risposta = threading.Event()
 
     @property
     def sta_lavorando(self) -> bool:
@@ -269,6 +320,7 @@ class Miglioratore:
 
     def ferma(self, aspetta: float = 0.0) -> None:
         self._fermati.set()
+        self._risposta.set()
         processo = self._processo
         if processo is not None and processo.poll() is None:
             try:
@@ -331,6 +383,7 @@ class Miglioratore:
         senza_memoria: list[int] = []
         self._saltate_in_sfida = set()
         self._salta = set()
+        self._disco = False
         try:
             while not self._fermati.is_set():
                 with self.archivio.scrittura() as connessione:
@@ -414,6 +467,9 @@ class Miglioratore:
         if esito is None:
             self._rimetti_in_coda(miglioria_id)
             return
+        if esito.get("guasto") in RAM_POCHE:
+            self._ram_poca(miglioria_id, originale, esito)
+            return
         if esito.get("guasto") in DA_RIFARE_DOPO:
             self._aspetta_l_archivio(miglioria_id, originale, esito["guasto"])
             return
@@ -435,7 +491,7 @@ class Miglioratore:
                        altezza_dopo=int(fatto.get("altezza") or 0) or None,
                        motori=json.dumps(fatto.get("motori") or []),
                        finita_il=adesso())
-        self.lavoro.di(f"pronto da rivedere: «{originale.name}»{misura_di_lucidflux(fatto)}")
+        self.lavoro.di(f"pronto da rivedere: «{originale.name}»{misura_del_motore(fatto)}")
 
     def _originale(self, riga, originale: Path):
         if originale.is_file():
@@ -472,6 +528,53 @@ class Miglioratore:
                    "percorsi": percorsi, "nome": originale.name}
         return trovata, {"dall_archivio": cercata, "date": date}, None
 
+    def rispondi_per_la_ram(self, scelta: str) -> bool:
+        if scelta not in RISPOSTE_PER_LA_RAM:
+            return False
+        self._scelta = scelta
+        self._risposta.set()
+        return True
+
+    def _ram_poca(self, miglioria_id: int, originale: Path, esito: dict) -> None:
+        codice = esito["guasto"]
+        serve, libera = _byte(esito.get("serve")), _byte(esito.get("libera"))
+        with self.archivio.scrittura() as connessione:
+            coda.segna(connessione, miglioria_id, coda.IN_CODA, guasto=codice)
+        registro.avviso("miglioria.ram_poca", motivo=registro.Parola(codice),
+                        serve_gb=in_giga(serve), libera_gb=in_giga(libera))
+        anche = codice == RAM_POCA_COL_DISCO
+        self._scelta = None
+        self._risposta.clear()
+        self.adesso = {"id": miglioria_id, "nome": originale.name, "fatti": 0, "totale": 0,
+                       "ram": {"serve": giga_in_su(serve), "libera": libera // GIGA,
+                               "anche_col_disco": anche, "disco": self._disco,
+                               "aspetto": False}}
+        self.lavoro.di(f"«{originale.name}»: {a_parole(codice)}. Aspetto che si liberi"
+                       + ("" if anche else ", o che tu scelga di usare il disco"))
+        self._aspetta_la_ram(serve, anche)
+        self.adesso = {}
+
+    def _aspetta_la_ram(self, serve: int, anche: bool) -> None:
+        from officina.miglioria import ram
+
+        while not self._fermati.is_set():
+            self._risposta.wait(OGNI_QUANTO_LA_RAM)
+            self._risposta.clear()
+            if self._fermati.is_set():
+                return
+            if self._scelta == "disco" and not anche:
+                self._disco = True
+                registro.evento("miglioria.ram_col_disco")
+                self.lavoro.di("una parte dei pesi di SeedVR2 resta sul disco, fino alla "
+                               "fine del giro")
+                return
+            if self._scelta == "aspetto" and not self.adesso["ram"]["aspetto"]:
+                self.adesso = {**self.adesso, "ram": {**self.adesso["ram"], "aspetto": True}}
+            libera = ram.libera()
+            if serve and libera is not None and libera >= serve:
+                self.lavoro.di("la RAM si è liberata: riprendo")
+                return
+
     def _aspetta_l_archivio(self, miglioria_id: int, originale: Path, codice: str) -> None:
         with self.archivio.scrittura() as connessione:
             coda.segna(connessione, miglioria_id, coda.IN_CODA, guasto=codice)
@@ -493,7 +596,8 @@ class Miglioratore:
             "persone": chi,
             "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
             "percorsi": percorsi_della_stanza(),
-            "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli)},
+            "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli),
+                        **({"disco": True} if self._disco else {})},
             **(piu or {}),
         }
 
@@ -518,7 +622,9 @@ class Miglioratore:
             return {"guasto": str(esito.get("guasto") or "stanza_muta"),
                     "dove": esito.get("dove", ""), "riga": esito.get("riga", ""),
                     "tipo": esito.get("tipo", ""),
-                    "spiegazione": esito.get("spiegazione", "")}
+                    "spiegazione": esito.get("spiegazione", ""),
+                    **{chiave: esito[chiave] for chiave in ("serve", "libera")
+                       if chiave in esito}}
         return esito
 
     def _fedelta(self, genere: str, originale: Path, finale: Path) -> dict:
@@ -565,10 +671,12 @@ class Miglioratore:
                            f"{sfida.NOMI[motore]}, versione {passo} di {len(sfida.SFIDANTI)}")
             scelti = dict(lavoro["motori"], foto=motore)
             esito = self._una_versione(dict(lavoro, motori=scelti), parziale, al_passo)
-            if esito is None or esito.get("guasto") in DA_RIFARE_DOPO:
+            if esito is None or esito.get("guasto") in DA_RIFARE_DOPO | RAM_POCHE:
                 sfida.butta([dati[0] for dati in fatte.values()])
                 if esito is None:
                     self._rimetti_in_coda(miglioria_id)
+                elif esito["guasto"] in RAM_POCHE:
+                    self._ram_poca(miglioria_id, originale, esito)
                 else:
                     self._aspetta_l_archivio(miglioria_id, originale, esito["guasto"])
                 return
