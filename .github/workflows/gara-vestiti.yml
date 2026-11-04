@@ -1,6 +1,11 @@
 name: Gara dei vestiti
 
 on:
+  push:
+    branches: [prove]
+    paths:
+      - strumenti/gara_vestiti.py
+      - .github/workflows/gara-vestiti.yml
   workflow_dispatch:
     inputs:
       schema:
@@ -29,5 +34,5 @@ jobs:
       - run: python -m pip install huggingface_hub pyarrow
       - name: Cerca
         env:
-          SCHEMA: ${{ github.event.inputs.schema }}
+          SCHEMA: ${{ github.event.inputs.schema || 'detection-datasets/fashionpedia' }}
         run: python strumenti/gara_vestiti.py esplora --schema "$SCHEMA"

@@ -18,7 +18,8 @@ INDIRIZZI = ("http://mmlab.ie.cuhk.edu.hk/projects/PETA.html",
 
 
 def _prova_indirizzo(url: str) -> str:
-    richiesta = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "officina"})
+    richiesta = urllib.request.Request(url, method="HEAD",
+                                       headers={"User-Agent": "officina"})
     try:
         with urllib.request.urlopen(richiesta, timeout=30) as risposta:
             return f"{risposta.status} {risposta.headers.get('Content-Length')} " \
