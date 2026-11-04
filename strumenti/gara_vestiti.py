@@ -108,6 +108,24 @@ def guarda_le_etichette(cartella: Path) -> None:
             print("parola", parola, quante)
 
 
+def guarda_i_nomi(cartella: Path) -> None:
+    zip_moda = _scarica(MODA + "images/val_test2020.zip", cartella / "moda.zip")
+    print(f"===== moda zip {_sha(zip_moda)} {zip_moda.stat().st_size}")
+    dati = json.loads(_scarica(MODA + "annotations/instances_attributes_val2020.json",
+                               cartella / "moda.json").read_text())
+    with zipfile.ZipFile(zip_moda) as archivio:
+        nomi = archivio.namelist()
+    print(len(nomi), nomi[:5])
+    basi = {n.rsplit("/", 1)[-1] for n in nomi}
+    print("val trovate", sum(i["file_name"] in basi for i in dati["images"]), len(dati["images"]))
+    with zipfile.ZipFile(cartella / "peta.zip") as archivio:
+        nomi = archivio.namelist()
+    for cartella_peta in sorted({n.split("/")[1] for n in nomi if n.count("/") >= 3}):
+        suoi = sorted(n for n in nomi if n.split("/")[1] == cartella_peta
+                      and not n.endswith("/") and not n.endswith(".txt"))
+        print("peta", cartella_peta, len(suoi), suoi[:4])
+
+
 def esplora(scelti: list[str]) -> None:
     from huggingface_hub import HfApi
 
@@ -139,6 +157,7 @@ def main() -> None:
         esplora([r for r in scelte.schema.split(",") if r.strip()])
     elif scelte.cosa == "etichette":
         guarda_le_etichette(scelte.cartella)
+        guarda_i_nomi(scelte.cartella)
     sys.stdout.flush()
 
 

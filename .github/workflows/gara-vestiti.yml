@@ -33,6 +33,7 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install huggingface_hub pyarrow
       - name: Cerca
+        if: false
         env:
           SCHEMA: ${{ github.event.inputs.schema || 'detection-datasets/fashionpedia' }}
         run: python strumenti/gara_vestiti.py esplora --schema "$SCHEMA"
