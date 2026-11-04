@@ -36,3 +36,5 @@ jobs:
         env:
           SCHEMA: ${{ github.event.inputs.schema || 'detection-datasets/fashionpedia' }}
         run: python strumenti/gara_vestiti.py esplora --schema "$SCHEMA"
+      - name: Le etichette
+        run: python strumenti/gara_vestiti.py etichette
