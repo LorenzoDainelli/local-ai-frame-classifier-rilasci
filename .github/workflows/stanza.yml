@@ -71,3 +71,4 @@ jobs:
           name: stanza-collaudo-${{ github.event.inputs.parte || 'da3' }}
           path: stanza-collaudo.json
           if-no-files-found: ignore
+          retention-days: 1

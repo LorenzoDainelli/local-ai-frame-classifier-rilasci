@@ -62,3 +62,4 @@ jobs:
           name: ldf-collaudo
           path: ldf-collaudo.json
           if-no-files-found: ignore
+          retention-days: 1

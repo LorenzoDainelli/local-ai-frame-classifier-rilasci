@@ -51,3 +51,4 @@ jobs:
           name: gimm-collaudo
           path: gimm-collaudo.json
           if-no-files-found: ignore
+          retention-days: 1
