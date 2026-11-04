@@ -22,6 +22,14 @@ PACCHETTO_FINTO = {
         b"from .modules.softsplat import softsplat\n"
         b"PRESA = softsplat\n"),
     "src/models/generalizable_INR/modules/__init__.py": b"",
+    "src/models/generalizable_INR/modules/module_config.py": (
+        b"from dataclasses import dataclass\n"
+        b"@dataclass\n"
+        b"class Dentro:\n"
+        b"    lati: int = 2\n"
+        b"@dataclass\n"
+        b"class Fuori:\n"
+        b"    dentro: Dentro = Dentro()\n"),
 }
 
 
@@ -203,6 +211,54 @@ def test_il_pacchetto_si_carica_col_suo_nome_e_la_spinta_nostra(tmp_path, pulito
     assert gimmvfi.carica_il_pacchetto(cartella) is pacchetto
 
 
+def test_le_classi_di_gimm_reggono_un_predefinito_come_in_python_vecchio(tmp_path, pulito):
+    import dataclasses
+
+    vera = dataclasses.dataclass
+    file = dict(PACCHETTO_FINTO)
+    chiave = "src/models/generalizable_INR/gimmvfi_f.py"
+    file[chiave] = file[chiave] + b"from .modules import module_config\n"
+    gimmvfi.carica_il_pacchetto(_scrivi(tmp_path, file))
+    scelte = sys.modules[gimmvfi.PACCHETTO + ".generalizable_INR.modules.module_config"]
+    assert scelte.Fuori().dentro.lati == 2
+    assert dataclasses.dataclass is vera
+
+    @dataclasses.dataclass
+    class Nostra:
+        lati: int = 1
+
+    assert Nostra.__hash__ is None
+    with pytest.raises(ValueError):
+        @dataclasses.dataclass
+        class Storta:
+            dentro: Nostra = Nostra()
+
+
+def test_solo_le_classi_di_gimm_cambiano(monkeypatch):
+    import dataclasses
+    import types
+
+    monkeypatch.setitem(sys.modules, gimmvfi.PACCHETTO + ".prova",
+                        types.ModuleType(gimmvfi.PACCHETTO + ".prova"))
+    with gimmvfi._classi_come_in_python_vecchio():
+        @dataclasses.dataclass
+        class Sua:
+            __module__ = gimmvfi.PACCHETTO + ".prova"
+            lati: int = 1
+
+        @dataclasses.dataclass(eq=True)
+        class SuaConScelte:
+            __module__ = gimmvfi.PACCHETTO + ".prova"
+            lati: int = 1
+
+        @dataclasses.dataclass
+        class Nostra:
+            lati: int = 1
+
+    assert Sua.__hash__ is not None and SuaConScelte.__hash__ is not None
+    assert Nostra.__hash__ is None
+
+
 def test_un_pacchetto_rotto_non_resta_a_meta(tmp_path, pulito):
     rotto = dict(PACCHETTO_FINTO)
     rotto["src/models/generalizable_INR/gimmvfi_f.py"] = b"raise ImportError('no')\n"
@@ -211,6 +267,9 @@ def test_un_pacchetto_rotto_non_resta_a_meta(tmp_path, pulito):
         gimmvfi.carica_il_pacchetto(cartella)
     assert not [n for n in sys.modules if n.startswith(gimmvfi.PACCHETTO)]
     assert "turtle" not in sys.modules
+    import dataclasses
+
+    assert dataclasses.dataclass.__module__ == "dataclasses"
 
 
 def test_un_modulo_di_un_altro_posto_si_vede(tmp_path, pulito, monkeypatch):

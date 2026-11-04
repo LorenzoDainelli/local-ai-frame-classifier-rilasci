@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import dataclasses
 import importlib
 import importlib.util
 import sys
@@ -73,6 +75,24 @@ def _vero_timm() -> None:
             sys.modules.pop(nome, None)
 
 
+@contextlib.contextmanager
+def _classi_come_in_python_vecchio():
+    vera = dataclasses.dataclass
+
+    def nostra(classe=None, /, **scelte):
+        def fai(dentro):
+            if dentro.__module__.startswith(PACCHETTO + "."):
+                return vera(dentro, **{"unsafe_hash": True, **scelte})
+            return vera(dentro, **scelte)
+        return fai if classe is None else fai(classe)
+
+    dataclasses.dataclass = nostra
+    try:
+        yield
+    finally:
+        dataclasses.dataclass = vera
+
+
 def carica_il_pacchetto(cartella: Path):
     gia = sys.modules.get(PACCHETTO)
     if gia is not None:
@@ -92,7 +112,7 @@ def carica_il_pacchetto(cartella: Path):
     pacchetto = importlib.util.module_from_spec(forma)
     sys.modules[PACCHETTO] = pacchetto
     try:
-        with scaricamento.senza_scrivere_bytecode():
+        with scaricamento.senza_scrivere_bytecode(), _classi_come_in_python_vecchio():
             forma.loader.exec_module(pacchetto)
     except BaseException:
         for nome in [n for n in sys.modules
