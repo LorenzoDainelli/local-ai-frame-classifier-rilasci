@@ -10,13 +10,15 @@ import pytest
 
 from officina import registro
 from officina.errori import ErroreOfficina
+from officina.immagini import compatibile
 from officina.miglioria import catena, date, lavoro, metadati, motori, stanza
 from officina.programma import archivio_sicuro
 from officina.sicuro import sportello, tubo
 from officina.sicuro.dall_archivio import (CHIUSO, CHIUSO_ADESSO, DIVERSA, SENZA_ARCHIVIO,
                                            SI_APRE, TROVATA, DallArchivio, Ricerca)
 from prove import test_sicuro_servizio as servizio_di_prova
-from prove.test_sicuro_dall_archivio import _Situazione, _impronta, _jpeg, _numero, _video
+from prove.test_sicuro_dall_archivio import (SENZA_CODIFICATORE, _Situazione, _impronta, _jpeg,
+                                             _numero, _video)
 from prove.test_sicuro_servizio import ATTESA, LEGGERO, PAROLA, _finche
 
 costo_leggero = servizio_di_prova.costo_leggero
@@ -31,9 +33,11 @@ FILMATO = "s/onde.mp4"
 
 @pytest.fixture
 def nell_archivio(casa, archivio, monkeypatch, tmp_path):
-    foto, filmato = _jpeg(), _video("libx264")
+    foto = _jpeg()
+    filmato = _video("libx264") if compatibile.si_puo_fare() else b""
     casa.metti(FOTO, foto)
-    casa.metti(FILMATO, filmato)
+    if filmato:
+        casa.metti(FILMATO, filmato)
     casa.archivio.crea(PAROLA, costo=LEGGERO)
     casa.archivio.copia_tutto([casa.foto])
     _finche(casa.copiato)
@@ -91,8 +95,9 @@ def _mai_in_chiaro(cartella: Path, dati: bytes) -> None:
             assert dati not in _letto(percorso), percorso
 
 
-@pytest.mark.parametrize("genere, relativo, intero", [("immagine", FOTO, True),
-                                                       ("video", FILMATO, False)])
+@pytest.mark.parametrize("genere, relativo, intero", [
+    ("immagine", FOTO, True),
+    pytest.param("video", FILMATO, False, marks=SENZA_CODIFICATORE)])
 def test_la_stanza_vera_migliora_un_originale_che_sta_solo_nell_archivio(
         nell_archivio, casa, tmp_path, monkeypatch, genere, relativo, intero):
     dati = nell_archivio.dati[relativo]
@@ -160,6 +165,7 @@ def test_una_versione_diversa_o_che_non_c_e_non_si_migliora(nell_archivio, casa,
     assert list(nell_archivio.attesa.iterdir()) == []
 
 
+@SENZA_CODIFICATORE
 def test_se_l_archivio_si_chiude_mentre_lavora_il_video_resta_da_rifare(nell_archivio, casa,
                                                                         monkeypatch):
     aperto = casa.aperto

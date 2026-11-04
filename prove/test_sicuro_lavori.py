@@ -13,7 +13,7 @@ from officina import registro
 from officina.archivio.database import tutti, uno
 from officina.errori import (DaRifare, ErroreOfficina, FileNonLeggibile, PasswordSbagliata,
                              perche_saltato)
-from officina.immagini import lettura
+from officina.immagini import fotogrammi, lettura
 from officina.importazione import (metadati, raddrizza, rileggi_date, rileggi_fps,
                                     rileggi_macchine, ripasso)
 from officina.modello import file_media, segnalazioni
@@ -678,6 +678,8 @@ RILETTORI = {
 class _Rilettore:
 
     def __init__(self, request, quale: str):
+        if quale == "fps" and not fotogrammi.c_e_il_decodificatore():
+            pytest.skip("manca av per leggere gli FPS")
         fixture, self.modulo, self._tutti, self.lasciati, prepara, self._fatto = (
             RILETTORI[quale])
         self.pronta = request.getfixturevalue(fixture)
