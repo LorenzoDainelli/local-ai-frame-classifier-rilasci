@@ -1,0 +1,53 @@
+name: GIMM-VFI
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/collaudo_gimm.py"
+      - "officina/miglioria/gimmvfi.py"
+      - "officina/miglioria/gimm_spinta.py"
+      - "officina/miglioria/terzi/gimmvfi.json"
+      - ".github/workflows/gimm.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gimm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gimm:
+    name: GIMM-VFI con i pesi veri
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Le librerie
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          grep -E "^(timm|yacs|loguru|scipy|omegaconf|PyYAML|antlr4-python3-runtime|einops)==" \
+            requirements-miglioria.txt | cut -d" " -f1 > gimm-librerie.txt
+          python -m pip install -r gimm-librerie.txt
+          python -m pip install huggingface-hub==1.33.0 safetensors==0.8.0 numpy pillow
+      - name: Il collaudo
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python strumenti/collaudo_gimm.py --uscita gimm-collaudo.json --casa "$RUNNER_TEMP/modelli"
+      - name: Cosa ha detto
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gimm-collaudo
+          path: gimm-collaudo.json
+          if-no-files-found: ignore

@@ -35,7 +35,8 @@ SOLO_SORGENTE = {
         "antlr4-python3-runtime-4.9.3/src/antlr4/",
     ),
 }
-SENZA_DIPENDENZE = ("rotary-embedding-torch", "accelerate", "omegaconf", "bitsandbytes")
+SENZA_DIPENDENZE = ("rotary-embedding-torch", "accelerate", "omegaconf", "bitsandbytes",
+                    "timm")
 
 SPAZIO_CON_CUDA = 7 * 2 ** 30
 SPAZIO_SENZA_CUDA = 2 * 2 ** 30

@@ -225,6 +225,7 @@ def test_i_siti_che_leggono_un_pt_scaricato_sono_quelli_conosciuti():
         ("officina/descrittori/pe_visione.py", "torch.load"),
         ("officina/miglioria/codeformer_pesi.py", "torch.load"),
         ("officina/miglioria/faceme_pesi.py", "torch.load"),
+        ("officina/miglioria/gimmvfi.py", "torch.load"),
         ("officina/miglioria/lucidflux_pesi.py", "torch.load"),
     }
 

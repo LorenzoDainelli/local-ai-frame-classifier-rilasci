@@ -17,7 +17,10 @@
 #
 # rotary-embedding-torch, accelerate e bitsandbytes chiedono torch fra le dipendenze: si
 # installano senza, perche' torch c'e' gia' nella sua parte e una seconda
-# copia costerebbe 2,5 GB (librerie.SENZA_DIPENDENZE).
+# copia costerebbe 2,5 GB (librerie.SENZA_DIPENDENZE). Lo stesso vale per timm.
+#
+# timm, yacs, loguru e scipy servono a GIMM-VFI, che porta i video a 120 FPS;
+# colorama e win32-setctime servono a loguru, solo su Windows.
 
 -r requirements-modelli.txt
 
@@ -29,3 +32,9 @@ rotary-embedding-torch==0.9.1     # la posizione dei pezzi nell'immagine
 einops==0.8.2                     # rimescola i tensori
 gguf==0.19.0                      # importato dal codice di SeedVR2, anche se qui non si usa
 tqdm==4.70.1                      # importato dal codice di SeedVR2
+timm==1.0.31                      # i pezzi di GIMM-VFI che leggono il movimento
+yacs==0.1.8                       # legge la configurazione di GIMM-VFI
+loguru==0.7.3                     # importato dal codice di GIMM-VFI
+colorama==0.4.6 ; sys_platform == "win32"         # serve a loguru su Windows
+win32-setctime==1.2.1 ; sys_platform == "win32"   # serve a loguru su Windows
+scipy==1.18.1                     # importato dal codice di GIMM-VFI
