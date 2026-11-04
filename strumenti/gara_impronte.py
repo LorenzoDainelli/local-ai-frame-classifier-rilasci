@@ -308,7 +308,7 @@ class Radio:
         self.adattatore = adattatore
         self.lato = lato
         self.modello = torch.hub.load("NVlabs/RADIO", "radio_model", version=versione,
-                                      progress=False, skip_validation=True,
+                                      progress=False, skip_validation=True, trust_repo=True,
                                       adaptor_names=[adattatore]).eval()
 
     def _tensore(self, foto: list):
