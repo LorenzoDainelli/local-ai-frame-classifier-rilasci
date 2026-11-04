@@ -1,0 +1,167 @@
+name: Gara delle impronte
+
+on:
+  workflow_dispatch:
+    inputs:
+      quante:
+        description: "foto con le frasi"
+        type: number
+        default: 1000
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gara-impronte-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foto:
+    name: Le foto della gara
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install huggingface_hub pyarrow pillow
+      - name: Foto pubbliche con le risposte giuste
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python strumenti/gara_impronte.py foto --cartella foto-gara --quante "${{ github.event.inputs.quante || '1000' }}"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: foto-gara
+          key: impronte-foto-${{ github.run_id }}
+
+  concorrente:
+    name: ${{ matrix.chi }} ${{ matrix.parte }}
+    needs: foto
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { chi: A, parte: 0, parti: 2 }
+          - { chi: A, parte: 1, parti: 2 }
+          - { chi: B, parte: 0, parti: 4 }
+          - { chi: B, parte: 1, parti: 4 }
+          - { chi: B, parte: 2, parti: 4 }
+          - { chi: B, parte: 3, parti: 4 }
+          - { chi: C, parte: 0, parti: 3 }
+          - { chi: C, parte: 1, parti: 3 }
+          - { chi: C, parte: 2, parti: 3 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: foto-gara
+          key: impronte-foto-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - name: Le librerie
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install transformers huggingface_hub safetensors sentencepiece protobuf pillow numpy timm einops open_clip_torch
+      - name: La corsa
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python strumenti/gara_impronte.py corri --chi "${{ matrix.chi }}" --cartella foto-gara \
+            --uscita "esiti/${{ matrix.chi }}-${{ matrix.parte }}" \
+            --parte "${{ matrix.parte }}" --parti "${{ matrix.parti }}"
+      - name: Cosa ha fatto
+        if: always()
+        run: cat esiti/*/esito.json || true
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always()
+        with:
+          path: esiti/${{ matrix.chi }}-${{ matrix.parte }}
+          key: impronte-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ github.run_id }}
+
+  somma:
+    name: Chi ha vinto
+    needs: concorrente
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install numpy
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: foto-gara
+          key: impronte-foto-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - name: Esito di A 0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/A-0
+          key: impronte-esito-A-0-${{ github.run_id }}
+          restore-keys: impronte-esito-A-0-
+      - name: Esito di A 1
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/A-1
+          key: impronte-esito-A-1-${{ github.run_id }}
+          restore-keys: impronte-esito-A-1-
+      - name: Esito di B 0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-0
+          key: impronte-esito-B-0-${{ github.run_id }}
+          restore-keys: impronte-esito-B-0-
+      - name: Esito di B 1
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-1
+          key: impronte-esito-B-1-${{ github.run_id }}
+          restore-keys: impronte-esito-B-1-
+      - name: Esito di B 2
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-2
+          key: impronte-esito-B-2-${{ github.run_id }}
+          restore-keys: impronte-esito-B-2-
+      - name: Esito di B 3
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-3
+          key: impronte-esito-B-3-${{ github.run_id }}
+          restore-keys: impronte-esito-B-3-
+      - name: Esito di C 0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-0
+          key: impronte-esito-C-0-${{ github.run_id }}
+          restore-keys: impronte-esito-C-0-
+      - name: Esito di C 1
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-1
+          key: impronte-esito-C-1-${{ github.run_id }}
+          restore-keys: impronte-esito-C-1-
+      - name: Esito di C 2
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-2
+          key: impronte-esito-C-2-${{ github.run_id }}
+          restore-keys: impronte-esito-C-2-
+      - name: La classifica
+        run: python strumenti/gara_impronte.py somma --cartella foto-gara --risultati esiti --uscita gara-impronte.json
+      - run: cat gara-impronte.json
