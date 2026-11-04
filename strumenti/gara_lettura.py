@@ -34,7 +34,7 @@ QWEN = "Qwen/Qwen3.5-9B"
 QWEN_REVISIONE = "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
 GEMMA_CERCA = ("gemma-4-26B-A4B-it-GGUF", "gemma-4-26b-a4b-it-GGUF")
 GEMMA_AUTORI = ("ggml-org", "unsloth", "bartowski", "lmstudio-community")
-LLAMA_RILASCI = "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest"
+LLAMA_RILASCI = "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30"
 PORTA = 8089
 PUNTEGGIATURA = "\"'«»“”‘’.,;:!?()[]{}<>-–—_*·•/\\|"
 
@@ -227,12 +227,20 @@ class Qwen:
 def _llama(cartella: Path) -> Path:
     richiesta = urllib.request.Request(LLAMA_RILASCI, headers={"User-Agent": "gara-lettura"})
     with urllib.request.urlopen(richiesta, timeout=120) as risposta:
-        rilascio = json.loads(risposta.read())
-    scelti = [a for a in rilascio.get("assets", [])
-              if re.search(r"bin-ubuntu-x64\.(zip|tar\.gz)$", a["name"])]
+        rilasci = json.loads(risposta.read())
+    rilascio: dict = {}
+    scelti: list = []
+    for candidato in rilasci:
+        if candidato.get("draft") or candidato.get("prerelease"):
+            continue
+        scelti = [a for a in candidato.get("assets", [])
+                  if re.search(r"bin-ubuntu-x64\.(zip|tar\.gz)$", a["name"])]
+        if scelti:
+            rilascio = candidato
+            break
     if not scelti:
-        raise RuntimeError("nessun llama.cpp per ubuntu x64 nell'ultimo rilascio: "
-                           + ", ".join(a["name"] for a in rilascio.get("assets", [])))
+        raise RuntimeError("nessun llama.cpp per ubuntu x64 negli ultimi rilasci: "
+                           + ", ".join(r.get("tag_name", "?") for r in rilasci))
     cartella.mkdir(parents=True, exist_ok=True)
     archivio = _scarica(scelti[0]["browser_download_url"], cartella / scelti[0]["name"])
     if archivio.name.endswith(".zip"):

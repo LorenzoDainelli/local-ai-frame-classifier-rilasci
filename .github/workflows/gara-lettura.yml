@@ -100,7 +100,15 @@ jobs:
       - name: Spazio e memoria in più
         if: steps.scelta.outputs.fare == 'si'
         run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
           sudo mkdir -p /mnt/grande && sudo chown "$USER" /mnt/grande
+          libero_mnt=$(df --output=avail -BG /mnt | tail -1 | tr -dc 0-9)
+          libero_radice=$(df --output=avail -BG / | tail -1 | tr -dc 0-9)
+          if [ "$libero_mnt" -lt 45 ] && [ "$libero_radice" -gt "$libero_mnt" ]; then
+            sudo rmdir /mnt/grande && sudo mkdir -p /grande && sudo chown "$USER" /grande
+            sudo ln -s /grande /mnt/grande
+          fi
           if [ "$CHI" = "B" ]; then sudo fallocate -l 30G /mnt/grande-swap && sudo chmod 600 /mnt/grande-swap && sudo mkswap /mnt/grande-swap && sudo swapon /mnt/grande-swap; fi
           df -h / /mnt; free -g; nproc
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
