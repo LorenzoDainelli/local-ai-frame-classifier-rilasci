@@ -1,0 +1,199 @@
+name: Gara dei volti
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/gara_volti.py"
+      - ".github/workflows/gara-volti.yml"
+  workflow_dispatch:
+    inputs:
+      solo:
+        description: "quali concorrenti rifare, separati da virgole (tutti = tutti, nessuno = solo la classifica)"
+        default: "tutti"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gara-volti-${{ github.ref }}-${{ github.event.inputs.solo || 'tutti' }}
+  cancel-in-progress: true
+
+jobs:
+  prove:
+    name: Le coppie di volti pubbliche
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install huggingface_hub pillow numpy
+      - name: Le coppie della gara di prima, se ci sono
+        id: prima
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: coppie-volti
+          key: volti-coppie-${{ github.run_id }}
+          restore-keys: volti-coppie-
+      - name: Cerca e scarica le coppie
+        if: steps.prima.outputs.cache-matched-key == ''
+        run: python strumenti/gara_volti.py prove --cartella coppie-volti
+      - run: cat coppie-volti/da_dove.json
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: coppie-volti
+          key: volti-coppie-${{ github.run_id }}
+
+  concorrente:
+    name: ${{ matrix.chi }} ${{ matrix.prova }}
+    needs: prove
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        chi: [ada, lv-l, lv-b]
+        prova: [lfw, cfp_fp, agedb_30, calfw, cplfw]
+    env:
+      CHI: ${{ matrix.chi }}
+      SOLO: ${{ github.event.inputs.solo || 'tutti' }}
+    steps:
+      - name: Tocca a questo concorrente?
+        id: scelta
+        run: |
+          if [ "$SOLO" = "tutti" ] || [[ ",$SOLO," == *",$CHI,"* ]]; then echo "fare=si" >> "$GITHUB_OUTPUT"; else echo "fare=no" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.scelta.outputs.fare == 'si'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.scelta.outputs.fare == 'si'
+        with:
+          python-version: "3.12"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.scelta.outputs.fare == 'si'
+        with:
+          path: coppie-volti
+          key: volti-coppie-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - if: steps.scelta.outputs.fare == 'si'
+        run: python -m pip install onnxruntime huggingface_hub pillow numpy
+      - name: La corsa
+        if: steps.scelta.outputs.fare == 'si'
+        run: python strumenti/gara_volti.py corri --chi "${{ matrix.chi }}" --prova "${{ matrix.prova }}" --cartella coppie-volti --uscita "esiti/${{ matrix.chi }}-${{ matrix.prova }}"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.scelta.outputs.fare == 'si'
+        with:
+          path: esiti/${{ matrix.chi }}-${{ matrix.prova }}
+          key: volti-esito-${{ matrix.chi }}-${{ matrix.prova }}-${{ github.run_id }}
+
+  somma:
+    name: Chi ha vinto
+    needs: concorrente
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Esito di ada lfw
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/ada-lfw
+          key: volti-esito-ada-lfw-${{ github.run_id }}
+          restore-keys: volti-esito-ada-lfw-
+      - name: Esito di ada cfp_fp
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/ada-cfp_fp
+          key: volti-esito-ada-cfp_fp-${{ github.run_id }}
+          restore-keys: volti-esito-ada-cfp_fp-
+      - name: Esito di ada agedb_30
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/ada-agedb_30
+          key: volti-esito-ada-agedb_30-${{ github.run_id }}
+          restore-keys: volti-esito-ada-agedb_30-
+      - name: Esito di ada calfw
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/ada-calfw
+          key: volti-esito-ada-calfw-${{ github.run_id }}
+          restore-keys: volti-esito-ada-calfw-
+      - name: Esito di ada cplfw
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/ada-cplfw
+          key: volti-esito-ada-cplfw-${{ github.run_id }}
+          restore-keys: volti-esito-ada-cplfw-
+      - name: Esito di lv-l lfw
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/lv-l-lfw
+          key: volti-esito-lv-l-lfw-${{ github.run_id }}
+          restore-keys: volti-esito-lv-l-lfw-
+      - name: Esito di lv-l cfp_fp
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/lv-l-cfp_fp
+          key: volti-esito-lv-l-cfp_fp-${{ github.run_id }}
+          restore-keys: volti-esito-lv-l-cfp_fp-
+      - name: Esito di lv-l agedb_30
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/lv-l-agedb_30
+          key: volti-esito-lv-l-agedb_30-${{ github.run_id }}
+          restore-keys: volti-esito-lv-l-agedb_30-
+      - name: Esito di lv-l calfw
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/lv-l-calfw
+          key: volti-esito-lv-l-calfw-${{ github.run_id }}
+          restore-keys: volti-esito-lv-l-calfw-
+      - name: Esito di lv-l cplfw
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/lv-l-cplfw
+          key: volti-esito-lv-l-cplfw-${{ github.run_id }}
+          restore-keys: volti-esito-lv-l-cplfw-
+      - name: Esito di lv-b lfw
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/lv-b-lfw
+          key: volti-esito-lv-b-lfw-${{ github.run_id }}
+          restore-keys: volti-esito-lv-b-lfw-
+      - name: Esito di lv-b cfp_fp
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/lv-b-cfp_fp
+          key: volti-esito-lv-b-cfp_fp-${{ github.run_id }}
+          restore-keys: volti-esito-lv-b-cfp_fp-
+      - name: Esito di lv-b agedb_30
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/lv-b-agedb_30
+          key: volti-esito-lv-b-agedb_30-${{ github.run_id }}
+          restore-keys: volti-esito-lv-b-agedb_30-
+      - name: Esito di lv-b calfw
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/lv-b-calfw
+          key: volti-esito-lv-b-calfw-${{ github.run_id }}
+          restore-keys: volti-esito-lv-b-calfw-
+      - name: Esito di lv-b cplfw
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/lv-b-cplfw
+          key: volti-esito-lv-b-cplfw-${{ github.run_id }}
+          restore-keys: volti-esito-lv-b-cplfw-
+      - name: La classifica
+        run: python strumenti/gara_volti.py somma --risultati esiti --uscita gara-volti.json

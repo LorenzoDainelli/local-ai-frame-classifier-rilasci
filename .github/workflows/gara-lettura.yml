@@ -45,8 +45,6 @@ jobs:
           restore-keys: lettura-foto-
       - name: Foto pubbliche con le risposte giuste
         if: steps.prima.outputs.cache-matched-key == ''
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: python strumenti/gara_lettura.py foto --cartella foto-lettura
       - run: python -c "import json;e=json.load(open('foto-lettura/elenco.json'));print({k:len(v) for k,v in e.items()});print(e['problemi'])"
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -126,8 +124,6 @@ jobs:
           python -m pip install transformers accelerate bitsandbytes huggingface_hub safetensors sentencepiece protobuf pillow numpy
       - name: La corsa
         if: steps.scelta.outputs.fare == 'si'
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python strumenti/gara_lettura.py corri --chi "${{ matrix.chi }}" --cartella foto-lettura \
             --uscita "esiti/${{ matrix.chi }}-${{ matrix.parte }}" \
@@ -268,7 +264,5 @@ jobs:
           key: lettura-esito-C-5-${{ github.run_id }}
           restore-keys: lettura-esito-C-5-
       - name: La classifica
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: python strumenti/gara_lettura.py somma --cartella foto-lettura --risultati esiti --uscita gara-lettura.json
       - run: cat gara-lettura.json

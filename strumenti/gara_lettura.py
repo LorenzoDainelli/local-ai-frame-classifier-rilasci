@@ -258,8 +258,8 @@ def _gguf(quanti: str) -> tuple[list[Path], Path, str]:
     trovati = []
     for cerca in GEMMA_CERCA:
         trovati.extend(m.id for m in api.list_models(search=cerca, limit=50))
-    trovati = sorted(set(trovati), key=lambda r: (
-        GEMMA_AUTORI.index(r.split("/")[0]) if r.split("/")[0] in GEMMA_AUTORI else 99, r))
+    trovati = sorted({r for r in trovati if r.split("/")[0] in GEMMA_AUTORI},
+                     key=lambda r: (GEMMA_AUTORI.index(r.split("/")[0]), r))
     print("GGUF trovati:", trovati, flush=True)
     for repo in trovati:
         file = api.list_repo_files(repo)
