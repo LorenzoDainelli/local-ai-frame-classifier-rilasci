@@ -121,6 +121,7 @@ def test_dalla_pagina_si_vede_a_tre_e_si_vota(con_due, monkeypatch):
     assert pagina.status_code == 200, pagina.text
     assert "rivedi-tre" in pagina.text and 'data-vota="pari"' in pagina.text
     assert 'data-decidi="approva"' not in pagina.text
+    assert pagina.text.count("tempo-gara numeri") == 2
     for lato in ("prima", "dopo", "b"):
         assert cliente.get(f"/ritocco/{lavoro_id}/mostra/{file_id}/{lato}").status_code == 200
 

@@ -62,6 +62,14 @@ def registra(connessione: sqlite3.Connection, miglioria_id: int, versione: str,
          json.dumps(dati, sort_keys=True), adesso()))
 
 
+def secondi_veri(connessione: sqlite3.Connection, miglioria_id: int) -> float | None:
+    riga = connessione.execute(
+        "SELECT secondi FROM tempi_miglioria WHERE miglioria_id = ? "
+        "ORDER BY id DESC LIMIT 1",
+        (int(miglioria_id),)).fetchone()
+    return None if riga is None else float(riga[0])
+
+
 def _colonne(genere: str, formati: list[str]) -> list[str]:
     numeri = [nome for nome in NUMERI if genere == "video" or nome not in SOLO_VIDEO]
     return [*numeri, *SI_O_NO, *(f"formato:{formato}" for formato in formati)]

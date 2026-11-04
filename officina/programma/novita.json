@@ -3,7 +3,7 @@
     "numero": 20,
     "versione": null,
     "data": "4 novembre",
-    "titolo": "PE-Core esce: le impronte le fanno DINOv3 e SigLIP 2",
+    "titolo": "PE-Core esce, e nelle sfide vedi quanto ci mette ogni modello",
     "tolti": [
       "pecore"
     ],
@@ -15,12 +15,17 @@
       [
         "disco",
         "Al primo avvio il programma cancella da solo le impronte di PE-Core e la sua cartella dei modelli, circa 7,5 GB. Non devi fare niente"
+      ],
+      [
+        "orologio",
+        "Nelle sfide alla cieca, sotto A e sotto B vedi quanto ci ha messo quel modello su quella foto o quel video. Le sfide già fatte dicono «tempo non misurato». Alla fine vedi anche il tempo medio di ognuno"
       ]
     ],
     "tecnico": [
       "Tolti <code>PeCore</code>, <code>pe_visione.py</code>, le sue revisioni e impronte fissate, la conversione dei pesi e la voce in <code>modelli_in_casa.OBBLIGATORI</code> (regola 574, che supera la 420).",
       "Migrazione 73: <code>DELETE FROM impronte WHERE descrittore = 'pecore'</code>, e il numero tolto va nello <code>stato</code> come <code>pecore_impronte_tolte</code>.",
-      "All'avvio <code>descrittori.sgombero.sgombra</code> cancella <code>modelli/pecore</code>, somma i byte liberati e le impronte tolte nella carta (<code>modelli_tolti</code>); la riga coi numeri veri compare qui sopra."
+      "All'avvio <code>descrittori.sgombero.sgombra</code> cancella <code>modelli/pecore</code>, somma i byte liberati e le impronte tolte nella carta (<code>modelli_tolti</code>); la riga coi numeri veri compare qui sopra.",
+      "Migrazione 74: <code>secondi_seedvr2</code>/<code>secondi_lucidflux</code> in <code>sfide</code> e <code>secondi_a</code>/<code>secondi_b</code> in <code>sfide_togli</code>, misurati col cronometro attorno al lavoro di ogni modello; a parole con <code>tempo_gara</code> (regola 575)."
     ]
   },
   {

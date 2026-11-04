@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from officina import tempo_gara
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
 from officina.miglioria import da_guardare
@@ -327,8 +328,11 @@ def _la_sfida(sfida, votate: int) -> dict:
     destra = sfida_togli.lettera_del_lato(sfida, "destra")
     lato = {"A": DOPO, "B": B}
     quante = sfida_togli.QUANTE[sfida["genere"]]
-    return {"sinistra": {"lettera": sinistra, "lato": lato[sinistra]},
-            "destra": {"lettera": destra, "lato": lato[destra]},
+    tempo = {lettera: tempo_gara.a_parole(sfida_togli.secondi_della_lettera(sfida, lettera))
+             for lettera in ("A", "B")}
+    return {"sinistra": {"lettera": sinistra, "lato": lato[sinistra],
+                         "tempo": tempo[sinistra]},
+            "destra": {"lettera": destra, "lato": lato[destra], "tempo": tempo[destra]},
             "quante": quante, "mancano": max(0, quante - votate)}
 
 

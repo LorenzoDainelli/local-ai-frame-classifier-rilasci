@@ -29,7 +29,7 @@
     <div class="carta rr-fine-sfida" data-fine-sfida>
         <h2>La sfida alla cieca {{ 'dei video' if fine.genere == 'video' else 'delle foto' }} è finita</h2>
         <ul class="rr-parti">
-            {% for nome in fine.due %}<li><b>{{ nome }}</b> <span class="numeri">{{ fine.conti.get(nome, 0)|numero }}</span> {{ 'volta' if fine.conti.get(nome, 0) == 1 else 'volte' }}</li>{% endfor %}
+            {% for nome in fine.due %}<li><b>{{ nome }}</b> <span class="numeri">{{ fine.conti.get(nome, 0)|numero }}</span> {{ 'volta' if fine.conti.get(nome, 0) == 1 else 'volte' }}{% if fine.tempi %} <span class="tenue numeri">&middot; {{ fine.tempi[nome] }}</span>{% endif %}</li>{% endfor %}
             <li class="tenue">Pari <span class="numeri">{{ fine.conti.get('pari', 0)|numero }}</span> &middot; Nessuna delle due <span class="numeri">{{ fine.conti.get('nessuna', 0)|numero }}</span></li>
         </ul>
         <p class="minuscolo tenue">{% if fine.vincitore %}Ha vinto <b>{{ fine.vincitore }}</b>: te lo propongo come principale. {% else %}Sono pari: scegli tu. {% endif %}L'altro resta installato.</p>
@@ -115,6 +115,7 @@
             </div>
             <figcaption>
                 <span class="etichetta-rivedi">{{ posto.lettera }}</span>
+                {% if posto.tempo %}<span class="etichetta-rivedi tempo-gara numeri" title="Quanto ci ha messo a lavorarla">{{ posto.tempo }}</span>{% endif %}
                 <span class="etichetta-rivedi" data-audio-qui hidden>audio</span>
             </figcaption>
         </figure>

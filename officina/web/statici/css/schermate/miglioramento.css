@@ -319,6 +319,8 @@
 }
 .originale-sfida .rivedi-quadro { outline: 1px dashed var(--linea); outline-offset: 3px; }
 .lettera-sfida { font-size: var(--testo-comando); font-weight: 600; padding: 2px 12px; }
+.tempo-gara { font-size: var(--testo-minimo); }
+.tempo-medio { font-size: var(--testo-minimo); color: var(--attenuato); }
 .sfida-lente {
     display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3);
     margin-top: var(--s3);

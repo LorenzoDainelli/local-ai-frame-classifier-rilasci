@@ -7,6 +7,7 @@ import sqlite3
 import time
 from pathlib import Path
 
+from officina import tempo_gara
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
 from officina.miglioria import (attesa, coda, da_guardare, fedelta, misura, motori,
@@ -481,6 +482,9 @@ def da_votare(archivio) -> dict | None:
         "votate": numeri["votate"],
         "quante": sfida.QUANTE,
         "lettere": {lato: sfida.lettera_del_lato(riga, lato) for lato in LATI_DELLA_SFIDA},
+        "tempi": {lato: tempo_gara.a_parole(
+            sfida.secondi_della_lettera(riga, sfida.lettera_del_lato(riga, lato)))
+            for lato in LATI_DELLA_SFIDA},
         "proporzione": round(larga / alta, 5),
         "ci_sono": all(Path(riga[f"percorso_{m}"] or "").is_file()
                        for m in sfida.SFIDANTI) and prima is not None,
@@ -510,5 +514,8 @@ def com_e_andata(archivio) -> dict:
     return {**numeri, "vincitore": vincitore,
             "nome_vincitore": sfida.NOMI.get(vincitore, ""),
             "nomi": sfida.NOMI, "chiusa": chiusa,
+            "medie": {motore: tempo_gara.media_a_parole(numeri["secondi_medi"][motore],
+                                                        numeri["misurate"][motore])
+                      for motore in sfida.SFIDANTI},
             "barra": {chiave: round(100 * numeri[chiave] / max(1, numeri["votate"]), 1)
                       for chiave in (*sfida.SFIDANTI, "pari", "nessuna")}}

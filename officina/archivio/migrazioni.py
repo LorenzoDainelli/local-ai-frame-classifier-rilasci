@@ -1598,6 +1598,13 @@ def _versione_73(connessione: sqlite3.Connection) -> None:
         "VALUES ('pecore_impronte_tolte', ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
         (str(quante),))
 
+
+def _versione_74(connessione: sqlite3.Connection) -> None:
+    for tabella, colonne in (("sfide", ("secondi_seedvr2", "secondi_lucidflux")),
+                             ("sfide_togli", ("secondi_a", "secondi_b"))):
+        for colonna in colonne:
+            connessione.execute(f"ALTER TABLE {tabella} ADD COLUMN {colonna} REAL")
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1731,6 +1738,7 @@ MIGRAZIONI: list[Migrazione] = [
     Migrazione(72, "i secondi veri di ogni file migliorato, per prevedere quanto manca "
                    "alla coda", _versione_72),
     Migrazione(73, "PE-Core esce: le sue impronte si cancellano", _versione_73),
+    Migrazione(74, "i secondi di ogni modello nelle gare, accanto ad A e B", _versione_74),
 ]
 
 

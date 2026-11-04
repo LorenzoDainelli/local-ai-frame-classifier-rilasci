@@ -17,8 +17,8 @@ def _memoria():
 
 
 def test_la_migrazione_73_toglie_solo_le_impronte_di_pe_core():
-    assert migrazioni.MIGRAZIONI[-1].versione == 73
-    assert migrazioni.MIGRAZIONI[-1].applica is migrazioni._versione_73
+    assert migrazioni.MIGRAZIONI[72].versione == 73
+    assert migrazioni.MIGRAZIONI[72].applica is migrazioni._versione_73
     connessione = _memoria()
     for nome in ("pecore", "dinov3", "pecore", "siglip2", "pecore"):
         connessione.execute("INSERT INTO impronte (descrittore) VALUES (?)", (nome,))

@@ -17,7 +17,7 @@
     <section class="carta sf-conti">
         <div class="conti-sfida">
             {% for chi in ["lucidflux", "seedvr2"] %}
-            <div><b class="numeri">{{ esito[chi]|numero }}</b><span class="sf-voce {{ chi }}">{{ esito.nomi[chi] }}</span></div>
+            <div><b class="numeri">{{ esito[chi]|numero }}</b><span class="sf-voce {{ chi }}">{{ esito.nomi[chi] }}</span><span class="tempo-medio numeri">{{ esito.medie[chi] }}</span></div>
             {% endfor %}
             <div><b class="numeri">{{ esito.pari|numero }}</b><span class="sf-voce pari">pari</span></div>
             <div><b class="numeri">{{ esito.nessuna|numero }}</b><span class="sf-voce pari">nessuna delle due</span></div>

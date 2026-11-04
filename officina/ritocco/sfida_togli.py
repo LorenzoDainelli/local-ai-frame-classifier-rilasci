@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from officina.archivio.database import adesso, leggi_stato, scrivi_stato, tutti, uno
+from officina import tempo_gara
 from officina.errori import ErroreOfficina
 from officina.miglioria import attesa
 from officina.ritocco import togliere
@@ -79,14 +80,17 @@ def registra(connessione: sqlite3.Connection, lavoro_id: int, file_id: int, gene
              sfida: dict) -> None:
     connessione.execute(
         "INSERT INTO sfide_togli (lavoro_id, file_id, genere, motore_a, motore_b, sinistra, "
-        "pronta_b, impronta_b, toppe_b, messa_il) VALUES (?,?,?,?,?,?,?,?,?,?) "
+        "pronta_b, impronta_b, toppe_b, secondi_a, secondi_b, messa_il) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(lavoro_id, file_id) DO UPDATE SET genere = excluded.genere, "
         "motore_a = excluded.motore_a, motore_b = excluded.motore_b, "
         "sinistra = excluded.sinistra, pronta_b = excluded.pronta_b, "
         "impronta_b = excluded.impronta_b, toppe_b = excluded.toppe_b, "
+        "secondi_a = excluded.secondi_a, secondi_b = excluded.secondi_b, "
         "messa_il = excluded.messa_il WHERE sfide_togli.voto IS NULL",
         (lavoro_id, file_id, genere, sfida["motore_a"], sfida["motore_b"], sfida["sinistra"],
          sfida.get("pronta_b"), sfida.get("impronta_b"), json.dumps(sfida.get("toppe_b") or {}),
+         tempo_gara.buoni(sfida.get("secondi_a")), tempo_gara.buoni(sfida.get("secondi_b")),
          adesso()))
 
 
@@ -214,6 +218,25 @@ def lettera_del_lato(riga, lato: str) -> str:
     return riga["sinistra"] if lato == "sinistra" else ("B" if riga["sinistra"] == "A" else "A")
 
 
+def secondi_della_lettera(riga, lettera: str) -> float | None:
+    try:
+        return tempo_gara.buoni(riga["secondi_a" if lettera == "A" else "secondi_b"])
+    except (IndexError, KeyError):
+        return None
+
+
+def tempi_medi(connessione: sqlite3.Connection, genere: str) -> dict:
+    misure: dict[str, list[float]] = {}
+    for riga in tutti(connessione, "SELECT motore_a, motore_b, secondi_a, secondi_b "
+                      "FROM sfide_togli WHERE genere = ?", genere):
+        for lettera in ("a", "b"):
+            secondi = tempo_gara.buoni(riga[f"secondi_{lettera}"])
+            if secondi is not None:
+                misure.setdefault(riga[f"motore_{lettera}"], []).append(secondi)
+    return {motore: (tempo_gara.media(valori), len(valori))
+            for motore, valori in misure.items()}
+
+
 def conti(connessione: sqlite3.Connection, genere: str) -> dict:
     numeri: dict[str, int] = {}
     for riga in tutti(connessione, "SELECT motore_a, motore_b, voto FROM sfide_togli "
@@ -266,5 +289,8 @@ def fine(archivio, genere: str) -> dict | None:
         if not finita(connessione, genere):
             return None
         numeri = conti(connessione, genere)
+        medi = tempi_medi(connessione, genere)
     return {"genere": genere, "due": list(due), "conti": numeri,
-            "vincitore": vincitore(numeri, due)}
+            "vincitore": vincitore(numeri, due),
+            "tempi": {motore: tempo_gara.media_a_parole(*medi.get(motore, (None, 0)))
+                      for motore in due}}

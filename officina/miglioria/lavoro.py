@@ -728,7 +728,9 @@ class Miglioratore:
             self.lavoro.di(f"lavoro «{originale.name}» per la sfida alla cieca: "
                            f"{sfida.NOMI[motore]}, versione {passo} di {len(sfida.SFIDANTI)}")
             scelti = dict(lavoro["motori"], foto=motore)
+            inizio = time.monotonic()
             esito = self._una_versione(dict(lavoro, motori=scelti), parziale, al_passo)
+            durata = time.monotonic() - inizio
             if esito is None or esito.get("guasto") in DA_RIFARE_DOPO | RAM_POCHE:
                 sfida.butta([dati[0] for dati in fatte.values()])
                 if esito is None:
@@ -745,7 +747,7 @@ class Miglioratore:
                 saltata = esito
                 break
             os.replace(parziale, arrivo)
-            fatte[motore] = (arrivo, impronta.del_file(arrivo), esito["fatto"])
+            fatte[motore] = (arrivo, impronta.del_file(arrivo), esito["fatto"], durata)
 
         base = fatte[motori.SEEDVR2][2]
         with self.archivio.scrittura() as connessione:
@@ -755,14 +757,14 @@ class Miglioratore:
                            altezza_dopo=int(base.get("altezza") or 0) or None,
                            finita_il=adesso())
                 sfida.registra(connessione, miglioria_id, {
-                    motore: (dati[0], dati[1], dati[2].get("motori"))
+                    motore: (dati[0], dati[1], dati[2].get("motori"), dati[3])
                     for motore, dati in fatte.items()})
                 sfida.segna_il_salto(connessione, None)
                 self._misurato(connessione, miglioria_id, base)
                 misura = misura_di_lucidflux(fatte[motori.LUCIDFLUX][2])
                 self.lavoro.di(f"pronto da votare: «{originale.name}»{misura}")
                 return
-            arrivo, sua_impronta, _fatto = fatte[motori.SEEDVR2]
+            arrivo, sua_impronta, _fatto, _durata = fatte[motori.SEEDVR2]
             coda.segna(connessione, miglioria_id, coda.DA_RIVEDERE,
                        in_revisione=str(arrivo), impronta_migliorata=sua_impronta,
                        larghezza_dopo=int(base.get("larghezza") or 0) or None,
@@ -840,7 +842,9 @@ class Miglioratore:
         parziale = arrivo.with_name(arrivo.name + attesa.PARZIALE)
         lavoro = self._il_lavoro("immagine", originale, riga["file_id"], piu)
         lavoro["motori"] = dict(lavoro["motori"], foto=motori.LUCIDFLUX)
+        inizio = time.monotonic()
         esito = self._una_versione(lavoro, parziale, self._al_passo)
+        durata = time.monotonic() - inizio
         if esito is None:
             return
         if esito.get("guasto") in DA_RIFARE_DOPO:
@@ -867,8 +871,10 @@ class Miglioratore:
                            impronta_migliorata=None, motori=None, fedelta=None)
                 sfida.registra(connessione, miglioria_id, {
                     motori.SEEDVR2: (tenuta, riga["impronta_migliorata"],
-                                     json.loads(riga["motori"] or "[]")),
-                    motori.LUCIDFLUX: (arrivo, sua_impronta, esito["fatto"].get("motori"))})
+                                     json.loads(riga["motori"] or "[]"),
+                                     previsione.secondi_veri(connessione, miglioria_id)),
+                    motori.LUCIDFLUX: (arrivo, sua_impronta, esito["fatto"].get("motori"),
+                                       durata)})
                 sfida.segna_il_salto(connessione, None)
         if not entra:
             sfida.butta([arrivo])

@@ -308,14 +308,18 @@ class Ritoccatore:
         serve = da.sorgente.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
         if shutil.disk_usage(dove).free < serve:
             raise RitoccoFermato(SPAZIO)
+        inizio = time.monotonic()
         pronta = self._fai_il_video(dove, file_id, lavoro_id, da, strati, "", quando)
+        _aggiungi_secondi(sfida, "secondi_a", time.monotonic() - inizio)
         fatto = {**fatto, "pronta": str(pronta), "impronta_pronta": impronta.del_file(pronta),
                  "fotogrammi": strati[0].quanti}
         if ritocchi_b is not None:
             try:
+                inizio = time.monotonic()
                 strati_b = self._strati(ritocchi_b, da.impronta_base)
                 pronta_b = self._fai_il_video(dove, file_id, lavoro_id, da, strati_b, "b",
                                               quando)
+                _aggiungi_secondi(sfida, "secondi_b", time.monotonic() - inizio)
             except BaseException:
                 copia.butta(pronta)
                 raise
@@ -356,18 +360,23 @@ class Ritoccatore:
 
     def _a_e_b(self, togli, lavoro_id: int, file_id: int, ritocchi, da, sfida):
         self._motore_ora = sfida["motore_a"] if sfida else None
+        inizio = time.monotonic()
         togli(lavoro_id, file_id, ritocchi, da)
+        if sfida is not None:
+            sfida["secondi_a"] = time.monotonic() - inizio
         with self.archivio.lettura() as connessione:
             ritocchi = coda.da_disegnare(connessione, file_id, lavoro_id)
         if sfida is None:
             return ritocchi, None
         self._motore_ora = sfida["motore_b"]
         ritocchi_b = [dict(ritocco) for ritocco in ritocchi]
+        inizio = time.monotonic()
         try:
             togli(lavoro_id, file_id, ritocchi_b, da, lato_b=True)
         except BaseException:
             self._butta_le_b(file_id, ritocchi_b)
             raise
+        sfida["secondi_b"] = time.monotonic() - inizio
         return ritocchi, ritocchi_b
 
     def _butta_le_b(self, file_id: int, ritocchi_b) -> None:
@@ -693,6 +702,11 @@ class Ritoccatore:
             if processo.is_alive():
                 processo.terminate()
                 processo.join(timeout=2.0)
+
+
+def _aggiungi_secondi(sfida: dict | None, chiave: str, secondi: float) -> None:
+    if sfida is not None and chiave in sfida:
+        sfida[chiave] = sfida[chiave] + secondi
 
 
 def _impronta_se_c_e(percorso: Path) -> str:

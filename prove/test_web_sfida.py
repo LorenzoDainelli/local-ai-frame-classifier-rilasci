@@ -51,6 +51,8 @@ def test_la_pagina_del_voto_non_dice_chi_e_chi(cliente, in_sfida):
     assert "SeedVR2" not in testo and "LucidFlux" not in testo
     assert "seedvr2" not in testo.lower().replace("/miglioramento", "")
     assert "Lente" in testo and "Nessuna delle due" in testo
+    assert testo.count('class="etichetta-rivedi tempo-gara numeri"') == 2
+    assert "tempo non misurato" not in testo
     numero = in_sfida["miglioria_id"]
     for lato in ("sinistra", "destra"):
         risposta = cliente.get(f"/miglioramento/{numero}/sfida/{lato}")
@@ -96,6 +98,7 @@ def test_alla_fine_si_vedono_i_nomi_e_si_sceglie_il_principale(cliente, in_sfida
     assert 'href="/miglioramento/sfida/com-e-andata"' in testo
     fine = _pagina(cliente, "/miglioramento/sfida/com-e-andata")
     assert "LucidFlux" in fine and "SeedVR2" in fine and "Sono pari" in fine
+    assert fine.count('class="tempo-medio numeri">in media ') == 2
     cliente.post("/miglioramento/sfida/chiudi", data={"principale": "lucidflux"})
     assert importato.impostazione("miglioria_foto") == "lucidflux"
     [riga] = _riga(importato, coda.DA_RIVEDERE)

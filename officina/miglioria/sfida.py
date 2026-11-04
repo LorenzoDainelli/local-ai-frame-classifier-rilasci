@@ -7,6 +7,7 @@ from pathlib import Path
 
 from officina.archivio.database import (adesso, inserisci, leggi_impostazione,
                                         scrivi_impostazione, tutti, uno, valore)
+from officina import tempo_gara
 from officina.errori import ErroreOfficina
 from officina.miglioria import coda, motori
 
@@ -93,17 +94,27 @@ def registra(connessione: sqlite3.Connection, miglioria_id: int, versioni: dict,
     caso = caso or random.SystemRandom()
     campi = {}
     for motore in SFIDANTI:
-        percorso, impronta, usati = versioni[motore]
-        campi[motore] = (str(percorso), impronta, json.dumps(usati or []))
+        percorso, impronta, usati, *resto = versioni[motore]
+        campi[motore] = (str(percorso), impronta, json.dumps(usati or []),
+                         tempo_gara.buoni(resto[0] if resto else None))
     return inserisci(
         connessione,
         "INSERT INTO sfide (miglioria_id, percorso_seedvr2, percorso_lucidflux, "
         "impronta_seedvr2, impronta_lucidflux, motori_seedvr2, motori_lucidflux, "
-        "a_e, a_sinistra, fatta_il) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "secondi_seedvr2, secondi_lucidflux, a_e, a_sinistra, fatta_il) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         miglioria_id, campi[motori.SEEDVR2][0], campi[motori.LUCIDFLUX][0],
         campi[motori.SEEDVR2][1], campi[motori.LUCIDFLUX][1],
         campi[motori.SEEDVR2][2], campi[motori.LUCIDFLUX][2],
+        campi[motori.SEEDVR2][3], campi[motori.LUCIDFLUX][3],
         caso.choice(SFIDANTI), caso.choice((0, 1)), adesso())
+
+
+def secondi_della_lettera(riga, lettera: str) -> float | None:
+    try:
+        return tempo_gara.buoni(riga[f"secondi_{chi_e(riga, lettera)}"])
+    except (IndexError, KeyError):
+        return None
 
 
 def da_votare(connessione: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -171,8 +182,14 @@ def vota(connessione: sqlite3.Connection, miglioria_id: int, voto: str) -> list[
 def conti(connessione: sqlite3.Connection) -> dict:
     fuori = {motore: 0 for motore in SFIDANTI}
     fuori.update(pari=0, nessuna=0, votate=0, da_votare=0, fatte=0)
-    for riga in tutti(connessione, "SELECT a_e, voto FROM sfide"):
+    misure: dict[str, list[float]] = {motore: [] for motore in SFIDANTI}
+    for riga in tutti(connessione, "SELECT a_e, voto, secondi_seedvr2, secondi_lucidflux "
+                                   "FROM sfide"):
         fuori["fatte"] += 1
+        for motore in SFIDANTI:
+            secondi = tempo_gara.buoni(riga[f"secondi_{motore}"])
+            if secondi is not None:
+                misure[motore].append(secondi)
         if riga["voto"] is None:
             fuori["da_votare"] += 1
             continue
@@ -182,6 +199,8 @@ def conti(connessione: sqlite3.Connection) -> dict:
         else:
             fuori[riga["voto"]] += 1
     fuori["quante"] = QUANTE
+    fuori["secondi_medi"] = {motore: tempo_gara.media(v) for motore, v in misure.items()}
+    fuori["misurate"] = {motore: len(v) for motore, v in misure.items()}
     return fuori
 
 
