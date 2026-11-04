@@ -1,0 +1,274 @@
+name: Gara delle scritte e descrizioni
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/gara_lettura.py"
+      - ".github/workflows/gara-lettura.yml"
+  workflow_dispatch:
+    inputs:
+      solo:
+        description: "quali concorrenti rifare, separati da virgole (tutti = tutti, nessuno = solo la classifica)"
+        default: "tutti"
+      minuti:
+        description: "minuti di lavoro per pezzo, poi si salva e si riprende alla corsa dopo"
+        type: number
+        default: 290
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gara-lettura-${{ github.ref }}-${{ github.event.inputs.solo || 'tutti' }}
+  cancel-in-progress: true
+
+jobs:
+  foto:
+    name: Le foto della gara
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install huggingface_hub pyarrow pillow
+      - name: Le foto della gara di prima, se ci sono
+        id: prima
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: foto-lettura
+          key: lettura-foto-${{ github.run_id }}
+          restore-keys: lettura-foto-
+      - name: Foto pubbliche con le risposte giuste
+        if: steps.prima.outputs.cache-matched-key == ''
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python strumenti/gara_lettura.py foto --cartella foto-lettura
+      - run: python -c "import json;e=json.load(open('foto-lettura/elenco.json'));print({k:len(v) for k,v in e.items()});print(e['problemi'])"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: foto-lettura
+          key: lettura-foto-${{ github.run_id }}
+
+  concorrente:
+    name: ${{ matrix.chi }} ${{ matrix.parte }}
+    needs: foto
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { chi: A, parte: 0, parti: 3 }
+          - { chi: A, parte: 1, parti: 3 }
+          - { chi: A, parte: 2, parti: 3 }
+          - { chi: B, parte: 0, parti: 8 }
+          - { chi: B, parte: 1, parti: 8 }
+          - { chi: B, parte: 2, parti: 8 }
+          - { chi: B, parte: 3, parti: 8 }
+          - { chi: B, parte: 4, parti: 8 }
+          - { chi: B, parte: 5, parti: 8 }
+          - { chi: B, parte: 6, parti: 8 }
+          - { chi: B, parte: 7, parti: 8 }
+          - { chi: C, parte: 0, parti: 6 }
+          - { chi: C, parte: 1, parti: 6 }
+          - { chi: C, parte: 2, parti: 6 }
+          - { chi: C, parte: 3, parti: 6 }
+          - { chi: C, parte: 4, parti: 6 }
+          - { chi: C, parte: 5, parti: 6 }
+    env:
+      CHI: ${{ matrix.chi }}
+      SOLO: ${{ github.event.inputs.solo || 'tutti' }}
+      HF_HOME: /mnt/grande/hf
+      CARTELLA_GRANDE: /mnt/grande
+    steps:
+      - name: Tocca a questo concorrente?
+        id: scelta
+        run: |
+          if [ "$SOLO" = "tutti" ] || [[ ",$SOLO," == *",$CHI,"* ]]; then echo "fare=si" >> "$GITHUB_OUTPUT"; else echo "fare=no" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.scelta.outputs.fare == 'si'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.scelta.outputs.fare == 'si'
+        with:
+          python-version: "3.12"
+      - name: Spazio e memoria in più
+        if: steps.scelta.outputs.fare == 'si'
+        run: |
+          sudo mkdir -p /mnt/grande && sudo chown "$USER" /mnt/grande
+          if [ "$CHI" = "B" ]; then sudo fallocate -l 30G /mnt/grande-swap && sudo chmod 600 /mnt/grande-swap && sudo mkswap /mnt/grande-swap && sudo swapon /mnt/grande-swap; fi
+          df -h / /mnt; free -g; nproc
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.scelta.outputs.fare == 'si'
+        with:
+          path: foto-lettura
+          key: lettura-foto-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - name: Le risposte delle corse di prima
+        if: steps.scelta.outputs.fare == 'si'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/${{ matrix.chi }}-${{ matrix.parte }}
+          key: lettura-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ github.run_id }}
+          restore-keys: lettura-esito-${{ matrix.chi }}-${{ matrix.parte }}-
+      - name: Le librerie
+        if: steps.scelta.outputs.fare == 'si'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install transformers accelerate bitsandbytes huggingface_hub safetensors sentencepiece protobuf pillow numpy
+      - name: La corsa
+        if: steps.scelta.outputs.fare == 'si'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python strumenti/gara_lettura.py corri --chi "${{ matrix.chi }}" --cartella foto-lettura \
+            --uscita "esiti/${{ matrix.chi }}-${{ matrix.parte }}" \
+            --parte "${{ matrix.parte }}" --parti "${{ matrix.parti }}" \
+            --minuti "${{ github.event.inputs.minuti || '290' }}"
+      - name: Cosa ha fatto
+        if: always() && steps.scelta.outputs.fare == 'si'
+        run: |
+          python -c "import json,glob;[print(f, len(d['foto']), 'foto', len(d['domande']), 'domande', d['problemi'][-5:]) for f in glob.glob('esiti/*/risposte.json') for d in [json.load(open(f))]]" || true
+          tail -n 40 llama-server.log || true
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.scelta.outputs.fare == 'si'
+        with:
+          path: esiti/${{ matrix.chi }}-${{ matrix.parte }}
+          key: lettura-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ github.run_id }}
+
+  somma:
+    name: Chi ha vinto
+    needs: concorrente
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install transformers huggingface_hub safetensors sentencepiece protobuf pillow numpy sacrebleu
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: foto-lettura
+          key: lettura-foto-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - name: Risposte di A 0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/A-0
+          key: lettura-esito-A-0-${{ github.run_id }}
+          restore-keys: lettura-esito-A-0-
+      - name: Risposte di A 1
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/A-1
+          key: lettura-esito-A-1-${{ github.run_id }}
+          restore-keys: lettura-esito-A-1-
+      - name: Risposte di A 2
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/A-2
+          key: lettura-esito-A-2-${{ github.run_id }}
+          restore-keys: lettura-esito-A-2-
+      - name: Risposte di B 0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-0
+          key: lettura-esito-B-0-${{ github.run_id }}
+          restore-keys: lettura-esito-B-0-
+      - name: Risposte di B 1
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-1
+          key: lettura-esito-B-1-${{ github.run_id }}
+          restore-keys: lettura-esito-B-1-
+      - name: Risposte di B 2
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-2
+          key: lettura-esito-B-2-${{ github.run_id }}
+          restore-keys: lettura-esito-B-2-
+      - name: Risposte di B 3
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-3
+          key: lettura-esito-B-3-${{ github.run_id }}
+          restore-keys: lettura-esito-B-3-
+      - name: Risposte di B 4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-4
+          key: lettura-esito-B-4-${{ github.run_id }}
+          restore-keys: lettura-esito-B-4-
+      - name: Risposte di B 5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-5
+          key: lettura-esito-B-5-${{ github.run_id }}
+          restore-keys: lettura-esito-B-5-
+      - name: Risposte di B 6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-6
+          key: lettura-esito-B-6-${{ github.run_id }}
+          restore-keys: lettura-esito-B-6-
+      - name: Risposte di B 7
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/B-7
+          key: lettura-esito-B-7-${{ github.run_id }}
+          restore-keys: lettura-esito-B-7-
+      - name: Risposte di C 0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-0
+          key: lettura-esito-C-0-${{ github.run_id }}
+          restore-keys: lettura-esito-C-0-
+      - name: Risposte di C 1
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-1
+          key: lettura-esito-C-1-${{ github.run_id }}
+          restore-keys: lettura-esito-C-1-
+      - name: Risposte di C 2
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-2
+          key: lettura-esito-C-2-${{ github.run_id }}
+          restore-keys: lettura-esito-C-2-
+      - name: Risposte di C 3
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-3
+          key: lettura-esito-C-3-${{ github.run_id }}
+          restore-keys: lettura-esito-C-3-
+      - name: Risposte di C 4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-4
+          key: lettura-esito-C-4-${{ github.run_id }}
+          restore-keys: lettura-esito-C-4-
+      - name: Risposte di C 5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-5
+          key: lettura-esito-C-5-${{ github.run_id }}
+          restore-keys: lettura-esito-C-5-
+      - name: La classifica
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python strumenti/gara_lettura.py somma --cartella foto-lettura --risultati esiti --uscita gara-lettura.json
+      - run: cat gara-lettura.json
