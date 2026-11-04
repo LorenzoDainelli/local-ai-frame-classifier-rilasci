@@ -12,7 +12,10 @@ from pathlib import Path
 
 PROVE = ("lfw", "cfp_fp", "agedb_30", "calfw", "cplfw")
 CERCA = ("agedb_30", "cfp_fp", "cplfw", "calfw", "faces_emore", "lfw bin",
-         "face verification", "insightface eval", "ms1m-retinaface", "face benchmark")
+         "face verification", "insightface eval", "ms1m-retinaface", "face benchmark",
+         "lfw", "agedb", "cfp", "insightface", "faces_webface", "faces_glint",
+         "face recognition eval", "arcface eval")
+ARCHIVI = (".zip",)
 PESO_MASSIMO = 3_000_000_000
 ADAFACE = ("Evn9172/cvlface_adaface_ir101_webface12m_onnx", "adaface_ir101.onnx",
            "3af39a8cf2f199127f34e247950df9c4d6f227e8")
@@ -52,21 +55,24 @@ def cerca_le_prove(cartella: Path) -> dict:
         except Exception as guasto:
             print("non leggo", repo, guasto, flush=True)
             continue
+        nomi = [f.rfilename for f in info.siblings or []]
+        if any(_quale_prova(Path(n).name) for n in nomi) or any(
+                p.replace("_", "") in repo.lower().replace("_", "") for p in PROVE):
+            print("file in", repo, ":", nomi[:60], flush=True)
         for file in info.siblings or []:
             nome = Path(file.rfilename).name.lower()
-            prova = nome[:-4] if nome.endswith(".bin") else None
-            if prova not in PROVE or prova in trovate:
-                continue
             if (file.size or 0) > PESO_MASSIMO:
+                continue
+            prova = _quale_prova(nome)
+            if nome.endswith(ARCHIVI) and _ci_interessa(nome, trovate):
+                _dall_archivio(repo, genere, file.rfilename, cartella, trovate)
+                continue
+            if not nome.endswith(".bin") or prova is None or prova in trovate:
                 continue
             try:
                 percorso = hf_hub_download(repo, file.rfilename, repo_type=genere)
-                coppie = leggi_la_prova(Path(percorso))
-                destinazione = cartella / f"{prova}.bin"
-                destinazione.write_bytes(Path(percorso).read_bytes())
-                trovate[prova] = (f"{genere}:{repo}/{file.rfilename} "
-                                  f"({len(coppie[1])} coppie)")
-                print("presa", prova, "da", trovate[prova], flush=True)
+                _prendi(Path(percorso).read_bytes(), prova, cartella, trovate,
+                        f"{genere}:{repo}/{file.rfilename}")
             except Exception as guasto:
                 print("non va", repo, file.rfilename, guasto, flush=True)
     (cartella / "da_dove.json").write_text(json.dumps(trovate, indent=1))
@@ -91,6 +97,61 @@ class SoloDati(pickle.Unpickler):
         if (modulo, nome) not in PERMESSI:
             raise pickle.UnpicklingError(f"vietato nel file delle coppie: {modulo}.{nome}")
         return super().find_class(modulo, nome)
+
+
+def _semplice(testo: str) -> str:
+    return "".join(c for c in testo.lower() if c.isalnum())
+
+
+def _quale_prova(nome: str) -> str | None:
+    radice = _semplice(Path(nome).stem)
+    for prova in sorted(PROVE, key=len, reverse=True):
+        if radice == _semplice(prova):
+            return prova
+    return None
+
+
+def _ci_interessa(nome: str, trovate: dict) -> bool:
+    insieme = _semplice(nome)
+    return len(trovate) < len(PROVE) and any(
+        parola in insieme for parola in ("lfw", "cfp", "agedb", "calfw", "cplfw",
+                                         "emore", "faces", "eval"))
+
+
+def _prendi(dati: bytes, prova: str, cartella: Path, trovate: dict, origine: str) -> None:
+    destinazione = cartella / f"{prova}.bin"
+    destinazione.write_bytes(dati)
+    try:
+        coppie = leggi_la_prova(destinazione)
+    except Exception:
+        destinazione.unlink()
+        raise
+    trovate[prova] = f"{origine} ({len(coppie[1])} coppie)"
+    print("presa", prova, "da", trovate[prova], flush=True)
+
+
+def _dall_archivio(repo: str, genere: str, nome: str, cartella: Path,
+                   trovate: dict) -> None:
+    import zipfile
+
+    from huggingface_hub import hf_hub_download
+
+    try:
+        percorso = hf_hub_download(repo, nome, repo_type=genere)
+        with zipfile.ZipFile(percorso) as archivio:
+            for voce in archivio.infolist():
+                prova = _quale_prova(Path(voce.filename).name)
+                if (prova is None or prova in trovate or voce.is_dir()
+                        or not voce.filename.lower().endswith(".bin")
+                        or voce.file_size > PESO_MASSIMO):
+                    continue
+                try:
+                    _prendi(archivio.read(voce), prova, cartella, trovate,
+                            f"{genere}:{repo}/{nome}!{voce.filename}")
+                except Exception as guasto:
+                    print("non va", repo, nome, voce.filename, guasto, flush=True)
+    except Exception as guasto:
+        print("archivio non va", repo, nome, guasto, flush=True)
 
 
 def leggi_la_prova(percorso: Path) -> tuple[list, list]:
