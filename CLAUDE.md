@@ -6,6 +6,8 @@
 - RAM: 32 GB DDR4 3600 MHz
 - Sistema: Windows
 - «Intensità della scheda» nelle Impostazioni: 100
+- Monitor del fisso: 60 Hz
+- Portatile: schermo a 120 Hz; l'utente usa quasi sempre il portatile, collegato al fisso con il collegamento del programma
 
 Non chiederle di nuovo: se cambiano, l'utente lo dice.
 

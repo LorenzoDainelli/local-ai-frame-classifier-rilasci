@@ -41,6 +41,8 @@ DEPOSITI = (
     ("HigherHu/RORD-50", "dataset", ()),
     ("Kunbyte/ROSE-Dataset", "dataset", ()),
     ("FudanCVL/EffectErase", "dataset", ()),
+    ("GSean/GIMM-VFI", "model", ()),
+    ("onecat-ai/LDF-VFI", "model", ()),
 )
 
 CARTELLE_DRIVE = (
@@ -84,7 +86,9 @@ def deposito(api, nome: str, tipo: str, voluti: tuple[str, ...], chiave: str | N
         if sha is None and isinstance(lfs, dict):
             sha = lfs.get("sha256")
         file[pezzo.rfilename] = {"byte": pezzo.size, "sha256": sha}
-    return {"revisione": info.sha, "file": file}
+    scheda = getattr(info, "card_data", None) or {}
+    licenza = scheda.get("license") if hasattr(scheda, "get") else None
+    return {"revisione": info.sha, "file": file, "licenza": licenza}
 
 
 def cartella_drive(codice: str, dove: Path) -> dict:
