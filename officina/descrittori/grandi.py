@@ -201,8 +201,8 @@ class Siglip2(DaTransformers):
 
         self.apri()
         divisore = AutoTokenizer.from_pretrained(str(self.cartella), local_files_only=True)
-        ingresso = divisore(frasi, padding="max_length", truncation=True,
-                            return_tensors="pt")
+        ingresso = divisore(frasi, padding="max_length", max_length=64,
+                            truncation=True, return_tensors="pt")
         ingresso = {chiave: valore.to(self._macchina.dispositivo)
                     for chiave, valore in ingresso.items()}
         with torch.inference_mode():

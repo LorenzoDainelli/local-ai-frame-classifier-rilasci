@@ -314,8 +314,8 @@ class Siglip:
         return _normali(getattr(uscita, "pooler_output", uscita))
 
     def frasi(self, frasi: list[str]):
-        ingresso = self.divisore(frasi, padding="max_length", truncation=True,
-                                 return_tensors="pt")
+        ingresso = self.divisore(frasi, padding="max_length", max_length=64,
+                                 truncation=True, return_tensors="pt")
         uscita = self.modello.get_text_features(**ingresso)
         return _normali(getattr(uscita, "pooler_output", uscita))
 
