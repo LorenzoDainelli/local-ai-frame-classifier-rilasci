@@ -72,8 +72,9 @@ def _sha(percorso: Path) -> str:
 def _scarica(url: str, dove: Path) -> Path:
     dove.parent.mkdir(parents=True, exist_ok=True)
     richiesta = urllib.request.Request(url, headers={"User-Agent": "officina"})
-    with urllib.request.urlopen(richiesta, timeout=600) as risposta, open(dove, "wb") as scrivi:
-        shutil.copyfileobj(risposta, scrivi, 1 << 20)
+    with urllib.request.urlopen(richiesta, timeout=600) as risposta:
+        with open(dove, "wb") as scrivi:
+            shutil.copyfileobj(risposta, scrivi, 1 << 20)
     return dove
 
 
