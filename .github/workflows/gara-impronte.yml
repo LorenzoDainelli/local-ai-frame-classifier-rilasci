@@ -1,6 +1,11 @@
 name: Gara delle impronte
 
 on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/gara_impronte.py"
+      - ".github/workflows/gara-impronte.yml"
   workflow_dispatch:
     inputs:
       quante:
