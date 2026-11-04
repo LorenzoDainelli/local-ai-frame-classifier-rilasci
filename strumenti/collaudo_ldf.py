@@ -32,8 +32,15 @@ def _psnr(uno, altro) -> float:
 def configurazioni(nostra: dict) -> dict:
     from huggingface_hub import hf_hub_download
 
-    posto = hf_hub_download("onecat-ai/LDF-VFI", "transformer/config.json",
-                            revision=REVISIONE_HF, token=os.environ.get("HF_TOKEN") or None)
+    from officina.descrittori import torcia
+
+    prima = torcia.con_la_rete_accesa()
+    try:
+        posto = hf_hub_download("onecat-ai/LDF-VFI", "transformer/config.json",
+                                revision=REVISIONE_HF,
+                                token=os.environ.get("HF_TOKEN") or None)
+    finally:
+        torcia.rimetti_la_rete_com_era(prima)
     da_hf = json.loads(Path(posto).read_text(encoding="utf-8"))
     diverse = {chiave: [nostra.get(chiave), da_hf.get(chiave)]
                for chiave in sorted(set(nostra) | set(da_hf))
