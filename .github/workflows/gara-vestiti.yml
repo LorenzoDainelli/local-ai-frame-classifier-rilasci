@@ -7,10 +7,6 @@ on:
       - strumenti/gara_vestiti.py
       - .github/workflows/gara-vestiti.yml
   workflow_dispatch:
-    inputs:
-      schema:
-        description: "raccolte di Hugging Face da guardare dentro, separate da virgole"
-        default: "detection-datasets/fashionpedia"
 
 permissions:
   contents: read
@@ -20,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  esplora:
-    name: Dove sono le foto
+  foto:
+    name: Le foto e le risposte giuste
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -31,11 +27,99 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - run: python -m pip install huggingface_hub pyarrow
-      - name: Cerca
-        if: false
-        env:
-          SCHEMA: ${{ github.event.inputs.schema || 'detection-datasets/fashionpedia' }}
-        run: python strumenti/gara_vestiti.py esplora --schema "$SCHEMA"
-      - name: Le etichette
-        run: python strumenti/gara_vestiti.py etichette
+      - run: python -m pip install pillow==13.0.0 numpy==2.4.6
+      - run: python strumenti/gara_vestiti.py scarica --cartella dati-vestiti
+      - run: python strumenti/gara_vestiti.py elenca --cartella dati-vestiti
+
+  concorrente:
+    name: ${{ matrix.chi }} ${{ matrix.parte }}
+    needs: foto
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { chi: A, parte: 0, parti: 2 }
+          - { chi: A, parte: 1, parti: 2 }
+          - { chi: C, parte: 0, parti: 4 }
+          - { chi: C, parte: 1, parti: 4 }
+          - { chi: C, parte: 2, parti: 4 }
+          - { chi: C, parte: 3, parti: 4 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Le librerie
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install transformers==5.18.0 huggingface-hub==1.33.0 \
+            safetensors==0.8.0 sentencepiece protobuf pillow==13.0.0 numpy==2.4.6 \
+            timm==1.0.31 einops==0.8.2 open_clip_torch
+      - run: python strumenti/gara_vestiti.py scarica --cartella dati-vestiti
+      - name: La corsa
+        run: |
+          python strumenti/gara_vestiti.py corri --chi "${{ matrix.chi }}" --cartella dati-vestiti \
+            --uscita "esiti/${{ matrix.chi }}-${{ matrix.parte }}" \
+            --parte "${{ matrix.parte }}" --parti "${{ matrix.parti }}"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always()
+        with:
+          path: esiti/${{ matrix.chi }}-${{ matrix.parte }}
+          key: vestiti-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ github.run_id }}
+
+  somma:
+    name: Chi ha vinto
+    needs: concorrente
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pillow==13.0.0 numpy==2.4.6
+      - name: Esito di A 0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/A-0
+          key: vestiti-esito-A-0-${{ github.run_id }}
+      - name: Esito di A 1
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/A-1
+          key: vestiti-esito-A-1-${{ github.run_id }}
+      - name: Esito di C 0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-0
+          key: vestiti-esito-C-0-${{ github.run_id }}
+      - name: Esito di C 1
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-1
+          key: vestiti-esito-C-1-${{ github.run_id }}
+      - name: Esito di C 2
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-2
+          key: vestiti-esito-C-2-${{ github.run_id }}
+      - name: Esito di C 3
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/C-3
+          key: vestiti-esito-C-3-${{ github.run_id }}
+      - run: python strumenti/gara_vestiti.py scarica --cartella dati-vestiti
+      - name: La classifica
+        run: >-
+          python strumenti/gara_vestiti.py somma --cartella dati-vestiti
+          --risultati esiti --uscita gara-vestiti.json
+      - run: cat gara-vestiti.json
