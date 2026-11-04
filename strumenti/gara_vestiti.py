@@ -121,9 +121,11 @@ def guarda_i_nomi(cartella: Path) -> None:
     with zipfile.ZipFile(cartella / "peta.zip") as archivio:
         nomi = archivio.namelist()
     for cartella_peta in sorted({n.split("/")[1] for n in nomi if n.count("/") >= 3}):
-        suoi = sorted(n for n in nomi if n.split("/")[1] == cartella_peta
+        suoi = sorted(n for n in nomi if n.count("/") >= 3 and n.split("/")[1] == cartella_peta
                       and not n.endswith("/") and not n.endswith(".txt"))
-        print("peta", cartella_peta, len(suoi), suoi[:4])
+        print("peta", cartella_peta, len(suoi), suoi[:6], suoi[-3:])
+    with zipfile.ZipFile(cartella / "peta.zip") as archivio:
+        print(archivio.read("ReadMe.txt").decode("utf-8", "replace")[:3000])
 
 
 def esplora(scelti: list[str]) -> None:
