@@ -42,6 +42,8 @@ DEPOSITI = (
     ("FudanCVL/EffectErase", "dataset", ()),
     ("GSean/GIMM-VFI", "model", ()),
     ("onecat-ai/LDF-VFI", "model", ()),
+    ("nvidia/C-RADIOv4-H", "model", ()),
+    ("google/siglip2-giant-opt-patch16-384", "model", ()),
 )
 
 CARTELLE_DRIVE = (
