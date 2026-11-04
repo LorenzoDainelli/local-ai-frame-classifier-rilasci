@@ -24,8 +24,8 @@ Corretto, provato e già dentro.
 **Il blocco 3, i modelli grandi.** DINOv3 e SigLIP 2 girano a trentadue bit,
 PE-Core-G a sedici, la precisione sta dentro la versione dell'impronta, i pesi
 si controllano appena caricati, e le impronte si conservano a trentadue bit
-comunque. PE-Core-G è entrato, e è entrato **in prova**: la sfida con SigLIP 2
-resta da correre.
+comunque. PE-Core-G era entrato **in prova**; poi è uscito senza sfida, perché
+faceva lo stesso lavoro di SigLIP 2 (regola 574).
 
 **Il blocco 2, la griglia adattiva.** Otto caselle sul lato lungo, quadrate nei
 pixel veri, con la migrazione che allarga il controllo sulla colonna
@@ -127,7 +127,7 @@ confrontate: dice se quei bit in più si vedono davvero. Costa un'ora.
 **La sfida** (regola 420). SigLIP 2 e PE-Core-G sono parenti stretti e
 probabilmente dicono la stessa cosa due volte. Trecento foto, una sera sola, e
 esce quello che ha ragione. Se esce PE le notti scendono da nove-tredici a
-circa quattro.
+circa quattro. **[Superata dalla 574: PE-Core è uscito senza sfida.]**
 
 ---
 

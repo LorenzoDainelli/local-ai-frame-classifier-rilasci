@@ -42,7 +42,7 @@ peso è sbagliata: la percentuale può sbagliare, i GB no. La barra si ferma a
 lavoro che continua è una bugia.
 
 Serve a una cosa sola, e non è l'impazienza: **distinguere una rete lenta da
-una rete caduta.** PE-Core sono venti minuti buoni, e senza un numero che si
+una rete caduta.** I modelli grandi sono minuti buoni, e senza un numero che si
 muove non c'è modo di sapere se aspettare o riprovare.
 
 Il gettone di chi distribuisce i modelli **non è un campo di quella pagina**.
@@ -125,56 +125,19 @@ servono a questo progetto: è multilingue su 109 lingue, il che alleggerisce il
 problema dell'italiano nella ricerca (regola 137); ed è addestrato con una
 funzione che produce punteggi di somiglianza meglio calibrati (regola 175).
 
-### PE-Core-G14 — il terzo sguardo, ed è in prova
+### PE-Core-G14 — è uscito
 
-- **si chiama:** `facebook/PE-Core-G14-448`
-- **pesa:** 9,7 GB da scaricare · impronta di 1280 numeri
-- **licenza:** Apache 2.0, libera
-- **chiede il permesso:** no — si scarica e basta
+PE-Core-G14 (`facebook/PE-Core-G14-448`) faceva lo stesso mestiere di SigLIP 2:
+immagini e parole nello stesso spazio, con quasi due miliardi di numeri invece
+di quattrocento milioni. Due modelli parenti che dicono la stessa cosa non sono
+due opinioni, sono la stessa opinione contata due volte. Si portava via due
+terzi del lavoro di una notte, e la sfida della regola 420 non è più servita:
+è uscito per decisione di chi usa il programma (regola 574).
 
-Fa lo stesso mestiere di SigLIP 2 — immagini e parole nello stesso spazio — ma
-con quasi due miliardi di numeri invece di quattrocento milioni. Due terzi del
-lavoro di una notte se ne va qui dentro.
-
-**Per questo non resta per diritto acquisito** (regola 420). I due si sfidano
-su trecento fotografie, una sera sola, e quello che sbaglia di più esce. Se
-esce questo, le notti passano da nove-tredici a circa quattro; se esce l'altro,
-si sono risparmiate delle impronte inutili. In nessuno dei due casi si tengono
-tutti e due «per sicurezza»: due modelli parenti che dicono la stessa cosa non
-sono due opinioni, sono la stessa opinione contata due volte.
-
-**Questo è l'unico che non si carica come gli altri due**, e vale la pena
-sapere perché. Nel deposito da cui si scarica non c'è nessun file di
-configurazione: c'è un unico file da 9,7 GB, in un formato che oltre ai numeri
-può contenere istruzioni da eseguire. Costruirci sopra il modello richiedeva il
-codice di chi l'ha fatto, che si prenderebbe da GitHub tirandosi dietro una
-catena di pacchetti che nessuno legge davvero.
-
-Non è andata così. Di quel codice serviva solo la metà che guarda le
-immagini — meno di quattrocento righe — e quella è stata **copiata dentro il
-programma**, con la sua licenza (Apache 2.0) e la sua attribuzione, invece che
-installata. Sta in `officina/descrittori/pe_visione.py`, si può leggere tutta,
-e non si muove. Le due librerie che si portava dietro sono sparite: il terzo
-modello è entrato **senza aggiungere una sola riga** all'elenco dei pacchetti
-da installare (regola 428).
-
-Il file da 9,7 GB si attraversa una volta sola, con il lettore che le
-istruzioni non le esegue — davanti a una si rifiuta di aprire il file. Subito
-dopo i pesi vengono riscritti nel formato degli altri due, dove le istruzioni
-non ci possono stare, e il file di partenza viene cancellato. Sul disco restano
-circa 7,5 GB. Da quel momento PE-Core si accende come DINOv3 e SigLIP 2.
-
-Della sua metà che legge le parole non c'è niente in casa: la ricerca a parole
-passa da SigLIP 2, e tenere quattro giga di pesi che nessuno chiama vorrebbe
-dire non sapere più cosa si ha (regola 74). Le impronte delle immagini sono le
-stesse.
-
-*Una nota onesta.* Anche così, questo modello non ha ancora girato su nessuna
-macchina vera. Quello che si sa è che l'architettura è quella giusta — il conto
-dei pesi torna al milione, 1,882 miliardi — e che i pezzi riscritti a mano
-danno gli stessi numeri dell'originale, confrontati uno per uno. Quello che non
-si sa lo dirà la prima notte: se qualcosa non torna, il messaggio è in italiano
-col comando che rimedia, e gli altri due continuano a funzionare senza di lui.
+Al primo avvio dopo l'aggiornamento il programma cancella da solo le sue
+impronte dall'archivio e la sua cartella dei modelli, circa 7,5 GB, e nella
+finestra delle Novità scrive quante impronte ha tolto e quanto spazio ha
+liberato. Il codice copiato per costruirlo (`pe_visione.py`) non c'è più.
 
 ### I volti: SCRFD e AdaFace
 
@@ -350,12 +313,10 @@ raffinatezza: è la differenza fra un modello che ci sta e uno che non ci sta.
 |---|---|---|---|
 | DINOv3 ViT-L | 0,3 mld | trentadue bit | 1,2 GB |
 | SigLIP 2 so400m | 0,4 mld | trentadue bit | 1,6 GB |
-| PE-Core-G14 | 1,9 mld | sedici bit | 3,8 GB (7,5 sul disco) |
 
-I primi due nei 12 GB ci stanno larghi e non c'è nessuna ragione di buttare via
-delle cifre (regola 414). Il terzo a precisione piena sarebbe 7,6 GB di soli
-pesi e non ci entra: costringerebbe a lavorare a due immagini per volta e a
-passare da nove a venticinque notti.
+Tutti e due nei 12 GB ci stanno larghi e non c'è nessuna ragione di buttare via
+delle cifre (regola 414). Il sedici bit serviva a PE-Core-G14, che a precisione
+piena sarebbe stato 7,6 GB di soli pesi; è uscito con la regola 574.
 
 Prima qui c'era una riga sola che decideva in base alla **scheda video**: se
 c'era una GPU, sedici bit per tutti. Così due modelli su tre perdevano cifre
@@ -364,7 +325,7 @@ per niente. L'unica cosa che dipende ancora dalla macchina è il contrario:
 lenti e non più veloci.
 
 **La precisione sta scritta dentro la versione dell'impronta** (regola 415):
-`dinov3@2-f32`, `pecore@1-f16`. Non è pignoleria — la stessa immagine guardata
+`dinov3@2-f32`, `siglip2@2-f32`. Non è pignoleria — la stessa immagine guardata
 a sedici bit e a trentadue dà numeri diversi, e il programma decide cosa
 rifare guardando nome e versione. Se la precisione non entrasse lì dentro, il
 giorno in cui metà archivio venisse rifatto con l'altra impostazione i due

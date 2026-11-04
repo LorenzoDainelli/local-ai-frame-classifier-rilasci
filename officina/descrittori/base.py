@@ -17,8 +17,6 @@ SENZA_PRECISIONE = "nessuna"
 
 SIGLE = {PIENA: "f32", MEZZA: "f16", SENZA_PRECISIONE: ""}
 
-PESI_CONVERTITI = "pesi-officina.safetensors"
-
 
 @dataclass(frozen=True)
 class Scheda:

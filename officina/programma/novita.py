@@ -49,4 +49,16 @@ def nome_della_versione(voce: dict) -> str:
 
 
 def per_la_pagina(voci) -> list[dict]:
-    return [{**voce, "nome": nome_della_versione(voce)} for voce in voci]
+    return [{**voce, "nome": nome_della_versione(voce), "semplice": _con_le_pulizie(voce)}
+            for voce in voci]
+
+
+def _con_le_pulizie(voce: dict) -> list:
+    righe = list(voce["semplice"])
+    if "pecore" in voce.get("tolti", ()):
+        from officina.descrittori import sgombero
+
+        detto = sgombero.da_dire()
+        if detto:
+            righe.append(["disco", detto])
+    return righe

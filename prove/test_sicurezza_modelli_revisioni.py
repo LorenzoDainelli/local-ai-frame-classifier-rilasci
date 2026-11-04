@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from officina.descrittori import scaricamento
-from officina.descrittori.grandi import Dinov3, PeCore, Siglip2
+from officina.descrittori.grandi import Dinov3, Siglip2
 from officina.miglioria import faceme_pesi, lucidflux_pesi
 from officina.parole import SCHEDA as QWEN
 from prove import impronte_vuote
@@ -36,7 +36,7 @@ def _hub_finto(monkeypatch, cosa_scrive: dict[str, bytes]):
     return chiamate
 
 
-SCHEDE = (Dinov3.scheda, Siglip2.scheda, PeCore.scheda, QWEN)
+SCHEDE = (Dinov3.scheda, Siglip2.scheda, QWEN)
 
 
 def test_ogni_scheda_scaricabile_ha_la_sua_riga_per_la_revisione_e_per_le_impronte():
@@ -101,19 +101,6 @@ def test_un_valore_vuoto_non_controlla_niente(tmp_path, monkeypatch):
     monkeypatch.setattr(scaricamento, "IMPRONTE_NOTE", {
         Siglip2.scheda.identificatore: {"model.safetensors": ""}})
     assert scaricamento.scarica(Siglip2.scheda, tmp_path).file == 2
-
-
-def test_il_pt_di_pe_core_si_controlla_prima_che_torch_lo_apra(tmp_path, monkeypatch):
-    _hub_finto(monkeypatch, {"PE-Core-G14-448.pt": b"un pickle cattivo"})
-    monkeypatch.setattr(scaricamento, "IMPRONTE_NOTE", {
-        PeCore.scheda.identificatore: {"PE-Core-G14-448.pt": _sha(b"il pt vero")}})
-    aperti = []
-    monkeypatch.setattr(scaricamento, "_converti_se_serve",
-                        lambda *a, **k: aperti.append(a))
-    with pytest.raises(scaricamento.ScaricamentoFallito):
-        scaricamento.scarica(PeCore.scheda, tmp_path)
-    assert aperti == []
-    assert not (tmp_path / "pecore" / "PE-Core-G14-448.pt").exists()
 
 
 class HfApiFinta:

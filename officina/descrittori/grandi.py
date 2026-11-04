@@ -3,7 +3,7 @@ from __future__ import annotations
 from PIL import Image
 
 from officina.descrittori import torcia
-from officina.descrittori.base import (MEZZA, PESI_CONVERTITI, PIENA,
+from officina.descrittori.base import (MEZZA, PIENA,
                                        VISIONE_E_LINGUA, VISIVO, Descrittore,
                                        Scheda)
 from officina.errori import ErroreOfficina
@@ -209,106 +209,3 @@ class Siglip2(DaTransformers):
             grezzo = _solo_il_vettore(self._modello.get_text_features(**ingresso)).float()
         grezzo = grezzo / grezzo.norm(dim=-1, keepdim=True).clamp(min=1e-8)
         return [riga.tolist() for riga in grezzo.cpu()]
-
-
-class PeCore(Descrittore):
-
-    scheda = Scheda(
-        nome="pecore",
-        titolo="PE-Core-G14",
-        versione="1-f16",
-        precisione=MEZZA,
-        famiglia=VISIONE_E_LINGUA,
-        dimensione=1280,
-        licenza="Apache 2.0 — libera, regola 177",
-        identificatore="facebook/PE-Core-G14-448",
-        byte_attesi=9_700_000_000,
-        lato=448,
-        cosa_serve=("*.pt",),
-        prova_che_c_e=PESI_CONVERTITI,
-        nota="Il più grande dei tre, e l'unico in prova: si sfida con SigLIP 2 "
-             "su trecento foto e uno dei due esce (regola 420).",
-    )
-
-    def __init__(self, cartella_modelli, per_gruppo: int | None = None):
-        super().__init__()
-        self.cartella = cartella_modelli / self.scheda.nome
-        self.per_gruppo = per_gruppo
-        self._modello = None
-        self._macchina = torcia.macchina()
-
-
-    def _apri(self) -> None:
-        _controlla_le_librerie(self.scheda, ("torch", "safetensors"))
-        pesi = self.cartella / PESI_CONVERTITI
-        if not pesi.exists():
-            raise ModelloNonInCasa(
-                f"«{self.scheda.titolo}» non è ancora in casa. Si scarica una "
-                "volta sola (regola 74):\n"
-                f"{istruzioni.modello(self.scheda.nome)}\n"
-                "Sono 9,7 GB, e appena arrivati vengono riscritti nel formato "
-                "che il programma usa. Da quel momento il programma non tocca "
-                "più la rete e funziona a scheda di rete spenta."
-            )
-
-        from safetensors.torch import load_file
-
-        from officina.descrittori import pe_visione as occhio
-
-        self._modello = occhio.costruisci()
-        self._modello.load_state_dict(load_file(str(pesi)), strict=True,
-                                      assign=True)
-        if self._macchina.dispositivo == "cuda":
-            self._modello = self._modello.half()
-        self._modello.to(self._macchina.dispositivo)
-        self._modello.eval()
-
-    def _chiudi(self) -> None:
-        self._modello = None
-        torcia.libera()
-
-    def dove_gira(self) -> str:
-        return self._macchina.a_parole()
-
-    @property
-    def gruppo(self) -> int:
-        if self.per_gruppo:
-            return self.per_gruppo
-        return 8 if self._macchina.e_scheda_video else 2
-
-
-    def _prepara(self, immagini):
-        import torch
-
-        lato = self.scheda.lato
-        pronte = []
-        for immagine in immagini:
-            piccola = immagine.convert("RGB").resize(
-                (lato, lato), resample=self._filtro())
-            crudo = torch.frombuffer(bytearray(piccola.tobytes()),
-                                     dtype=torch.uint8)
-            crudo = crudo.reshape(lato, lato, 3).permute(2, 0, 1).float() / 255.0
-            pronte.append((crudo - 0.5) / 0.5)
-        return torch.stack(pronte)
-
-    @staticmethod
-    def _filtro():
-        from PIL import Image as Immagine
-
-        return Immagine.Resampling.BILINEAR
-
-    def _descrivi(self, immagini: list[Image.Image]) -> list[list[float]]:
-        import torch
-
-        fuori: list[list[float]] = []
-        for inizio in range(0, len(immagini), self.gruppo):
-            gruppo = self._prepara(immagini[inizio:inizio + self.gruppo])
-            gruppo = gruppo.to(self._macchina.dispositivo)
-            if self._macchina.dispositivo == "cuda":
-                gruppo = gruppo.half()
-            with torch.inference_mode():
-                grezzo = self._modello(gruppo)
-            grezzo = grezzo.float()
-            grezzo = grezzo / grezzo.norm(dim=-1, keepdim=True).clamp(min=1e-8)
-            fuori.extend(riga.tolist() for riga in grezzo.cpu())
-        return fuori

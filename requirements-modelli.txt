@@ -52,13 +52,9 @@
 # invisibile. Le versioni provate sull'indice normale erano torch 2.9.1 e
 # torchvision 0.24.1: sono scritte qui perche' l'informazione resti, non
 # perche' pip debba imporle.
-torch                     # le reti neurali: il motore sotto i tre descrittori
+torch                     # le reti neurali: il motore sotto i descrittori
 torchvision               # prepara l'immagine per DINOv3 (va con la torch installata)
 transformers==5.18.0      # carica DINOv3, SigLIP 2 e Qwen3.5 (regole 174, 175)
-# PE-Core non passa da `transformers`: nel suo deposito non c'e' nessun
-# config.json. Si costruisce con il codice copiato in `pe_visione.py` e legge
-# i suoi pesi da qui, che c'era gia'. Fare entrare il terzo modello non ha
-# aggiunto nessuna riga a questo file, ed era la condizione per farlo entrare.
 safetensors==0.8.0        # il formato dei pesi, senza codice eseguibile dentro
 huggingface-hub==1.33.0   # scarica i modelli, una volta sola (regola 74)
 av==16.1.0                # i fotogrammi dei video veri (regole 41, 89)

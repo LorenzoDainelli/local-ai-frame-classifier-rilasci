@@ -564,6 +564,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                                        daemon=True)
         caricamento.start()
         archivio = accesso.apri(REALE, password=password)
+        self._togli_pe_core(archivio)
         self.fase_apertura = 1
         aperto_in = time.monotonic() - partenza
         in_rete = bool(archivio.impostazione("accesso_dalla_rete"))
@@ -806,6 +807,15 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             return
         self.servitore_di_rete = servitore
         origine.segna_la_rete(servitore.porta, impronta)
+
+    def _togli_pe_core(self, archivio) -> None:
+        from officina.descrittori import sgombero
+
+        try:
+            sgombero.sgombra(archivio.dove.modelli, archivio)
+        except Exception as guasto:
+            registro.errore("programma.pe_core_non_tolto",
+                            **registro.dove_si_e_rotto(guasto))
 
     def _prepara_i_conti(self) -> None:
         from officina.web.strade import comune

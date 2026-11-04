@@ -1586,6 +1586,18 @@ def _versione_72(connessione: sqlite3.Connection) -> None:
                         "tempi_miglioria(genere, versione, id)")
 
 
+
+def _versione_73(connessione: sqlite3.Connection) -> None:
+    quante = connessione.execute(
+        "SELECT count(*) FROM impronte WHERE descrittore = 'pecore'").fetchone()[0]
+    if not quante:
+        return
+    connessione.execute("DELETE FROM impronte WHERE descrittore = 'pecore'")
+    connessione.execute(
+        "INSERT OR REPLACE INTO stato (chiave, valore, aggiornato_il) "
+        "VALUES ('pecore_impronte_tolte', ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
+        (str(quante),))
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1718,6 +1730,7 @@ MIGRAZIONI: list[Migrazione] = [
                    "con un tasto", _versione_71),
     Migrazione(72, "i secondi veri di ogni file migliorato, per prevedere quanto manca "
                    "alla coda", _versione_72),
+    Migrazione(73, "PE-Core esce: le sue impronte si cancellano", _versione_73),
 ]
 
 

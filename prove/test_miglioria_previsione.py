@@ -288,8 +288,8 @@ def _memoria():
 
 
 def test_la_migrazione_72_fa_la_tabella_dei_tempi():
-    assert migrazioni.MIGRAZIONI[-1].versione == 72
-    assert migrazioni.MIGRAZIONI[-1].applica is migrazioni._versione_72
+    assert migrazioni.MIGRAZIONI[71].versione == 72
+    assert migrazioni.MIGRAZIONI[71].applica is migrazioni._versione_72
     connessione = _memoria()
     previsione.registra(connessione, 4, NUOVA, 12.5, None, _foto(640, 480))
     riga = dict(uno(connessione, "SELECT * FROM tempi_miglioria"))

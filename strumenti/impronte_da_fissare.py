@@ -20,7 +20,6 @@ DEPOSITI = (
     ("minchul/cvlface_adaface_ir101_webface4m", "model", ()),
     ("facebook/dinov3-vitl16-pretrain-lvd1689m", "model", ()),
     ("google/siglip2-so400m-patch14-384", "model", ()),
-    ("facebook/PE-Core-G14-448", "model", ()),
     ("Qwen/Qwen3.5-9B", "model", ()),
     ("SG161222/RealVisXL_V3.0", "model", ()),
     ("thomas2modyu/FaceMe", "model", ()),
