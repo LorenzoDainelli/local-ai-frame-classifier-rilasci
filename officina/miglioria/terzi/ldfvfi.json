@@ -1,0 +1,30 @@
+{
+ "deposito": "xypeng9903/LDF-VFI",
+ "commit": "61b34d2379df8a313e8e4cb467cc2f74c52b45d7",
+ "licenza": "Apache-2.0",
+ "file": {
+  "LICENSE": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+  "configs/wan1_3B.json": "5351f8efdbdd3561b2a0036b64de43469fc788d64feabe45a0622ec05b553a26",
+  "training/models/msk_encoder.py": "70bbee447229e3de597b7474304c82b420122a1843470d6233669506a83070dd",
+  "training/models/precond.py": "1fee74ed8a63d53e1eb28026d26629f3c1da38abf6d20ade4f1a5610da579db9",
+  "training/models/transformer_wan.py": "939d7a8b5e363253069af047a24b4b3aaa382cde1d185cf23cc2e204200689ed",
+  "training/models/utils.py": "f416bd78dac46e79da47dcea8a6fd7043436fc26043c055c945722a02808748f",
+  "training/models/vae2_1.py": "89282600cf33ffcfd152ac9c6b22638bd9b14992d5dab8cf071e8da76d8f5e74",
+  "training/models/vae2_1_cond.py": "060e36c14fe15f39fa82d29bed1a31244bb8ca883d6b659056776d798b558429",
+  "training/models/vae2_1_cond_v2.py": "e274eb05939ea0d93658944a054d45dfb67950ca577e48300d6b733f24a000fb"
+ },
+ "pesi": [
+  {
+   "nome": "Wan2.1_VAE_cond_v2.pth",
+   "repo": "onecat-ai/LDF-VFI",
+   "sha256": "96fcd7f89998868a681b715d030eac99420335421785fccc581c2541303b9515",
+   "byte_circa": 801028218
+  },
+  {
+   "nome": "transformer/diffusion_pytorch_model.safetensors",
+   "repo": "onecat-ai/LDF-VFI",
+   "sha256": "73b82c245d9985f5311b0bb4568cba63bca0304ec83a26f17e57a89604174d0f",
+   "byte_circa": 5641946552
+  }
+ ]
+}

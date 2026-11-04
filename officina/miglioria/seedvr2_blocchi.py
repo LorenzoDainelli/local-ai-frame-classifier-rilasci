@@ -12,8 +12,8 @@ class RamPoca(ErroreOfficina):
     codice = "ram_poca"
     senza_nomi = True
 
-    def __init__(self, serve: int, libera: int) -> None:
-        super().__init__(f"Per SeedVR2 servono almeno {math.ceil(serve / GIGA)} GB di RAM "
+    def __init__(self, serve: int, libera: int, chi: str = "SeedVR2") -> None:
+        super().__init__(f"Per {chi} servono almeno {math.ceil(serve / GIGA)} GB di RAM "
                          f"libera e ce ne sono {libera // GIGA}.")
         self.serve = int(serve)
         self.libera = int(libera)
@@ -55,16 +55,17 @@ def quanti_ne_stanno(pesi: list[int], posto: int) -> int:
     return len(pesi)
 
 
-def quanti_in_ram(pesi: list[int], libera: int | None, fisso: int, disco: bool) -> int:
+def quanti_in_ram(pesi: list[int], libera: int | None, fisso: int, disco: bool,
+                  chi: str = "SeedVR2") -> int:
     if libera is None:
         return len(pesi)
     posto = libera - MARGINE_RAM - fisso
     if posto >= sum(pesi):
         return len(pesi)
     if not disco:
-        raise RamPoca(MARGINE_RAM + fisso + sum(pesi), libera)
+        raise RamPoca(MARGINE_RAM + fisso + sum(pesi), libera, chi)
     if posto < max(pesi, default=0):
-        raise DiscoNonBasta(MARGINE_RAM + fisso + max(pesi, default=0), libera)
+        raise DiscoNonBasta(MARGINE_RAM + fisso + max(pesi, default=0), libera, chi)
     return quanti_ne_stanno(pesi, posto)
 
 
@@ -83,8 +84,10 @@ def _svuota_la_ram_fissata() -> None:
 
 class Blocchi:
 
-    def __init__(self, disco: bool = False, fissa: bool = True) -> None:
+    def __init__(self, disco: bool = False, fissa: bool = True,
+                 chi: str = "SeedVR2") -> None:
         self.disco = bool(disco)
+        self.chi = chi
         self.fissa = fissa
         self.fuori: list = []
         self.in_ram: list[bool] = []
@@ -110,7 +113,7 @@ class Blocchi:
         self.togli()
         pesi = [peso(blocco) for blocco in blocchi]
         fisso = max(peso(modello) - sum(pesi), 0)
-        dentro = quanti_in_ram(pesi, libera, fisso, self.disco)
+        dentro = quanti_in_ram(pesi, libera, fisso, self.disco, self.chi)
         self.dispositivo = modello.main_device
         self.pesi, self.fisso = pesi, fisso
         for numero, blocco in enumerate(blocchi):

@@ -1,0 +1,64 @@
+name: LDF-VFI
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/collaudo_ldf.py"
+      - "officina/miglioria/ldfvfi.py"
+      - "officina/miglioria/ldf_fette.py"
+      - "officina/miglioria/ldf_giro.py"
+      - "officina/miglioria/terzi/ldfvfi.json"
+      - ".github/workflows/ldf.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ldf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ldf:
+    name: LDF-VFI con i pesi veri
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Più spazio sul disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Le librerie
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          grep -E "^(diffusers|einops|tqdm)==" requirements-miglioria.txt \
+            | cut -d" " -f1 > ldf-librerie.txt
+          python -m pip install -r ldf-librerie.txt
+          python -m pip install huggingface-hub==1.33.0 safetensors==0.8.0 numpy pillow
+      - name: Il codice originale
+        run: |
+          COMMIT=$(python -c "import json; print(json.load(open('officina/miglioria/terzi/ldfvfi.json'))['commit'])")
+          git init -q "$RUNNER_TEMP/originale"
+          git -C "$RUNNER_TEMP/originale" fetch -q --depth 1 https://github.com/xypeng9903/LDF-VFI "$COMMIT"
+          git -C "$RUNNER_TEMP/originale" checkout -q FETCH_HEAD
+      - name: Il collaudo
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python strumenti/collaudo_ldf.py --uscita ldf-collaudo.json --casa "$RUNNER_TEMP/modelli" --originale "$RUNNER_TEMP/originale"
+      - name: Cosa ha detto
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ldf-collaudo
+          path: ldf-collaudo.json
+          if-no-files-found: ignore
