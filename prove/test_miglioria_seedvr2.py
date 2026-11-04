@@ -329,7 +329,7 @@ def test_l_installatore_mette_la_miglioria_in_due_giri(casa, monkeypatch):
 
     installatore = librerie.Installatore(esegui=esegui, prendi=lambda _: contenuto)
     installatore.installa(["miglioria"])
-    assert len(comandi) == 2
+    assert len(comandi) == 3
     assert "--no-binary" not in comandi[0] and "--no-deps" not in comandi[0]
     assert not any(c.startswith("antlr4") for c in comandi[0] + comandi[1])
     casa_nuova = librerie.cartella("miglioria")
@@ -340,10 +340,15 @@ def test_l_installatore_mette_la_miglioria_in_due_giri(casa, monkeypatch):
     assert "--no-deps" in comandi[1]
     sue = {librerie._nome(r) for r in librerie.richieste_della_miglioria()}
     for nome in librerie.SENZA_DIPENDENZE:
-        if nome not in sue:
+        if nome not in sue or nome in librerie.A_PARTE:
             continue
         assert any(c.startswith(nome + "==") for c in comandi[1])
         assert not any(c.startswith(nome + "==") for c in comandi[0])
+    a_parte = comandi[2]
+    assert "--no-deps" in a_parte and "--constraint" not in a_parte
+    assert a_parte[a_parte.index("--target") + 1].endswith(librerie.A_PARTE["timm"])
+    assert [c for c in a_parte if "==" in c] == ["timm==0.4.12"]
+    assert not any(c.startswith("timm==") for c in comandi[0] + comandi[1])
     assert librerie.cartella("miglioria").is_dir()
     assert not librerie.manca_la_miglioria()
 

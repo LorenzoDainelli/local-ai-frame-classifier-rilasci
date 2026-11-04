@@ -291,6 +291,54 @@ def test_un_timm_finto_lascia_il_posto_a_quello_vero(monkeypatch):
     assert "timm" not in sys.modules and "timm.models" not in sys.modules
 
 
+def _cartella_privata(monkeypatch, tmp_path, con_timm=True):
+    from officina.programma import librerie
+
+    monkeypatch.setattr(librerie, "cartella", lambda parte: tmp_path / parte)
+    dove = tmp_path / "miglioria" / librerie.A_PARTE["timm"]
+    if con_timm:
+        (dove / "timm").mkdir(parents=True)
+        (dove / "timm" / "__init__.py").write_text("")
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    return dove
+
+
+def test_il_timm_di_gimm_passa_davanti_a_quello_dei_modelli(monkeypatch, tmp_path):
+    dove = _cartella_privata(monkeypatch, tmp_path)
+    nuovo = type(sys)("timm")
+    nuovo.__file__ = str(tmp_path / "modelli" / "timm" / "__init__.py")
+    monkeypatch.setitem(sys.modules, "timm", nuovo)
+    monkeypatch.setitem(sys.modules, "timm.layers", type(sys)("timm.layers"))
+    sys.path.append(str(dove))
+    gimmvfi._timm_di_gimm()
+    assert "timm" not in sys.modules and "timm.layers" not in sys.modules
+    assert sys.path[0] == str(dove) and sys.path.count(str(dove)) == 1
+
+
+def test_il_timm_di_gimm_gia_caricato_resta(monkeypatch, tmp_path):
+    dove = _cartella_privata(monkeypatch, tmp_path)
+    suo = type(sys)("timm")
+    suo.__file__ = str(dove / "timm" / "__init__.py")
+    monkeypatch.setitem(sys.modules, "timm", suo)
+    prima = list(sys.path)
+    gimmvfi._timm_di_gimm()
+    assert sys.modules["timm"] is suo and sys.path == prima
+
+
+def test_senza_la_cartella_privata_si_torna_al_timm_vero(monkeypatch, tmp_path):
+    _cartella_privata(monkeypatch, tmp_path, con_timm=False)
+    vero = type(sys)("timm")
+    vero.__file__ = str(tmp_path / "timm.py")
+    monkeypatch.setitem(sys.modules, "timm", vero)
+    prima = list(sys.path)
+    gimmvfi._timm_di_gimm()
+    assert sys.modules["timm"] is vero and sys.path == prima
+    finto = type(sys)("timm")
+    monkeypatch.setitem(sys.modules, "timm", finto)
+    gimmvfi._timm_di_gimm()
+    assert "timm" not in sys.modules
+
+
 def test_un_timm_vero_resta(monkeypatch, tmp_path):
     vero = type(sys)("timm")
     vero.__file__ = str(tmp_path / "timm.py")

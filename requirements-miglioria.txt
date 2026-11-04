@@ -22,7 +22,9 @@
 # timm, yacs, loguru e scipy servono a GIMM-VFI, che porta i video a 120 FPS;
 # colorama e win32-setctime servono a loguru, solo su Windows. timm resta apposta
 # sulla 0.4.12, quella con cui GIMM-VFI e' stato fatto: le versioni nuove non hanno
-# piu' dei pezzi che il suo codice chiede.
+# piu' dei pezzi che il suo codice chiede. C-RADIOv4 invece vuole la 1.x, che sta
+# fra i modelli: per questo la 0.4.12 si installa in una cartella tutta sua,
+# timm_di_gimm, che solo GIMM-VFI mette davanti quando parte (librerie.A_PARTE).
 
 -r requirements-modelli.txt
 

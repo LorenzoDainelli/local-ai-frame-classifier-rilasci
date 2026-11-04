@@ -17,3 +17,7 @@ Non chiederle di nuovo: se cambiano, l'utente lo dice.
 - Niente commenti nel codice, in nessuna lingua.
 - Niente prove a misura di telefono: il programma si usa sul fisso e sul portatile.
 - Qualità prima di quantità: ore di calcolo in più vanno bene se il risultato è migliore.
+- Gare con foto e video pubblici: le risposte giuste devono essere verificate (dati
+  controllati, niente etichette sbagliate), e oltre ai casi facili ci devono essere casi
+  difficili o molto difficili (buio, mosso, sfocato, di lato, coperti, piccoli, rumore,
+  compressi), con il punteggio anche solo sui difficili. Sul facile sono bravi tutti.

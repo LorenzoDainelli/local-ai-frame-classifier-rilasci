@@ -75,6 +75,24 @@ def _vero_timm() -> None:
             sys.modules.pop(nome, None)
 
 
+def _timm_di_gimm() -> None:
+    from officina.programma import librerie
+    dove = librerie.cartella("miglioria") / librerie.A_PARTE["timm"]
+    if not (dove / "timm").is_dir():
+        _vero_timm()
+        return
+    gia = sys.modules.get("timm")
+    da_dove = getattr(gia, "__file__", None) if gia is not None else None
+    if da_dove and Path(da_dove).resolve().is_relative_to(dove.resolve()):
+        return
+    for nome in [n for n in sys.modules if n == "timm" or n.startswith("timm.")]:
+        sys.modules.pop(nome, None)
+    if str(dove) in sys.path:
+        sys.path.remove(str(dove))
+    sys.path.insert(0, str(dove))
+    importlib.invalidate_caches()
+
+
 @contextlib.contextmanager
 def _classi_come_in_python_vecchio():
     vera = dataclasses.dataclass
@@ -97,7 +115,7 @@ def carica_il_pacchetto(cartella: Path):
     gia = sys.modules.get(PACCHETTO)
     if gia is not None:
         return gia
-    _vero_timm()
+    _timm_di_gimm()
     messi = []
     for nome in FINTI:
         if nome not in sys.modules:

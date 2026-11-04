@@ -37,6 +37,7 @@ SOLO_SORGENTE = {
 }
 SENZA_DIPENDENZE = ("rotary-embedding-torch", "accelerate", "omegaconf", "bitsandbytes",
                     "timm")
+A_PARTE = {"timm": "timm_di_gimm"}
 
 SPAZIO_CON_CUDA = 7 * 2 ** 30
 SPAZIO_SENZA_CUDA = 2 * 2 ** 30
@@ -633,14 +634,21 @@ class Installatore:
         try:
             file_vincoli = _scrivi_i_vincoli(
                 vincoli([cartella("modelli"), cartella("torch")]), lavoro)
-            sole = [r for r in richieste if _nome(r) in SENZA_DIPENDENZE]
+            appartate = [r for r in richieste if _nome(r) in A_PARTE]
+            sole = [r for r in richieste
+                    if _nome(r) in SENZA_DIPENDENZE and r not in appartate]
             a_mano = [r for r in richieste if _nome(r) in SOLO_SORGENTE]
             prima = comando_pip(python_per_i_comandi(), nuova,
-                                [r for r in richieste if r not in sole and r not in a_mano],
+                                [r for r in richieste
+                                 if r not in sole and r not in a_mano and r not in appartate],
                                 indice=PYPI, file_vincoli=file_vincoli)
             dopo = comando_pip(python_per_i_comandi(), nuova, sole, indice=PYPI,
                                extra_opzioni=["--no-deps"]) if sole else None
-            if not self._esegui_pip(prima) or (dopo and not self._esegui_pip(dopo)):
+            da_soli = [comando_pip(python_per_i_comandi(), nuova / A_PARTE[_nome(r)], [r],
+                                   indice=PYPI, extra_opzioni=["--no-deps"])
+                       for r in appartate]
+            if (not self._esegui_pip(prima) or (dopo and not self._esegui_pip(dopo))
+                    or not all(self._esegui_pip(c) for c in da_soli)):
                 raise ErroreOfficina(
                     "Lo scaricamento delle librerie del miglioramento non è "
                     "andato a buon fine. Controlla la connessione e premi "
