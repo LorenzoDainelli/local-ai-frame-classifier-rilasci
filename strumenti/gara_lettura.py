@@ -224,6 +224,17 @@ class Qwen:
         self.modello = None
 
 
+def _llama_adatto(nome: str) -> bool:
+    nome = nome.lower()
+    if not re.search(r"\.(zip|tar\.gz)$", nome):
+        return False
+    if not re.search(r"(ubuntu|linux)", nome) or not re.search(r"(x64|x86_64|amd64)", nome):
+        return False
+    altri = ("vulkan", "cuda", "rocm", "hip", "sycl", "openvino", "kompute", "musa",
+             "cann", "arm64", "aarch64", "s390", "riscv", "xcframework")
+    return not any(altro in nome for altro in altri)
+
+
 def _llama(cartella: Path) -> Path:
     richiesta = urllib.request.Request(LLAMA_RILASCI, headers={"User-Agent": "gara-lettura"})
     with urllib.request.urlopen(richiesta, timeout=120) as risposta:
@@ -233,14 +244,15 @@ def _llama(cartella: Path) -> Path:
     for candidato in rilasci:
         if candidato.get("draft") or candidato.get("prerelease"):
             continue
-        scelti = [a for a in candidato.get("assets", [])
-                  if re.search(r"bin-ubuntu-x64\.(zip|tar\.gz)$", a["name"])]
+        scelti = [a for a in candidato.get("assets", []) if _llama_adatto(a["name"])]
         if scelti:
             rilascio = candidato
             break
     if not scelti:
-        raise RuntimeError("nessun llama.cpp per ubuntu x64 negli ultimi rilasci: "
-                           + ", ".join(r.get("tag_name", "?") for r in rilasci))
+        primo = rilasci[0] if rilasci else {}
+        raise RuntimeError("nessun llama.cpp per linux x64 negli ultimi rilasci; nel "
+                           + str(primo.get("tag_name")) + " ci sono: "
+                           + ", ".join(a["name"] for a in primo.get("assets", [])))
     cartella.mkdir(parents=True, exist_ok=True)
     archivio = _scarica(scelti[0]["browser_download_url"], cartella / scelti[0]["name"])
     if archivio.name.endswith(".zip"):
