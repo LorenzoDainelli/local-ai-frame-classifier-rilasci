@@ -269,13 +269,52 @@ def impronte_xtest(cartella: Path) -> list[str]:
     return righe
 
 
+def piano_snu() -> list[str]:
+    import sys
+
+    from huggingface_hub import HfApi, hf_hub_download
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from officina.miglioria import gara120_casi as g
+
+    insiemi = []
+    for livello in ("easy", "medium", "hard", "extreme"):
+        file = hf_hub_download(SNU[0], f"test-{livello}.txt", repo_type="dataset",
+                               revision=SNU[1])
+        insiemi.append(g.centri_dalla_lista(Path(file).read_text(encoding="utf-8")))
+    righe = [f"CENTRI_UGUALI {all(set(i) == set(insiemi[0]) for i in insiemi)}"]
+    info = HfApi().dataset_info(SNU[0], revision=SNU[1], files_metadata=True)
+    file_hf = {s.rfilename: s for s in info.siblings or []}
+    conti: dict = {}
+    for nome in file_hf:
+        if nome.endswith(".png"):
+            conti[_cartella(nome)] = conti.get(_cartella(nome), 0) + 1
+    casi = g.piano(sorted(set(insiemi[3])), conti)
+    elenco = [[c.nome, c.gruppo, c.scena, c.passo, c.volte, c.rovina, list(c.tenuti),
+               list(c.veri)] for c in casi]
+    righe.append("CASI " + json.dumps(elenco))
+    byte = 0
+    for nome in g.file_che_servono(casi):
+        voce = file_hf[nome]
+        byte += voce.size
+        righe.append(f"S {voce.lfs.sha256} {voce.size} {nome}")
+    righe.append(f"TOTALE file={len(g.file_che_servono(casi))} byte={byte}")
+    return righe
+
+
 def main() -> None:
     lettore = argparse.ArgumentParser()
     lettore.add_argument("--uscita", type=Path, required=True)
     lettore.add_argument("--peso", action="append", default=[])
     lettore.add_argument("--dettagli", action="store_true")
     lettore.add_argument("--impronte", type=Path)
+    lettore.add_argument("--piano", action="store_true")
     scelte = lettore.parse_args()
+    if scelte.piano:
+        righe = piano_snu()
+        print("\n".join(righe), flush=True)
+        scelte.uscita.write_text("\n".join(righe), encoding="utf-8")
+        return
     if scelte.impronte:
         righe = liste_snu()
         print("\n".join(righe), flush=True)

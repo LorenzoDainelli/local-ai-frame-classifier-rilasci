@@ -24,8 +24,4 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install huggingface_hub
-      - run: df -h / /mnt
-      - run: sudo mkdir -p /mnt/xtest && sudo chown "$USER" /mnt/xtest
-      - run: >-
-          python strumenti/cerca_video_120.py --uscita cerca-video-120.txt
-          --impronte /mnt/xtest
+      - run: python strumenti/cerca_video_120.py --uscita cerca-video-120.txt --piano
