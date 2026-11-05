@@ -285,11 +285,15 @@ def piano_snu() -> list[str]:
     righe = [f"CENTRI_UGUALI {all(set(i) == set(insiemi[0]) for i in insiemi)}"]
     info = HfApi().dataset_info(SNU[0], revision=SNU[1], files_metadata=True)
     file_hf = {s.rfilename: s for s in info.siblings or []}
-    conti: dict = {}
+    presenti: dict = {}
     for nome in file_hf:
         if nome.endswith(".png"):
-            conti[_cartella(nome)] = conti.get(_cartella(nome), 0) + 1
-    casi = g.piano(sorted(set(insiemi[3])), conti)
+            numero = int(nome.rsplit("/", 1)[1].split(".")[0])
+            presenti.setdefault(_cartella(nome), set()).add(numero)
+    for scena, numeri in sorted(presenti.items()):
+        buchi = max(numeri) - min(numeri) + 1 - len(numeri)
+        righe.append(f"SCENA {scena} da={min(numeri)} a={max(numeri)} buchi={buchi}")
+    casi = g.piano(sorted(set(insiemi[3])), presenti)
     elenco = [[c.nome, c.gruppo, c.scena, c.passo, c.volte, c.rovina, list(c.tenuti),
                list(c.veri)] for c in casi]
     righe.append("CASI " + json.dumps(elenco))

@@ -50,9 +50,8 @@ def centri_dalla_lista(testo: str) -> list[tuple[str, int]]:
     return centri
 
 
-def _sta_dentro(caso: Caso, quanti: int) -> bool:
-    servono = caso.servono()
-    return servono[0] >= 1 and servono[-1] <= quanti
+def _sta_dentro(caso: Caso, presenti: set[int]) -> bool:
+    return all(n in presenti for n in caso.servono())
 
 
 def _ordine(sale: str, scena: str, centro: int) -> str:
@@ -73,30 +72,30 @@ def _scegli(centri: list[tuple[str, int]], quanti: int, sale: str) -> list[tuple
     return presi
 
 
-def _casi(centri, quanti_per_scena, gruppo, passo, volte, rovina, quanti, sale):
+def _casi(centri, presenti, gruppo, passo, volte, rovina, quanti, sale):
     buoni = []
     for scena, centro in centri:
         tenuti, veri = finestra(centro, passo, volte)
         nome = f"{scena}/{centro:06d}/p{passo}x{volte}" + (f"/{rovina}" if rovina else "")
         caso = Caso(nome, gruppo, scena, passo, volte, rovina, tenuti, veri)
-        if _sta_dentro(caso, quanti_per_scena[scena]):
+        if _sta_dentro(caso, presenti.get(scena, set())):
             buoni.append((scena, centro, caso))
     scelti = set(_scegli([(s, c) for s, c, _ in buoni], quanti, sale))
     return [caso for s, c, caso in buoni if (s, c) in scelti]
 
 
-def piano(centri: list[tuple[str, int]], quanti_per_scena: dict[str, int]) -> list[Caso]:
-    casi = _casi(centri, quanti_per_scena, FACILE, 4, 2, None, QUANTI["facili"], "facili")
-    hard = _casi(centri, quanti_per_scena, DIFFICILE, 8, 4, None, QUANTI["hard"], "hard")
-    estremi = _casi(centri, quanti_per_scena, DIFFICILE, 16, 4, None, QUANTI["extreme"],
+def piano(centri: list[tuple[str, int]], presenti: dict[str, set[int]]) -> list[Caso]:
+    casi = _casi(centri, presenti, FACILE, 4, 2, None, QUANTI["facili"], "facili")
+    hard = _casi(centri, presenti, DIFFICILE, 8, 4, None, QUANTI["hard"], "hard")
+    estremi = _casi(centri, presenti, DIFFICILE, 16, 4, None, QUANTI["extreme"],
                     "extreme")
     casi += hard + estremi
     centri_estremi = [(c.scena, c.tenuti[1] + c.passo // 2) for c in estremi]
     for rovina in ROVINE:
-        casi += _casi(centri_estremi, quanti_per_scena, DIFFICILISSIMO, 16, 4, rovina,
+        casi += _casi(centri_estremi, presenti, DIFFICILISSIMO, 16, 4, rovina,
                       QUANTI["rovinati"], rovina)
     centri_hard = [(c.scena, c.tenuti[1] + c.passo // 2) for c in hard]
-    casi += _casi(centri_hard, quanti_per_scena, DIFFICILISSIMO, 8, 4, MOSSO,
+    casi += _casi(centri_hard, presenti, DIFFICILISSIMO, 8, 4, MOSSO,
                   QUANTI["mossi"], MOSSO)
     return casi
 
