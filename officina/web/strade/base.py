@@ -60,6 +60,7 @@ FOGLI_DELLE_SCHERMATE = (
     "in3d",
     "tempo",
     "ritocca",
+    "gara120",
 )
 pagine.env.globals["fogli_delle_schermate"] = FOGLI_DELLE_SCHERMATE
 pagine.env.globals["istruzioni_motori"] = istruzioni.motori_in_una_riga

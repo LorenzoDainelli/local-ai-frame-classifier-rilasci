@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from "_spiega.html" import spiega %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Gara dei 120 FPS — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina pagina-gara120" id="gara120">
+
+    <a class="ps-torna" href="/impostazioni#c2">{{ icona('indietro', 14) }} Impostazioni</a>
+
+    <div class="g1-testa">
+        <h1 class="titolo-pagina">Gara dei 120 FPS{% call spiega("Come funziona") %}
+            <p>Tre concorrenti creano i fotogrammi che mancano in video pubblici
+            girati veloci (SNU-FILM, X-TEST e Adobe240): GIMM-VFI-F-P, LDF-VFI e la
+            Fusione zona per zona. <b>I tuoi video non entrano mai.</b></p>
+            <p>Prima il voto automatico su 430 casi, poi il tuo voto alla cieca su 20
+            casi difficilissimi. Vince solo chi è primo in tutte e due; se non sono
+            d'accordo, decidiamo insieme.</p>
+            <p>Si ferma con «Ferma» e riprende da dove era. Se la fermi mentre scarica
+            l'archivio di XVFI, quel pezzo ricomincia da capo.</p>
+        {% endcall %}</h1>
+        <p class="sottotitolo">Chi crea meglio i fotogrammi in mezzo, per i video a 120 FPS.</p>
+    </div>
+
+    <section class="carta g1-stato" aria-live="polite">
+        <div class="g1-righe">
+            <p class="g1-fase" data-g1-fase></p>
+            <p class="ds" data-g1-riga></p>
+            <div class="g1-barra" data-g1-barra hidden><span></span></div>
+            <p class="ds" data-g1-occupa></p>
+        </div>
+        <div class="in-fila">
+            <button class="tasto-comando principale" type="button" data-g1-avvia>Avvia la gara</button>
+            <button class="tasto-comando nudo" type="button" data-g1-ferma hidden>Ferma</button>
+            <button class="tasto-comando nudo" type="button" data-g1-cancella hidden>Cancella i dati scaricati</button>
+            <span class="g1-sicuro" data-g1-sicuro hidden>
+                <span class="ds">Si cancellano i video pubblici scaricati; i risultati e i video del voto restano.</span>
+                <button class="tasto-comando" type="button" data-g1-cancella-si>Sì, cancella</button>
+                <button class="tasto-comando nudo" type="button" data-g1-cancella-no>No</button>
+            </span>
+        </div>
+    </section>
+
+    <section class="carta g1-voto" data-g1-voto hidden>
+        <div class="g1-voto-testa">
+            <h2>Voto alla cieca <span class="tenue numeri" data-g1-quale></span></h2>
+            <span class="in-fila">
+                <button class="tasto-comando nudo piccolo" type="button" data-g1-prima aria-label="Caso prima">&larr;</button>
+                <button class="tasto-comando nudo piccolo" type="button" data-g1-dopo aria-label="Caso dopo">&rarr;</button>
+            </span>
+        </div>
+        <p class="ds">Guarda i tre video e vota quello più naturale: niente scatti, niente
+            doppi contorni, niente parti che si sciolgono. Il video vero e i nomi si
+            vedono solo dopo il voto.</p>
+        <div class="g1-video" data-g1-video></div>
+        <div class="in-fila g1-comandi">
+            <button class="tasto-comando nudo piccolo" type="button" data-g1-gioca>Riparti insieme</button>
+            <button class="tasto-comando nudo piccolo" type="button" data-g1-vel="1" aria-pressed="true">Velocità vera</button>
+            <button class="tasto-comando nudo piccolo" type="button" data-g1-vel="0.25" aria-pressed="false">Rallentato ×4</button>
+        </div>
+        <div class="in-fila g1-vota" data-g1-vota>
+            <button class="tasto-comando" type="button" data-g1-lettera="A">Vota A <kbd>1</kbd></button>
+            <button class="tasto-comando" type="button" data-g1-lettera="B">Vota B <kbd>2</kbd></button>
+            <button class="tasto-comando" type="button" data-g1-lettera="C">Vota C <kbd>3</kbd></button>
+        </div>
+        <p class="esito-rivedi" data-g1-detto aria-live="polite"></p>
+    </section>
+
+    <section class="carta g1-esito" data-g1-esito hidden></section>
+</div>
+</main>
+</div>
+
+<script type="application/json" id="dati-gara120">{{ dati|safe }}</script>
+{% endblock %}
+
+{% block coda %}
+<script type="module" src="/statici/js/gara120.js"></script>
+{% endblock %}
