@@ -71,7 +71,8 @@ def come_stanno_i_modelli(dove: Path) -> list[dict]:
         "licenza": ("SAM License (Meta), Apache 2.0, Hippocratic 3.0 (KPR), "
                     "S-Lab 1.0 (Puffin, solo uso non commerciale), NVIDIA Open Model License, "
                     "FAIR Noncommercial Research License (VGGT-Omega) e CC BY-NC 4.0 (Depth Anything 3)"),
-        "si_chiama": ("SAM 3 · RTMW-x · KPR con SOLIDER, 3 versioni · SAM 3D Body · Puffin · "
+        "si_chiama": ("SAM 3 · SAM 3.1 · RTMW-x · KPR con SOLIDER, 3 versioni · "
+                      "SAM 3D Body · Puffin · "
                       "VGGT-Omega · Depth Anything 3 Nested"),
         "a_cosa_serve": ("separare ogni persona nella foto, anche quando si coprono, "
                          "capire di chi è ogni mano, gamba e volto, riconoscere la "
@@ -81,7 +82,9 @@ def come_stanno_i_modelli(dove: Path) -> list[dict]:
                          "non c'è scritto. VGGT-Omega e Depth Anything 3 costruiscono in 3D "
                          "ogni luogo con almeno 5 foto, in metri, e mettono ogni foto nel "
                          "punto da cui è stata fatta. Per scaricarlo serve aver accettato le "
-                         "licenze di SAM 3, SAM 3D Body e VGGT-Omega su Hugging Face; KPR arriva da Google "
+                         "licenze di SAM 3, SAM 3.1, SAM 3D Body e VGGT-Omega su "
+                         "Hugging Face; "
+                         "KPR arriva da Google "
                          "Drive, senza chiave. La licenza di KPR chiede di non usarlo "
                          "contro i diritti delle persone, per esempio per sorvegliarle; "
                          "quelle di Puffin, VGGT-Omega e Depth Anything 3 permettono solo "

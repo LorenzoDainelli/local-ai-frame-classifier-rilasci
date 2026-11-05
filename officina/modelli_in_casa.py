@@ -284,7 +284,8 @@ def porta_in_casa(quale: str, dove: Path, lavoro) -> None:
         scarica_corpi.scarica(dove, al_passo=lavoro.di, chiave=chiave,
                               a_che_punto=lavoro.a_che_punto)
         finito()
-        lavoro.di("I modelli del corpo sono in casa: SAM 3, RTMW, KPR, SAM 3D Body, Puffin, "
+        lavoro.di("I modelli del corpo sono in casa: SAM 3, SAM 3.1, RTMW, KPR, "
+                  "SAM 3D Body, Puffin, "
                   "VGGT-Omega e Depth Anything 3.")
         return
 

@@ -27,6 +27,10 @@
       [
         "disco",
         "La gara scarica circa 23 GB di video pubblici e alla fine c'è un tasto per cancellarli. Se la fermi, riparte da dove era arrivata"
+      ],
+      [
+        "video",
+        "Nei video la parte che scegli la segue SAM 3.1, solo sulla scheda video: se è occupata aspetta il suo turno. Scegliere con un clic resta a SAM 3. SAM 3.1 chiede di accettare la licenza di Meta su Hugging Face"
       ]
     ],
     "tecnico": [
@@ -34,7 +38,8 @@
       "Migrazione 73: <code>DELETE FROM impronte WHERE descrittore = 'pecore'</code>, e il numero tolto va nello <code>stato</code> come <code>pecore_impronte_tolte</code>.",
       "All'avvio <code>descrittori.sgombero.sgombra</code> cancella <code>modelli/pecore</code>, somma i byte liberati e le impronte tolte nella carta (<code>modelli_tolti</code>); la riga coi numeri veri compare qui sopra.",
       "Migrazione 74: <code>secondi_seedvr2</code>/<code>secondi_lucidflux</code> in <code>sfide</code> e <code>secondi_a</code>/<code>secondi_b</code> in <code>sfide_togli</code>, misurati col cronometro attorno al lavoro di ogni modello; a parole con <code>tempo_gara</code> (regola 575).",
-      "Gara 120 FPS: <code>miglioria.gara120</code> (regista), <code>gara120_stanza</code> senza rete per la corsa e le clip, <code>gara120_voto</code> (20 clip SNU-FILM da 2 s a 120 vere, lettere mescolate, vero dopo il voto, primo voto definitivo), pagina <code>/gara-120</code>; si ferma durante la prima copia (regola 577)."
+      "Gara 120 FPS: <code>miglioria.gara120</code> (regista), <code>gara120_stanza</code> senza rete per la corsa e le clip, <code>gara120_voto</code> (20 clip SNU-FILM da 2 s a 120 vere, lettere mescolate, vero dopo il voto, primo voto definitivo), pagina <code>/gara-120</code>; si ferma durante la prima copia (regola 577).",
+      "SAM 3.1 (<code>ritocco.sam31</code>) dal codice di Meta fissato file per file con sha256, pesi con <code>weights_only=True</code>, parti triton sostituite con OpenCV; scaricato con i modelli del corpo; nomi aggiornati in Intelligenza artificiale, Modelli e chiave (regola 576)."
     ]
   },
   {
