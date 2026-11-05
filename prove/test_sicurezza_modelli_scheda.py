@@ -222,6 +222,7 @@ def test_i_siti_che_leggono_un_pt_scaricato_sono_quelli_conosciuti():
     siti = {(file, nome) for file, _riga, nome, _solo in _chiamate_di_torch_load()}
     assert siti == {
         ("officina/corpi/kpr_pesi.py", "torch.load"),
+        ("officina/descrittori/radio4.py", "torch.load"),
         ("officina/miglioria/codeformer_pesi.py", "torch.load"),
         ("officina/miglioria/faceme_pesi.py", "torch.load"),
         ("officina/miglioria/gimmvfi.py", "torch.load"),

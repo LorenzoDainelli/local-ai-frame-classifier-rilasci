@@ -780,6 +780,44 @@ def test_regista_dice_il_guasto_della_stanza(tmp_path, monkeypatch):
     assert gara.turno.chi is None
 
 
+def test_regista_accende_la_rete_solo_per_scaricare(tmp_path, monkeypatch):
+    import os
+    import sys
+
+    from officina.miglioria import gara120
+
+    gara, azioni, _ = _regista(tmp_path, monkeypatch)
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    costanti = SimpleNamespace(HF_HUB_OFFLINE=True)
+    monkeypatch.setitem(sys.modules, "huggingface_hub.constants", costanti)
+    visto = []
+
+    def elenco_rotto(*a, **k):
+        visto.append((os.environ["HF_HUB_OFFLINE"], costanti.HF_HUB_OFFLINE))
+        raise ConnectionError("niente internet")
+
+    monkeypatch.setattr(sc, "elenco_snu", elenco_rotto)
+    gara.lavoro.parti(gara._gira, nome="prova")
+    gara.lavoro.aspetta_che_finisca(10)
+    assert visto == [("0", False)]
+    assert gara.lavoro.guasto == gara120.SENZA_RETE
+    assert os.environ["HF_HUB_OFFLINE"] == "1" and costanti.HF_HUB_OFFLINE is True
+    assert azioni == [] and gara.turno.chi is None
+
+
+def test_regista_lascia_passare_il_guasto_spiegato(tmp_path, monkeypatch):
+    from officina.descrittori.scaricamento import ScaricamentoFallito
+
+    gara, _, _ = _regista(tmp_path, monkeypatch)
+
+    def poco_spazio(*a, **k):
+        raise ScaricamentoFallito("Libera spazio e riprova.")
+
+    monkeypatch.setattr(sc, "scarica_xvfi", poco_spazio)
+    with pytest.raises(ScaricamentoFallito, match="Libera spazio"):
+        gara._gira()
+
+
 def test_regista_aspetta_la_scheda(tmp_path, monkeypatch):
     from officina.miglioria import gara120
     from officina.web.lavori import Lavoro

@@ -5,9 +5,9 @@ from pathlib import Path
 from officina.descrittori.base import (SENZA_MODELLO, VISIONE_E_LINGUA, VISIVO,
                                        Descrittore, Scheda)
 from officina.descrittori.disegnato import Disegnato
-from officina.descrittori.grandi import Dinov3, Siglip2
+from officina.descrittori.grandi import Dinov3, Radio4, Siglip2
 
-TIPI = (Dinov3, Siglip2, Disegnato)
+TIPI = (Dinov3, Radio4, Siglip2, Disegnato)
 SCHEDE = {tipo.scheda.nome: tipo.scheda for tipo in TIPI}
 PREDEFINITO = "disegnato"
 

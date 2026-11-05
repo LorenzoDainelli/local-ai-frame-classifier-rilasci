@@ -152,9 +152,15 @@ def permessi_mancanti(chiave: str, repo: set[str] | None = None) -> list[tuple[s
         import huggingface_hub
     except ImportError:
         return []
-    return [(nome, pagina) for quale, nome, pagina in _con_le_condizioni()
-            if (repo is None or quale in repo)
-            and not _ha_il_permesso(huggingface_hub, chiave, quale)]
+    from officina.descrittori import torcia
+
+    prima = torcia.con_la_rete_accesa()
+    try:
+        return [(nome, pagina) for quale, nome, pagina in _con_le_condizioni()
+                if (repo is None or quale in repo)
+                and not _ha_il_permesso(huggingface_hub, chiave, quale)]
+    finally:
+        torcia.rimetti_la_rete_com_era(prima)
 
 
 def _in_fila(voci: list[str]) -> str:

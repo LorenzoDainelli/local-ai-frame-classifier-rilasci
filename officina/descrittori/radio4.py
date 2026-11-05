@@ -209,6 +209,9 @@ def _carica_il_pth(sorgente: Path) -> dict:
 
     import torch
 
+    from officina.programma import scheda
+
+    scheda.controlla_che_torch_legga_in_sicurezza(torch)
     sicuri = [argparse.Namespace]
     with torch.serialization.safe_globals(sicuri):
         letto = torch.load(str(sorgente), map_location="cpu", weights_only=True)

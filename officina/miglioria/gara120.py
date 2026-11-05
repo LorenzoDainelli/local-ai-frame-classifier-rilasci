@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import threading
 from pathlib import Path
 from typing import Callable
 
 from officina import registro
+from officina.descrittori import torcia
+from officina.descrittori.scaricamento import ScaricamentoFallito
 from officina.errori import ErroreOfficina
 from officina.miglioria import gara120_corsa as corsa
 from officina.miglioria import gara120_scarica as sc
@@ -19,6 +22,8 @@ RISULTATI = "risultati"
 ASPETTA_LA_SCHEDA = 30.0
 MODULO = "officina.miglioria.gara120_stanza"
 SCARICO, CORSA, CLIP, VOTO, VOTATA = "scarico", "corsa", "clip", "voto", "votata"
+SENZA_RETE = ("Non riesco a scaricare i video pubblici della gara: controlla che "
+              "internet funzioni e premi di nuovo «Avvia gara». Riprende da dove era.")
 
 
 class Fermata(Exception):
@@ -104,15 +109,30 @@ class Gara120:
             self.turno.lascia(self.lavoro)
             self.lavoro.senza_numeri()
 
+    @contextlib.contextmanager
+    def _in_rete(self):
+        prima = torcia.con_la_rete_accesa()
+        try:
+            yield
+        except (Fermata, ErroreOfficina):
+            raise
+        except Exception as errore:
+            registro.errore("gara_120.scaricamento_fallito",
+                            **registro.dove_si_e_rotto(errore))
+            raise ScaricamentoFallito(SENZA_RETE) from errore
+        finally:
+            torcia.rimetti_la_rete_com_era(prima)
+
     def _corri(self) -> None:
-        self.lavoro.di("controllo l'elenco di SNU-FILM")
-        elenco = sc.elenco_snu(self.dati, api=self._api, scarica_da_hf=self._hf)
-        self._controlla()
-        self.lavoro.di("scarico e controllo i fotogrammi di SNU-FILM")
-        sc.scarica_snu(self.dati, elenco, sc.nomi_che_servono(elenco), self._al_pezzo,
-                       self._hf)
-        self.lavoro.di("scarico e controllo X-TEST e Adobe240 (l'archivio di XVFI)")
-        sc.scarica_xvfi(self.dati, self._al_byte, self._rete)
+        with self._in_rete():
+            self.lavoro.di("controllo l'elenco di SNU-FILM")
+            elenco = sc.elenco_snu(self.dati, api=self._api, scarica_da_hf=self._hf)
+            self._controlla()
+            self.lavoro.di("scarico e controllo i fotogrammi di SNU-FILM")
+            sc.scarica_snu(self.dati, elenco, sc.nomi_che_servono(elenco), self._al_pezzo,
+                           self._hf)
+            self.lavoro.di("scarico e controllo X-TEST e Adobe240 (l'archivio di XVFI)")
+            sc.scarica_xvfi(self.dati, self._al_byte, self._rete)
         self.lavoro.senza_numeri()
         self._controlla()
         piano = corsa.scrivi_piano(self.dati, elenco, sc.cartelle_adobe(self.dati))
@@ -129,8 +149,9 @@ class Gara120:
             raise ErroreOfficina("Non trovo casi adatti per il voto alla cieca.",
                                  codice="gara_120_senza_voto")
         self.lavoro.di(f"scarico i fotogrammi delle {len(clip)} clip del voto")
-        sc.scarica_snu(self.dati, elenco, voto.nomi_del_voto(clip, elenco), self._al_pezzo,
-                       self._hf)
+        with self._in_rete():
+            sc.scarica_snu(self.dati, elenco, voto.nomi_del_voto(clip, elenco),
+                           self._al_pezzo, self._hf)
         self.lavoro.senza_numeri()
         self.lavoro.di("preparo i video del voto alla cieca")
         esito = self._nella_stanza(stanza.CLIP)

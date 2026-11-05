@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PIL import Image
 
-from officina.descrittori import torcia
+from officina.descrittori import radio4, torcia
 from officina.descrittori.base import (MEZZA, PIENA,
                                        VISIONE_E_LINGUA, VISIVO, Descrittore,
                                        Scheda)
@@ -207,5 +207,91 @@ class Siglip2(DaTransformers):
                     for chiave, valore in ingresso.items()}
         with torch.inference_mode():
             grezzo = _solo_il_vettore(self._modello.get_text_features(**ingresso)).float()
+        grezzo = grezzo / grezzo.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+        return [riga.tolist() for riga in grezzo.cpu()]
+
+
+class Radio4(Descrittore):
+
+    scheda = Scheda(
+        nome="radio4",
+        titolo="C-RADIOv4-H",
+        versione="1-f32",
+        precisione=PIENA,
+        famiglia=VISIONE_E_LINGUA,
+        dimensione=1536,
+        licenza=radio4.LICENZA,
+        identificatore=radio4.REPO,
+        byte_attesi=4_200_000_000,
+        lato=radio4.LATO,
+        nota="Immagini e parole nello stesso spazio, con le parole lette da SigLIP 2 "
+             "giant: serve per cercare a parole e per far partire un nodo da zero "
+             "(regola 580).",
+        prova_che_c_e=radio4.SCHEDA,
+    )
+
+    def __init__(self, cartella_modelli, per_gruppo: int | None = None):
+        super().__init__()
+        self.cartella = cartella_modelli / self.scheda.nome
+        self.per_gruppo = per_gruppo
+        self._visione = None
+        self._testo = None
+        self._divisore = None
+        self._macchina = torcia.macchina()
+
+    def _apri(self) -> None:
+        _controlla_le_librerie(self.scheda, ("torch", "transformers", "safetensors"))
+        if not radio4.ci_sono(self.cartella):
+            raise ModelloNonInCasa(
+                f"«{self.scheda.titolo}» non è ancora in casa. Si scarica una "
+                "volta sola (regola 74):\n"
+                f"{istruzioni.modello(self.scheda.nome)}\n"
+                "Da quel momento il programma non tocca più la rete e funziona "
+                "a scheda di rete spenta."
+            )
+        self._visione = radio4.costruisci_visione(self.cartella, self._macchina.dispositivo)
+
+    def _apri_le_parole(self) -> None:
+        if self._testo is None:
+            self._testo = radio4.costruisci_testo(self.cartella, self._macchina.dispositivo)
+            self._divisore = radio4.divisore(self.cartella)
+
+    def _chiudi(self) -> None:
+        self._visione = None
+        self._testo = None
+        self._divisore = None
+        torcia.libera()
+
+    def dove_gira(self) -> str:
+        return self._macchina.a_parole()
+
+    @property
+    def gruppo(self) -> int:
+        if self.per_gruppo:
+            return self.per_gruppo
+        return 8 if self._macchina.e_scheda_video else 2
+
+    def _descrivi(self, immagini: list[Image.Image]) -> list[list[float]]:
+        import torch
+
+        fuori: list[list[float]] = []
+        for inizio in range(0, len(immagini), self.gruppo):
+            x = radio4.tensore(immagini[inizio:inizio + self.gruppo])
+            with torch.inference_mode():
+                grezzo = self._visione(x.to(self._macchina.dispositivo)).float()
+            grezzo = grezzo / grezzo.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+            fuori.extend(riga.tolist() for riga in grezzo.cpu())
+        return fuori
+
+    def descrivi_parole(self, frasi: list[str]) -> list[list[float]]:
+        import torch
+
+        self.apri()
+        self._apri_le_parole()
+        ingresso = radio4.gettoni(self._divisore, frasi)
+        ingresso = {chiave: valore.to(self._macchina.dispositivo)
+                    for chiave, valore in ingresso.items()}
+        with torch.inference_mode():
+            grezzo = self._testo(**ingresso).pooler_output.float()
         grezzo = grezzo / grezzo.norm(dim=-1, keepdim=True).clamp(min=1e-8)
         return [riga.tolist() for riga in grezzo.cpu()]
