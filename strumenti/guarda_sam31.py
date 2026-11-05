@@ -19,11 +19,53 @@ def impronta(file: Path) -> str:
     return calcolo.hexdigest()
 
 
+def chiavi_del_seguire(pesi: dict) -> dict:
+    mappa = {}
+    for nome, (forma, _tipo) in pesi.items():
+        if nome.startswith("tracker.model."):
+            mappa[nome[len("tracker.model."):]] = forma
+        elif nome.startswith("detector.backbone.vision_backbone."):
+            mappa["backbone." + nome[len("detector.backbone."):]] = forma
+    return mappa
+
+
+def confronta(codice: Path, letto: Path, uscita: Path) -> None:
+    import sys
+
+    import torch
+
+    sys.path.insert(0, str(codice))
+    from sam3.model_builder import build_sam3_multiplex_video_model
+
+    with torch.device("meta"):
+        modello = build_sam3_multiplex_video_model(load_from_HF=False, device="meta")
+    voluti = {k: list(v.shape) for k, v in modello.state_dict().items()}
+    dati = json.loads(letto.read_text(encoding="utf-8"))
+    nel_file = chiavi_del_seguire(dati["pesi"])
+    fuori = {
+        "voluti": len(voluti),
+        "nel_file": len(nel_file),
+        "mancano": sorted(set(voluti) - set(nel_file)),
+        "avanzano": sorted(set(nel_file) - set(voluti)),
+        "forme_diverse": sorted(k for k in set(voluti) & set(nel_file)
+                                if voluti[k] != nel_file[k]),
+        "tipi": sorted({t for _f, t in dati["pesi"].values()}),
+        "numeri_seguire": sum(int(torch.Size(f).numel()) for f in nel_file.values()),
+    }
+    uscita.write_text(json.dumps(fuori, indent=1), encoding="utf-8")
+    print(json.dumps(fuori, indent=1))
+
+
 def main() -> None:
     parti = argparse.ArgumentParser()
     parti.add_argument("--uscita", default="sam31.json")
     parti.add_argument("--cartella", default="sam31")
+    parti.add_argument("--confronta", default=None)
+    parti.add_argument("--letto", default="sam31.json")
     scelte = parti.parse_args()
+    if scelte.confronta:
+        confronta(Path(scelte.confronta), Path(scelte.letto), Path(scelte.uscita))
+        return
 
     from huggingface_hub import HfApi, hf_hub_download
 

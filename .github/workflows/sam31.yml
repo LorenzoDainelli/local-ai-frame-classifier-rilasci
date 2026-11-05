@@ -43,3 +43,28 @@ jobs:
           path: sam31.json
           if-no-files-found: ignore
           retention-days: 1
+  confronta:
+    name: I pezzi vanno al posto giusto
+    needs: guarda
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sam31
+      - name: Le librerie e il codice di Meta
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install timm ftfy regex iopath huggingface_hub numpy
+          git clone -q https://github.com/facebookresearch/sam3 sam3-originale
+          git -C sam3-originale checkout -q f1647e8d0c1d280991f4d1b7d974c2704537fe66
+      - name: Il confronto
+        run: |
+          python strumenti/guarda_sam31.py --confronta sam3-originale --letto sam31.json \
+            --uscita sam31-confronto.json
