@@ -10,7 +10,7 @@ from pathlib import Path
 from officina import registro
 from officina.errori import ErroreOfficina
 
-OBBLIGATORI = ("dinov3", "siglip2", "volti", "corpi", "parole")
+OBBLIGATORI = ("dinov3", "radio4", "siglip2", "volti", "corpi", "parole")
 FACOLTATIVI = ("seedvr2", "codeformer", "faceme", "lucidflux")
 CONSIGLIATI = ("seedvr2", "codeformer")
 

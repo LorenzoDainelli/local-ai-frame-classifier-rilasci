@@ -1225,7 +1225,7 @@ def costruisci_parser() -> argparse.ArgumentParser:
     impronte = comandi.add_parser(
         "impronte", help="calcola le impronte numeriche (regole 16, 329)")
     impronte.add_argument("--finto", action="store_true")
-    impronte.add_argument("--descrittore", help="dinov3 | siglip2 | disegnato")
+    impronte.add_argument("--descrittore", help="dinov3 | radio4 | siglip2 | disegnato")
     impronte.add_argument("--tutti", action="store_true",
                           help="uno dopo l'altro, liberando la scheda (regola 329)")
     impronte.add_argument("--intensita", type=int, default=None,
@@ -1252,7 +1252,7 @@ def costruisci_parser() -> argparse.ArgumentParser:
         "modelli", help="scarica e verifica i modelli — l'unico che tocca la rete")
     modelli.add_argument("--finto", action="store_true")
     modelli.add_argument("--scarica", metavar="NOME",
-                         help="dinov3 | siglip2 | volti | corpi | tutti")
+                         help="dinov3 | radio4 | siglip2 | volti | corpi | tutti")
     modelli.add_argument("--verifica", action="store_true",
                          help="rilegge i file e ricontrolla le impronte")
     modelli.add_argument("--togli", metavar="NOME")

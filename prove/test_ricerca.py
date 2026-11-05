@@ -46,7 +46,7 @@ def test_senza_il_modello_lo_dice_col_nome_del_comando(archivio_misurabile):
     risposta = ricerca.cerca(archivio_misurabile.connessione,
                              archivio_misurabile.dove.modelli, "un tramonto")
     assert risposta.con_le_parole is False
-    assert "siglip2" in risposta.perche_no
+    assert "--scarica radio4" in risposta.perche_no
     assert "etichettato tu" in risposta.perche_no
 
 
