@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from officina import registro
 from officina.archivio.database import (adesso, leggi_impostazione, scrivi_impostazione,
                                         tutti, uno)
 from officina.errori import ErroreOfficina
-from officina.miglioria import coda, da_guardare, ricomincia, scambio
+from officina.miglioria import catena, coda, da_guardare, misura, ricomincia, scambio
 from officina.modello import file_media
 from officina.sicuro.accoglienza import RIMETTI, RIPORTA
 from officina.sicuro.dall_archivio import SENZA_ARCHIVIO
@@ -18,6 +19,9 @@ from officina.sicuro.elenco import piegato
 DAL = "seedvr2_nuova_dal"
 SALTATE = "seedvr2_nuova_saltate"
 TEMPI_DI_PRIMA = "seedvr2_tempi_di_prima"
+DAL_IN_GRANDE = "miglioria_4k_dal"
+SALTATE_IN_GRANDE = "miglioria_4k_saltate"
+FATTE_IN_GRANDE = "miglioria_4k_fatte"
 DA_GUARDARE = (coda.DA_RIVEDERE, coda.APPROVATA, coda.RIFIUTATA, coda.FALLITA)
 PULITA = {"in_revisione": None, "impronta_migliorata": None, "percorso_migliorata": None,
           "percorso_spostato": None, "motori": None, "fedelta": None, "guasto": None,
@@ -39,6 +43,7 @@ DALL_ARCHIVIO = {
 }
 RITOCCATO = "è stato ritoccato: non lo tocco"
 IN_SFIDA = "fa parte della sfida alla cieca: non lo tocco"
+_IN_GRANDE = threading.Lock()
 
 
 @dataclass
@@ -46,6 +51,7 @@ class Esito:
 
     rimesse: int = 0
     saltate: list[str] = field(default_factory=list)
+    byte: int = 0
 
 
 def versione_di_adesso() -> str:
@@ -193,11 +199,19 @@ def _comincia(archivio, versione: str) -> str:
     return dal
 
 
-def tutto(archivio, versione: str | None = None) -> Esito:
-    versione = versione or versione_di_adesso()
-    dal = _comincia(archivio, versione)
-    with archivio.lettura() as connessione:
-        righe = da_rifare(connessione, versione, dal)
+def _sul_disco(riga) -> int:
+    chiave = "in_revisione" if riga["stato"] == coda.DA_RIVEDERE else "percorso_migliorata"
+    if riga["stato"] not in (coda.DA_RIVEDERE, coda.APPROVATA) or not riga[chiave]:
+        return 0
+    if chiave == "percorso_migliorata" and riga["nell_archivio"]:
+        return 0
+    try:
+        return Path(riga[chiave]).stat().st_size
+    except OSError:
+        return 0
+
+
+def _rifai(archivio, righe) -> Esito:
     esito = Esito()
     for riga in righe:
         with archivio.lettura() as connessione:
@@ -205,15 +219,26 @@ def tutto(archivio, versione: str | None = None) -> Esito:
             if adesso_e is None or adesso_e["stato"] != riga["stato"]:
                 continue
             perche = perche_resta(connessione, adesso_e)
+        prima = _sul_disco(adesso_e)
         if perche is None:
             try:
                 perche = _una(archivio, adesso_e)
             except (scambio.ScambioFermato, OSError) as errore:
                 perche = str(errore) or "non si è potuto spostare"
         if perche is None:
+            esito.byte += prima
             esito.rimesse += 1
         elif perche:
             esito.saltate.append(f"{Path(riga['percorso_originale']).name}: {perche}")
+    return esito
+
+
+def tutto(archivio, versione: str | None = None) -> Esito:
+    versione = versione or versione_di_adesso()
+    dal = _comincia(archivio, versione)
+    with archivio.lettura() as connessione:
+        righe = da_rifare(connessione, versione, dal)
+    esito = _rifai(archivio, righe)
     with archivio.scrittura() as connessione:
         scrivi_impostazione(connessione, SALTATE, esito.saltate)
     if esito.rimesse or esito.saltate:
@@ -225,3 +250,90 @@ def tutto(archivio, versione: str | None = None) -> Esito:
 def saltate(connessione: sqlite3.Connection) -> list[str]:
     lista = leggi_impostazione(connessione, SALTATE)
     return [str(voce) for voce in lista] if isinstance(lista, list) else []
+
+
+def _fatta_in_piccolo(riga, tetto: str) -> bool:
+    if riga["stato"] == coda.FALLITA:
+        return (riga["guasto"] == catena.GIA_GRANDE and bool(riga["larghezza_prima"])
+                and bool(riga["altezza_prima"])
+                and not misura.e_gia_grande(riga["larghezza_prima"],
+                                            riga["altezza_prima"], tetto))
+    if riga["larghezza_dopo"] or riga["altezza_dopo"]:
+        return misura.fatta_in_fhd(riga["larghezza_dopo"], riga["altezza_dopo"])
+    return True
+
+
+def da_rifare_in_grande(connessione: sqlite3.Connection, dal: str,
+                        tetto: str) -> list[sqlite3.Row]:
+    if misura.pixel_del_tetto(tetto) <= misura.PIXEL_FHD:
+        return []
+    righe = tutti(connessione,
+                  "SELECT * FROM migliorie WHERE stato IN (?,?,?,?) "
+                  "AND finita_il IS NOT NULL AND finita_il < ? ORDER BY id",
+                  *DA_GUARDARE, dal)
+    return [riga for riga in righe if _fatta_in_piccolo(riga, tetto)]
+
+
+def _dal_in_grande(connessione: sqlite3.Connection) -> str | None:
+    dal = leggi_impostazione(connessione, DAL_IN_GRANDE)
+    return dal if isinstance(dal, str) and dal else None
+
+
+def ci_sono_in_grande(connessione: sqlite3.Connection) -> bool:
+    dal = _dal_in_grande(connessione)
+    if dal is None:
+        return False
+    tetto = misura.letto(connessione)
+    return any(perche_resta(connessione, riga) is None
+               for riga in da_rifare_in_grande(connessione, dal, tetto))
+
+
+def in_grande(archivio, prima_volta: bool = False) -> Esito | None:
+    with _IN_GRANDE:
+        return _in_grande(archivio, prima_volta)
+
+
+def _in_grande(archivio, prima_volta: bool) -> Esito | None:
+    with archivio.scrittura() as connessione:
+        dal = _dal_in_grande(connessione)
+        if dal is None:
+            if not prima_volta:
+                return None
+            dal = adesso()
+            scrivi_impostazione(connessione, DAL_IN_GRANDE, dal)
+            registro.evento("miglioria.in_grande_comincia")
+        elif prima_volta or not ci_sono_in_grande(connessione):
+            return None
+        tetto = misura.letto(connessione)
+        righe = da_rifare_in_grande(connessione, dal, tetto)
+    esito = _rifai(archivio, righe)
+    with archivio.scrittura() as connessione:
+        fatte = leggi_impostazione(connessione, FATTE_IN_GRANDE)
+        fatte = fatte if isinstance(fatte, dict) else {}
+        scrivi_impostazione(connessione, FATTE_IN_GRANDE, {
+            "rimesse": int(fatte.get("rimesse") or 0) + esito.rimesse,
+            "byte": int(fatte.get("byte") or 0) + esito.byte,
+            "misura": misura.nome(tetto)})
+        scrivi_impostazione(connessione, SALTATE_IN_GRANDE, esito.saltate)
+    if esito.rimesse or esito.saltate:
+        registro.evento("miglioria.rifatte_in_grande", rimesse=esito.rimesse,
+                        saltate=len(esito.saltate), byte=esito.byte)
+    return esito
+
+
+def in_grande_a_parole(connessione: sqlite3.Connection) -> dict | None:
+    fatte = leggi_impostazione(connessione, FATTE_IN_GRANDE)
+    saltate_ = leggi_impostazione(connessione, SALTATE_IN_GRANDE)
+    saltate_ = [str(voce) for voce in saltate_] if isinstance(saltate_, list) else []
+    if not isinstance(fatte, dict) or not (fatte.get("rimesse") or saltate_):
+        return None
+    giga = int(fatte.get("byte") or 0) / 1e9
+    return {"rimesse": int(fatte.get("rimesse") or 0),
+            "liberati": f"{giga:.1f}".replace(".", ",") + " GB",
+            "misura": str(fatte.get("misura") or misura.nome()),
+            "saltate": saltate_}
+
+
+def in_grande_visto(connessione: sqlite3.Connection) -> None:
+    scrivi_impostazione(connessione, FATTE_IN_GRANDE, {})
+    scrivi_impostazione(connessione, SALTATE_IN_GRANDE, [])

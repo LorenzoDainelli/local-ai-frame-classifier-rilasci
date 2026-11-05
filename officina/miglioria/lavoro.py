@@ -41,7 +41,7 @@ MESSAGGI = {
     "originale_assente": "l'originale non è più dov'era",
     "originale_cambiato": "l'originale è cambiato da quando è entrato in coda",
     "spazio": "sul disco delle foto non c'è abbastanza spazio",
-    "gia_grande": "è già FHD o più",
+    "gia_grande": "è già grande quanto la misura di arrivo o più",
     "memoria_finita": "è finita la memoria del computer",
     "memoria_scheda_finita": "è finita la memoria della scheda video",
     RAM_POCA: "per SeedVR2 la RAM libera non basta",
@@ -141,7 +141,11 @@ def misura_del_motore(fatto: dict) -> str:
             if isinstance(motore, dict)]
     if nomi[:1] == ["seedvr2"]:
         return misura_di_seedvr2(fatto)
-    return misura_di_lucidflux(fatto)
+    detto = misura_di_lucidflux(fatto)
+    dopo = fatto.get("dopo")
+    if "seedvr2" in nomi[1:] and isinstance(dopo, dict):
+        detto += misura_di_seedvr2(dopo)
+    return detto
 
 
 def percorsi_della_stanza() -> list[str]:
@@ -167,14 +171,21 @@ def volti_da_soli(cartella_modelli: Path, senza_faceme: bool = False) -> str | N
     return motori.CODEFORMER
 
 
-def spazio_dei_pezzi(originale: Path) -> int:
+def quanto_puo_crescere(tetto: str | None = None) -> float:
+    from officina.miglioria import misura
+
+    return QUANTO_PUO_CRESCERE * max(1.0, misura.pixel_del_tetto(tetto) / misura.PIXEL_FHD)
+
+
+def spazio_dei_pezzi(originale: Path, tetto: str | None = None) -> int:
     from officina.miglioria import misura
 
     try:
         piano = video.guarda(originale)
     except Exception:                                    # noqa: BLE001
         return 0
-    larghezza, altezza = misura.di_arrivo(piano.larghezza, piano.altezza, pari=True)
+    larghezza, altezza = misura.di_arrivo(piano.larghezza, piano.altezza, pari=True,
+                                          tetto=tetto)
     return larghezza * altezza * BYTE_PER_PIXEL_DEI_PEZZI * max(piano.fotogrammi, 0)
 
 
@@ -410,9 +421,18 @@ class Miglioratore:
             registro.evento("miglioria.giro", fatti=fatti,
                             fermato=self._fermati.is_set())
 
+    def _rifai_in_grande(self) -> None:
+        from officina.miglioria import rifai
+
+        esito = rifai.in_grande(self.archivio)
+        if esito is not None and esito.rimesse:
+            self.lavoro.di(f"rimetto in coda {esito.rimesse} file fatti in FHD, per "
+                           "rifarli nella misura nuova")
+
     def _rifai_con_la_nuova(self) -> None:
         from officina.miglioria import preparazione, rifai
 
+        self._rifai_in_grande()
         if not preparazione.e_pronto(self.archivio.dove.modelli):
             return
         esito = rifai.tutto(self.archivio)
@@ -469,9 +489,10 @@ class Miglioratore:
 
         attesa.prepara(dove)
         genere = file["genere"]
-        serve = letto.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
+        tetto = self._tetto()
+        serve = int(letto.stat().st_size * quanto_puo_crescere(tetto)) + MARGINE_DI_SPAZIO
         if genere == "video":
-            serve += spazio_dei_pezzi(letto)
+            serve += spazio_dei_pezzi(letto, tetto)
         if shutil.disk_usage(dove).free < serve:
             self._fallita(miglioria_id, "spazio")
             return
@@ -623,17 +644,25 @@ class Miglioratore:
             "motori": scelti,
             "persone": chi,
             "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
+            "misura": self._tetto(),
             "percorsi": percorsi_della_stanza(),
             "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli),
                         **({"disco": True} if self._disco else {})},
             **(piu or {}),
         }
 
+    def _tetto(self) -> str:
+        from officina.miglioria import misura
+
+        return misura.tetto_vero(self.archivio.impostazione(misura.CHIAVE))
+
     def _prevedi(self, partito: float, file, lavoro: dict, in_sfida: bool) -> None:
         dati = previsione.fattori(
             file, volti=len(lavoro["persone"]), dall_archivio="dall_archivio" in lavoro,
             sfida=in_sfida, disco=bool(lavoro["opzioni"].get("disco")),
-            a_freddo=not self._accesa.accesa, intensita=lavoro["intensita"])
+            a_freddo=not self._accesa.accesa, intensita=lavoro["intensita"],
+            tetto=lavoro.get("misura"),
+            lucidflux=lavoro["motori"].get("foto") == motori.LUCIDFLUX)
         versione = _versione_di_seedvr2()
         try:
             with self.archivio.lettura() as connessione:
@@ -832,7 +861,8 @@ class Miglioratore:
             perche = NON_RIPRESA.get(codice, (codice, a_parole(codice)))
             self._non_ripresa(originale, *perche)
             return
-        serve = letto.stat().st_size * QUANTO_PUO_CRESCERE + MARGINE_DI_SPAZIO
+        serve = (int(letto.stat().st_size * quanto_puo_crescere(self._tetto()))
+                 + MARGINE_DI_SPAZIO)
         if shutil.disk_usage(tenuta.parent).free < serve:
             self._non_ripresa(originale, "spazio", "manca spazio sul disco")
             return

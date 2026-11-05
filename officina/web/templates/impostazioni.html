@@ -276,6 +276,21 @@
                            ("nessuno", "nessuno")]) }}
                 {% endcall %}
 
+                {% call riga("Misura di arrivo del miglioramento", "miglioria_misura", False,
+                    "Quanto diventano grandi foto e video migliorati. <b>4K</b>
+                     (3840 × 2160 pixel) dà il dettaglio più alto, ma ci mette
+                     più tempo e i file occupano circa quattro volte lo spazio
+                     dell'FHD. <b>2K</b> (2560 × 1440) sta in mezzo. <b>FHD</b>
+                     (1920 × 1080) è la misura di prima. Si migliorano solo i
+                     file più piccoli della misura scelta. Con LucidFlux la foto
+                     arriva fino a 2K e poi SeedVR2 la porta a 4K. Se abbassi la
+                     misura, quelli già fatti restano come sono.") %}
+                {{ scelte("miglioria_misura", impostazioni.miglioria_misura,
+                          [("4k", "4K"),
+                           ("2k", "2K"),
+                           ("fhd", "FHD")]) }}
+                {% endcall %}
+
                 <div class="riga" data-gara-video>
                     <div class="lato">
                         <div class="nome">La gara dei video per «Togli»</div>

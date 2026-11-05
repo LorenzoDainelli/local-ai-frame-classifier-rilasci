@@ -219,6 +219,16 @@ def miglioramento_togli(miglioria_id: int):
     return RedirectResponse("/miglioramento", status_code=303)
 
 
+@strada.post("/miglioramento/in-grande/visto")
+def miglioramento_in_grande_visto():
+    from officina.miglioria import rifai
+
+    archivio = accesso.aperto()
+    with archivio.scrittura() as connessione:
+        rifai.in_grande_visto(connessione)
+    return RedirectResponse("/miglioramento", status_code=303)
+
+
 @strada.post("/miglioramento/coda/togli-tutte")
 def miglioramento_togli_tutte(fino_a: int = Form(...)):
     from pathlib import Path

@@ -77,6 +77,7 @@ def test_nel_menu_lavoro_c_e_il_miglioramento(cliente):
 
 
 def test_migliora_mette_in_coda_e_dice_cosa_ha_scartato(cliente, importato):
+    importato.imposta("miglioria_misura", "fhd")
     scatti = [_scatto_di(importato, nome)
               for nome in ("piccola.jpg", "grande.jpg", "breve.MOV")]
     risposta = cliente.post("/api/miglioramento/metti", json={"scatti": scatti})
@@ -328,6 +329,8 @@ def test_la_pagina_della_foto_offre_migliora_solo_se_serve(cliente, importato):
     piccola = _scatto_di(importato, "piccola.jpg")
     grande = _scatto_di(importato, "grande.jpg")
     assert 'id="migliora-scatto"' in _pagina(cliente, f"/scatto/{piccola}")
+    assert 'id="migliora-scatto"' in _pagina(cliente, f"/scatto/{grande}")
+    importato.imposta("miglioria_misura", "fhd")
     assert 'id="migliora-scatto"' not in _pagina(cliente, f"/scatto/{grande}")
 
     cliente.post("/api/miglioramento/metti", json={"scatti": [piccola]})

@@ -128,12 +128,12 @@ def misura_a_parole(larghezza, altezza) -> str:
     return f"{int(larghezza)} × {int(altezza)}"
 
 
-def _dopo(riga: sqlite3.Row) -> tuple[int, int] | None:
+def _dopo(riga: sqlite3.Row, tetto: str | None = None) -> tuple[int, int] | None:
     if riga["larghezza_dopo"] and riga["altezza_dopo"]:
         return int(riga["larghezza_dopo"]), int(riga["altezza_dopo"])
     if riga["larghezza_prima"] and riga["altezza_prima"]:
         return misura.di_arrivo(riga["larghezza_prima"], riga["altezza_prima"],
-                                pari=riga["genere"] == "video")
+                                pari=riga["genere"] == "video", tetto=tetto)
     return None
 
 
@@ -151,10 +151,10 @@ def motori_a_parole(testo: str | None) -> str:
     return f"{nomi[0]} · volti: {', '.join(nomi[1:])}"
 
 
-def a_parole(riga: sqlite3.Row) -> dict:
+def a_parole(riga: sqlite3.Row, tetto: str | None = None) -> dict:
     from officina.miglioria import lavoro
 
-    dopo = _dopo(riga)
+    dopo = _dopo(riga, tetto)
     return {
         "id": riga["id"],
         "file_id": riga["file_id"],
@@ -171,7 +171,8 @@ def a_parole(riga: sqlite3.Row) -> dict:
 
 
 def righe(connessione: sqlite3.Connection, stato: str, quante: int) -> list[dict]:
-    return [a_parole(riga) for riga in tutti(
+    tetto = misura.letto(connessione)
+    return [a_parole(riga, tetto) for riga in tutti(
         connessione, UNA_RIGA + "WHERE m.stato = ? ORDER BY m.id LIMIT ?",
         stato, quante)]
 
@@ -198,6 +199,7 @@ def quanto_manca(archivio, connessione: sqlite3.Connection) -> dict | None:
             connessione, rifai.versione_di_adesso(), ora=time.time(),
             sta_lavorando=bool(stato.get("sta_lavorando")), lavoro=lavoro,
             faceme=miglioratore._scelti().get("volti") == motori.FACEME,
+            lucidflux=miglioratore._scelti().get("foto") == motori.LUCIDFLUX,
             posti_in_sfida=posti, disco=bool(lavoro.get("disco")),
             intensita=int(archivio.impostazione("intensita_scheda") or 100))
     except Exception as guasto:
@@ -223,6 +225,7 @@ def la_coda(archivio) -> dict:
             "ferme": righe(connessione, coda.IN_SCAMBIO, QUANTE_FALLITE),
             "in_chiaro": in_chiaro(connessione),
             "non_rifatte": rifai.saltate(connessione),
+            "in_grande": rifai.in_grande_a_parole(connessione),
             "previsione": quanto_manca(archivio, connessione),
         }
 
@@ -469,8 +472,9 @@ def da_votare(archivio) -> dict | None:
     larga, alta = (riga["larghezza_dopo"], riga["altezza_dopo"]) \
         if riga["larghezza_dopo"] and riga["altezza_dopo"] else (4, 3)
     dopo = (misura_a_parole(riga["larghezza_dopo"], riga["altezza_dopo"])
-            or misura_a_parole(*misura.di_arrivo(riga["larghezza_prima"] or 1,
-                                                 riga["altezza_prima"] or 1)))
+            or misura_a_parole(*misura.di_arrivo(
+                riga["larghezza_prima"] or 1, riga["altezza_prima"] or 1,
+                tetto=archivio.impostazione(misura.CHIAVE))))
     return {
         "id": riga["miglioria_id"],
         "scatto_id": riga["scatto_id"],

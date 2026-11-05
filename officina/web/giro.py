@@ -55,7 +55,7 @@ PASSI = (
         "dove": "/miglioramento",
         "bersaglio": ".pagina-miglioramento h1",
         "titolo": "Il miglioramento",
-        "prova": "Qui arrivano le foto e i video piccoli da portare a FHD. "
+        "prova": "Qui arrivano le foto e i video piccoli da portare a 4K, 2K o FHD. "
                  "Si mettono in coda dalla galleria, selezionando e premendo "
                  "«Migliora».",
         "nota": "L'originale non si tocca finché non approvi tu.",

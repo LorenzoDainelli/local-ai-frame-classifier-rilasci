@@ -198,8 +198,9 @@ def uno_scatto(richiesta: Request, scatto_id: int):
         "ritocchi": ritocchi,
         "si_puo_migliorare": bool(
             miglioria is None and scatto["larghezza"] and scatto["altezza"]
-            and not miglioria_misura.e_gia_grande(scatto["larghezza"],
-                                                  scatto["altezza"])),
+            and not miglioria_misura.e_gia_grande(
+                scatto["larghezza"], scatto["altezza"],
+                archivio.impostazione(miglioria_misura.CHIAVE))),
     })
 
 

@@ -565,6 +565,8 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         caricamento.start()
         archivio = accesso.apri(REALE, password=password)
         self._togli_pe_core(archivio)
+        threading.Thread(target=self._miglioria_in_grande, args=(archivio,),
+                         name="miglioria_in_grande", daemon=True).start()
         self.fase_apertura = 1
         aperto_in = time.monotonic() - partenza
         in_rete = bool(archivio.impostazione("accesso_dalla_rete"))
@@ -815,6 +817,15 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             sgombero.sgombra(archivio.dove.modelli, archivio)
         except Exception as guasto:
             registro.errore("programma.pe_core_non_tolto",
+                            **registro.dove_si_e_rotto(guasto))
+
+    def _miglioria_in_grande(self, archivio) -> None:
+        from officina.miglioria import rifai
+
+        try:
+            rifai.in_grande(archivio, prima_volta=True)
+        except Exception as guasto:
+            registro.errore("programma.miglioria_in_grande",
                             **registro.dove_si_e_rotto(guasto))
 
     def _prepara_i_conti(self) -> None:

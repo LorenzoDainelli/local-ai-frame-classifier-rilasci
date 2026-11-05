@@ -80,7 +80,7 @@ def test_i_fattori_di_una_foto():
     larghezza, altezza = misura.di_arrivo(640, 480)
     assert dati == {"genere": "immagine", "formato": "jpeg", "mb": 2.0, "volti": 2,
                     "dall_archivio": True, "sfida": True, "disco": True, "a_freddo": True,
-                    "intensita": 80, "megapixel": 640 * 480 / 1e6,
+                    "intensita": 80, "lucidflux": False, "megapixel": 640 * 480 / 1e6,
                     "arrivo": larghezza * altezza / 1e6, "durata": None,
                     "fotogrammi": None}
     assert json.loads(json.dumps(dati)) == dati
@@ -89,9 +89,18 @@ def test_i_fattori_di_una_foto():
 def test_i_fattori_di_un_video():
     dati = previsione.fattori(_file("video", 1280, 720, 9_000_000, "mov", 4000, 30.0))
     assert dati["durata"] == 4.0 and dati["fotogrammi"] == 120.0
-    assert dati["arrivo"] == 1920 * 1080 / 1e6
+    assert dati["arrivo"] == 3840 * 2160 / 1e6
     assert not any(dati[nome] for nome in previsione.SI_O_NO)
     assert dati["intensita"] == 100 and dati["volti"] == 0
+
+
+def test_i_fattori_seguono_la_misura_scelta_e_lucidflux():
+    dati = previsione.fattori(_file("video", 1280, 720, 9_000_000, "mov", 4000, 30.0),
+                              tetto="fhd")
+    assert dati["arrivo"] == 1920 * 1080 / 1e6
+    dati = previsione.fattori(_file(), tetto="2k", lucidflux=True)
+    larghezza, altezza = misura.di_arrivo(640, 480, tetto="2k")
+    assert dati["arrivo"] == larghezza * altezza / 1e6 and dati["lucidflux"] is True
 
 
 @pytest.mark.parametrize(("campi", "nulli"), [
@@ -909,8 +918,8 @@ def test_la_pagina_passa_quello_che_sa(importato, monkeypatch):
     assert abs(ora - datetime.now().timestamp()) < 60
     assert versione == NUOVA
     assert campi == {"sta_lavorando": False, "lavoro": {"id": 3, "disco": True},
-                     "faceme": True, "posti_in_sfida": sfida.QUANTE, "disco": True,
-                     "intensita": 60}
+                     "faceme": True, "lucidflux": False, "posti_in_sfida": sfida.QUANTE,
+                     "disco": True, "intensita": 60}
     for spento in ({"pausa": True}, {"pronti": False}, {"chiusa": True}):
         visti.clear()
         with monkeypatch.context() as cambi:

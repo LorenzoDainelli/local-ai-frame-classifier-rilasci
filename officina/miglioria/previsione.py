@@ -24,7 +24,7 @@ PER_CHI = {
     ("video", 2): "Per i {} video in coda la previsione arriva dopo i primi video finiti",
 }
 NUMERI = ("megapixel", "arrivo", "mb", "durata", "fotogrammi", "volti", "intensita")
-SI_O_NO = ("dall_archivio", "sfida", "disco", "a_freddo")
+SI_O_NO = ("dall_archivio", "sfida", "disco", "a_freddo", "lucidflux")
 DEL_LAVORO = {"immagine": ("arrivo",), "video": ("arrivo", "fotogrammi")}
 SOLO_VIDEO = ("durata", "fotogrammi")
 
@@ -32,17 +32,19 @@ _imparato: dict = {}
 
 
 def fattori(file, *, volti: int = 0, dall_archivio: bool = False, sfida: bool = False,
-            disco: bool = False, a_freddo: bool = False, intensita: int = 100) -> dict:
+            disco: bool = False, a_freddo: bool = False, intensita: int = 100,
+            tetto: str | None = None, lucidflux: bool = False) -> dict:
     larghezza, altezza = int(file["larghezza"] or 0), int(file["altezza"] or 0)
     fuori: dict = {"genere": file["genere"], "formato": str(file["formato"] or "").lower(),
                    "mb": int(file["dimensione"] or 0) / 1e6, "volti": int(volti),
                    "dall_archivio": bool(dall_archivio), "sfida": bool(sfida),
                    "disco": bool(disco), "a_freddo": bool(a_freddo),
-                   "intensita": int(intensita), "megapixel": None, "arrivo": None,
+                   "intensita": int(intensita), "lucidflux": bool(lucidflux),
+                   "megapixel": None, "arrivo": None,
                    "durata": None, "fotogrammi": None}
     if larghezza > 0 and altezza > 0:
         fuori["megapixel"] = larghezza * altezza / 1e6
-        nuova_larghezza, nuova_altezza = misura.di_arrivo(larghezza, altezza)
+        nuova_larghezza, nuova_altezza = misura.di_arrivo(larghezza, altezza, tetto=tetto)
         fuori["arrivo"] = nuova_larghezza * nuova_altezza / 1e6
     durata = int(file["durata_ms"] or 0) / 1000
     if file["genere"] == "video" and durata > 0:
@@ -296,8 +298,9 @@ def fine_a_parole(quando: datetime, ora: datetime) -> str:
 def quanto_manca(connessione: sqlite3.Connection, versione: str, *, ora: float,
                  sta_lavorando: bool = False, lavoro: dict | None = None,
                  faceme: bool = False, posti_in_sfida: int = 0, disco: bool = False,
-                 intensita: int = 100) -> dict | None:
+                 intensita: int = 100, lucidflux: bool = False) -> dict | None:
     righe = _in_coda(connessione)
+    tetto = misura.letto(connessione)
     if not righe:
         return None
     lavoro = lavoro or {}
@@ -312,7 +315,8 @@ def quanto_manca(connessione: sqlite3.Connection, versione: str, *, ora: float,
         posti_in_sfida -= sfida
         dati = fattori(riga, volti=volti.get(riga["file_id"], 0),
                        dall_archivio=not riga["presente"], sfida=sfida, disco=disco,
-                       a_freddo=posto == 0 and not sta_lavorando, intensita=intensita)
+                       a_freddo=posto == 0 and not sta_lavorando, intensita=intensita,
+                       tetto=tetto, lucidflux=lucidflux and riga["genere"] == "immagine")
         secondi = prevedi(connessione, versione, dati)
         if in_lavoro and lavoro.get("id") == riga["id"]:
             if isinstance(lavoro.get("prevista"), (int, float)):

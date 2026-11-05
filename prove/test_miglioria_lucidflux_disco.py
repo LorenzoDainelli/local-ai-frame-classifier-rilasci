@@ -409,3 +409,78 @@ def test_il_lavoro_normale_con_la_misura_la_dice(importato):
     miglioratore = _gira(importato, _con_la_misura(MISURA), pronti=False)
     detto = " (SeedVR2: scheda 7,1 GB · RAM 9 GB · disco 6,2 GB)"
     assert f"pronto da rivedere: «piccola.jpg»{detto}" in miglioratore.lavoro.righe
+
+
+class _Passaggio(_Motore):
+
+    def __init__(self, nome, dove_stanno, visti) -> None:
+        super().__init__(dove_stanno)
+        self.nome = nome
+        self.visti = visti
+
+    def foto(self, immagine, larghezza, altezza):
+        self.visti.append((self.nome, immagine.size, (larghezza, altezza)))
+        return Image.new("RGB", (larghezza, altezza), (10, 20, 30))
+
+
+def _due_passaggi(monkeypatch, tmp_path, tetto, lato=(640, 480)):
+    originale = tmp_path / "a.jpg"
+    _jpeg(originale, lato, "2016:02:03 04:05:06")
+    visti, aperti = [], []
+
+    def apri(genere, nome, **_):
+        motore = _Passaggio(nome, {"scheda": 1.0, "ram": 2.0, "disco": 0.0}, visti)
+        aperti.append(motore)
+        return motore
+
+    monkeypatch.setattr(motori, "apri", apri)
+    lavoro_ = {"originale": str(originale), "uscita": str(tmp_path / "b.jpg"),
+               "motori": {"foto": motori.LUCIDFLUX}}
+    if tetto is not None:
+        lavoro_["misura"] = tetto
+    fatto = catena.foto(lavoro_)
+    assert all(motore.spento for motore in aperti)
+    return fatto, visti
+
+
+def test_in_4k_lucidflux_arriva_a_2k_e_seedvr2_finisce(monkeypatch, tmp_path):
+    fatto, visti = _due_passaggi(monkeypatch, tmp_path, None)
+    assert visti == [(motori.LUCIDFLUX, (640, 480), (2217, 1663)),
+                     (motori.SEEDVR2, (2217, 1663), (3326, 2494))]
+    assert (fatto["larghezza"], fatto["altezza"]) == (3326, 2494)
+    assert [(m["nome"], m["larghezza"], m["altezza"]) for m in fatto["motori"]] == [
+        (motori.LUCIDFLUX, 2217, 1663), (motori.SEEDVR2, 3326, 2494)]
+    assert fatto["dove_stanno"] and fatto["dopo"]["dove_stanno"]
+    with Image.open(tmp_path / "b.jpg") as uscita:
+        assert uscita.size == (3326, 2494)
+
+
+def test_in_2k_e_in_fhd_lucidflux_lavora_da_solo(monkeypatch, tmp_path):
+    fatto, visti = _due_passaggi(monkeypatch, tmp_path, "2k")
+    assert visti == [(motori.LUCIDFLUX, (640, 480), (2217, 1663))]
+    assert fatto["motori"] == [{"nome": motori.LUCIDFLUX, "versione": "1"}]
+    fatto, visti = _due_passaggi(monkeypatch, tmp_path, "fhd")
+    assert visti == [(motori.LUCIDFLUX, (640, 480), (1663, 1247))]
+    assert "dopo" not in fatto
+
+
+def test_gia_2k_con_lucidflux_va_solo_seedvr2(monkeypatch, tmp_path):
+    fatto, visti = _due_passaggi(monkeypatch, tmp_path, "4k", (2600, 1500))
+    assert visti == [(motori.SEEDVR2, (2600, 1500), (3792, 2188))]
+    assert [m["nome"] for m in fatto["motori"]] == [motori.SEEDVR2]
+
+
+def test_gia_4k_non_si_migliora_e_lo_dice(monkeypatch, tmp_path):
+    with pytest.raises(catena.TroppoGrande, match="già 4K"):
+        _due_passaggi(monkeypatch, tmp_path, "4k", (3840, 2160))
+    with pytest.raises(catena.TroppoGrande, match="già 2K"):
+        _due_passaggi(monkeypatch, tmp_path, "2k", (2560, 1440))
+
+
+def test_la_misura_del_motore_dice_tutti_e_due_i_passaggi():
+    fatto = {"motori": [{"nome": "lucidflux"}, {"nome": "seedvr2"}], "secondi": 5,
+             "dove_stanno": {}, "dopo": {"secondi": 7, "dove_stanno": {
+                 "scheda": 8.0, "ram": 4.0, "disco": 0.0}}}
+    detto = lavoro.misura_del_motore(fatto)
+    assert detto.startswith(" (LucidFlux ci ha messo 5 s)")
+    assert "SeedVR2: scheda 8 GB" in detto

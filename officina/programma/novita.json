@@ -3,7 +3,7 @@
     "numero": 20,
     "versione": null,
     "data": "4 novembre",
-    "titolo": "PE-Core esce, e nelle sfide vedi quanto ci mette ogni modello",
+    "titolo": "Il miglioramento arriva a 4K, PE-Core esce e nelle sfide vedi i tempi",
     "tolti": [
       "pecore"
     ],
@@ -35,6 +35,22 @@
       [
         "riprova",
         "I video in cui l'IA aveva già seguito una persona o un oggetto vanno rifatti con SAM 3.1: il programma cancella solo il calcolo vecchio e tiene i tuoi clic. Quando vuoi, li fai ripartire tu"
+      ],
+      [
+        "migliora",
+        "Il miglioramento ora porta foto e video a 4K. In Impostazioni › Miglioramento puoi scegliere 4K, 2K o FHD. Si migliorano anche i file fra FHD e 4K"
+      ],
+      [
+        "migliora",
+        "Con LucidFlux la foto arriva a 2K, dove rende meglio, poi SeedVR2 la porta a 4K. In revisione vedi tutti e due i passaggi"
+      ],
+      [
+        "riprova",
+        "Al primo avvio il programma butta le copie migliorate in FHD, rimette al loro posto gli originali e rimette i file in coda. Il lavoro non parte da solo: premi Avvia quando vuoi. Le foto ritoccate e quelle della sfida restano come sono"
+      ],
+      [
+        "disco",
+        "In 4K i file occupano circa quattro volte lo spazio dell'FHD: il programma controlla che sul disco ci sia posto prima di cominciare"
       ]
     ],
     "tecnico": [
@@ -44,7 +60,9 @@
       "Migrazione 74: <code>secondi_seedvr2</code>/<code>secondi_lucidflux</code> in <code>sfide</code> e <code>secondi_a</code>/<code>secondi_b</code> in <code>sfide_togli</code>, misurati col cronometro attorno al lavoro di ogni modello; a parole con <code>tempo_gara</code> (regola 575).",
       "Gara 120 FPS: <code>miglioria.gara120</code> (regista), <code>gara120_stanza</code> senza rete per la corsa e le clip, <code>gara120_voto</code> (20 clip SNU-FILM da 2 s a 120 vere, lettere mescolate, vero dopo il voto, primo voto definitivo), pagina <code>/gara-120</code>; si ferma durante la prima copia (regola 577).",
       "SAM 3.1 (<code>ritocco.sam31</code>) dal codice di Meta fissato file per file con sha256, pesi con <code>weights_only=True</code>, parti triton sostituite con OpenCV; scaricato con i modelli del corpo; nomi aggiornati in Intelligenza artificiale, Modelli e chiave (regola 576).",
-      "Migrazione 75: <code>DELETE FROM seguiti_fotogrammi</code>, i seguiti tornano <code>da_seguire</code> con le <code>seguiti_scelte</code> intatte; il numero va nello <code>stato</code> come <code>seguiti_sam3_tolti</code> (regola 578)."
+      "Migrazione 75: <code>DELETE FROM seguiti_fotogrammi</code>, i seguiti tornano <code>da_seguire</code> con le <code>seguiti_scelte</code> intatte; il numero va nello <code>stato</code> come <code>seguiti_sam3_tolti</code> (regola 578).",
+      "Misura di arrivo in <code>miglioria.misura</code> (<code>fhd</code>, <code>2k</code>, <code>4k</code>; predefinita <code>4k</code>) letta dall'impostazione <code>miglioria_misura</code> e passata nel lavoro della stanza; LucidFlux fino a 2K con <code>di_lucidflux</code>, poi SeedVR2 al tetto; spazio e previsione scalati sui pixel (regola 581).",
+      "All'avvio <code>rifai.in_grande</code> segna <code>miglioria_4k_dal</code> una volta sola e rimette in coda le righe finite prima in FHD (e le fallite <code>gia_grande</code> sotto il tetto) con lo stesso giro di <code>rifai.tutto</code>; quelle rimaste per l'archivio chiuso si rifanno nel giro (regola 581)."
     ]
   },
   {

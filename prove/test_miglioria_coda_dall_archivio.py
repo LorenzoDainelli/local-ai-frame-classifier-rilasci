@@ -314,7 +314,7 @@ def _poco_spazio(pronta, monkeypatch, relativo: str, di_piu: int) -> list:
         if Path(percorso) != dove:
             return vero(percorso)
         chiesti.append(percorso)
-        serve = (len(pronta.dati[relativo]) * lavoro.QUANTO_PUO_CRESCERE
+        serve = (int(len(pronta.dati[relativo]) * lavoro.quanto_puo_crescere())
                  + lavoro.MARGINE_DI_SPAZIO)
         return vero(percorso)._replace(free=serve + di_piu)
 
@@ -371,7 +371,7 @@ def test_lo_spazio_conta_i_pezzi_del_video_letto_dall_archivio(solo_nell_archivi
         if Path(percorso) != dove:
             return vero(percorso)
         chiesti.append(percorso)
-        senza_pezzi = (len(pronta.dati[FILMATO]) * lavoro.QUANTO_PUO_CRESCERE
+        senza_pezzi = (int(len(pronta.dati[FILMATO]) * lavoro.quanto_puo_crescere())
                        + lavoro.MARGINE_DI_SPAZIO)
         return vero(percorso)._replace(free=senza_pezzi)
 

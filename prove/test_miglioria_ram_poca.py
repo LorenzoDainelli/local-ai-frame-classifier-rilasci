@@ -381,7 +381,7 @@ def _video(monkeypatch, tmp_path, stanno):
     from prove.test_miglioria_pezzi import _filmato, _lavoro
 
     monkeypatch.setattr(catena, "PER_VOLTA", 10)
-    monkeypatch.setattr(catena.misura, "di_arrivo", lambda larga, alta, pari=False: (64, 48))
+    monkeypatch.setattr(catena.misura, "di_arrivo", lambda larga, alta, **_: (64, 48))
     if stanno is not None:
         monkeypatch.setattr(motori.Finto, "dove_stanno", stanno, raising=False)
     return catena.filmato(_lavoro(tmp_path, _filmato(tmp_path / "a.mp4")))

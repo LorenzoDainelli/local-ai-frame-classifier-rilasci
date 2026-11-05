@@ -227,8 +227,9 @@
     <div class="mg-testa">
         <div>
             <h1 class="titolo-pagina">Miglioramento{% call spiega("Cosa fa, e cosa non tocca") %}
-                <p>Porta le foto e i video piccoli a FHD, cioè a tanti pixel
-                quanti ne ha un 1920 &times; 1080, senza cambiarne la forma. I
+                <p>Porta le foto e i video piccoli alla misura scelta nelle
+                Impostazioni: 4K (tanti pixel quanti ne ha un 3840 &times; 2160),
+                2K o FHD, senza cambiarne la forma. I
                 modelli girano qui sul computer: nessun file passa da
                 internet.</p>
                 <p><b>L'originale non si tocca finché non approvi.</b> La copia
@@ -241,7 +242,7 @@
                 &laquo;Migliora&raquo;, oppure dalla pagina di una foto o di un
                 video.</p>
             {% endcall %}</h1>
-            <p class="sottotitolo">Porta a FHD foto e video piccoli, qui sul computer. <b>Nessun originale si tocca</b> finché non approvi.</p>
+            <p class="sottotitolo">Porta a 4K, 2K o FHD foto e video piccoli, qui sul computer. <b>Nessun originale si tocca</b> finché non approvi.</p>
         </div>
         {% if versione == 'B' %}
         <span class="bollino {{ 'bene' if lavoro.sta_lavorando }}">{{ "Al lavoro" if lavoro.sta_lavorando else "Fermo" }}</span>
@@ -256,6 +257,27 @@
         <ul class="righe-coda">
             {% for riga in in_chiaro %}{{ riga_in_chiaro(riga) }}{% endfor %}
         </ul>
+    </section>
+    {% endif %}
+
+    {% if in_grande %}
+    <section class="carta mg-non-rifatte" id="in-grande" aria-labelledby="mg-in-grande-titolo">
+        <h2 id="mg-in-grande-titolo">Da rifare in {{ in_grande.misura }}</h2>
+        <p class="piccolo">Il miglioramento ora arriva a {{ in_grande.misura }}. Ho buttato
+        le copie migliorate fatte in FHD e rimesso al loro posto gli originali:
+        <b class="numeri">{{ in_grande.rimesse|numero }}</b>
+        {{ 'file è' if in_grande.rimesse == 1 else 'file sono' }} di nuovo in coda e sul disco
+        si sono liberati <b class="numeri">{{ in_grande.liberati }}</b>.
+        Il lavoro non parte da solo: premi Avvia quando vuoi.</p>
+        {% if in_grande.saltate %}
+        <p class="piccolo attenuato">Questi restano come sono, per il motivo scritto accanto:</p>
+        <ul class="mg-non-rifatte-elenco minuscolo">
+            {% for voce in in_grande.saltate %}<li>{{ voce }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        <form method="post" action="/miglioramento/in-grande/visto">
+            <button class="tasto-comando piccolo" type="submit">Ho capito</button>
+        </form>
     </section>
     {% endif %}
 

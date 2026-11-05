@@ -36,7 +36,7 @@ class Spento(Exception):
 @pytest.fixture
 def piccolo(monkeypatch):
     monkeypatch.setattr(catena, "PER_VOLTA", 10)
-    monkeypatch.setattr(catena.misura, "di_arrivo", lambda larga, alta, pari=False: (64, 48))
+    monkeypatch.setattr(catena.misura, "di_arrivo", lambda larga, alta, **_: (64, 48))
 
 
 def _lavoro(tmp_path: Path, originale: Path) -> dict:

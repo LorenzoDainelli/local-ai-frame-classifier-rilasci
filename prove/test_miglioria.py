@@ -91,23 +91,63 @@ def _riga(archivio, stato: str | None = None):
 
 
 def test_la_misura_arriva_ai_pixel_di_una_fhd():
-    assert misura.di_arrivo(1280, 720) == (1920, 1080)
-    assert misura.di_arrivo(640, 360) == (1920, 1080)
-    assert misura.di_arrivo(640, 480) == (1663, 1247)
-    assert misura.di_arrivo(1600, 1200) == (1663, 1247)
-    assert misura.di_arrivo(480, 640) == (1247, 1663)
-    assert misura.di_arrivo(640, 480, pari=True) == (1662, 1246)
+    assert misura.di_arrivo(1280, 720, tetto="fhd") == (1920, 1080)
+    assert misura.di_arrivo(640, 360, tetto="fhd") == (1920, 1080)
+    assert misura.di_arrivo(640, 480, tetto="fhd") == (1663, 1247)
+    assert misura.di_arrivo(1600, 1200, tetto="fhd") == (1663, 1247)
+    assert misura.di_arrivo(480, 640, tetto="fhd") == (1247, 1663)
+    assert misura.di_arrivo(640, 480, pari=True, tetto="fhd") == (1662, 1246)
+
+
+def test_la_misura_arriva_ai_pixel_di_2k_e_di_4k():
+    assert misura.di_arrivo(1280, 720, tetto="2k") == (2560, 1440)
+    assert misura.di_arrivo(1280, 720, tetto="4k") == (3840, 2160)
+    assert misura.di_arrivo(1280, 720) == (3840, 2160)
+    assert misura.di_arrivo(640, 480, tetto="2k") == (2217, 1663)
+    assert misura.di_arrivo(640, 480) == (3326, 2494)
+    assert misura.di_arrivo(480, 640) == (2494, 3326)
+    assert misura.di_arrivo(640, 480, pari=True) == (3326, 2494)
+    assert misura.di_arrivo(1920, 1080) == (3840, 2160)
+    assert misura.di_arrivo(640, 480, tetto="sbagliato") == (3326, 2494)
+    assert misura.nome() == "4K" and misura.nome("2k") == "2K"
+    assert misura.nome("fhd") == "FHD"
+
+
+def test_lucidflux_lavora_fino_a_2k_poi_tocca_a_seedvr2():
+    assert misura.di_lucidflux(640, 480) == (2217, 1663)
+    assert misura.di_lucidflux(640, 480, "2k") == (2217, 1663)
+    assert misura.di_lucidflux(640, 480, "fhd") == (1663, 1247)
+    assert misura.di_lucidflux(2600, 1500) == (2600, 1500)
+    assert misura.di_lucidflux(2560, 1440) == (2560, 1440)
 
 
 def test_quello_che_e_gia_fhd_non_si_migliora():
-    assert misura.e_gia_grande(1920, 1080)
-    assert misura.e_gia_grande(1080, 1920)
+    assert misura.e_gia_grande(1920, 1080, "fhd")
+    assert misura.e_gia_grande(1080, 1920, "fhd")
+    assert misura.e_gia_grande(4032, 3024, "fhd")
+    assert not misura.e_gia_grande(1600, 1200, "fhd")
+    assert not misura.e_gia_grande(1280, 720, "fhd")
+
+
+def test_quello_che_e_gia_4k_non_si_migliora():
+    assert misura.e_gia_grande(3840, 2160)
     assert misura.e_gia_grande(4032, 3024)
-    assert not misura.e_gia_grande(1600, 1200)
-    assert not misura.e_gia_grande(1280, 720)
+    assert not misura.e_gia_grande(1920, 1080)
+    assert not misura.e_gia_grande(2000, 1500)
+    assert misura.e_gia_grande(2560, 1440, "2k")
+    assert not misura.e_gia_grande(2000, 1500, "2k")
+
+
+def test_fatta_in_fhd_riconosce_le_copie_vecchie():
+    assert misura.fatta_in_fhd(1920, 1080)
+    assert misura.fatta_in_fhd(1663, 1247)
+    assert not misura.fatta_in_fhd(3326, 2494)
+    assert not misura.fatta_in_fhd(None, None)
+    assert not misura.fatta_in_fhd(0, 1080)
 
 
 def test_in_coda_entra_solo_quello_piu_piccolo_di_fhd(importato):
+    importato.imposta("miglioria_misura", "fhd")
     esito = _metti(importato, "piccola.jpg", "grande.jpg", "breve.MOV")
     assert esito.messi == 2
     assert esito.gia_grandi == ["grande.jpg"]
@@ -116,6 +156,13 @@ def test_in_coda_entra_solo_quello_piu_piccolo_di_fhd(importato):
     di_nuovo = _metti(importato, "piccola.jpg")
     assert di_nuovo.messi == 0
     assert di_nuovo.gia_in_coda == 1
+    assert "già FHD o più" in esito.a_parole()
+
+
+def test_in_4k_entra_anche_quello_fra_fhd_e_4k(importato):
+    esito = _metti(importato, "piccola.jpg", "grande.jpg", "breve.MOV")
+    assert esito.messi == 3
+    assert esito.gia_grandi == []
 
 
 def test_la_foto_migliorata_aspetta_nascosta_e_l_originale_non_si_tocca(
@@ -130,7 +177,7 @@ def test_la_foto_migliorata_aspetta_nascosta_e_l_originale_non_si_tocca(
     assert in_attesa.parent == cartella / attesa.NOME
     assert impronta.del_file(in_attesa) == riga["impronta_migliorata"]
     assert impronta.del_file(originale) == prima
-    assert (riga["larghezza_dopo"], riga["altezza_dopo"]) == (1663, 1247)
+    assert (riga["larghezza_dopo"], riga["altezza_dopo"]) == (3326, 2494)
     assert json.loads(riga["motori"])[0]["nome"] == "finto"
 
     letti = leggi_metadati.leggi(in_attesa)
@@ -294,7 +341,7 @@ def test_il_video_migliorato_tiene_date_e_chiavi_di_apple(importato, cartella):
     assert in_attesa.suffix == ".MOV"
     letti = quicktime.leggi(in_attesa)
     prima = quicktime.leggi(originale)
-    assert (letti.larghezza, letti.altezza) == (1662, 1246)
+    assert (letti.larghezza, letti.altezza) == (3326, 2494)
     assert letti.data_locale == prima.data_locale
     assert letti.fuso_minuti == prima.fuso_minuti
     assert letti.identificatore_ios == "FINTO-0001"
@@ -632,3 +679,11 @@ def test_la_stanza_non_ripete_i_messaggi_che_possono_avere_nomi(monkeypatch):
 
     esito = _stanza_che_scoppia(monkeypatch, Qualunque("manca C:/Foto/Nonna/mare.jpg"))
     assert esito == {"guasto": "originale_sparito"}
+
+
+def test_lo_spazio_che_serve_cresce_con_la_misura():
+    assert lavoro.quanto_puo_crescere("fhd") == lavoro.QUANTO_PUO_CRESCERE
+    assert lavoro.quanto_puo_crescere("4k") == lavoro.QUANTO_PUO_CRESCERE * 4
+    assert lavoro.quanto_puo_crescere() == lavoro.quanto_puo_crescere("4k")
+    assert lavoro.quanto_puo_crescere("2k") == pytest.approx(
+        lavoro.QUANTO_PUO_CRESCERE * 2560 * 1440 / (1920 * 1080))
