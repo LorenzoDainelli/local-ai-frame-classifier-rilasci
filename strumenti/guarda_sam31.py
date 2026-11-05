@@ -51,6 +51,7 @@ def _sul_processore(torch) -> None:
 
     torch.zeros = zeri
     torch.Tensor.cuda = lambda tensore, *parti, **scelte: tensore
+    torch.Tensor.pin_memory = lambda tensore, *parti, **scelte: tensore
 
 
 def confronta(codice: Path, letto: Path, uscita: Path) -> None:
