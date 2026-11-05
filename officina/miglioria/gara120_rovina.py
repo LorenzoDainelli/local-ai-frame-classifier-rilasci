@@ -50,8 +50,6 @@ def rumore(quadro, numero_seme: int):
 
 
 def mosso(prendi, numero: int):
-    import numpy as np
-
     somma = None
     quanti = 0
     for vicino in range(numero + OTTURATORE[0], numero + OTTURATORE[1] + 1):

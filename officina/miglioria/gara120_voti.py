@@ -39,7 +39,9 @@ def struttura(fatto, vero) -> float:
     vx = scatola(x * x, RAGGIO_SSIM) - mx * mx
     vy = scatola(y * y, RAGGIO_SSIM) - my * my
     cxy = scatola(x * y, RAGGIO_SSIM) - mx * my
-    mappa = ((2 * mx * my + C1) * (2 * cxy + C2)) / ((mx * mx + my * my + C1) * (vx + vy + C2))
+    sopra = (2 * mx * my + C1) * (2 * cxy + C2)
+    sotto = (mx * mx + my * my + C1) * (vx + vy + C2)
+    mappa = sopra / sotto
     return float(mappa.mean())
 
 
