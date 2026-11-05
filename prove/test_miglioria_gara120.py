@@ -585,6 +585,7 @@ def _prendi(numero):
 
 
 def test_fai_clip_scrive_i_video_e_si_riprende(tmp_path):
+    pytest.importorskip("av")
     clip = [_clip_finta(), _clip_finta("buio")]
     gimm, ldf = _MotoreFinto("g", sbaglio=2), _MotoreFinto("l")
     visti = []
@@ -642,6 +643,7 @@ def test_vincitore_solo_se_d_accordo():
 
 
 def test_stanza_fa_la_corsa_e_le_clip_senza_rete(tmp_path, monkeypatch):
+    pytest.importorskip("av")
     from officina.miglioria import gara120_stanza as stanza
     from officina.miglioria import rete
 
@@ -727,6 +729,7 @@ def _regista(tmp_path, monkeypatch, motori=None, fermati_dopo=None):
 
 
 def test_regista_fa_tutto_fino_al_voto(tmp_path, monkeypatch):
+    pytest.importorskip("av")
     from officina.miglioria import gara120
 
     gara, azioni, scaricati = _regista(tmp_path, monkeypatch)
@@ -750,6 +753,7 @@ def test_regista_fa_tutto_fino_al_voto(tmp_path, monkeypatch):
 
 
 def test_regista_fermato_riprende(tmp_path, monkeypatch):
+    pytest.importorskip("av")
     from officina.miglioria import gara120
 
     gara, azioni, _ = _regista(tmp_path, monkeypatch, fermati_dopo=1)

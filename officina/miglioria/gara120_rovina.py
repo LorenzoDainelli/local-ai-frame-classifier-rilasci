@@ -92,10 +92,12 @@ def prepara(caso, prendi) -> tuple[list, list]:
         entrate = [prendi(n) for n in caso.tenuti]
         veri = [prendi(n) for n in caso.veri]
     if caso.rovina == "buio":
-        entrate = [buio(q, seme(caso.nome, n)) for q, n in zip(entrate, caso.tenuti)]
+        entrate = [buio(q, seme(caso.nome, n))
+                   for q, n in zip(entrate, caso.tenuti, strict=True)]
         veri = [buio(q, None) for q in veri]
     elif caso.rovina == "rumore":
-        entrate = [rumore(q, seme(caso.nome, n)) for q, n in zip(entrate, caso.tenuti)]
+        entrate = [rumore(q, seme(caso.nome, n))
+                   for q, n in zip(entrate, caso.tenuti, strict=True)]
     elif caso.rovina == "compresso":
         entrate = compresso(entrate)
         veri = _veri_compressi(caso, veri, prendi)

@@ -158,7 +158,7 @@ def _leggi_gimm(posto: Path) -> dict:
 
 
 def _voti_lista(fatti: list, veri: list) -> list[dict]:
-    return [voti.voti(f, v) for f, v in zip(fatti, veri)]
+    return [voti.voti(f, v) for f, v in zip(fatti, veri, strict=True)]
 
 
 def _uscita(motore, entrate: list, volte: int) -> list:

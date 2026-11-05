@@ -153,11 +153,11 @@ def prepara_clip(clip: g.Caso, prendi) -> tuple[list, list]:
         veri = [prendi(n) for n in clip.veri]
     if clip.rovina == "buio":
         entrate = [rovina.buio(q, rovina.seme(clip.nome, n))
-                   for q, n in zip(entrate, clip.tenuti)]
+                   for q, n in zip(entrate, clip.tenuti, strict=True)]
         veri = [rovina.buio(q, None) for q in veri]
     elif clip.rovina == "rumore":
         entrate = [rovina.rumore(q, rovina.seme(clip.nome, n))
-                   for q, n in zip(entrate, clip.tenuti)]
+                   for q, n in zip(entrate, clip.tenuti, strict=True)]
     elif clip.rovina == "compresso":
         entrate = rovina.compresso(entrate)
         veri = rovina.compresso(veri)
@@ -276,7 +276,8 @@ def lettere(risultati: Path, numero: int, caso: random.Random | None = None) -> 
         caso = caso or random.SystemRandom()
         mescolati = list(corsa.CONCORRENTI)
         caso.shuffle(mescolati)
-        voti[chiave] = {"lettere": dict(zip(LETTERE, mescolati)), "scelta": None}
+        lettere = dict(zip(LETTERE, mescolati, strict=True))
+        voti[chiave] = {"lettere": lettere, "scelta": None}
         _scrivi_voti(risultati, voti)
     return voti[chiave]
 
