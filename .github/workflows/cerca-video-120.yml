@@ -24,4 +24,4 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install huggingface_hub
-      - run: python strumenti/cerca_video_120.py --uscita cerca-video-120.json
+      - run: python strumenti/cerca_video_120.py --uscita cerca-video-120.json --dettagli

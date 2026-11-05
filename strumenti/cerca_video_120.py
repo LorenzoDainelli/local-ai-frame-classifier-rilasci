@@ -96,11 +96,111 @@ def pesi(indirizzi: list[str]) -> dict:
     return {i: _peso(i) for i in indirizzi}
 
 
+XTEST = "https://www.dropbox.com/sh/duisote638etlv2/AABJw5Vygk94AWjGM4Se0Goza?dl=0"
+GOPRO_TUTTO = ("https://huggingface.co/datasets/snah/GOPRO_Large/resolve/main/"
+               "GOPRO_Large_all.zip")
+XIPH = "https://media.xiph.org/video/derf/"
+
+
+def _cartelle(nomi: list[str], livelli: int) -> dict:
+    conti: dict = {}
+    for nome in nomi:
+        chiave = "/".join(nome.split("/")[:livelli])
+        conti[chiave] = conti.get(chiave, 0) + 1
+    return conti
+
+
+def _zip_lontano(indirizzo: str) -> dict:
+    import zipfile
+
+    class Lontano:
+        def __init__(self):
+            self.dove = 0
+            self.quanto = int(_peso(indirizzo)["byte"])
+
+        def seek(self, dove, da=0):
+            self.dove = {0: dove, 1: self.dove + dove, 2: self.quanto + dove}[da]
+            return self.dove
+
+        def tell(self):
+            return self.dove
+
+        def seekable(self):
+            return True
+
+        def read(self, n=-1):
+            fine = self.quanto if n is None or n < 0 else min(self.quanto, self.dove + n)
+            if fine <= self.dove:
+                return b""
+            richiesta = urllib.request.Request(indirizzo, headers={
+                "User-Agent": "officina-ricerca", "Range": f"bytes={self.dove}-{fine - 1}"})
+            with urllib.request.urlopen(richiesta, timeout=120) as risposta:
+                dati = risposta.read()
+            self.dove += len(dati)
+            return dati
+
+    with zipfile.ZipFile(Lontano()) as archivio:
+        voci = archivio.infolist()
+    nomi = [v.filename for v in voci if not v.is_dir()]
+    byte: dict = {}
+    for v in voci:
+        chiave = "/".join(v.filename.split("/")[:3])
+        byte[chiave] = byte.get(chiave, 0) + v.file_size
+    return {"quanti": len(nomi), "esempi": nomi[:12], "per_cartella": _cartelle(nomi, 3),
+            "byte_per_cartella": byte}
+
+
+def dettagli() -> dict:
+    from huggingface_hub import HfApi
+
+    fuori: dict = {}
+    stato, testo = _leggi(XTEST)
+    fuori["xtest_pagina"] = {"stato": stato, "link": sorted({
+        l for l in LINK.findall(testo) if "dropbox.com/sh/" in l or "dl=" in l})[:60],
+        "peso_cartella": _peso(XTEST.replace("dl=0", "dl=1"))}
+    api = HfApi()
+    info = api.dataset_info("xypeng9903/SNU_FILM", files_metadata=True)
+    nomi = [s.rfilename for s in info.siblings or []]
+    byte: dict = {}
+    for s in info.siblings or []:
+        chiave = "/".join(s.rfilename.split("/")[:2])
+        byte[chiave] = byte.get(chiave, 0) + (s.size or 0)
+    lfs = [s for s in info.siblings or [] if getattr(s, "lfs", None)][:3]
+    fuori["snu_film"] = {"commit": info.sha, "per_cartella": _cartelle(nomi, 2),
+                         "byte_per_cartella": byte,
+                         "non_immagini": [n for n in nomi if not n.endswith(".png")][:40],
+                         "lfs_esempio": [{"nome": s.rfilename, "sha256": s.lfs.sha256}
+                                         for s in lfs]}
+    stato, testo = _leggi("https://huggingface.co/datasets/xypeng9903/SNU_FILM/raw/main/"
+                          "README.md")
+    fuori["snu_film"]["leggimi"] = testo[:1500]
+    try:
+        fuori["gopro_tutto"] = _zip_lontano(GOPRO_TUTTO)
+    except Exception as errore:
+        fuori["gopro_tutto"] = {"errore": f"{type(errore).__name__}: {errore}"}
+    stato, testo = _leggi(PAGINE["adobe240"])
+    fuori["adobe240"] = {"stato": stato, "testo": re.sub(r"<[^>]+>", " ", testo)[:2500],
+                         "link": sorted(set(LINK.findall(testo)))[:60]}
+    stato, testo = _leggi(XIPH)
+    righe = [r for r in re.sub(r"<[^>]+>", " ", testo).splitlines()
+             if re.search(r"4096|3840|2160|4K|Netflix|fps", r, re.I)]
+    fuori["xiph"] = {"stato": stato, "righe": [r.strip()[:200] for r in righe][:120],
+                     "link": sorted({l for l in LINK.findall(testo) if "y4m" in l
+                                     or "Netflix" in l})[:80]}
+    return fuori
+
+
 def main() -> None:
     lettore = argparse.ArgumentParser()
     lettore.add_argument("--uscita", type=Path, required=True)
     lettore.add_argument("--peso", action="append", default=[])
+    lettore.add_argument("--dettagli", action="store_true")
     scelte = lettore.parse_args()
+    if scelte.dettagli:
+        testo = json.dumps(dettagli(), indent=1, ensure_ascii=False)
+        scelte.uscita.write_text(testo, encoding="utf-8")
+        print(testo[:60000])
+        return
     fuori = {"pagine": pagine(), "hugging_face": hugging_face(), "pesi": pesi(scelte.peso)}
     for nome, voce in fuori["pagine"].items():
         fuori["pesi"].update(pesi([l for l in voce["link"]
