@@ -198,10 +198,21 @@ def uno_scatto(richiesta: Request, scatto_id: int):
         "ritocchi": ritocchi,
         "si_puo_migliorare": bool(
             miglioria is None and scatto["larghezza"] and scatto["altezza"]
-            and not miglioria_misura.e_gia_grande(
+            and (not miglioria_misura.e_gia_grande(
                 scatto["larghezza"], scatto["altezza"],
-                archivio.impostazione(miglioria_misura.CHIAVE))),
+                archivio.impostazione(miglioria_misura.CHIAVE))
+                 or _solo_a_120(archivio, scatto, principale))),
     })
+
+
+def _solo_a_120(archivio, scatto, principale) -> bool:
+    from officina.miglioria import centoventi
+
+    if scatto["genere"] != "video" or principale is None:
+        return False
+    if centoventi.arrivo(principale["fps"]) is None:
+        return False
+    return centoventi.motore_da_usare(archivio) is not None
 
 
 def _impronta_di(riga, percorso) -> str:

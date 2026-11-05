@@ -10,6 +10,7 @@ from officina.errori import ErroreOfficina
 from officina.miglioria import attesa
 
 CARTELLA = ".pezzi"
+FLUIDI = ".fluidi"
 FIRMA = "firma.json"
 FINITO = "finito"
 FINE = ".mkv"
@@ -36,7 +37,8 @@ def butta(dove: Path) -> bool:
 def butta_quelli_di(dove: Path, miglioria_id: int) -> int:
     if not dove.is_dir():
         return 0
-    return sum(butta(cantiere) for cantiere in dove.glob(f"{int(miglioria_id)}-*{CARTELLA}"))
+    return sum(butta(cantiere) for fine in (CARTELLA, FLUIDI)
+               for cantiere in dove.glob(f"{int(miglioria_id)}-*{fine}"))
 
 
 class Pezzi:

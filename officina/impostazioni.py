@@ -134,6 +134,8 @@ PREDEFINITE: dict[str, object] = {
 
     "miglioria_volti": "da_soli",
     "miglioria_misura": "4k",
+    "miglioria_120": True,
+    "miglioria_120_motore": "",
 }
 
 
@@ -172,6 +174,7 @@ PAROLE_AMMESSE: dict[str, frozenset[str]] = {
     "volti_prudenza": frozenset({"prudente", "equilibrato", "generoso"}),
     "miglioria_volti": frozenset({"da_soli", "codeformer", "nessuno"}),
     "miglioria_misura": frozenset({"fhd", "2k", "4k"}),
+    "miglioria_120_motore": frozenset({"", "gimm", "ldf", "fusione"}),
 }
 
 TESTO_PIU_LUNGO = 1024

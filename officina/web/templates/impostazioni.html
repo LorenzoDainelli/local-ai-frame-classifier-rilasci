@@ -291,6 +291,29 @@
                            ("fhd", "FHD")]) }}
                 {% endcall %}
 
+                {% call riga("Porta i video a 120 FPS", "miglioria_120", False,
+                    "Quando migliora un video sotto i 120 FPS, il programma crea i
+                     fotogrammi che mancano in mezzo a quelli veri, dopo averlo
+                     ingrandito. Un video da 30 FPS ne ha tre nuovi ogni quattro.
+                     Quelli da 29,97 o 59,94 FPS arrivano a 119,88. Audio e durata
+                     restano quelli dell'originale. Un video già della misura
+                     scelta si porta solo a 120 FPS.") %}
+                {{ interruttore("miglioria_120", impostazioni.miglioria_120) }}
+                {% endcall %}
+
+                {% call riga("Chi fa i 120 FPS", "miglioria_120_motore", False,
+                    "<b>Come dice la gara</b>: il vincitore della gara dei 120 FPS"
+                    ~ (", cioè <b>" ~ nomi_120[motore_120_gara] ~ "</b>." if motore_120_gara
+                       else ". La gara non ha ancora un vincitore: finché non c'è, i
+                       video si migliorano senza 120 FPS.")
+                    ~ " Se la gara finisce con «decidiamo insieme», qui scegli tu.") %}
+                {{ scelte("miglioria_120_motore", impostazioni.miglioria_120_motore,
+                          [("", "come dice la gara"),
+                           ("gimm", "GIMM-VFI"),
+                           ("ldf", "LDF-VFI"),
+                           ("fusione", "Fusione")]) }}
+                {% endcall %}
+
                 <div class="riga" data-gara-video>
                     <div class="lato">
                         <div class="nome">La gara dei video per «Togli»</div>

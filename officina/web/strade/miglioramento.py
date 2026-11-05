@@ -229,6 +229,16 @@ def miglioramento_in_grande_visto():
     return RedirectResponse("/miglioramento", status_code=303)
 
 
+@strada.post("/miglioramento/a-120/visto")
+def miglioramento_a_120_visto():
+    from officina.miglioria import rifai
+
+    archivio = accesso.aperto()
+    with archivio.scrittura() as connessione:
+        rifai.a_centoventi_visto(connessione)
+    return RedirectResponse("/miglioramento", status_code=303)
+
+
 @strada.post("/miglioramento/coda/togli-tutte")
 def miglioramento_togli_tutte(fino_a: int = Form(...)):
     from pathlib import Path
@@ -297,9 +307,16 @@ def _metti_in_coda(dati: dict, numeri: list[int]) -> dict:
         raise ErroreOfficina("Non hai selezionato niente.")
     with accesso.aperto().scrittura() as connessione:
         esito = miglioria_coda.metti(connessione, numeri, _ritoccati(dati),
-                                     chiedi_l_archivio=_chiedi_l_archivio(dati))
+                                     chiedi_l_archivio=_chiedi_l_archivio(dati),
+                                     fps120=_a_120())
     registro.evento("miglioria.messi", messi=esito.messi, scelti=len(numeri))
     return _risposta(esito)
+
+
+def _a_120() -> bool:
+    from officina.miglioria import centoventi
+
+    return centoventi.motore_da_usare(accesso.aperto()) is not None
 
 
 def _ritoccati(dati: dict) -> bool | None:
@@ -455,7 +472,8 @@ def _metti_in_coda_per_qualita(dati: dict) -> dict:
         raise ErroreOfficina("Con questi filtri non c'è niente da mettere in coda.")
     with accesso.aperto().scrittura() as connessione:
         esito = miglioria_coda.metti(connessione, numeri, _ritoccati(dati),
-                                     chiedi_l_archivio=_chiedi_l_archivio(dati))
+                                     chiedi_l_archivio=_chiedi_l_archivio(dati),
+                                     fps120=_a_120())
     registro.evento("miglioria.messi_dalla_qualita", messi=esito.messi,
                     scelti=len(numeri))
     return _risposta(esito)

@@ -281,6 +281,27 @@
     </section>
     {% endif %}
 
+    {% if a_centoventi %}
+    <section class="carta mg-non-rifatte" id="a-120" aria-labelledby="mg-a-120-titolo">
+        <h2 id="mg-a-120-titolo">Da rifare a 120 FPS</h2>
+        <p class="piccolo">La gara dei 120 FPS ha un vincitore. Ho buttato le copie migliorate
+        dei video sotto i 120 FPS e rimesso al loro posto gli originali:
+        <b class="numeri">{{ a_centoventi.rimesse|numero }}</b>
+        {{ 'video è' if a_centoventi.rimesse == 1 else 'video sono' }} di nuovo in coda e sul
+        disco si sono liberati <b class="numeri">{{ a_centoventi.liberati }}</b>.
+        Il lavoro non parte da solo: premi Avvia quando vuoi.</p>
+        {% if a_centoventi.saltate %}
+        <p class="piccolo attenuato">Questi restano come sono, per il motivo scritto accanto:</p>
+        <ul class="mg-non-rifatte-elenco minuscolo">
+            {% for voce in a_centoventi.saltate %}<li>{{ voce }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        <form method="post" action="/miglioramento/a-120/visto">
+            <button class="tasto-comando piccolo" type="submit">Ho capito</button>
+        </form>
+    </section>
+    {% endif %}
+
     {% if non_rifatte %}
     <section class="carta mg-non-rifatte" id="non-rifatte" aria-labelledby="mg-non-rifatte-titolo">
         <h2 id="mg-non-rifatte-titolo">Restano fatti con la versione vecchia <span class="tenue numeri">{{ non_rifatte|length }}</span></h2>

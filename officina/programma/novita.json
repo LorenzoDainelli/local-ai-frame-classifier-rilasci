@@ -3,7 +3,7 @@
     "numero": 20,
     "versione": null,
     "data": "4 novembre",
-    "titolo": "Il miglioramento arriva a 4K, PE-Core esce e nelle sfide vedi i tempi",
+    "titolo": "Il miglioramento arriva a 4K e a 120 FPS, PE-Core esce e nelle sfide vedi i tempi",
     "tolti": [
       "pecore",
       "siglip2"
@@ -68,6 +68,18 @@
       [
         "disco",
         "In 4K i file occupano circa quattro volte lo spazio dell'FHD: il programma controlla che sul disco ci sia posto prima di cominciare"
+      ],
+      [
+        "video",
+        "Quando la gara dei 120 FPS ha un vincitore, i video sotto i 120 FPS si migliorano a 120 FPS: quelli da 30 FPS hanno tre fotogrammi nuovi ogni quattro. Audio e durata restano gli stessi. Si spegne in Impostazioni › Miglioramento"
+      ],
+      [
+        "video",
+        "Un video già in 4K, o della misura che hai scelto, ora si porta solo a 120 FPS. In revisione leggi, per esempio, «da 30 a 120 FPS con GIMM-VFI-F-P»"
+      ],
+      [
+        "riprova",
+        "Quando c'è il vincitore, i video sotto i 120 FPS già approvati o da rivedere tornano in coda e l'originale torna al suo posto. Il lavoro non parte da solo: premi Avvia. I video ritoccati restano come sono"
       ]
     ],
     "tecnico": [
@@ -82,7 +94,8 @@
       "Misura di arrivo in <code>miglioria.misura</code> (<code>fhd</code>, <code>2k</code>, <code>4k</code>; predefinita <code>4k</code>) letta dall'impostazione <code>miglioria_misura</code> e passata nel lavoro della stanza; LucidFlux fino a 2K con <code>di_lucidflux</code>, poi SeedVR2 al tetto; spazio e previsione scalati sui pixel (regola 581).",
       "All'avvio <code>rifai.in_grande</code> segna <code>miglioria_4k_dal</code> una volta sola e rimette in coda le righe finite prima in FHD (e le fallite <code>gia_grande</code> sotto il tetto) con lo stesso giro di <code>rifai.tutto</code>; quelle rimaste per l'archivio chiuso si rifanno nel giro (regola 581).",
       "C-RADIOv4-H (<code>descrittori.radio4</code>): codice NVIDIA fissato nel programma, niente <code>torch.hub</code>; pth e file del testo con sha256 fissati, visione e testo convertiti in safetensors, adattatore <code>siglip2-g</code>. Su GitHub dà gli stessi numeri dell'originale (diff 0,0 su 12 lotti di foto e sulle frasi) (regola 580).",
-      "<code>descrittori.SUPERATI</code> toglie SigLIP 2 dalla coda delle impronte quando C-RADIOv4-H è in casa; <code>ricerca.per_le_parole</code> usa le vecchie finché <code>quanti_da_fare</code> della nuova non è 0; poi <code>sgombero.togli_le_superate</code> (a fine coda e all'avvio) cancella le impronte di SigLIP 2 e scrive numero e byte nella carta (<code>modelli_tolti</code>); al riavvio dopo <code>sgombero.compatta_se_serve</code> fa <code>VACUUM</code> e <code>wal_checkpoint(TRUNCATE)</code> una volta sola, se la RAM libera è almeno il doppio del database e sul disco c'è il suo peso più 1 GB, e scrive i byte liberati."
+      "<code>descrittori.SUPERATI</code> toglie SigLIP 2 dalla coda delle impronte quando C-RADIOv4-H è in casa; <code>ricerca.per_le_parole</code> usa le vecchie finché <code>quanti_da_fare</code> della nuova non è 0; poi <code>sgombero.togli_le_superate</code> (a fine coda e all'avvio) cancella le impronte di SigLIP 2 e scrive numero e byte nella carta (<code>modelli_tolti</code>); al riavvio dopo <code>sgombero.compatta_se_serve</code> fa <code>VACUUM</code> e <code>wal_checkpoint(TRUNCATE)</code> una volta sola, se la RAM libera è almeno il doppio del database e sul disco c'è il suo peso più 1 GB, e scrive i byte liberati.",
+      "Regola 582: <code>centoventi.arrivo</code> sceglie 120 o 119,88; <code>fluido.fai</code> salva tratti da 2 s già compressi in <code>.fluidi</code> e <code>video.unisci_tratti</code> li unisce con l'audio; <code>rifai.a_centoventi</code> rimette in coda i video fatti senza."
     ]
   },
   {

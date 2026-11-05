@@ -847,6 +847,10 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         except Exception as guasto:
             registro.errore("programma.miglioria_in_grande",
                             **registro.dove_si_e_rotto(guasto))
+        try:
+            rifai.a_centoventi(archivio)
+        except Exception as guasto:
+            registro.errore("programma.miglioria_a_120", **registro.dove_si_e_rotto(guasto))
 
     def _prepara_i_conti(self) -> None:
         from officina.web.strade import comune

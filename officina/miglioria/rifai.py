@@ -22,6 +22,9 @@ TEMPI_DI_PRIMA = "seedvr2_tempi_di_prima"
 DAL_IN_GRANDE = "miglioria_4k_dal"
 SALTATE_IN_GRANDE = "miglioria_4k_saltate"
 FATTE_IN_GRANDE = "miglioria_4k_fatte"
+SALTATE_120 = "miglioria_120_saltate"
+DAL_120 = "miglioria_120_dal"
+FATTE_120 = "miglioria_120_fatte"
 DA_GUARDARE = (coda.DA_RIVEDERE, coda.APPROVATA, coda.RIFIUTATA, coda.FALLITA)
 PULITA = {"in_revisione": None, "impronta_migliorata": None, "percorso_migliorata": None,
           "percorso_spostato": None, "motori": None, "fedelta": None, "guasto": None,
@@ -44,6 +47,7 @@ DALL_ARCHIVIO = {
 RITOCCATO = "è stato ritoccato: non lo tocco"
 IN_SFIDA = "fa parte della sfida alla cieca: non lo tocco"
 _IN_GRANDE = threading.Lock()
+_A_CENTOVENTI = threading.Lock()
 
 
 @dataclass
@@ -337,3 +341,76 @@ def in_grande_a_parole(connessione: sqlite3.Connection) -> dict | None:
 def in_grande_visto(connessione: sqlite3.Connection) -> None:
     scrivi_impostazione(connessione, FATTE_IN_GRANDE, {})
     scrivi_impostazione(connessione, SALTATE_IN_GRANDE, [])
+
+
+def _fatta_senza_120(riga, dal: str) -> bool:
+    from officina.miglioria import centoventi
+
+    if riga["genere"] != "video" or centoventi.arrivo(riga["fps"]) is None:
+        return False
+    if riga["stato"] == coda.FALLITA:
+        return riga["guasto"] == catena.GIA_GRANDE and (riga["finita_il"] or "") < dal
+    try:
+        usati = json.loads(riga["motori"] or "[]")
+    except (TypeError, ValueError):
+        usati = []
+    return centoventi.dai_motori(usati if isinstance(usati, list) else []) is None
+
+
+def da_rifare_a_120(connessione: sqlite3.Connection, dal: str) -> list[sqlite3.Row]:
+    righe = tutti(connessione,
+                  "SELECT m.*, f.genere, f.fps FROM migliorie AS m "
+                  "JOIN file_media AS f ON f.id = m.file_id "
+                  "WHERE m.stato IN (?,?,?) AND m.finita_il IS NOT NULL ORDER BY m.id",
+                  coda.DA_RIVEDERE, coda.APPROVATA, coda.FALLITA)
+    return [riga for riga in righe if _fatta_senza_120(riga, dal)]
+
+
+def a_centoventi(archivio, gara=None) -> Esito | None:
+    from officina.miglioria import centoventi
+
+    with _A_CENTOVENTI:
+        if centoventi.motore_da_usare(archivio, *([gara] if gara else [])) is None:
+            return None
+        with archivio.scrittura() as connessione:
+            dal = leggi_impostazione(connessione, DAL_120)
+            if not isinstance(dal, str) or not dal:
+                dal = adesso()
+                scrivi_impostazione(connessione, DAL_120, dal)
+                registro.evento("miglioria.a_120_comincia")
+            righe = da_rifare_a_120(connessione, dal)
+            if not any(perche_resta(connessione, riga) is None for riga in righe):
+                return None
+        esito = _rifai(archivio, righe)
+        with archivio.scrittura() as connessione:
+            fatte = leggi_impostazione(connessione, FATTE_120)
+            fatte = fatte if isinstance(fatte, dict) else {}
+            scrivi_impostazione(connessione, FATTE_120, {
+                "rimesse": int(fatte.get("rimesse") or 0) + esito.rimesse,
+                "byte": int(fatte.get("byte") or 0) + esito.byte})
+            scrivi_impostazione(connessione, SALTATE_120, esito.saltate)
+    if esito.rimesse or esito.saltate:
+        registro.evento("miglioria.rifatte_a_120", rimesse=esito.rimesse,
+                        saltate=len(esito.saltate), byte=esito.byte)
+    return esito
+
+
+def saltate_a_120(connessione: sqlite3.Connection) -> list[str]:
+    lista = leggi_impostazione(connessione, SALTATE_120)
+    return [str(voce) for voce in lista] if isinstance(lista, list) else []
+
+
+def a_centoventi_a_parole(connessione: sqlite3.Connection) -> dict | None:
+    fatte = leggi_impostazione(connessione, FATTE_120)
+    saltate_ = saltate_a_120(connessione)
+    if not isinstance(fatte, dict) or not (fatte.get("rimesse") or saltate_):
+        return None
+    giga = int(fatte.get("byte") or 0) / 1e9
+    return {"rimesse": int(fatte.get("rimesse") or 0),
+            "liberati": f"{giga:.1f}".replace(".", ",") + " GB",
+            "saltate": saltate_}
+
+
+def a_centoventi_visto(connessione: sqlite3.Connection) -> None:
+    scrivi_impostazione(connessione, FATTE_120, {})
+    scrivi_impostazione(connessione, SALTATE_120, [])

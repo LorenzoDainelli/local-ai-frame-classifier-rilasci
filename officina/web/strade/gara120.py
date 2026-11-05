@@ -132,7 +132,21 @@ def _vota(numero: int, lettera: str, secondi) -> dict | None:
         secondi = None
     voto.vota(risultati, numero, lettera, secondi)
     registro.evento("gara_120.votato", numero=numero)
+    _se_ha_vinto(accesso.aperto())
     return _un_caso(numero)
+
+
+def _se_ha_vinto(archivio) -> None:
+    from officina.miglioria import rifai
+
+    def rifai_a_120() -> None:
+        try:
+            rifai.a_centoventi(archivio)
+        except Exception as guasto:
+            registro.errore("gara_120.rifai_a_120", **registro.dove_si_e_rotto(guasto))
+
+    if la_gara(archivio).esito().get("vincitore"):
+        threading.Thread(target=rifai_a_120, name="miglioria_a_120", daemon=True).start()
 
 
 @strada.get("/api/gara-120/voto/{numero}")

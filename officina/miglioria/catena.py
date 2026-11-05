@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import itertools
 import time
 from pathlib import Path
 from typing import Callable, Iterable, Iterator
 
 from officina.errori import ErroreOfficina
-from officina.miglioria import date, metadati, misura, motori, pezzi, video
+from officina.miglioria import (centoventi, date, fluido, metadati, misura, motori, pezzi,
+                                video)
 from officina.sicuro.dall_archivio import DallArchivio
 
 GIA_GRANDE = "gia_grande"
@@ -150,33 +152,93 @@ def filmato(lavoro: dict, al_passo=None, freno=None, racconta=None) -> dict:
     uscita = Path(lavoro["uscita"])
     piano = video.guarda(originale)
     quale = tetto(lavoro)
-    if misura.e_gia_grande(piano.larghezza, piano.altezza, quale):
+    verso = centoventi.arrivo(piano.fps) if lavoro.get("fps120") else None
+    grande = misura.e_gia_grande(piano.larghezza, piano.altezza, quale)
+    if grande and verso is None:
         raise TroppoGrande(f"Il video è già {misura.nome(quale)} o più.")
-    larghezza, altezza = misura.di_arrivo(piano.larghezza, piano.altezza, pari=True,
-                                          tetto=quale)
+    usati: list[dict] = []
+    stanno = None
+    fatti = None
+    if grande:
+        larghezza = max(2, piano.larghezza - piano.larghezza % 2)
+        altezza = max(2, piano.altezza - piano.altezza % 2)
+    else:
+        larghezza, altezza = misura.di_arrivo(piano.larghezza, piano.altezza, pari=True,
+                                              tetto=quale)
+        fatti, usati, stanno = _ingrandisci(originale, piano, lavoro, larghezza, altezza,
+                                            freno, al_passo, racconta)
+    if verso is None:
+        def rifatti(quadri: Iterable) -> Iterator:
+            for _quadro, fatto in zip(quadri, fatti.rileggi(), strict=True):
+                yield fatto
 
+        video.lavora(originale, uscita, larghezza, altezza, rifatti)
+        piu = {}
+        if lavoro.get("fps120"):
+            usati.append({"nome": centoventi.NOME, "da": str(centoventi.ritmo(piano.fps)),
+                          "a": None, "motore": None})
+    else:
+        piu, del_fluido = _a_centoventi(originale, piano, lavoro, fatti, verso, uscita,
+                                        freno, al_passo)
+        usati.append({"nome": centoventi.NOME, **piu["fps"], "usati": piu.pop("usati")})
+        stanno = stanno or del_fluido
+    _date(originale, uscita, lavoro)
+    if fatti is not None:
+        pezzi.butta(fatti.dove)
+    return {"larghezza": larghezza, "altezza": altezza, "motori": usati, **piu,
+            **({"dove_stanno": dict(stanno)} if stanno else {})}
+
+
+def _ingrandisci(originale, piano, lavoro: dict, larghezza: int, altezza: int, freno,
+                 al_passo, racconta):
     motore = motori.apri(motori.VIDEO, lavoro["motori"]["video"],
                          **lavoro.get("opzioni", {}))
     stanno = None
     try:
-        fatti = pezzi.Pezzi(pezzi.cartella(uscita), _firma(originale, motore, larghezza, altezza))
+        fatti = pezzi.Pezzi(pezzi.cartella(Path(lavoro["uscita"])),
+                            _firma(originale, motore, larghezza, altezza))
         if not fatti.finito:
             _fai_i_pezzi(originale, piano, motore, fatti, larghezza, altezza,
                          Frenato(freno), al_passo, racconta)
             stanno = getattr(motore, "dove_stanno", None)
     finally:
         motore.spegni()
+    return fatti, [{"nome": motore.nome, "versione": motore.versione}], stanno
 
-    def rifatti(quadri: Iterable) -> Iterator:
-        for _quadro, fatto in zip(quadri, fatti.rileggi(), strict=True):
-            yield fatto
 
-    video.lavora(originale, uscita, larghezza, altezza, rifatti)
-    _date(originale, uscita, lavoro)
-    pezzi.butta(fatti.dove)
-    return {"larghezza": larghezza, "altezza": altezza,
-            "motori": [{"nome": motore.nome, "versione": motore.versione}],
-            **({"dove_stanno": dict(stanno)} if stanno else {})}
+def _a_centoventi(originale, piano, lavoro: dict, fatti, verso, uscita: Path, freno,
+                  al_passo) -> tuple[dict, dict | None]:
+    nome = str(lavoro["fps120"])
+    codec = video.codec_di_arrivo(piano.codec)
+    opzioni = dict(video.OPZIONI[codec])
+    motore = fluido.Motore(nome, deposito=uscita.parent, **lavoro.get("opzioni", {}))
+    stanno = None
+    try:
+        sorgente = (dict(fatti.firma) if fatti is not None
+                    else _firma(originale, motore, piano.larghezza, piano.altezza))
+        tratti = fluido.Tratti(
+            fluido.cartella(uscita),
+            {"sorgente": sorgente, "fluido": motore.firma(), "verso": str(verso),
+             "codec": codec, "opzioni": opzioni},
+            codec, opzioni, verso)
+        entrati = fatti.fatti() if fatti is not None else piano.fotogrammi
+
+        def apri(da: int) -> Iterator:
+            quadri = fatti.rileggi() if fatti is not None else video.dritti(originale)
+            return itertools.islice(quadri, int(da), None)
+
+        frenato = Frenato(freno)
+        fluido.fai(motore, apri, piano.fps, verso, tratti, entrati, al_passo,
+                   filtro=lambda quadri: _col_freno(quadri, frenato))
+        stanno = motore.dove_stanno()
+        usati = motore.usati()
+    finally:
+        motore.spegni()
+    video.unisci_tratti(originale, uscita, tratti.file())
+    pezzi.butta(tratti.dove)
+    return {"usati": usati,
+            "fps": {"da": str(centoventi.ritmo(piano.fps)), "a": str(verso),
+                    "motore": nome}}, stanno
 
 
 def _firma(originale, motore, larghezza: int, altezza: int) -> dict:

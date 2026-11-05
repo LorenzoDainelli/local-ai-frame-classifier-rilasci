@@ -48,6 +48,7 @@ class Esito:
     fermo: bool = False
     altri: int = 0
     tetto: str = misura.PREDEFINITO
+    fps120: bool = False
 
     def a_parole(self) -> str:
         pezzi = []
@@ -140,8 +141,9 @@ def ritoccati_da_chiedere(connessione: sqlite3.Connection, scatti) -> int:
 
 
 def metti(connessione: sqlite3.Connection, scatti: list[int],
-          ritoccati: bool | None = None, *, chiedi_l_archivio: bool = False) -> Esito:
-    esito = Esito(tetto=misura.letto(connessione))
+          ritoccati: bool | None = None, *, chiedi_l_archivio: bool = False,
+          fps120: bool = False) -> Esito:
+    esito = Esito(tetto=misura.letto(connessione), fps120=bool(fps120))
     scelti = list(dict.fromkeys(int(s) for s in scatti))
     if ritoccati is None:
         esito.ritoccati = ritoccati_da_chiedere(connessione, scelti)
@@ -201,7 +203,8 @@ def _metti_uno(connessione: sqlite3.Connection, riga: sqlite3.Row,
         esito.non_adatti.append(nome)
         return
     larghezza, altezza = riga["larghezza"], riga["altezza"]
-    if larghezza and altezza and misura.e_gia_grande(larghezza, altezza, esito.tetto):
+    if (larghezza and altezza and misura.e_gia_grande(larghezza, altezza, esito.tetto)
+            and not _da_fare_a_120(riga, esito)):
         esito.gia_grandi.append(nome)
         return
 
@@ -214,6 +217,14 @@ def _metti_uno(connessione: sqlite3.Connection, riga: sqlite3.Row,
         str(percorso), larghezza, altezza, adesso())
     esito.messi += 1
     esito.dall_archivio += dall_archivio
+
+
+def _da_fare_a_120(riga: sqlite3.Row, esito: Esito) -> bool:
+    from officina.miglioria import centoventi
+
+    if not esito.fps120 or riga["genere"] != "video":
+        return False
+    return centoventi.arrivo(riga["fps"]) is not None
 
 
 def _non_messo(esito: Esito, perche: str) -> list[str]:

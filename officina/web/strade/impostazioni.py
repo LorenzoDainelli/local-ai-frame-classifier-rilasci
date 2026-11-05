@@ -16,6 +16,7 @@ from officina.modello import dispositivi, fotografie, nodi, persone
 from officina.web import blocco
 from officina.web import telefono as telefono_web
 from officina.web import vista
+from officina.miglioria import centoventi, fluido
 from officina.programma import aspetto
 
 from officina.web.strade import base, comune, copia_esterna, schermo, tentativi
@@ -89,6 +90,8 @@ def impostazioni(richiesta: Request):
         "copia_esterna": copia_esterna.com_e(),
         "versione_tenuta": _versione_tenuta(richiesta.query_params.get("tenuta")),
         "nodi_rimessi": _nodi_rimessi(richiesta.query_params.get("rimesso")),
+        "motore_120_gara": centoventi.dalla_gara(archivio),
+        "nomi_120": fluido.NOMI,
     })
 
 

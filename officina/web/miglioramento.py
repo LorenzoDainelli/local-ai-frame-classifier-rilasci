@@ -10,8 +10,8 @@ from pathlib import Path
 from officina import tempo_gara
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
-from officina.miglioria import (attesa, coda, da_guardare, fedelta, misura, motori,
-                                previsione, ricomincia, rifai, scambio, sfida)
+from officina.miglioria import (attesa, centoventi, coda, da_guardare, fedelta, misura,
+                                motori, previsione, ricomincia, rifai, scambio, sfida)
 from officina.modello import file_media, scatti
 from officina.sicuro.dall_archivio import CHIUSO, SI_APRE, TROVATA, DallArchivio
 from officina.web.lavori import Lavoro
@@ -142,13 +142,16 @@ def motori_a_parole(testo: str | None) -> str:
         usati = json.loads(testo or "[]")
     except ValueError:
         return ""
-    nomi = [NOMI_DEI_MOTORI.get(str(usato.get("nome")), str(usato.get("nome")))
-            for usato in usati if isinstance(usato, dict)]
-    if not nomi:
+    if not isinstance(usati, list):
         return ""
-    if len(nomi) == 1:
-        return nomi[0]
-    return f"{nomi[0]} · volti: {', '.join(nomi[1:])}"
+    fluido = centoventi.con_chi(usati)
+    nomi = [NOMI_DEI_MOTORI.get(str(usato.get("nome")), str(usato.get("nome")))
+            for usato in usati
+            if isinstance(usato, dict) and usato.get("nome") != centoventi.NOME]
+    detto = nomi[0] if nomi else ""
+    if len(nomi) > 1:
+        detto += f" · volti: {', '.join(nomi[1:])}"
+    return " · ".join(parte for parte in (detto, fluido) if parte)
 
 
 def a_parole(riga: sqlite3.Row, tetto: str | None = None) -> dict:
@@ -201,7 +204,8 @@ def quanto_manca(archivio, connessione: sqlite3.Connection) -> dict | None:
             faceme=miglioratore._scelti().get("volti") == motori.FACEME,
             lucidflux=miglioratore._scelti().get("foto") == motori.LUCIDFLUX,
             posti_in_sfida=posti, disco=bool(lavoro.get("disco")),
-            intensita=int(archivio.impostazione("intensita_scheda") or 100))
+            intensita=int(archivio.impostazione("intensita_scheda") or 100),
+            fluido=centoventi.motore_da_usare(archivio))
     except Exception as guasto:
         registro.avviso("miglioria.previsione", **registro.dove_si_e_rotto(guasto))
         return None
@@ -226,6 +230,7 @@ def la_coda(archivio) -> dict:
             "in_chiaro": in_chiaro(connessione),
             "non_rifatte": rifai.saltate(connessione),
             "in_grande": rifai.in_grande_a_parole(connessione),
+            "a_centoventi": rifai.a_centoventi_a_parole(connessione),
             "previsione": quanto_manca(archivio, connessione),
         }
 

@@ -82,7 +82,7 @@ def test_i_fattori_di_una_foto():
                     "dall_archivio": True, "sfida": True, "disco": True, "a_freddo": True,
                     "intensita": 80, "lucidflux": False, "megapixel": 640 * 480 / 1e6,
                     "arrivo": larghezza * altezza / 1e6, "durata": None,
-                    "fotogrammi": None}
+                    "fotogrammi": None, "fluidi": 0, "fluido": ""}
     assert json.loads(json.dumps(dati)) == dati
 
 
@@ -919,7 +919,7 @@ def test_la_pagina_passa_quello_che_sa(importato, monkeypatch):
     assert versione == NUOVA
     assert campi == {"sta_lavorando": False, "lavoro": {"id": 3, "disco": True},
                      "faceme": True, "lucidflux": False, "posti_in_sfida": sfida.QUANTE,
-                     "disco": True, "intensita": 60}
+                     "disco": True, "intensita": 60, "fluido": None}
     for spento in ({"pausa": True}, {"pronti": False}, {"chiusa": True}):
         visti.clear()
         with monkeypatch.context() as cambi:

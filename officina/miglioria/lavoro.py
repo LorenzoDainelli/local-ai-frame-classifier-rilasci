@@ -13,8 +13,9 @@ from officina import registro
 from officina.archivio.database import adesso
 from officina.errori import ErroreOfficina
 from officina.importazione import impronta
-from officina.miglioria import (attesa, catena, coda, da_guardare, fedelta, motori, persone, pezzi,
-                                previsione, scambio, sfida, video)
+from officina.miglioria import (attesa, catena, centoventi, coda, da_guardare, fedelta,
+                                fluido, motori, persone, pezzi, previsione, scambio, sfida,
+                                video)
 from officina.modello import file_media
 from officina.sicuro.dall_archivio import CHIUSO, CHIUSO_ADESSO, DIVERSA, PERSA, SI_APRE
 from officina.web.lavori import Lavoro
@@ -137,8 +138,13 @@ def misura_di_seedvr2(fatto: dict) -> str:
 
 
 def misura_del_motore(fatto: dict) -> str:
+    piu = centoventi.con_chi(fatto.get("motori"))
+    return misura_dei_motori(fatto) + (f" · {piu}" if piu else "")
+
+
+def misura_dei_motori(fatto: dict) -> str:
     nomi = [motore.get("nome") for motore in fatto.get("motori") or []
-            if isinstance(motore, dict)]
+            if isinstance(motore, dict) and motore.get("nome") != centoventi.NOME]
     if nomi[:1] == ["seedvr2"]:
         return misura_di_seedvr2(fatto)
     detto = misura_di_lucidflux(fatto)
@@ -187,6 +193,31 @@ def spazio_dei_pezzi(originale: Path, tetto: str | None = None) -> int:
     larghezza, altezza = misura.di_arrivo(piano.larghezza, piano.altezza, pari=True,
                                           tetto=tetto)
     return larghezza * altezza * BYTE_PER_PIXEL_DEI_PEZZI * max(piano.fotogrammi, 0)
+
+
+def spazio_dei_120(originale: Path, tetto: str | None, motore: str | None) -> int:
+    from officina.miglioria import centoventi, misura
+
+    if motore is None:
+        return 0
+    try:
+        piano = video.guarda(originale)
+    except Exception:                                    # noqa: BLE001
+        return 0
+    verso = centoventi.arrivo(piano.fps)
+    if verso is None:
+        return 0
+    if misura.e_gia_grande(piano.larghezza, piano.altezza, tetto):
+        larghezza, altezza = piano.larghezza, piano.altezza
+    else:
+        larghezza, altezza = misura.di_arrivo(piano.larghezza, piano.altezza, pari=True,
+                                              tetto=tetto)
+    serve = int(originale.stat().st_size * quanto_puo_crescere(tetto)
+                * float(verso / centoventi.ritmo(piano.fps)))
+    if motore == "fusione":
+        dentro = max(piano.fotogrammi, 0) * centoventi.volte(piano.fps, verso)
+        serve += larghezza * altezza * 3 * dentro
+    return serve
 
 
 def _sportello(processo: subprocess.Popen):
@@ -428,6 +459,16 @@ class Miglioratore:
         if esito is not None and esito.rimesse:
             self.lavoro.di(f"rimetto in coda {esito.rimesse} file fatti in FHD, per "
                            "rifarli nella misura nuova")
+        self._rifai_a_120()
+
+    def _rifai_a_120(self) -> None:
+        from officina.miglioria import rifai
+
+        esito = rifai.a_centoventi(self.archivio)
+        if esito is not None and esito.rimesse:
+            quanti = esito.rimesse
+            self.lavoro.di(f"rimetto in coda {quanti} video "
+                           "sotto i 120 FPS, per rifarli a 120 FPS")
 
     def _rifai_con_la_nuova(self) -> None:
         from officina.miglioria import preparazione, rifai
@@ -489,10 +530,13 @@ class Miglioratore:
 
         attesa.prepara(dove)
         genere = file["genere"]
+        if genere == "video":
+            self._guarda_il_120()
         tetto = self._tetto()
         serve = int(letto.stat().st_size * quanto_puo_crescere(tetto)) + MARGINE_DI_SPAZIO
         if genere == "video":
             serve += spazio_dei_pezzi(letto, tetto)
+            serve += spazio_dei_120(letto, tetto, self._fps120())
         if shutil.disk_usage(dove).free < serve:
             self._fallita(miglioria_id, "spazio")
             return
@@ -645,11 +689,20 @@ class Miglioratore:
             "persone": chi,
             "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
             "misura": self._tetto(),
+            **({"fps120": self._fps120()} if genere == "video" and self._fps120() else {}),
             "percorsi": percorsi_della_stanza(),
             "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli),
                         **({"disco": True} if self._disco else {})},
             **(piu or {}),
         }
+
+    def _fps120(self) -> str | None:
+        return getattr(self, "_motore_120", None)
+
+    def _guarda_il_120(self) -> None:
+        from officina.miglioria import centoventi
+
+        self._motore_120 = centoventi.motore_da_usare(self.archivio)
 
     def _tetto(self) -> str:
         from officina.miglioria import misura
@@ -662,7 +715,8 @@ class Miglioratore:
             sfida=in_sfida, disco=bool(lavoro["opzioni"].get("disco")),
             a_freddo=not self._accesa.accesa, intensita=lavoro["intensita"],
             tetto=lavoro.get("misura"),
-            lucidflux=lavoro["motori"].get("foto") == motori.LUCIDFLUX)
+            lucidflux=lavoro["motori"].get("foto") == motori.LUCIDFLUX,
+            fluido=lavoro.get("fps120"))
         versione = _versione_di_seedvr2()
         try:
             with self.archivio.lettura() as connessione:
@@ -678,8 +732,10 @@ class Miglioratore:
     def _misurato(self, connessione, miglioria_id: int, fatto: dict) -> None:
         misura, self._misura = self._misura, None
         if misura is None or not any(
-                isinstance(motore, dict) and motore.get("nome") == motori.SEEDVR2
-                and motore.get("versione") == misura["versione"]
+                isinstance(motore, dict) and (
+                    motore.get("nome") == centoventi.NOME
+                    or (motore.get("nome") == motori.SEEDVR2
+                        and motore.get("versione") == misura["versione"]))
                 for motore in fatto.get("motori") or []):
             return
         secondi = time.monotonic() - misura["partito"]
@@ -704,6 +760,7 @@ class Miglioratore:
             return None
         if "guasto" in esito and esito["guasto"] not in DA_RIPRENDERE:
             pezzi.butta(pezzi.cartella(parziale))
+            pezzi.butta(fluido.cartella(parziale))
         if "guasto" in esito or not parziale.is_file():
             parziale.unlink(missing_ok=True)
             return {"guasto": str(esito.get("guasto") or "stanza_muta"),
