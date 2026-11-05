@@ -10,6 +10,7 @@ from officina.descrittori.grandi import Dinov3, Siglip2
 TIPI = (Dinov3, Siglip2, Disegnato)
 SCHEDE = {tipo.scheda.nome: tipo.scheda for tipo in TIPI}
 PREDEFINITO = "disegnato"
+SUPERATI = {"siglip2": "radio4"}
 
 
 def scheda(nome: str) -> Scheda:
@@ -34,11 +35,20 @@ def in_casa(nome: str, cartella_modelli: Path) -> bool:
     return (cartella_modelli / nome / carta.prova_che_c_e).exists()
 
 
+def superato_da(nome: str, cartella_modelli: Path) -> str | None:
+    dopo = SUPERATI.get(nome)
+    if dopo in SCHEDE and in_casa(dopo, cartella_modelli):
+        return dopo
+    return None
+
+
 def pronti(cartella_modelli: Path) -> list[str]:
-    return [nome for nome in SCHEDE if in_casa(nome, cartella_modelli)]
+    return [nome for nome in SCHEDE if in_casa(nome, cartella_modelli)
+            and superato_da(nome, cartella_modelli) is None]
 
 
 __all__ = [
-    "SCHEDE", "TIPI", "PREDEFINITO", "SENZA_MODELLO", "VISIONE_E_LINGUA",
+    "SCHEDE", "SUPERATI", "TIPI", "PREDEFINITO", "SENZA_MODELLO", "VISIONE_E_LINGUA",
     "VISIVO", "Descrittore", "Scheda", "apri", "in_casa", "pronti", "scheda",
+    "superato_da",
 ]

@@ -271,11 +271,16 @@ def quanti_scatti_in_archivio(connessione) -> int:
 
 
 def _quali_in_coda(descrittore: str, archivio) -> list[str]:
-    from officina.descrittori import PREDEFINITO, SCHEDE, TIPI, pronti
+    from officina.descrittori import PREDEFINITO, SCHEDE, TIPI, pronti, superato_da
 
     disponibili = pronti(archivio.dove.modelli)
     voluto = descrittore or "tutti"
     if voluto in SCHEDE:
+        dopo = superato_da(voluto, archivio.dove.modelli)
+        if dopo:
+            raise ErroreOfficina(
+                f"{_titolo_corto(SCHEDE[voluto].titolo)} non fa più le impronte: le fa "
+                f"{_titolo_corto(SCHEDE[dopo].titolo)} (regola 580).")
         if voluto not in disponibili:
             raise ErroreOfficina(
                 f"{_titolo_corto(SCHEDE[voluto].titolo)} non è ancora scaricato. "

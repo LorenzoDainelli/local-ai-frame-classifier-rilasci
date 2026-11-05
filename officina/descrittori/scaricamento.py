@@ -125,6 +125,9 @@ def scarica(carta: Scheda, cartella_modelli: Path,
         rapporto.gia_c_era = True
         return rapporto
 
+    if carta.nome == "radio4":
+        return _scarica_radio4(carta, cartella_modelli, al_passo, chiave, a_che_punto)
+
     try:
         from huggingface_hub import snapshot_download
     except ImportError as errore:
@@ -198,6 +201,66 @@ def scarica(carta: Scheda, cartella_modelli: Path,
     return rapporto
 
 
+def _prendi_un_file(repo: str, nome: str, revisione: str, cartella: Path) -> Path:
+    from huggingface_hub import hf_hub_download
+
+    return Path(hf_hub_download(repo_id=repo, filename=nome, revision=revisione,
+                                local_dir=str(cartella), token=False))
+
+
+def _scarica_radio4(carta: Scheda, cartella_modelli: Path,
+                    al_passo: Callable[[str], None] | None, chiave: str | None,
+                    a_che_punto: Callable[[int, int], None] | None,
+                    prendi=None) -> Rapporto:
+    from officina.descrittori import radio4
+
+    dove = cartella_modelli / carta.nome
+    grezzo = dove.with_name(dove.name + ".grezzo")
+    if al_passo:
+        al_passo(f"scarico {carta.titolo} — circa {carta.byte_attesi / 1e9:.1f} GB")
+    gia = quanto_pesa(grezzo) if grezzo.exists() else 0
+    serve = max(GREZZI_RADIO4 - gia, 0) + carta.byte_attesi
+    libero = shutil.disk_usage(cartella_modelli).free
+    if libero < serve:
+        raise ScaricamentoFallito(
+            f"Per «{carta.titolo}» servono circa {serve / 1e9:.0f} GB liberi sul "
+            f"disco dei modelli, e ce ne sono {libero / 1e9:.0f}. Alla fine ne "
+            f"resteranno occupati circa {carta.byte_attesi / 1e9:.0f}, perché i file "
+            "scaricati si cancellano dopo la conversione. Libera un po' di spazio "
+            "e riprova.")
+    prima = torcia.con_la_rete_accesa()
+    try:
+        if a_che_punto is None:
+            radio4.porta_in_casa(dove, prendi or _prendi_un_file, al_passo)
+        else:
+            with Sorvegliante(grezzo, carta.byte_attesi, a_che_punto):
+                radio4.porta_in_casa(dove, prendi or _prendi_un_file, al_passo)
+    except radio4.FileDiverso as errore:
+        registro.errore("modelli.file_diverso", quale=carta.nome, quanti=1)
+        raise ScaricamentoFallito(
+            f"«{carta.titolo}» è arrivato, ma il file «{errore}» non è identico a "
+            "quello provato: per sicurezza non lo tengo. Riprova più tardi; se succede "
+            "ancora, il file pubblicato è cambiato e va controllato in un "
+            "aggiornamento.\n  Il resto del programma funziona lo stesso senza questo "
+            "modello.") from errore
+    except Exception as errore:
+        registro.errore("modelli.scaricamento_fallito",
+                        ragione=registro.Parola(_che_genere(errore)))
+        raise ScaricamentoFallito(
+            f"Non sono riuscito a scaricare «{carta.titolo}».\n"
+            + _perche_e_andata_male(errore, carta, chiave)
+            + "\n  Il resto del programma funziona lo stesso senza questo modello."
+        ) from errore
+    finally:
+        torcia.rimetti_la_rete_com_era(prima)
+    rapporto = _annota(carta, dove)
+    registro.evento("modelli.scaricato", file=rapporto.file)
+    if al_passo:
+        al_passo(f"{carta.titolo}: {rapporto.file} file, "
+                 f"{rapporto.byte / 1e9:.1f} GB, impronte scritte")
+    return rapporto
+
+
 def _sha256(percorso: Path) -> str:
     calcolo = hashlib.sha256()
     with open(percorso, "rb") as dentro:
@@ -239,6 +302,7 @@ def _dove_arriva(carta: Scheda, dove: Path) -> Path:
 
 
 SPAZIO_PER_COMPRIMERE = 8_000_000_000
+GREZZI_RADIO4 = 8_000_000_000
 
 
 def _controlla_lo_spazio(carta: Scheda, cartella_modelli: Path) -> None:

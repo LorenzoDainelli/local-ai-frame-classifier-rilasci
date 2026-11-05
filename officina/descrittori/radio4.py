@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import string
 from pathlib import Path
 
@@ -342,3 +343,51 @@ def scrivi_scheda(casa: Path, testo: dict) -> None:
               "adattatore": ADATTATORE, "testo": testo,
               "impronte": {nome: sha256(casa / nome) for nome in (VISIONE, TESTO)}}
     (casa / SCHEDA).write_text(json.dumps(scheda, indent=2, ensure_ascii=False), "utf-8")
+
+
+class FileDiverso(ValueError):
+    pass
+
+
+def _uguale(posto: Path, voluto: str, nome: str) -> Path:
+    if sha256(posto) != voluto:
+        Path(posto).unlink(missing_ok=True)
+        raise FileDiverso(nome)
+    return Path(posto)
+
+
+def piccoli_del_testo() -> dict[str, str]:
+    return {**SHA256_PICCOLI, **{nome: sha for nome, sha in SHA256_TESTO.items()
+                                 if not nome.endswith(".safetensors")}}
+
+
+def porta_in_casa(casa: Path, prendi, al_passo=None) -> int:
+    casa = Path(casa)
+    grezzo = casa.with_name(casa.name + ".grezzo")
+    nuova = casa.with_name(casa.name + ".nuova")
+    shutil.rmtree(nuova, ignore_errors=True)
+    nuova.mkdir(parents=True)
+    testo = grezzo / "testo"
+    di = al_passo or (lambda _riga: None)
+    di("scarico la parte che guarda le foto")
+    pth = _uguale(prendi(REPO, FILE_PESI, REVISIONE, grezzo), SHA256_PESI, FILE_PESI)
+    di("preparo la parte che guarda le foto")
+    converti_visione(pth, nuova / VISIONE)
+    for nome, voluto in piccoli_del_testo().items():
+        dove = _uguale(prendi(REPO_TESTO, nome, REVISIONE_TESTO, testo), voluto, nome)
+        shutil.copyfile(dove, nuova / nome)
+    di("scarico la parte che legge le parole")
+    indice = json.loads((nuova / "model.safetensors.index.json").read_text("utf-8"))
+    for nome in file_del_testo(indice):
+        _uguale(prendi(REPO_TESTO, nome, REVISIONE_TESTO, testo), SHA256_TESTO[nome], nome)
+    di("preparo la parte che legge le parole")
+    converti_testo(testo, nuova / TESTO)
+    shutil.copyfile(FILE_LICENZA, nuova / FILE_LICENZA.name)
+    scrivi_scheda(nuova, configurazione_del_testo(nuova))
+    if not ci_sono(nuova):
+        raise FileDiverso(SCHEDA)
+    shutil.rmtree(casa, ignore_errors=True)
+    nuova.replace(casa)
+    liberati = sum(f.stat().st_size for f in grezzo.rglob("*") if f.is_file())
+    shutil.rmtree(grezzo, ignore_errors=True)
+    return liberati

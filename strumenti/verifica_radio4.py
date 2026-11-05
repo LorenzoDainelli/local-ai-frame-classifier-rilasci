@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
-import shutil
 import sys
 from pathlib import Path
 
@@ -26,30 +24,16 @@ def scrivi(uscita, *pezzi) -> None:
     uscita.write(riga + "\n")
 
 
-def prepara(uscita, casa: Path) -> None:
+def prendi(repo: str, nome: str, revisione: str, cartella: Path) -> Path:
     from huggingface_hub import hf_hub_download
 
-    casa.mkdir(parents=True, exist_ok=True)
-    pth = Path(hf_hub_download(radio4.REPO, radio4.FILE_PESI, revision=radio4.REVISIONE))
-    scrivi(uscita, "SHA_PESI", radio4.sha256(pth) == radio4.SHA256_PESI)
-    scrivi(uscita, "VISIONE_PEZZI", radio4.converti_visione(pth, casa / radio4.VISIONE))
-    for nome in (*radio4.SHA256_PICCOLI, "tokenizer.json", "tokenizer.model"):
-        dove = Path(hf_hub_download(radio4.REPO_TESTO, nome, revision=TESTO))
-        voluto = {**radio4.SHA256_PICCOLI, **radio4.SHA256_TESTO}[nome]
-        scrivi(uscita, "SHA_TESTO", nome, radio4.sha256(dove) == voluto)
-        shutil.copyfile(dove, casa / nome)
-    indice = json.loads((casa / "model.safetensors.index.json").read_text("utf-8"))
-    servono = radio4.file_del_testo(indice)
-    scrivi(uscita, "FILE_DEL_TESTO", servono)
-    for nome in servono:
-        dove = Path(hf_hub_download(radio4.REPO_TESTO, nome, revision=TESTO))
-        giusto = radio4.sha256(dove) == radio4.SHA256_TESTO[nome]
-        scrivi(uscita, "SHA_FRAMMENTO", nome, giusto)
-        (casa / nome).symlink_to(dove)
-    scrivi(uscita, "TESTO_PEZZI", radio4.converti_testo(casa, casa / radio4.TESTO))
-    for nome in servono:
-        (casa / nome).unlink()
-    radio4.scrivi_scheda(casa, radio4.configurazione_del_testo(casa))
+    return Path(hf_hub_download(repo, nome, revision=revisione, local_dir=str(cartella)))
+
+
+def prepara(uscita, casa: Path) -> None:
+    casa.parent.mkdir(parents=True, exist_ok=True)
+    liberati = radio4.porta_in_casa(casa, prendi, lambda riga: scrivi(uscita, "PASSO", riga))
+    scrivi(uscita, "GREZZI_TOLTI", liberati)
     for nome in (radio4.VISIONE, radio4.TESTO):
         scrivi(uscita, "PESA", nome, (casa / nome).stat().st_size)
     scrivi(uscita, "CI_SONO", radio4.ci_sono(casa))

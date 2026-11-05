@@ -12,7 +12,7 @@ from officina.descrittori import vettori
 from officina.descrittori import griglia
 from officina.modello import impronte as impronte_mod, nodi
 
-PREFERENZA = ("dinov3", "siglip2", "disegnato")
+PREFERENZA = ("dinov3", "radio4", "siglip2", "disegnato")
 
 MINIMO_ESEMPI = 4
 

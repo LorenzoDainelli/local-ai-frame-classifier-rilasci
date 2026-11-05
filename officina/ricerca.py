@@ -237,31 +237,45 @@ def _dalle_descrizioni(connessione: sqlite3.Connection, frase: str, quanti: int,
             for riga in righe if riga["scatto_id"] not in gia_visti]
 
 
+PER_LE_PAROLE = ("radio4", "siglip2")
+
+
+def per_le_parole(connessione: sqlite3.Connection,
+                  cartella_modelli: Path) -> tuple[str | None, str]:
+    from officina.descrittori import SCHEDE, in_casa
+
+    presenti = dict(magazzino.modelli_presenti(connessione))
+    candidati = [nome for nome in PER_LE_PAROLE if nome in SCHEDE]
+    pronti = [nome for nome in candidati
+              if in_casa(nome, cartella_modelli) and nome in presenti]
+    for nome in pronti:
+        if nome == pronti[-1] or not magazzino.quanti_da_fare(connessione, nome,
+                                                               presenti[nome]):
+            return nome, ""
+    if not any(in_casa(nome, cartella_modelli) for nome in candidati):
+        return None, ("Per cercare a parole serve il modello che capisce le "
+                      "parole, e non è ancora stato scaricato:\n"
+                      f"{istruzioni.modello(candidati[0])}\n"
+                      "Senza, si cerca solo fra le cose che hai etichettato tu.")
+    return None, ("Il modello c'è, ma le impronte non sono ancora state "
+                  "calcolate con lui:\n"
+                  f"    python -m officina impronte --descrittore {candidati[0]}")
+
+
 def _per_somiglianza(connessione: sqlite3.Connection, cartella_modelli: Path,
                      frase: str, quanti: int, fuori: Risposta,
                      riformula: bool) -> tuple[list[Trovato], str]:
-    from officina.descrittori import in_casa
-
-    if not in_casa("siglip2", Path(cartella_modelli)):
-        return [], ("Per cercare a parole serve il modello che capisce le "
-                    "parole, e non è ancora stato scaricato:\n"
-                    f"{istruzioni.modello('siglip2')}\n"
-                    "Senza, si cerca solo fra le cose che hai etichettato tu.")
-
+    nome, avviso = per_le_parole(connessione, Path(cartella_modelli))
+    if nome is None:
+        return [], avviso
     presenti = dict(magazzino.modelli_presenti(connessione))
-    if "siglip2" not in presenti:
-        return [], ("Il modello c'è, ma le impronte non sono ancora state "
-                    "calcolate con lui:\n"
-                    "    python -m officina impronte --descrittore siglip2")
-
-    elenco, dati = magazzino.passata(connessione, "siglip2", presenti["siglip2"],
-                                     "intera")
+    elenco, dati = magazzino.passata(connessione, nome, presenti[nome], "intera")
     if not elenco:
-        return [], "Nessuna impronta di siglip2 in questo archivio."
+        return [], f"Nessuna impronta di {nome} in questo archivio."
 
     from officina.descrittori import apri
 
-    modello = apri("siglip2", Path(cartella_modelli))
+    modello = apri(nome, Path(cartella_modelli))
     riscritta = _riscrivi(frase, Path(cartella_modelli), riformula)
     fuori.modi = riscritta.modi
     fuori.modi_da_dove = riscritta.da_dove
