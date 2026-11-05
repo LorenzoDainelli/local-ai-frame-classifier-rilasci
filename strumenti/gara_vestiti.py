@@ -353,17 +353,29 @@ def _classifica(riga, chiavi: list[str]) -> dict:
     return fuori
 
 
-def corri(chi: str, cartella: Path, uscita: Path, parte: int, parti: int) -> None:
+def corri(chi: str, cartella: Path, uscita: Path, parte: int, parti: int,
+          minuti: float = 0) -> None:
     import numpy
     import torch
 
     from officina.corpi import vestiti, vestiti_a_parole
 
     torch.set_grad_enabled(False)
+    avvio = time.monotonic()
     scheda = CONCORRENTI[chi]
     tutti = campioni(cartella)
     miei = [c for c in tutti if c["id"] % parti == parte]
-    print(chi, "campioni", len(tutti), "miei", len(miei), flush=True)
+    prima = _esito_di_prima(uscita / "esito.json", chi, parte, parti)
+    if prima["saltati"] is None:
+        prima["saltati"] = [c["id"] for c in miei if str(c["id"]) not in prima["risposte"]]
+    fatti = {int(k) for k in prima["risposte"]} | set(prima["saltati"])
+    da_fare = [c for c in miei if c["id"] not in fatti]
+    print(chi, "campioni", len(tutti), "miei", len(miei), "gia' fatti", len(fatti),
+          flush=True)
+    if not da_fare:
+        _scrivi_esito(uscita, chi, parte, parti, prima["risposte"], prima["saltati"],
+                      prima["secondi"], prima["contate"], True)
+        return
     modello = (Radio(scheda["radio"], scheda["adattatore"]) if "radio" in scheda
                else Siglip(scheda["nome"]))
     elenco = vestiti_a_parole.frasi()
@@ -372,31 +384,69 @@ def corri(chi: str, cartella: Path, uscita: Path, parte: int, parti: int) -> Non
                             for i in range(0, len(elenco), 32)]).numpy()
     chiavi = [chiave for chiave, _ in elenco]
     foto = Foto(cartella)
-    risposte, tempi, saltate = {}, [], 0
-    for inizio in range(0, len(miei), 16):
-        gruppo = miei[inizio:inizio + 16]
+    risposte = dict(prima["risposte"])
+    saltati = list(prima["saltati"])
+    secondi, contate = prima["secondi"], prima["contate"]
+    tempi: list[float] = []
+    finito = True
+    for inizio in range(0, len(da_fare), 16):
+        if minuti and time.monotonic() - avvio > minuti * 60:
+            finito = False
+            break
+        gruppo = da_fare[inizio:inizio + 16]
         sagome = [vestiti.sagoma(foto.ritaglio(c), (0.0, 0.0, 1.0, 1.0),
                                  lato_finale=scheda["lato"]) for c in gruppo]
         pronti = [(c, s) for c, s in zip(gruppo, sagome, strict=True) if s is not None]
-        saltate += len(gruppo) - len(pronti)
+        saltati.extend(c["id"] for c in gruppo if all(c is not d for d, _ in pronti))
         if not pronti:
             continue
         partito = time.monotonic()
         with torch.inference_mode():
             numeri = modello.immagini([s for _, s in pronti]).numpy()
-        tempi.append((time.monotonic() - partito) / len(pronti))
+        speso = time.monotonic() - partito
+        tempi.append(speso / len(pronti))
+        secondi, contate = secondi + speso, contate + len(pronti)
         voti = numeri @ parole.T
         for (campione, _), riga in zip(pronti, voti, strict=True):
-            risposte[campione["id"]] = _classifica(riga, chiavi)
+            risposte[str(campione["id"])] = _classifica(riga, chiavi)
         if inizio % 320 == 0:
             media = round(float(numpy.mean(tempi)), 3)
-            print(chi, inizio, len(miei), media, "s", flush=True)
+            print(chi, inizio, len(da_fare), media, "s", flush=True)
+            _scrivi_esito(uscita, chi, parte, parti, risposte, saltati, secondi, contate,
+                          False)
+    _scrivi_esito(uscita, chi, parte, parti, risposte, saltati, secondi, contate, finito)
+    print(chi, "finito" if finito else "fermato per il tempo, si riprende dopo",
+          len(risposte), "saltate perche' troppo piccole", len(saltati), flush=True)
+
+
+def _esito_di_prima(file: Path, chi: str, parte: int, parti: int) -> dict:
+    vuoto = {"risposte": {}, "saltati": [], "secondi": 0.0, "contate": 0}
+    if not file.exists():
+        return vuoto
+    esito = json.loads(file.read_text())
+    if (esito.get("chi"), esito.get("parte"), esito.get("parti")) != (chi, parte, parti):
+        return vuoto
+    if "saltati" not in esito:
+        per_foto = float(esito.get("secondi_per_foto") or 0.0)
+        return {"risposte": esito["risposte"], "saltati": None,
+                "secondi": per_foto * len(esito["risposte"]),
+                "contate": len(esito["risposte"])}
+    return {"risposte": esito["risposte"], "saltati": esito["saltati"],
+            "secondi": float(esito.get("secondi", 0.0)),
+            "contate": int(esito.get("contate", 0))}
+
+
+def _scrivi_esito(uscita: Path, chi: str, parte: int, parti: int, risposte: dict,
+                  saltati: list, secondi: float, contate: int, finito: bool) -> None:
     uscita.mkdir(parents=True, exist_ok=True)
-    (uscita / "esito.json").write_text(json.dumps({
-        "chi": chi, "parte": parte, "parti": parti, "risposte": risposte, "saltate": saltate,
-        "secondi_per_foto": float(numpy.mean(tempi)) if tempi else None,
+    nuovo = uscita / "esito.json.nuovo"
+    nuovo.write_text(json.dumps({
+        "chi": chi, "parte": parte, "parti": parti, "risposte": risposte,
+        "saltati": saltati, "saltate": len(saltati), "secondi": secondi,
+        "contate": contate, "finito": finito,
+        "secondi_per_foto": secondi / contate if contate else None,
     }))
-    print(chi, "fatto", len(risposte), "saltate perche' troppo piccole", saltate, flush=True)
+    nuovo.replace(uscita / "esito.json")
 
 
 def _significato() -> dict[str, tuple[str, str]]:
@@ -517,8 +567,11 @@ def somma(cartella: Path, risultati: Path, uscita: Path) -> None:
     tutti = {c["id"]: c for c in campioni(cartella)}
     risposte: dict[str, dict] = {}
     tempi: dict[str, list] = {}
+    non_finiti = []
     for file in sorted(risultati.glob("*/esito.json")):
         esito = json.loads(file.read_text())
+        if esito.get("finito") is False:
+            non_finiti.append(file.parent.name)
         risposte.setdefault(esito["chi"], {}).update(
             {int(k): v for k, v in esito["risposte"].items()})
         if esito.get("secondi_per_foto"):
@@ -530,7 +583,7 @@ def somma(cartella: Path, risultati: Path, uscita: Path) -> None:
     giusti = _giudica(tutti, risposte, comuni)
     fuori = {"concorrenti": {chi: CONCORRENTI[chi]["titolo"] for chi in chi_ci_sono},
              "risposte": {chi: len(r) for chi, r in risposte.items()},
-             "comuni": len(comuni), "campioni": len(tutti),
+             "comuni": len(comuni), "campioni": len(tutti), "non_finiti": non_finiti,
              "secondi_per_foto": {
                  chi: round(sum(t) / len(t), 3) for chi, t in tempi.items()},
              "somiglianza_del_primo": _quanto_simili(risposte),
@@ -591,6 +644,7 @@ def main() -> None:
     giro.add_argument("--uscita", type=Path, required=True)
     giro.add_argument("--parte", type=int, default=0)
     giro.add_argument("--parti", type=int, default=1)
+    giro.add_argument("--minuti", type=float, default=0)
     conto = sotto.add_parser("somma")
     conto.add_argument("--cartella", type=Path, required=True)
     conto.add_argument("--risultati", type=Path, required=True)
@@ -601,7 +655,8 @@ def main() -> None:
     elif scelte.cosa == "elenca":
         elenca(scelte.cartella)
     elif scelte.cosa == "corri":
-        corri(scelte.chi, scelte.cartella, scelte.uscita, scelte.parte, scelte.parti)
+        corri(scelte.chi, scelte.cartella, scelte.uscita, scelte.parte, scelte.parti,
+              scelte.minuti)
     else:
         somma(scelte.cartella, scelte.risultati, scelte.uscita)
     sys.stdout.flush()

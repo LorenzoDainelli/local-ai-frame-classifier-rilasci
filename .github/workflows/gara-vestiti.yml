@@ -65,16 +65,24 @@ jobs:
             safetensors==0.8.0 sentencepiece protobuf pillow==13.0.0 numpy==2.4.6 \
             timm==1.0.31 einops==0.8.2 open_clip_torch
       - run: python strumenti/gara_vestiti.py scarica --cartella dati-vestiti
+      - name: Le risposte delle corse di prima
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: esiti/${{ matrix.chi }}-${{ matrix.parte }}
+          key: vestiti-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ github.run_id }}
+          restore-keys: vestiti-esito-${{ matrix.chi }}-${{ matrix.parte }}-
       - name: La corsa
         run: |
           python strumenti/gara_vestiti.py corri --chi "${{ matrix.chi }}" --cartella dati-vestiti \
             --uscita "esiti/${{ matrix.chi }}-${{ matrix.parte }}" \
-            --parte "${{ matrix.parte }}" --parti "${{ matrix.parti }}"
+            --parte "${{ matrix.parte }}" --parti "${{ matrix.parti }}" --minuti 300
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: always()
         with:
           path: esiti/${{ matrix.chi }}-${{ matrix.parte }}
-          key: vestiti-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ github.run_id }}
+          key: >-
+            vestiti-esito-${{ matrix.chi }}-${{ matrix.parte }}-${{ github.run_id }}-${{
+            github.run_attempt }}
 
   somma:
     name: Chi ha vinto
@@ -94,32 +102,38 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: esiti/A-0
-          key: vestiti-esito-A-0-${{ github.run_id }}
+          key: vestiti-esito-A-0-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: vestiti-esito-A-0-
       - name: Esito di A 1
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: esiti/A-1
-          key: vestiti-esito-A-1-${{ github.run_id }}
+          key: vestiti-esito-A-1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: vestiti-esito-A-1-
       - name: Esito di C 0
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: esiti/C-0
-          key: vestiti-esito-C-0-${{ github.run_id }}
+          key: vestiti-esito-C-0-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: vestiti-esito-C-0-
       - name: Esito di C 1
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: esiti/C-1
-          key: vestiti-esito-C-1-${{ github.run_id }}
+          key: vestiti-esito-C-1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: vestiti-esito-C-1-
       - name: Esito di C 2
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: esiti/C-2
-          key: vestiti-esito-C-2-${{ github.run_id }}
+          key: vestiti-esito-C-2-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: vestiti-esito-C-2-
       - name: Esito di C 3
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: esiti/C-3
-          key: vestiti-esito-C-3-${{ github.run_id }}
+          key: vestiti-esito-C-3-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: vestiti-esito-C-3-
       - run: python strumenti/gara_vestiti.py scarica --cartella dati-vestiti
       - name: La classifica
         run: >-
