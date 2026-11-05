@@ -11,7 +11,16 @@ DIFFICILE = "difficile"
 DIFFICILISSIMO = "difficilissimo"
 ROVINE = ("buio", "rumore", "compresso")
 MOSSO = "mosso"
-QUANTI = {"facili": 60, "hard": 100, "extreme": 50, "rovinati": 30, "mossi": 20}
+QUANTI = {"facili": 60, "hard": 100, "extreme": 50, "rovinati": 30, "mossi": 20,
+          "adobe": 50}
+XTEST = "xtest/"
+ADOBE = "adobe/"
+XTEST_TENUTI = (0, 32)
+XTEST_VERI = (8, 16, 24)
+XTEST_QUADRI = 33
+ADOBE_TENUTI = (0, 8)
+ADOBE_VERI = (2, 4, 6)
+ADOBE_QUADRI = 9
 
 
 @dataclass(frozen=True)
@@ -101,6 +110,23 @@ def piano(centri: list[tuple[str, int]], presenti: dict[str, set[int]]) -> list[
     return casi
 
 
+def casi_xtest(clip: list[str]) -> list[Caso]:
+    casi = []
+    for nome in sorted(clip):
+        scena = XTEST + nome
+        for rovina in (None,) + ROVINE:
+            casi.append(Caso(f"{scena}/p32x4" + (f"/{rovina}" if rovina else ""),
+                             DIFFICILISSIMO, scena, 32, 4, rovina, XTEST_TENUTI,
+                             XTEST_VERI))
+    return casi
+
+
+def casi_adobe(cartelle: list[str]) -> list[Caso]:
+    scelte = sorted(cartelle, key=lambda c: _ordine("adobe", c, 0))[:QUANTI["adobe"]]
+    return [Caso(f"{ADOBE}{c}/p8x4", DIFFICILE, ADOBE + c, 8, 4, None, ADOBE_TENUTI,
+                 ADOBE_VERI) for c in sorted(scelte)]
+
+
 def presenti_da_nomi(nomi) -> tuple[dict[str, set[int]], dict[tuple[str, int], str]]:
     presenti: dict[str, set[int]] = {}
     veri_nomi: dict[tuple[str, int], str] = {}
@@ -128,6 +154,14 @@ def righe_file(casi: list[Caso], veri_nomi: dict, voce) -> list[str]:
     return righe
 
 
+def righe_tutte(veri_nomi: dict, voce) -> list[str]:
+    righe = []
+    for scena, numero in sorted(veri_nomi):
+        impronta_file, peso = voce(veri_nomi[(scena, numero)])
+        righe.append(f"{impronta_file} {peso} {numero} {veri_nomi[(scena, numero)]}")
+    return righe
+
+
 def impronta(testo: str) -> str:
     return hashlib.sha256(testo.encode()).hexdigest()
 
@@ -137,6 +171,9 @@ def file_che_servono(casi: list[Caso]) -> list[str]:
     return sorted(tutti)
 
 
-__all__ = ["Caso", "DIFFICILE", "DIFFICILISSIMO", "FACILE", "MOSSO", "OTTURATORE", "QUANTI",
-           "ROVINE", "centri_dalla_lista", "file_che_servono", "finestra", "impronta",
-           "piano", "presenti_da_nomi", "righe_file", "testo_casi"]
+__all__ = ["ADOBE", "ADOBE_QUADRI", "ADOBE_TENUTI", "ADOBE_VERI", "Caso", "DIFFICILE",
+           "DIFFICILISSIMO", "FACILE", "MOSSO", "OTTURATORE", "QUANTI", "ROVINE", "XTEST",
+           "XTEST_QUADRI", "XTEST_TENUTI", "XTEST_VERI", "casi_adobe", "casi_xtest",
+           "centri_dalla_lista", "file_che_servono", "finestra", "impronta", "piano",
+           "presenti_da_nomi", "righe_file", "righe_tutte",
+           "testo_casi"]

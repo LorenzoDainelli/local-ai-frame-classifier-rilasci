@@ -304,6 +304,9 @@ def piano_snu() -> list[str]:
     byte = sum(int(r.split()[1]) for r in elenco)
     righe.append(f"IMPRONTA_FILE {g.impronta(chr(10).join(elenco))}")
     righe.append(f"TOTALE file={len(elenco)} byte={byte}")
+    tutte = g.righe_tutte(veri_nomi, lambda n: (file_hf[n].lfs.sha256, file_hf[n].size))
+    righe.append(f"IMPRONTA_TUTTI {g.impronta(chr(10).join(tutte))} file={len(tutte)} "
+                 f"byte={sum(int(r.split()[1]) for r in tutte)}")
     righe += ["CASI " + testo] + ["S " + r for r in elenco]
     return righe
 
