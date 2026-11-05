@@ -286,23 +286,28 @@ def piano_snu() -> list[str]:
     info = HfApi().dataset_info(SNU[0], revision=SNU[1], files_metadata=True)
     file_hf = {s.rfilename: s for s in info.siblings or []}
     presenti: dict = {}
+    veri_nomi: dict = {}
     for nome in file_hf:
         if nome.endswith(".png"):
             numero = int(nome.rsplit("/", 1)[1].split(".")[0])
             presenti.setdefault(_cartella(nome), set()).add(numero)
+            veri_nomi[(_cartella(nome), numero)] = nome
     for scena, numeri in sorted(presenti.items()):
         buchi = max(numeri) - min(numeri) + 1 - len(numeri)
-        righe.append(f"SCENA {scena} da={min(numeri)} a={max(numeri)} buchi={buchi}")
+        esempio = veri_nomi[(scena, min(numeri))]
+        righe.append(f"SCENA {scena} da={min(numeri)} a={max(numeri)} buchi={buchi} "
+                     f"es={esempio}")
     casi = g.piano(sorted(set(insiemi[3])), presenti)
     elenco = [[c.nome, c.gruppo, c.scena, c.passo, c.volte, c.rovina, list(c.tenuti),
                list(c.veri)] for c in casi]
     righe.append("CASI " + json.dumps(elenco))
     byte = 0
-    for nome in g.file_che_servono(casi):
-        voce = file_hf[nome]
+    servono = sorted({(c.scena, n) for c in casi for n in c.servono()})
+    for scena, numero in servono:
+        voce = file_hf[veri_nomi[(scena, numero)]]
         byte += voce.size
-        righe.append(f"S {voce.lfs.sha256} {voce.size} {nome}")
-    righe.append(f"TOTALE file={len(g.file_che_servono(casi))} byte={byte}")
+        righe.append(f"S {voce.lfs.sha256} {voce.size} {numero} {voce.rfilename}")
+    righe.append(f"TOTALE file={len(servono)} byte={byte}")
     return righe
 
 
