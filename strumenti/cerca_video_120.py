@@ -102,10 +102,14 @@ GOPRO_TUTTO = ("https://huggingface.co/datasets/snah/GOPRO_Large/resolve/main/"
 XIPH = "https://media.xiph.org/video/derf/"
 
 
-def _cartelle(nomi: list[str], livelli: int) -> dict:
+def _cartella(nome: str) -> str:
+    return nome.rsplit("/", 1)[0] if "/" in nome else "."
+
+
+def _cartelle(nomi: list[str]) -> dict:
     conti: dict = {}
     for nome in nomi:
-        chiave = "/".join(nome.split("/")[:livelli])
+        chiave = _cartella(nome)
         conti[chiave] = conti.get(chiave, 0) + 1
     return conti
 
@@ -144,9 +148,9 @@ def _zip_lontano(indirizzo: str) -> dict:
     nomi = [v.filename for v in voci if not v.is_dir()]
     byte: dict = {}
     for v in voci:
-        chiave = "/".join(v.filename.split("/")[:3])
+        chiave = _cartella(v.filename)
         byte[chiave] = byte.get(chiave, 0) + v.file_size
-    return {"quanti": len(nomi), "esempi": nomi[:12], "per_cartella": _cartelle(nomi, 3),
+    return {"quanti": len(nomi), "esempi": nomi[:12], "per_cartella": _cartelle(nomi),
             "byte_per_cartella": byte}
 
 
@@ -163,10 +167,10 @@ def dettagli() -> dict:
     nomi = [s.rfilename for s in info.siblings or []]
     byte: dict = {}
     for s in info.siblings or []:
-        chiave = "/".join(s.rfilename.split("/")[:2])
+        chiave = _cartella(s.rfilename)
         byte[chiave] = byte.get(chiave, 0) + (s.size or 0)
     lfs = [s for s in info.siblings or [] if getattr(s, "lfs", None)][:3]
-    fuori["snu_film"] = {"commit": info.sha, "per_cartella": _cartelle(nomi, 2),
+    fuori["snu_film"] = {"commit": info.sha, "per_cartella": _cartelle(nomi),
                          "byte_per_cartella": byte,
                          "non_immagini": [n for n in nomi if not n.endswith(".png")][:40],
                          "lfs_esempio": [{"nome": s.rfilename, "sha256": s.lfs.sha256}
