@@ -20,9 +20,9 @@ CERCA_HF = ("X4K1000FPS", "X4K", "XTEST", "SNU-FILM", "SNU_FILM", "Adobe240", "G
             "gopro_large", "frame interpolation", "vfi benchmark", "high fps video",
             "240fps", "1000fps", "Xiph 4K")
 LINK = re.compile(r"https?://[^\s\"'<>)\]]+")
-INTERESSANTI = ("drive.google", "dropbox", ".zip", ".tar", ".7z", "huggingface", "onedrive",
-                "1drv", "sharepoint", "mega.nz", "kaist", "snu.ac", "xiph.org/video/derf/y4m",
-                "license", "LICENSE", "cc-by", "creativecommons")
+INTERESSANTI = ("drive.google", "dropbox", ".zip", ".tar", ".7z", "huggingface",
+                "onedrive", "1drv", "sharepoint", "mega.nz", "kaist", "snu.ac",
+                "xiph.org/video/derf/y4m", "license", "LICENSE", "cc-by", "creativecommons")
 
 
 def _leggi(indirizzo: str) -> tuple[int, str]:
@@ -78,7 +78,8 @@ def hugging_face() -> dict:
             except Exception as errore:
                 voci.append({"id": uno.id, "errore": str(errore)[:160]})
                 continue
-            file = [{"nome": s.rfilename, "byte": s.size or 0} for s in (info.siblings or [])]
+            file = [{"nome": s.rfilename, "byte": s.size or 0}
+                    for s in (info.siblings or [])]
             dati = getattr(info, "card_data", None) or {}
             voci.append({
                 "id": uno.id, "commit": info.sha,
@@ -104,8 +105,9 @@ def main() -> None:
     for nome, voce in fuori["pagine"].items():
         fuori["pesi"].update(pesi([l for l in voce["link"]
                                    if l.endswith((".zip", ".tar", ".7z", ".tar.gz"))][:20]))
-    scelte.uscita.write_text(json.dumps(fuori, indent=1, ensure_ascii=False), encoding="utf-8")
-    print(json.dumps(fuori, indent=1, ensure_ascii=False))
+    testo = json.dumps(fuori, indent=1, ensure_ascii=False)
+    scelte.uscita.write_text(testo, encoding="utf-8")
+    print(testo)
 
 
 if __name__ == "__main__":
