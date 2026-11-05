@@ -690,3 +690,109 @@ def test_stanza_dice_il_guasto(tmp_path, monkeypatch):
     lavoro = {"azione": "corsa", "dati": str(tmp_path), "risultati": str(tmp_path)}
     assert stanza.un_lavoro(lavoro, messaggi.append, rotti) == 1
     assert messaggi[-1]["guasto"] == "rotto"
+
+
+def _regista(tmp_path, monkeypatch, motori=None, fermati_dopo=None):
+    from officina.miglioria import gara120
+    from officina.miglioria import gara120_stanza as stanza
+    from officina.miglioria import rete
+    from officina.web.lavori import TurnoDellaScheda
+
+    monkeypatch.setattr(rete, "chiudi", lambda: None)
+    dati, _ = _gara_finta(tmp_path, monkeypatch)
+    piano = corsa.leggi_piano(dati)
+    elenco = sc.Elenco(piano.casi, {}, {("s/a", n): f"s/a/{n:05d}.png"
+                                        for n in range(1, 200)}, {"s/a": set(range(1, 200))})
+    scaricati = []
+    monkeypatch.setattr(sc, "elenco_snu", lambda *a, **k: elenco)
+    monkeypatch.setattr(sc, "scarica_snu",
+                        lambda cartella, el, nomi, *_: scaricati.append(nomi))
+    monkeypatch.setattr(sc, "scarica_xvfi", lambda *a, **k: None)
+    monkeypatch.setattr(sc, "cartelle_adobe", lambda cartella: {})
+    azioni = []
+
+    def lancia(lavoro, al_passo):
+        azioni.append(lavoro["azione"])
+        messaggi = []
+        stanza.un_lavoro(lavoro, messaggi.append, motori or (
+            lambda _: (_MotoreFinto("g", sbaglio=2), _MotoreFinto("l"), (_NonCiSta,))))
+        if fermati_dopo is not None and len(azioni) == fermati_dopo:
+            gara.ferma()
+        return messaggi[-1]
+
+    archivio = SimpleNamespace(dove=SimpleNamespace(modelli=tmp_path))
+    gara = gara120.Gara120(archivio, cartella=tmp_path, lancia=lancia,
+                           turno=TurnoDellaScheda())
+    return gara, azioni, scaricati
+
+
+def test_regista_fa_tutto_fino_al_voto(tmp_path, monkeypatch):
+    from officina.miglioria import gara120
+
+    gara, azioni, scaricati = _regista(tmp_path, monkeypatch)
+    assert gara.fase() == gara120.CORSA
+    gara._gira()
+    assert azioni == ["corsa", "clip"]
+    assert len(scaricati) == 2 and scaricati[1][0].startswith("s/a/")
+    assert gara.fase() == gara120.VOTO
+    assert gara.turno.chi is None
+    esito = gara.esito()
+    assert esito["automatico"] == esito["classifiche"]["difficilissimi"]["primo"]
+    assert esito["vincitore"] is None and not esito["decidiamo_insieme"]
+    lettere = voto.lettere(tmp_path / "risultati", 0)
+    scelta = next(k for k, v in lettere["lettere"].items() if v == esito["automatico"])
+    voto.vota(tmp_path / "risultati", 0, scelta)
+    assert gara.fase() == gara120.VOTATA
+    assert gara.esito()["vincitore"] == esito["automatico"]
+    assert gara.occupa() > 0
+    assert gara.cancella_i_dati() > 0 and gara.occupa() == 0
+    assert voto.clip_pronte(tmp_path / "risultati")
+
+
+def test_regista_fermato_riprende(tmp_path, monkeypatch):
+    from officina.miglioria import gara120
+
+    gara, azioni, _ = _regista(tmp_path, monkeypatch, fermati_dopo=1)
+    gara._gira()
+    assert azioni == ["corsa"]
+    assert any("riprende" in riga for riga in gara.lavoro.righe)
+    assert gara.fase() == gara120.CLIP
+    gara._fermati.clear()
+    gara._gira()
+    assert azioni == ["corsa", "corsa", "clip"]
+    assert gara.fase() == gara120.VOTO
+
+
+def test_regista_dice_il_guasto_della_stanza(tmp_path, monkeypatch):
+    from officina.errori import ErroreOfficina
+
+    def rotti(lavoro):
+        raise MemoryError()
+
+    gara, _, _ = _regista(tmp_path, monkeypatch, motori=rotti)
+    with pytest.raises(ErroreOfficina) as preso:
+        gara._gira()
+    assert preso.value.codice == "memoria_finita"
+    assert gara.turno.chi is None
+
+
+def test_regista_aspetta_la_scheda(tmp_path, monkeypatch):
+    from officina.miglioria import gara120
+    from officina.web.lavori import Lavoro
+
+    gara, azioni, _ = _regista(tmp_path, monkeypatch)
+    altro = Lavoro("altro")
+    assert gara.turno.prendi_se_libera(altro)
+    monkeypatch.setattr(gara120, "ASPETTA_LA_SCHEDA", 0.01)
+    detto = gara.lavoro.di
+
+    def di(riga):
+        detto(riga)
+        if "scheda" in riga:
+            gara.ferma()
+
+    gara.lavoro.di = di
+    gara._gira()
+    assert azioni == []
+    assert "aspetto che la scheda si liberi" in gara.lavoro.righe
+    assert gara.turno.chi is altro

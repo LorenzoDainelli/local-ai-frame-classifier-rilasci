@@ -340,4 +340,5 @@ def vincitore(automatico: str | None, voto: str | None) -> str | None:
 
 __all__ = ["LETTERE", "QUANTI", "clip_di", "clip_pronte", "conto", "distanza", "fai_clip",
            "leggi_clip", "lettere", "nomi_del_voto", "prendi_del_voto", "prepara_clip",
-           "prepara_voto", "scegli", "secondi_di", "velocita", "video_di", "vincitore", "vota"]
+           "prepara_voto", "scegli", "secondi_di", "velocita", "video_di", "vincitore",
+           "vota"]
