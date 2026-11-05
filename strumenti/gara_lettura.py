@@ -242,7 +242,7 @@ def _llama(cartella: Path) -> Path:
     rilascio: dict = {}
     scelti: list = []
     for candidato in rilasci:
-        if candidato.get("draft") or candidato.get("prerelease"):
+        if candidato.get("draft"):
             continue
         scelti = [a for a in candidato.get("assets", []) if _llama_adatto(a["name"])]
         if scelti:
