@@ -20,6 +20,7 @@ USCITA = 120
 CARTELLA = "voto"
 CLIP = "clip.json"
 VOTI = "voti.json"
+NOMI = "nomi.json"
 VERO = "vero"
 LETTERE = ("A", "B", "C")
 MINIMO = 8
@@ -63,7 +64,7 @@ def scegli(registro: corsa.Risultati, casi: list, quanti: int = QUANTI,
 
 
 def clip_di(caso: g.Caso, presenti: set[int]) -> g.Caso | None:
-    passo = VELOCITA_VERA * caso.volte // USCITA
+    passo = VELOCITA_VERA // USCITA * caso.volte
     centro = (caso.tenuti[1] + caso.tenuti[2]) // 2
     mezzo = int(SECONDI * VELOCITA_VERA / 2)
     margine = (-g.OTTURATORE[0], g.OTTURATORE[1]) if caso.rovina == g.MOSSO else (0, 0)
@@ -75,7 +76,7 @@ def clip_di(caso: g.Caso, presenti: set[int]) -> g.Caso | None:
         tenuti = tenuti[1:-1]
     if len(tenuti) < MINIMO:
         return None
-    veri = tuple(range(tenuti[0], tenuti[-1] + 1, passo // caso.volte))
+    veri = tuple(range(tenuti[0], tenuti[-1] + 1, VELOCITA_VERA // USCITA))
     return g.Caso(caso.nome, caso.gruppo, caso.scena, passo, caso.volte, caso.rovina,
                   tuple(tenuti), veri)
 
@@ -83,7 +84,7 @@ def clip_di(caso: g.Caso, presenti: set[int]) -> g.Caso | None:
 def _servono(caso: g.Caso, tenuti: list[int]) -> set[int]:
     if not tenuti:
         return set()
-    tutti = set(range(tenuti[0], tenuti[-1] + 1))
+    tutti = set(range(tenuti[0], tenuti[-1] + 1, VELOCITA_VERA // USCITA))
     if caso.rovina == g.MOSSO:
         tutti = {n + d for n in tutti for d in range(g.OTTURATORE[0], g.OTTURATORE[1] + 1)}
     return tutti
@@ -98,8 +99,39 @@ def prepara_voto(risultati: Path, registro: corsa.Risultati, elenco: sc.Elenco,
             for c in scegli(registro, piano.casi, adatto=adatto)]
     posto = Path(risultati) / CARTELLA / CLIP
     posto.parent.mkdir(parents=True, exist_ok=True)
-    posto.write_text(g.testo_casi(clip), encoding="utf-8")
+    nomi: dict[str, dict[str, str]] = {}
+    for uno in clip:
+        for numero in _servono(uno, list(uno.tenuti)):
+            nomi.setdefault(uno.scena, {})[str(numero)] = elenco.veri_nomi[
+                (uno.scena, numero)]
+    _scrivi(posto.with_name(NOMI), json.dumps(nomi, sort_keys=True))
+    _scrivi(posto, g.testo_casi(clip))
     return clip
+
+
+def _scrivi(posto: Path, testo: str) -> None:
+    nuovo = posto.with_name(posto.name + sc.PARTE)
+    nuovo.write_text(testo, encoding="utf-8")
+    os.replace(nuovo, posto)
+
+
+def prendi_del_voto(dati: Path, risultati: Path) -> Callable:
+    import numpy as np
+    from PIL import Image
+
+    nomi = json.loads((Path(risultati) / CARTELLA / NOMI).read_text(encoding="utf-8"))
+    casa = Path(dati) / sc.SNU
+
+    def prendi_di(clip: g.Caso) -> Callable:
+        della_scena = nomi[clip.scena]
+
+        def prendi(numero: int):
+            with Image.open(casa / della_scena[str(numero)]) as immagine:
+                return np.asarray(immagine.convert("RGB"))
+
+        return prendi
+
+    return prendi_di
 
 
 def leggi_clip(risultati: Path) -> list[g.Caso]:
@@ -234,10 +266,7 @@ def _leggi_voti(risultati: Path) -> dict:
 
 
 def _scrivi_voti(risultati: Path, voti: dict) -> None:
-    posto = Path(risultati) / CARTELLA / VOTI
-    nuovo = posto.with_name(posto.name + sc.PARTE)
-    nuovo.write_text(json.dumps(voti, ensure_ascii=False), encoding="utf-8")
-    os.replace(nuovo, posto)
+    _scrivi(Path(risultati) / CARTELLA / VOTI, json.dumps(voti, ensure_ascii=False))
 
 
 def lettere(risultati: Path, numero: int, caso: random.Random | None = None) -> dict:
@@ -310,5 +339,5 @@ def vincitore(automatico: str | None, voto: str | None) -> str | None:
 
 
 __all__ = ["LETTERE", "QUANTI", "clip_di", "clip_pronte", "conto", "distanza", "fai_clip",
-           "leggi_clip", "lettere", "nomi_del_voto", "prepara_clip", "prepara_voto",
-           "scegli", "secondi_di", "velocita", "video_di", "vincitore", "vota"]
+           "leggi_clip", "lettere", "nomi_del_voto", "prendi_del_voto", "prepara_clip",
+           "prepara_voto", "scegli", "secondi_di", "velocita", "video_di", "vincitore", "vota"]

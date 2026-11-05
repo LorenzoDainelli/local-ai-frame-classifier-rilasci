@@ -639,3 +639,54 @@ def test_vincitore_solo_se_d_accordo():
     assert voto.vincitore(corsa.LDF, corsa.LDF) == corsa.LDF
     assert voto.vincitore(corsa.LDF, corsa.GIMM) is None
     assert voto.vincitore(None, corsa.GIMM) is None
+
+
+def test_stanza_fa_la_corsa_e_le_clip_senza_rete(tmp_path, monkeypatch):
+    from officina.miglioria import gara120_stanza as stanza
+    from officina.miglioria import rete
+
+    chiusa = []
+    monkeypatch.setattr(rete, "chiudi", lambda: chiusa.append(1))
+    dati, risultati = _gara_finta(tmp_path, monkeypatch)
+    messaggi = []
+
+    def motori(lavoro):
+        return _MotoreFinto("g", sbaglio=2), _MotoreFinto("l"), (_NonCiSta,)
+
+    lavoro = {"azione": "corsa", "dati": str(dati), "risultati": str(risultati)}
+    assert stanza.un_lavoro(lavoro, messaggi.append, motori) == 0
+    assert chiusa == [1]
+    assert messaggi[-1] == {"fatto": {"azione": "corsa", "gimm": 2, "ldf": 2}}
+    assert {"fatti": 4, "totale": 4, "fase": corsa.LDF} in messaggi
+    piano = corsa.leggi_piano(dati)
+    elenco = sc.Elenco(piano.casi, {}, {("s/a", n): f"s/a/{n:05d}.png"
+                                        for n in range(1, 200)}, {"s/a": set(range(1, 200))})
+    registro = corsa.Risultati(risultati)
+    clip = voto.prepara_voto(risultati, registro, elenco, piano)
+    assert [c.nome for c in clip] == ["s/a/000100/p16x4/buio"]
+    nomi = voto.nomi_del_voto(clip, elenco)
+    assert nomi[0] == f"s/a/{clip[0].tenuti[0]:05d}.png" and len(nomi) == len(clip[0].veri)
+    assert clip[0].passo == 8 and min(clip[0].tenuti) >= 1
+    messaggi.clear()
+    lavoro["azione"] = "clip"
+    assert stanza.un_lavoro(lavoro, messaggi.append, motori) == 0
+    assert messaggi[-1] == {"fatto": {"azione": "clip", "pronte": True}}
+    assert messaggi[-2] == {"fatti": 2, "totale": 2}
+
+
+def test_stanza_dice_il_guasto(tmp_path, monkeypatch):
+    from officina.miglioria import gara120_stanza as stanza
+    from officina.miglioria import rete
+
+    monkeypatch.setattr(rete, "chiudi", lambda: None)
+    messaggi = []
+    assert stanza.un_lavoro({"azione": "boh"}, messaggi.append) == 2
+    assert messaggi == [{"guasto": "azione_sconosciuta"}]
+
+    def rotti(lavoro):
+        raise RuntimeError("niente")
+
+    messaggi.clear()
+    lavoro = {"azione": "corsa", "dati": str(tmp_path), "risultati": str(tmp_path)}
+    assert stanza.un_lavoro(lavoro, messaggi.append, rotti) == 1
+    assert messaggi[-1]["guasto"] == "rotto"
