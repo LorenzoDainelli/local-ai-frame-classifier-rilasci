@@ -1605,6 +1605,21 @@ def _versione_74(connessione: sqlite3.Connection) -> None:
         for colonna in colonne:
             connessione.execute(f"ALTER TABLE {tabella} ADD COLUMN {colonna} REAL")
 
+
+
+def _versione_75(connessione: sqlite3.Connection) -> None:
+    quanti = connessione.execute(
+        "SELECT count(DISTINCT seguito_id) FROM seguiti_fotogrammi").fetchone()[0]
+    if not quanti:
+        return
+    connessione.execute("DELETE FROM seguiti_fotogrammi")
+    connessione.execute(
+        "UPDATE seguiti SET stato = 'da_seguire', guasto = NULL, dove = NULL, "
+        "seguito_il = NULL WHERE stato != 'da_seguire'")
+    connessione.execute(
+        "INSERT OR REPLACE INTO stato (chiave, valore, aggiornato_il) "
+        "VALUES ('seguiti_sam3_tolti', ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
+        (str(quanti),))
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1739,6 +1754,8 @@ MIGRAZIONI: list[Migrazione] = [
                    "alla coda", _versione_72),
     Migrazione(73, "PE-Core esce: le sue impronte si cancellano", _versione_73),
     Migrazione(74, "i secondi di ogni modello nelle gare, accanto ad A e B", _versione_74),
+    Migrazione(75, "i seguiti si rifanno con SAM 3.1: via il calcolato, restano le scelte",
+               _versione_75),
 ]
 
 
