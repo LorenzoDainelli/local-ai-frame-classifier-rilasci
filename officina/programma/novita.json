@@ -19,13 +19,22 @@
       [
         "orologio",
         "Nelle sfide alla cieca, sotto A e sotto B vedi quanto ci ha messo quel modello su quella foto o quel video. Le sfide già fatte dicono «tempo non misurato». Alla fine vedi anche il tempo medio di ognuno"
+      ],
+      [
+        "sfida",
+        "Nelle Impostazioni c'è la gara dei 120 FPS fra GIMM-VFI, LDF-VFI e la Fusione, su video pubblici veloci. Prima li misura il programma, poi li guardi tu alla cieca, con A, B e C. Chi vince tutte e due le prove fa i 120 FPS"
+      ],
+      [
+        "disco",
+        "La gara scarica circa 23 GB di video pubblici e alla fine c'è un tasto per cancellarli. Se la fermi, riparte da dove era arrivata"
       ]
     ],
     "tecnico": [
       "Tolti <code>PeCore</code>, <code>pe_visione.py</code>, le sue revisioni e impronte fissate, la conversione dei pesi e la voce in <code>modelli_in_casa.OBBLIGATORI</code> (regola 574, che supera la 420).",
       "Migrazione 73: <code>DELETE FROM impronte WHERE descrittore = 'pecore'</code>, e il numero tolto va nello <code>stato</code> come <code>pecore_impronte_tolte</code>.",
       "All'avvio <code>descrittori.sgombero.sgombra</code> cancella <code>modelli/pecore</code>, somma i byte liberati e le impronte tolte nella carta (<code>modelli_tolti</code>); la riga coi numeri veri compare qui sopra.",
-      "Migrazione 74: <code>secondi_seedvr2</code>/<code>secondi_lucidflux</code> in <code>sfide</code> e <code>secondi_a</code>/<code>secondi_b</code> in <code>sfide_togli</code>, misurati col cronometro attorno al lavoro di ogni modello; a parole con <code>tempo_gara</code> (regola 575)."
+      "Migrazione 74: <code>secondi_seedvr2</code>/<code>secondi_lucidflux</code> in <code>sfide</code> e <code>secondi_a</code>/<code>secondi_b</code> in <code>sfide_togli</code>, misurati col cronometro attorno al lavoro di ogni modello; a parole con <code>tempo_gara</code> (regola 575).",
+      "Gara 120 FPS: <code>miglioria.gara120</code> (regista), <code>gara120_stanza</code> senza rete per la corsa e le clip, <code>gara120_voto</code> (20 clip SNU-FILM da 2 s a 120 vere, lettere mescolate, vero dopo il voto, primo voto definitivo), pagina <code>/gara-120</code>; si ferma durante la prima copia (regola 577)."
     ]
   },
   {
