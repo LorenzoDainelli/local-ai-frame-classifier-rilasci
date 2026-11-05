@@ -349,7 +349,10 @@ def parti_le_impronte(archivio) -> None:
 
 @strada.post("/misura/impronte/ferma")
 def ferma_impronte():
+    from officina.impronte import rifacimento
+
     sosta.per_la_copia.fermato_da_te(sosta.IMPRONTE)
+    rifacimento.del_programma.fermato_da_te()
     ferma_le_impronte()
     return RedirectResponse("/intelligenza", status_code=303)
 

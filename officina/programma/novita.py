@@ -54,11 +54,11 @@ def per_la_pagina(voci) -> list[dict]:
 
 
 def _con_le_pulizie(voce: dict) -> list:
-    righe = list(voce["semplice"])
-    if "pecore" in voce.get("tolti", ()):
-        from officina.descrittori import sgombero
+    from officina.descrittori import sgombero
 
-        detto = sgombero.da_dire()
+    righe = list(voce["semplice"])
+    for nome in voce.get("tolti", ()):
+        detto = sgombero.da_dire() if nome == "pecore" else sgombero.da_dire_superate(nome)
         if detto:
             righe.append(["disco", detto])
     return righe

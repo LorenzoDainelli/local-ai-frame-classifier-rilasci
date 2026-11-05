@@ -446,7 +446,18 @@ class Coda:
             finally:
                 self.finite.append(self.passata.avanzamento)
                 self.passata = None
+        if not self.fermata:
+            self._togli_le_superate()
         return self
+
+    def _togli_le_superate(self) -> None:
+        from officina.descrittori import sgombero
+
+        try:
+            sgombero.togli_le_superate(self.archivio, self.archivio.dove.modelli)
+        except Exception as guasto:
+            registro.errore("impronte.superate_non_tolte",
+                            **registro.dove_si_e_rotto(guasto))
 
 
     @property

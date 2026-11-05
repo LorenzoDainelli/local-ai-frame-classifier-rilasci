@@ -114,6 +114,9 @@ def disco_occupato() -> bool:
 
 
 def ferma_tutto(entro: float = 5.0) -> None:
+    from officina.impronte import rifacimento
+
+    rifacimento.del_programma.smetti()
     sosta.per_la_copia.smetti(entro)
     comune.raddrizza_basta.set()
     comune.date_basta.set()

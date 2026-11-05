@@ -588,6 +588,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         self.fase_apertura = 3
         self._apri_l_archivio_sicuro_in_sottofondo(password)
         self._parti_la_sosta()
+        self._parti_il_rifacimento()
         self._parti_le_copie_in_sottofondo()
         self._parti_la_salute_in_sottofondo()
         threading.Thread(target=self._prepara_i_conti, name="preparazione", daemon=True).start()
@@ -649,6 +650,15 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                                       attiva=archivio_sicuro.prima_copia_segnata())
         except Exception as guasto:
             registro.errore("programma.sosta_non_partita",
+                            **registro.dove_si_e_rotto(guasto))
+
+    def _parti_il_rifacimento(self) -> None:
+        from officina.impronte import rifacimento
+
+        try:
+            rifacimento.del_programma.guarda()
+        except Exception as guasto:
+            registro.errore("programma.rifacimento_non_partito",
                             **registro.dove_si_e_rotto(guasto))
 
     def _serve_la_sosta(self) -> bool | None:
@@ -817,6 +827,16 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             sgombero.sgombra(archivio.dove.modelli, archivio)
         except Exception as guasto:
             registro.errore("programma.pe_core_non_tolto",
+                            **registro.dove_si_e_rotto(guasto))
+        try:
+            sgombero.togli_le_superate(archivio, archivio.dove.modelli)
+        except Exception as guasto:
+            registro.errore("programma.impronte_superate_non_tolte",
+                            **registro.dove_si_e_rotto(guasto))
+        try:
+            sgombero.compatta_se_serve(archivio)
+        except Exception as guasto:
+            registro.errore("programma.database_non_compattato",
                             **registro.dove_si_e_rotto(guasto))
 
     def _miglioria_in_grande(self, archivio) -> None:

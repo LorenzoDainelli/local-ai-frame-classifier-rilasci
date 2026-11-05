@@ -330,6 +330,11 @@ class Archivio:
         with self.lettura() as connessione:
             return database.leggi_stato(connessione, chiave, predefinito)
 
+    def compatta(self) -> None:
+        with self._lucchetto:
+            self.connessione.execute("VACUUM")
+            self.connessione.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
     def salva_stato(self, chiave: str, valore) -> None:
         with self._lucchetto:
             prima = self.connessione.total_changes
