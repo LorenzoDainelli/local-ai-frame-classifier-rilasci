@@ -20,3 +20,4 @@
 .g1-tabella th, .g1-tabella td { text-align: left; padding: 6px 8px; border-bottom: 0.5px solid var(--linea); }
 .g1-tabella td.g1-primo { font-weight: 600; }
 .g1-scorre { overflow-x: auto; }
+.pagina-gara120 [hidden] { display: none !important; }
