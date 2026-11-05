@@ -22,10 +22,14 @@ SHA256_TESTO = {
     "tokenizer.model": "61a7b147390c64585d6c3543dd6fc636906c9af3865a5548f27f31aee1d4c8e2",
 }
 SHA256_PICCOLI: dict[str, str] = {
-    "config.json": "",
-    "model.safetensors.index.json": "",
-    "tokenizer_config.json": "",
-    "special_tokens_map.json": "",
+    "config.json":
+        "04d69dffcd86c212b5433f791ac685a54a951c00da5ed556e968f10aa101f663",
+    "model.safetensors.index.json":
+        "3766cd1194767496943ae5deb6add8c994b41158c69e6c13d4037cbaf8a4e118",
+    "tokenizer_config.json":
+        "14afe629fe4959b9e0d51e1852b8d9f7ad074f90a1a7125a4fcdd17f06e78fc8",
+    "special_tokens_map.json":
+        "baec30ea10906f16adb8c18af7a34023002c1746542612b8b41c9f09e1351351",
 }
 CODICE = "https://github.com/NVlabs/RADIO"
 REVISIONE_CODICE = "4ffaf15d0ff48197c194e306772bdb5fb92db230"
@@ -298,7 +302,7 @@ def costruisci_testo(casa: Path, dispositivo="cpu", tipo=None):
     rete = SiglipTextModel(SiglipTextConfig(**scheda["testo"]))
     pesi = load_file(str(casa / TESTO))
     pesi = {k: v.to(torch.float32) for k, v in pesi.items()}
-    rete.text_model.load_state_dict(pesi, strict=True)
+    getattr(rete, "text_model", rete).load_state_dict(pesi, strict=True)
     return rete.to(device=dispositivo, dtype=tipo or torch.float32).eval()
 
 

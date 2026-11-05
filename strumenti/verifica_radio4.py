@@ -35,7 +35,8 @@ def prepara(uscita, casa: Path) -> None:
     scrivi(uscita, "VISIONE_PEZZI", radio4.converti_visione(pth, casa / radio4.VISIONE))
     for nome in (*radio4.SHA256_PICCOLI, "tokenizer.json", "tokenizer.model"):
         dove = Path(hf_hub_download(radio4.REPO_TESTO, nome, revision=TESTO))
-        scrivi(uscita, "SHA_TESTO", nome, radio4.sha256(dove))
+        voluto = {**radio4.SHA256_PICCOLI, **radio4.SHA256_TESTO}[nome]
+        scrivi(uscita, "SHA_TESTO", nome, radio4.sha256(dove) == voluto)
         shutil.copyfile(dove, casa / nome)
     indice = json.loads((casa / "model.safetensors.index.json").read_text("utf-8"))
     servono = radio4.file_del_testo(indice)
