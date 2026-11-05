@@ -886,14 +886,14 @@ def test_la_gara_fermata_non_scarica_i_motori(tmp_path, monkeypatch):
 def test_la_gara_scarica_i_motori_prima_della_corsa(tmp_path, monkeypatch):
     from officina.miglioria import gara120, preparazione
 
-    gara, azioni, _ = _regista(tmp_path, monkeypatch)
+    gara, azioni, _ = _regista(tmp_path, monkeypatch, fermati_dopo=3)
     gara._prepara = gara._prepara_i_motori
     monkeypatch.setattr(preparazione, "e_pronto", lambda cartella, nome="seedvr2": False)
     monkeypatch.setattr(preparazione, "prepara",
                         lambda cartella, di, nome="seedvr2", **_: azioni.append(nome))
     gara._gira()
-    assert azioni[:3] == ["gimmvfi", "ldfvfi", "corsa"]
-    assert gara.fase() == gara120.VOTO
+    assert azioni == ["gimmvfi", "ldfvfi", "corsa"]
+    assert gara.fase() == gara120.CLIP
 
 
 def test_senza_i_motori_la_gara_dice_quale_manca(tmp_path, monkeypatch):
