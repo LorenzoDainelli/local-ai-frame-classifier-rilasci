@@ -272,6 +272,12 @@ def _llama(cartella: Path) -> Path:
     return server
 
 
+def _gguf_principale(nome: str) -> bool:
+    base = nome.rsplit("/", 1)[-1].lower()
+    aiuti = ("mmproj", "dflash", "draft", "mtp", "eagle", "assistant")
+    return base.startswith("gemma") and not any(aiuto in base for aiuto in aiuti)
+
+
 def _gguf(quanti: str) -> tuple[list[Path], Path, str]:
     from huggingface_hub import HfApi, hf_hub_download
 
@@ -285,10 +291,11 @@ def _gguf(quanti: str) -> tuple[list[Path], Path, str]:
     for repo in trovati:
         file = api.list_repo_files(repo)
         pesi = sorted(f for f in file if f.endswith(".gguf") and quanti.lower() in f.lower()
-                      and "mmproj" not in f.lower())
+                      and _gguf_principale(f))
         vista = sorted((f for f in file if "mmproj" in f.lower() and f.endswith(".gguf")),
                        key=lambda f: (0 if "f16" in f.lower() else 1, f))
         if pesi and vista:
+            print("GGUF scelti:", repo, pesi, vista[0], flush=True)
             presi = [Path(hf_hub_download(repo, f)) for f in pesi]
             return presi, Path(hf_hub_download(repo, vista[0])), repo
     raise RuntimeError("nessun GGUF di Gemma 4 26B A4B con " + quanti + " e la parte visiva")
