@@ -298,7 +298,7 @@ def test_un_modello_delle_figure_interrotto_riparte_da_dove_era(tmp_path, monkey
     assert scaricamento.quanto_manca(tmp_path) == prima - 4
     assert scaricamento.quanto_manca(tmp_path, rifai=True) == (
         scaricamento.SAM3.byte_attesi + scaricamento.POSE_BYTE + scaricamento.BYTE_KPR
-        + 10 * len(scaricamento.FIGURE))
+        + 10 * len(scaricamento.FIGURE) + scaricamento.BYTE_SAM31)
 
     def riprende(pezzo, arrivo, chiave):
         cartelle.append(arrivo)
@@ -331,7 +331,7 @@ def test_gli_avanzi_dei_vecchi_scaricamenti_si_tolgono_e_quello_a_meta_resta(tmp
     a_meta = scaricamento._arrivo(casa, scaricamento.FIGURE[0])
     (a_meta / ".cache").mkdir(parents=True)
     (a_meta / ".cache" / "pezzo.incomplete").write_bytes(b"fint")
-    for nome in ("_scarica_sam3", "_scarica_la_pose", "_scarica_le_figure"):
+    for nome in ("_scarica_sam3", "_scarica_la_pose", "_scarica_le_figure", "_scarica_sam31"):
         monkeypatch.setattr(scaricamento, nome, lambda *a, **k: None)
     monkeypatch.setattr(scaricamento, "_scarica_kpr", lambda *a, **k: None)
     monkeypatch.setattr(scaricamento, "_controlla_lo_spazio", lambda casa, manca: None)
@@ -344,6 +344,7 @@ def test_i_corpi_sono_in_casa_solo_con_le_figure(tmp_path, monkeypatch):
     from officina.corpi import rilevatore, scaricamento
 
     monkeypatch.setattr(rilevatore, "ci_sono_i_modelli", lambda cartella: True)
+    monkeypatch.setattr(scaricamento, "_c_e_sam31", lambda cartella: True)
     assert not scaricamento.gia_in_casa(tmp_path)
     casa = rilevatore.dove_stanno(tmp_path)
     for pezzo in scaricamento.FIGURE:

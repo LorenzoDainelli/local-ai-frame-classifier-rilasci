@@ -38,7 +38,7 @@ QUANTO_PUO_CRESCERE = 3
 
 SPAZIO = ("Sul disco delle foto non c'è abbastanza spazio per la copia ritoccata del video. "
           "Il video non è stato toccato.")
-SENZA_SEGUIRE = ("Per seguire la parte scelta nel video serve SAM 3, che adesso non è "
+SENZA_SEGUIRE = ("Per seguire la parte scelta nel video serve SAM 3.1, che adesso non è "
                  "pronto. Il video non è stato toccato.")
 NON_TOLTO = "Il modello per togliere non è riuscito: {perche}. Lo scatto non è stato toccato."
 TOGLI_A_PAROLE = {

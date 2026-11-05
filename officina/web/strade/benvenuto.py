@@ -43,6 +43,7 @@ def benvenuto_chiave(richiesta: Request):
         "pagina_sam3": modelli_in_casa.PAGINA_SAM3,
         "pagina_corpo3d": scarica_corpi.PAGINA_CORPO3D,
         "pagina_vggt": scarica_corpi.vggt.PAGINA,
+        "pagina_sam31": scarica_corpi.sam31.PAGINA,
     })
 
 

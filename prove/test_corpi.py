@@ -340,9 +340,13 @@ def test_senza_modelli_la_passata_si_ferma_subito(archivio_pieno):
         passata.esegui()
 
 
-def test_i_corpi_sono_obbligatori_e_si_riconoscono_in_casa(tmp_path):
+def test_i_corpi_sono_obbligatori_e_si_riconoscono_in_casa(tmp_path, monkeypatch):
     from officina import modelli_in_casa
     from officina.corpi import rilevatore
+    from officina.corpi import scaricamento as corpi_scaricamento
+
+    monkeypatch.setattr(corpi_scaricamento, "_c_e_sam31",
+                        lambda cartella: (cartella / "sam31-finto").exists())
 
     assert "corpi" in modelli_in_casa.OBBLIGATORI
     assert modelli_in_casa.OBBLIGATORI.index("corpi") > modelli_in_casa.OBBLIGATORI.index("volti")
@@ -366,8 +370,10 @@ def test_i_corpi_sono_obbligatori_e_si_riconoscono_in_casa(tmp_path):
     for pezzo in scaricamento.FIGURE:
         (casa / pezzo.dove).parent.mkdir(parents=True, exist_ok=True)
         (casa / pezzo.dove).write_bytes(b"finto")
+    assert not modelli_in_casa.in_casa("corpi", tmp_path)
+    (tmp_path / "sam31-finto").write_text("{}")
     assert modelli_in_casa.in_casa("corpi", tmp_path)
-    assert modelli_in_casa.nome("corpi") == "SAM 3, RTMW, KPR, SAM 3D Body, Puffin, VGGT-Omega e Depth Anything 3"
+    assert modelli_in_casa.nome("corpi") == "SAM 3, SAM 3.1, RTMW, KPR, SAM 3D Body, Puffin, VGGT-Omega e Depth Anything 3"
 
 
 def test_rtmw_si_prende_dallo_zip_ufficiale(tmp_path):

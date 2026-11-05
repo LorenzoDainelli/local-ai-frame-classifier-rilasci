@@ -145,10 +145,22 @@ def _vista():
     return _parte("vl_combiner").TriHeadVisionOnly(visual=collo, n_features=256, scalp=0)
 
 
+def _solo_cio_che_segue(modello):
+    vede = modello.forward_image
+
+    def forward_image(immagini, *, need_sam3_out=False, need_interactive_out=False,
+                      need_propagation_out=False):
+        return vede(immagini, need_sam3_out=False, need_interactive_out=need_interactive_out,
+                    need_propagation_out=need_propagation_out)
+
+    modello.forward_image = forward_image
+    return modello
+
+
 def costruisci():
     insieme = _parte("multiplex_utils").MultiplexController(
         multiplex_count=QUANTI_INSIEME, eval_multiplex_count=QUANTI_INSIEME)
-    return _parte("video_tracking_multiplex_demo").Sam3VideoTrackingMultiplexDemo(
+    modello = _parte("video_tracking_multiplex_demo").Sam3VideoTrackingMultiplexDemo(
         backbone=_vista(), transformer=_trasformatore(), maskmem_backbone=_memoria(),
         multiplex_controller=insieme, image_size=LATO, backbone_stride=14, num_maskmem=7,
         use_high_res_features_in_sam=True, use_obj_ptrs_in_encoder=True,
@@ -172,6 +184,7 @@ def costruisci():
                                      "dynamic_multimask_stability_delta": 0.05,
                                      "dynamic_multimask_stability_thresh": 0.98},
         compile_all_components=False, use_memory_selection=False)
+    return _solo_cio_che_segue(modello)
 
 
 def pesi_del_seguire(stato: dict) -> dict:

@@ -418,6 +418,13 @@ def test_senza_siglip2_i_corpi_non_partono(tmp_path, monkeypatch):
     assert rilevatore.cosa_manca(tmp_path) == ""
 
 
+def _sam31_finto(monkeypatch, scaricamento) -> None:
+    monkeypatch.setattr(scaricamento, "_c_e_sam31",
+                        lambda cartella: (cartella / "sam31-finto").exists())
+    monkeypatch.setattr(scaricamento, "_scarica_sam31",
+                        lambda cartella, *_: (cartella / "sam31-finto").write_text("{}"))
+
+
 def test_scaricare_i_corpi_porta_anche_kpr(tmp_path, monkeypatch):
     from officina.corpi import kpr_pesi, rilevatore, scaricamento
 
@@ -454,6 +461,7 @@ def test_scaricare_i_corpi_porta_anche_kpr(tmp_path, monkeypatch):
     monkeypatch.setattr(kpr_pesi, "scarica", kpr)
     monkeypatch.setattr(scaricamento, "_scarica_le_figure", figure)
     monkeypatch.setattr(scaricamento, "_controlla_lo_spazio", lambda casa, manca: None)
+    _sam31_finto(monkeypatch, scaricamento)
     punti = []
     scaricamento.scarica(tmp_path, a_che_punto=lambda fatti, totale: punti.append((fatti, totale)))
     assert chiesti == [tmp_path]
@@ -486,6 +494,7 @@ def test_se_drive_non_lascia_scaricare_kpr_si_spiega(tmp_path, monkeypatch):
     monkeypatch.setattr(kpr_pesi, "scarica", chiuso)
     monkeypatch.setattr(scaricamento, "_scarica_le_figure", lambda casa, *_: figure.append(casa))
     monkeypatch.setattr(scaricamento, "_controlla_lo_spazio", lambda casa, manca: None)
+    _sam31_finto(monkeypatch, scaricamento)
     with pytest.raises(ScaricamentoFallito) as preso:
         scaricamento.scarica(tmp_path)
     assert "KPR" in preso.value.messaggio and "Google Drive" in preso.value.messaggio
@@ -517,6 +526,7 @@ def test_se_piu_pezzi_dei_corpi_non_arrivano_si_dicono_tutti_e_gli_altri_arrivan
     monkeypatch.setattr(scaricamento, "_scarica_kpr", kpr)
     monkeypatch.setattr(scaricamento, "_scarica_le_figure", lambda casa, *_: figure.append(casa))
     monkeypatch.setattr(scaricamento, "_controlla_lo_spazio", lambda casa, manca: None)
+    _sam31_finto(monkeypatch, scaricamento)
     with pytest.raises(ScaricamentoFallito) as preso:
         scaricamento.scarica(tmp_path)
     messaggio = preso.value.messaggio

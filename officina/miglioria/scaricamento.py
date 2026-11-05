@@ -21,6 +21,7 @@ CODICE = "codice"
 PESI = "pesi"
 GREZZO = "https://raw.githubusercontent.com"
 MARGINE = 1 * 2 ** 30
+DI_COSA = "modello che migliora foto e video"
 PUO_ESSERE_IMPORTATO = (".py", ".pyw", ".pyc", ".pyo", ".pyd", ".so", ".dll", ".dylib",
                         ".zip", ".egg", ".pth")
 _GIA_CONTROLLATI: dict[tuple[str, int, int], str] = {}
@@ -255,7 +256,8 @@ def scarica(cartella_modelli: Path, nome: str = "seedvr2",
             chiave: str | None = None,
             prendi_testo: Callable[[str], bytes] | None = None,
             prendi_peso: Callable[[str, str, Path, str | None], Path] | None = None,
-            a_che_punto: Callable[[int, int], None] | None = None) -> Path:
+            a_che_punto: Callable[[int, int], None] | None = None,
+            di_cosa: str = DI_COSA) -> Path:
     atteso = manifesto(nome)
     arrivo = dove(cartella_modelli, nome)
     if e_in_casa(cartella_modelli, nome):
@@ -280,8 +282,8 @@ def scarica(cartella_modelli: Path, nome: str = "seedvr2",
             except Exception as errore:
                 registro.errore("miglioria.codice_non_scaricato")
                 raise ScaricamentoFallito(
-                    "Non sono riuscito a scaricare il codice del modello che "
-                    "migliora foto e video. Controlla la connessione e riprova.\n"
+                    f"Non sono riuscito a scaricare il codice del {di_cosa}. "
+                    "Controlla la connessione e riprova.\n"
                     + _dettaglio_tecnico(errore, chiave)) from errore
             if hashlib.sha256(contenuto).hexdigest() != voluta:
                 raise ScaricamentoFallito(
@@ -292,7 +294,7 @@ def scarica(cartella_modelli: Path, nome: str = "seedvr2",
             posto.write_bytes(contenuto)
 
         verificati = _porta_i_pesi(atteso, arrivo, nuova, di_passo, chiave, prendi_peso,
-                                   a_che_punto, spostati)
+                                   a_che_punto, spostati, di_cosa)
         shutil.rmtree(nuova / PESI / ".cache", ignore_errors=True)
         grandezze = {nome_peso: (nuova / PESI / nome_peso).stat().st_size
                      for nome_peso in verificati}
@@ -337,16 +339,20 @@ def gia_arrivato(posto: Path, *impronte: str | None) -> bool:
 
 
 def _porta_i_pesi(atteso: dict, arrivo: Path, nuova: Path, di_passo, chiave, prendi_peso,
-                  a_che_punto, spostati: list | None = None) -> dict[str, str]:
+                  a_che_punto, spostati: list | None = None,
+                  di_cosa: str = DI_COSA) -> dict[str, str]:
     if a_che_punto is None:
-        return _i_pesi(atteso, arrivo, nuova, di_passo, chiave, prendi_peso, spostati)
+        return _i_pesi(atteso, arrivo, nuova, di_passo, chiave, prendi_peso, spostati,
+                       di_cosa)
     totale = sum(int(p.get("byte_circa") or 0) for p in atteso["pesi"])
     with Sorvegliante(nuova / PESI, totale, a_che_punto):
-        return _i_pesi(atteso, arrivo, nuova, di_passo, chiave, prendi_peso, spostati)
+        return _i_pesi(atteso, arrivo, nuova, di_passo, chiave, prendi_peso, spostati,
+                       di_cosa)
 
 
 def _i_pesi(atteso: dict, arrivo: Path, nuova: Path, di_passo, chiave,
-            prendi_peso, spostati: list | None = None) -> dict[str, str]:
+            prendi_peso, spostati: list | None = None,
+            di_cosa: str = DI_COSA) -> dict[str, str]:
     spostati = [] if spostati is None else spostati
     verificati: dict[str, str] = {}
     for peso in atteso["pesi"]:
@@ -369,8 +375,8 @@ def _i_pesi(atteso: dict, arrivo: Path, nuova: Path, di_passo, chiave,
             except Exception as errore:
                 registro.errore("miglioria.peso_non_scaricato")
                 raise ScaricamentoFallito(
-                    "Non sono riuscito a scaricare i pesi del modello che "
-                    "migliora foto e video. Controlla la connessione e riprova.\n"
+                    f"Non sono riuscito a scaricare i pesi del {di_cosa}. "
+                    "Controlla la connessione e riprova.\n"
                     + _dettaglio_tecnico(errore, chiave)) from errore
             if not _e_lo_stesso(Path(preso), nuovo):
                 shutil.move(str(preso), str(nuovo))

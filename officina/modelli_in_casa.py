@@ -20,7 +20,7 @@ PESI = {
 
 NOMI = {
     "volti": "SCRFD e AdaFace",
-    "corpi": "SAM 3, RTMW, KPR, SAM 3D Body, Puffin, VGGT-Omega e Depth Anything 3",
+    "corpi": "SAM 3, SAM 3.1, RTMW, KPR, SAM 3D Body, Puffin, VGGT-Omega e Depth Anything 3",
     "seedvr2": "SeedVR2",
     "codeformer": "CodeFormer",
     "faceme": "FaceMe",
@@ -142,6 +142,7 @@ def _con_le_condizioni() -> tuple[tuple[str, str, str], ...]:
 
     return ((tutte_le_carte()["dinov3"].identificatore, "DINOv3", PAGINA_DINOV3),
             (scarica_corpi.SAM3.identificatore, "SAM 3", PAGINA_SAM3),
+            (scarica_corpi.REPO_SAM31, "SAM 3.1", scarica_corpi.sam31.PAGINA),
             (scarica_corpi.REPO_CORPO3D, "SAM 3D Body", scarica_corpi.PAGINA_CORPO3D),
             (scarica_corpi.vggt.REPO, "VGGT-Omega", scarica_corpi.vggt.PAGINA))
 

@@ -19,6 +19,8 @@ from officina.descrittori.scaricamento import (ScaricamentoFallito, Sorvegliante
                                                _che_genere, _dettaglio_tecnico,
                                                _perche_e_andata_male, quanto_pesa)
 from officina.errori import ErroreOfficina
+from officina.miglioria import scaricamento as miglioria_scaricamento
+from officina.ritocco import sam31
 from officina.stanza import costruzione, da3, vggt
 
 SCHEDA_SUL_DISCO = "scheda.json"
@@ -121,7 +123,11 @@ FIGURE = (
                   f"{costruzione.NOME}/{costruzione.FILE_DA3}", da3.SHA256, da3.BYTE, PER_LA_STANZA),
 )
 BYTE_FIGURE = sum(f.byte for f in FIGURE) + 20_000_000
-BYTE_IN_TUTTO = SAM3.byte_attesi + POSE_BYTE + BYTE_KPR + BYTE_FIGURE
+REPO_SAM31 = "facebook/sam3.1"
+LICENZA_SAM31 = "SAM License (Meta) — uso consentito, da accettare su Hugging Face"
+DI_SAM31 = "modello SAM 3.1, che segue nei video la parte scelta"
+BYTE_SAM31 = miglioria_scaricamento.byte_circa(sam31.NOME)
+BYTE_IN_TUTTO = SAM3.byte_attesi + POSE_BYTE + BYTE_KPR + BYTE_FIGURE + BYTE_SAM31
 MARGINE_SUL_DISCO = 2_000_000_000
 
 
@@ -136,7 +142,11 @@ class Rapporto:
 def gia_in_casa(cartella_modelli: Path) -> bool:
     return (rilevatore_mod.ci_sono_i_modelli(cartella_modelli)
             and corpo3d.ci_sono(cartella_modelli) and obiettivo.ci_sono(cartella_modelli)
-            and costruzione.ci_sono(cartella_modelli))
+            and costruzione.ci_sono(cartella_modelli) and _c_e_sam31(cartella_modelli))
+
+
+def _c_e_sam31(cartella_modelli: Path) -> bool:
+    return miglioria_scaricamento.e_in_casa(Path(cartella_modelli), sam31.NOME)
 
 
 def scarica(cartella_modelli: Path, al_passo: Callable[[str], None] | None = None,
@@ -159,6 +169,9 @@ def scarica(cartella_modelli: Path, al_passo: Callable[[str], None] | None = Non
         parti.append(lambda: _scarica_la_pose(file_pose, chiave, al_passo, a_che_punto))
     parti.append(lambda: _scarica_kpr(cartella_modelli, rifai, al_passo, a_che_punto))
     parti.append(lambda: _scarica_le_figure(casa, chiave, rifai, al_passo, a_che_punto))
+    if rifai or not _c_e_sam31(cartella_modelli):
+        parti.append(lambda: _scarica_sam31(cartella_modelli, chiave, rifai, al_passo,
+                                            a_che_punto))
     guasti: list[ScaricamentoFallito] = []
     prima = torcia.con_la_rete_accesa()
     try:
@@ -201,6 +214,8 @@ def quanto_manca(cartella_modelli: Path, rifai: bool = False) -> int:
         manca += POSE_BYTE
     if rifai or not kpr_pesi.tutti_in_casa(cartella_modelli):
         manca += BYTE_KPR
+    if rifai or not _c_e_sam31(cartella_modelli):
+        manca += BYTE_SAM31
     return manca
 
 
@@ -209,6 +224,8 @@ def repo_da_scaricare(cartella_modelli: Path, rifai: bool = False) -> set[str]:
     repo = {f.repo for f in FIGURE if rifai or not (casa / f.dove).exists()}
     if rifai or not (casa / rilevatore_mod.CARTELLA_SAM3 / rilevatore_mod.PROVA_SAM3).exists():
         repo.add(SAM3.identificatore)
+    if rifai or not _c_e_sam31(cartella_modelli):
+        repo.add(REPO_SAM31)
     return repo
 
 
@@ -270,6 +287,40 @@ def _scarica_sam3(dove: Path, chiave: str | None,
             "SAM 3 è arrivato, ma non è identico a quello provato: per sicurezza "
             "non lo tengo. Riprova più tardi; se succede ancora, il file "
             "pubblicato è cambiato e va controllato in un aggiornamento.")
+
+
+def _scarica_sam31(cartella_modelli: Path, chiave: str | None, rifai: bool,
+                   al_passo: Callable[[str], None] | None,
+                   a_che_punto: Callable[[int, int], None] | None) -> None:
+    if rifai:
+        (miglioria_scaricamento.dove(cartella_modelli, sam31.NOME)
+         / miglioria_scaricamento.PRONTO).unlink(missing_ok=True)
+    if al_passo:
+        al_passo(f"scarico SAM 3.1 — circa {BYTE_SAM31 / 1e9:.1f} GB")
+    di_passo = (lambda testo: al_passo("SAM 3.1: " + testo)) if al_passo else None
+    gia = quanto_pesa(rilevatore_mod.dove_stanno(cartella_modelli))
+
+    def avanti(arrivati: int, _totale: int) -> None:
+        a_che_punto(min(BYTE_IN_TUTTO, gia + arrivati), BYTE_IN_TUTTO)
+
+    try:
+        miglioria_scaricamento.scarica(cartella_modelli, sam31.NOME, al_passo=di_passo,
+                                       chiave=chiave,
+                                       a_che_punto=avanti if a_che_punto else None,
+                                       di_cosa=DI_SAM31)
+    except ScaricamentoFallito as errore:
+        causa = errore.__cause__
+        registro.errore("corpi.sam31_non_scaricato",
+                        ragione=registro.Parola(_che_genere(causa) if causa else "-"))
+        if causa is not None and _che_genere(causa) == "permesso":
+            raise ScaricamentoFallito(
+                "Non sono riuscito a scaricare SAM 3.1, il modello che segue nei video la "
+                "parte scelta.\n  Hugging Face dice che non hai ancora il permesso per "
+                f"SAM 3.1. Apri la sua pagina,\n      {sam31.PAGINA}\n  compila il modulo "
+                "per accettare la licenza, aspetta la conferma di Meta e poi riprova."
+                "\n  Il resto del programma funziona lo stesso.") from errore
+        raise ScaricamentoFallito(
+            errore.messaggio + "\n  Il resto del programma funziona lo stesso.") from errore
 
 
 def _perche_sam3(errore: Exception, chiave: str | None) -> str:
@@ -523,7 +574,8 @@ def _annota(casa: Path) -> None:
     from officina.corpi import kpr_pesi
 
     (casa / SCHEDA_SUL_DISCO).write_text(json.dumps({
-        "che_cosa": "i modelli del corpo: SAM 3 separa le persone, RTMW trova i punti, "
+        "che_cosa": "i modelli del corpo: SAM 3 separa le persone, SAM 3.1 le "
+                    "segue nei video, RTMW trova i punti, "
                     "KPR riconosce corporatura e vestiti, SAM 3D Body fa la figura in 3D, "
                     "Puffin capisce l'obiettivo della foto, VGGT-Omega trova da dove è stata "
                     "fatta ogni foto e Depth Anything 3 dà la forma e i metri della stanza",
@@ -543,6 +595,8 @@ def _annota(casa: Path) -> None:
                                               "licenza": vggt.LICENZA},
                                "depth_anything_3": {"repo": da3.REPO, "revisione": da3.REVISIONE,
                                                     "licenza": da3.LICENZA}},
+            sam31.NOME: {"repo": REPO_SAM31, "codice": miglioria_scaricamento.manifesto(
+                sam31.NOME)["commit"], "licenza": LICENZA_SAM31},
             "kpr": {"cartella": kpr_pesi.PAGINA_DRIVE, "codice": kpr_pesi.RIPOSTIGLIO,
                     "licenza": kpr_pesi.LICENZA,
                     "file": {p.versione: {"nome": p.file, "sha256": p.sha256}
@@ -579,13 +633,17 @@ def verifica(cartella_modelli: Path) -> dict:
     quanti = len(dati.get("impronte") or {})
     return {"stato": "intatto",
             "dettaglio": f"corpi: intatti ({quanti} file controllati) — "
-                         f"{SAM3.licenza}, {LICENZA_POSE}, {LICENZA_KPR}, "
+                         f"{SAM3.licenza}, SAM 3.1: {LICENZA_SAM31}, "
+                         f"{LICENZA_POSE}, {LICENZA_KPR}, "
                          f"{LICENZA_CORPO3D}, {obiettivo.LICENZA}, {vggt.LICENZA}, {da3.LICENZA}"}
 
 
 def togli(cartella_modelli: Path) -> bool:
     casa = rilevatore_mod.dove_stanno(cartella_modelli)
-    if not casa.is_dir():
-        return False
-    shutil.rmtree(casa)
-    return True
+    seguire = miglioria_scaricamento.dove(cartella_modelli, sam31.NOME)
+    tolto = False
+    for cartella in (casa, seguire, seguire.with_name(sam31.NOME + ".nuova")):
+        if cartella.is_dir():
+            shutil.rmtree(cartella)
+            tolto = True
+    return tolto

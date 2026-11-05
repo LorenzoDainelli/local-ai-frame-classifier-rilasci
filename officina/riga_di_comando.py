@@ -450,7 +450,7 @@ def comando_modelli(argomenti) -> int:
     if argomenti.scarica == "corpi":
         print("\n  Questo è l'unico comando che apre una connessione "
               "(regole 1, 74).")
-        print("  SAM 3 chiede di aver accettato la sua licenza su Hugging Face.\n")
+        print("  SAM 3 e SAM 3.1 chiedono di aver accettato la loro licenza su Hugging Face.\n")
         try:
             rapporto = corpi_scaricamento.scarica(
                 dove, al_passo=lambda t: print(f"  {t}"), rifai=argomenti.rifai,

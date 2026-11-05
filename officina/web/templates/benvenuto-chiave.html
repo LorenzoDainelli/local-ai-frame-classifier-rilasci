@@ -57,11 +57,13 @@
             <li>Una volta sola: entra su Hugging Face, apri
                 <span class="indirizzo numeri">{{ pagina_dinov3 | replace("https://", "") }}</span>
                 e accetta le condizioni.</li>
-            <li>Poi apri <span class="indirizzo numeri">{{ pagina_sam3 | replace("https://", "") }}</span>,
-                compila il modulo e accetta le condizioni.{% call spiega("Quanto ci vuole?") %}
-                    <p>Per SAM 3 la conferma arriva per mail, di solito in pochi
+            <li>Poi apri <span class="indirizzo numeri">{{ pagina_sam3 | replace("https://", "") }}</span>
+                e <span class="indirizzo numeri">{{ pagina_sam31 | replace("https://", "") }}</span>,
+                compila il modulo e accetta le condizioni su tutte e due.{% call spiega("Quanto ci vuole?") %}
+                    <p>Per SAM 3 e SAM 3.1 la conferma arriva per mail, di solito in pochi
                     minuti, a volte in qualche ora. Finché non arriva, i corpi
-                    nelle foto non si possono separare.</p>
+                    nelle foto non si possono separare e nei video non si può seguire
+                    la parte scelta.</p>
                 {% endcall %}</li>
             <li>Infine apri <span class="indirizzo numeri">{{ pagina_corpo3d | replace("https://", "") }}</span>
                 e <span class="indirizzo numeri">{{ pagina_vggt | replace("https://", "") }}</span>
