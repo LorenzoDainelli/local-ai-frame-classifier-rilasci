@@ -194,12 +194,70 @@ def dettagli() -> dict:
     return fuori
 
 
+SNU = ("xypeng9903/SNU_FILM", "a02ce2ca387b56cb0a3633416480cb40898b813c")
+
+
+def liste_snu() -> list[str]:
+    from huggingface_hub import hf_hub_download
+
+    righe = []
+    for livello in ("easy", "medium", "hard", "extreme"):
+        file = hf_hub_download(SNU[0], f"test-{livello}.txt", repo_type="dataset",
+                               revision=SNU[1])
+        testo = Path(file).read_text(encoding="utf-8").split()
+        terne = [testo[i:i + 3] for i in range(0, len(testo) - 2, 3)]
+        salti = sorted({int(Path(c).stem) - int(Path(a).stem) for a, _, c in terne})
+        righe.append(f"LISTA {livello} terne={len(terne)} salti={salti}")
+        righe += [f"  {' '.join(t)}" for t in terne[:3]]
+        scene: dict = {}
+        for a, _, _ in terne:
+            scene[a.rsplit("/", 1)[0]] = scene.get(a.rsplit("/", 1)[0], 0) + 1
+        righe += [f"  SCENA {s} {n}" for s, n in sorted(scene.items())]
+    return righe
+
+
+def impronte_xtest(cartella: Path) -> list[str]:
+    import hashlib
+    import zipfile
+
+    cartella.mkdir(parents=True, exist_ok=True)
+    archivio = cartella / "xtest.zip"
+    tutto = hashlib.sha256()
+    richiesta = urllib.request.Request(XTEST.replace("dl=0", "dl=1"),
+                                       headers={"User-Agent": "officina-ricerca"})
+    with urllib.request.urlopen(richiesta, timeout=600) as risposta, \
+            archivio.open("wb") as uscita:
+        while pezzo := risposta.read(8 << 20):
+            tutto.update(pezzo)
+            uscita.write(pezzo)
+    righe = [f"ARCHIVIO {archivio.stat().st_size} {tutto.hexdigest()}"]
+    with zipfile.ZipFile(archivio) as dentro:
+        for voce in dentro.infolist():
+            if voce.is_dir():
+                continue
+            uno = hashlib.sha256()
+            with dentro.open(voce) as letto:
+                while pezzo := letto.read(8 << 20):
+                    uno.update(pezzo)
+            righe.append(f"X {uno.hexdigest()} {voce.file_size} {voce.filename}")
+    archivio.unlink()
+    return righe
+
+
 def main() -> None:
     lettore = argparse.ArgumentParser()
     lettore.add_argument("--uscita", type=Path, required=True)
     lettore.add_argument("--peso", action="append", default=[])
     lettore.add_argument("--dettagli", action="store_true")
+    lettore.add_argument("--impronte", type=Path)
     scelte = lettore.parse_args()
+    if scelte.impronte:
+        righe = liste_snu()
+        print("\n".join(righe), flush=True)
+        righe_x = impronte_xtest(scelte.impronte)
+        print("\n".join(righe_x), flush=True)
+        scelte.uscita.write_text("\n".join(righe + righe_x), encoding="utf-8")
+        return
     if scelte.dettagli:
         testo = json.dumps(dettagli(), indent=1, ensure_ascii=False)
         scelte.uscita.write_text(testo, encoding="utf-8")
