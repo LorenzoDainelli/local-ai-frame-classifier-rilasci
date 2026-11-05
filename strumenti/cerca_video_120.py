@@ -107,7 +107,31 @@ def main() -> None:
                                    if l.endswith((".zip", ".tar", ".7z", ".tar.gz"))][:20]))
     testo = json.dumps(fuori, indent=1, ensure_ascii=False)
     scelte.uscita.write_text(testo, encoding="utf-8")
-    print(testo)
+    print(riassunto(fuori))
+
+
+def riassunto(fuori: dict) -> str:
+    righe = []
+    for nome, voce in fuori["pagine"].items():
+        righe.append(f"## {nome} {voce['stato']} {voce.get('errore', '')}")
+        righe += [f"  {l}" for l in voce["link"]]
+        righe += [f"  LIC {l}" for l in voce["licenza"][:6]]
+    for indirizzo, peso in fuori["pesi"].items():
+        righe.append(f"PESO {indirizzo} {json.dumps(peso)}")
+    visti = set()
+    for parola, voci in fuori["hugging_face"].items():
+        if isinstance(voci, dict):
+            righe.append(f"HF {parola} {voci}")
+            continue
+        for x in voci:
+            if x["id"] in visti:
+                continue
+            visti.add(x["id"])
+            righe.append(f"HF [{parola}] {x['id']} gb={x.get('gb')} lic={x.get('licenza')} "
+                         f"file={x.get('quanti_file')} giu={x.get('scaricati')} "
+                         f"chiuso={x.get('chiuso')}")
+            righe += [f"     {f['nome']} {f['byte']}" for f in x.get("file", [])[:6]]
+    return "\n".join(righe)
 
 
 if __name__ == "__main__":
