@@ -551,15 +551,17 @@ def test_clip_resta_dentro_i_fotogrammi():
     caso = g.Caso("s/a/1000/p16x4/buio", g.DIFFICILISSIMO, "s/a", 16, 4, "buio",
                   *g.finestra(1000, 16, 4))
     clip = voto.clip_di(caso, set(range(1, 5000)))
-    assert clip.tenuti[1] - clip.tenuti[0] == 16
+    assert clip.tenuti[1] - clip.tenuti[0] == 8 and clip.passo == 8
     assert set(caso.tenuti) <= set(clip.tenuti)
-    assert clip.veri[1] - clip.veri[0] == 4
+    assert clip.veri[1] - clip.veri[0] == 2
+    assert voto.velocita(clip) == 120
     assert (clip.tenuti[0], clip.tenuti[-1]) == (clip.veri[0], clip.veri[-1])
     assert clip.tenuti[-1] - clip.tenuti[0] <= 480
     assert len(clip.veri) == (len(clip.tenuti) - 1) * 4 + 1
+    assert clip.rovina == "buio" and clip.nome == caso.nome
     vicino = voto.clip_di(caso, set(range(950, 1200)))
     assert min(vicino.tenuti) >= 950 and max(vicino.tenuti) < 1200
-    assert voto.clip_di(caso, set(range(990, 1060))) is None
+    assert voto.clip_di(caso, set(range(990, 1040))) is None
 
 
 def test_clip_mosso_lascia_posto_all_otturatore():

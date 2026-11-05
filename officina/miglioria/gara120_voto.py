@@ -16,6 +16,7 @@ QUANTI = 20
 PER_SCENA = 2
 SECONDI = 2.0
 VELOCITA_VERA = 240
+USCITA = 120
 CARTELLA = "voto"
 CLIP = "clip.json"
 VOTI = "voti.json"
@@ -62,20 +63,20 @@ def scegli(registro: corsa.Risultati, casi: list, quanti: int = QUANTI,
 
 
 def clip_di(caso: g.Caso, presenti: set[int]) -> g.Caso | None:
+    passo = VELOCITA_VERA * caso.volte // USCITA
     centro = (caso.tenuti[1] + caso.tenuti[2]) // 2
     mezzo = int(SECONDI * VELOCITA_VERA / 2)
     margine = (-g.OTTURATORE[0], g.OTTURATORE[1]) if caso.rovina == g.MOSSO else (0, 0)
     primo = min(presenti) + margine[0]
     ultimo = max(presenti) - margine[1]
-    tenuti = [t for t in range(caso.tenuti[1] - (mezzo // caso.passo) * caso.passo,
-                               centro + mezzo + 1, caso.passo) if primo <= t <= ultimo]
+    inizio = caso.tenuti[1] - ((caso.tenuti[1] - centro + mezzo) // passo) * passo
+    tenuti = [t for t in range(inizio, centro + mezzo + 1, passo) if primo <= t <= ultimo]
     while tenuti and any(n not in presenti for n in _servono(caso, tenuti)):
         tenuti = tenuti[1:-1]
     if len(tenuti) < MINIMO:
         return None
-    passo_vero = caso.passo // caso.volte
-    veri = tuple(range(tenuti[0], tenuti[-1] + 1, passo_vero))
-    return g.Caso(caso.nome, caso.gruppo, caso.scena, caso.passo, caso.volte, caso.rovina,
+    veri = tuple(range(tenuti[0], tenuti[-1] + 1, passo // caso.volte))
+    return g.Caso(caso.nome, caso.gruppo, caso.scena, passo, caso.volte, caso.rovina,
                   tuple(tenuti), veri)
 
 
