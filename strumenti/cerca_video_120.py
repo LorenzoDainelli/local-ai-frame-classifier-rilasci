@@ -216,30 +216,55 @@ def liste_snu() -> list[str]:
     return righe
 
 
-def impronte_xtest(cartella: Path) -> list[str]:
+def _sha(letto) -> str:
     import hashlib
+
+    uno = hashlib.sha256()
+    while pezzo := letto.read(8 << 20):
+        uno.update(pezzo)
+    return uno.hexdigest()
+
+
+def _riassunto_nomi(nomi: list[tuple[str, int]]) -> list[str]:
+    cartelle: dict = {}
+    for nome, byte in nomi:
+        voce = cartelle.setdefault(_cartella(nome), [0, 0, nome])
+        voce[0] += 1
+        voce[1] += byte
+    return [f"  CART {c} file={n} byte={b} es={e}"
+            for c, (n, b, e) in sorted(cartelle.items())]
+
+
+def impronte_xtest(cartella: Path) -> list[str]:
+    import tarfile
     import zipfile
 
     cartella.mkdir(parents=True, exist_ok=True)
     archivio = cartella / "xtest.zip"
-    tutto = hashlib.sha256()
     richiesta = urllib.request.Request(XTEST.replace("dl=0", "dl=1"),
                                        headers={"User-Agent": "officina-ricerca"})
     with urllib.request.urlopen(richiesta, timeout=600) as risposta, \
             archivio.open("wb") as uscita:
         while pezzo := risposta.read(8 << 20):
-            tutto.update(pezzo)
             uscita.write(pezzo)
-    righe = [f"ARCHIVIO {archivio.stat().st_size} {tutto.hexdigest()}"]
+    righe = []
     with zipfile.ZipFile(archivio) as dentro:
-        for voce in dentro.infolist():
-            if voce.is_dir():
-                continue
-            uno = hashlib.sha256()
-            with dentro.open(voce) as letto:
-                while pezzo := letto.read(8 << 20):
-                    uno.update(pezzo)
-            righe.append(f"X {uno.hexdigest()} {voce.file_size} {voce.filename}")
+        codice = dentro.read("mp4_decoding.py").decode("utf-8", "replace")
+        righe.append("DECODIFICA\n" + codice)
+        with dentro.open("encoded_test.tar.gz") as letto, \
+                tarfile.open(fileobj=letto, mode="r|gz") as pacco:
+            for voce in pacco:
+                if voce.isfile():
+                    impronta = _sha(pacco.extractfile(voce))
+                    righe.append(f"T {impronta} {voce.size} {voce.name}")
+        for nome in ("png_test_8_input_frames.zip", "Adobe240fps_test_spilt_XVFI.zip"):
+            dentro.extract(nome, cartella)
+            with zipfile.ZipFile(cartella / nome) as interno:
+                voci = [(v.filename, v.file_size) for v in interno.infolist()
+                        if not v.is_dir()]
+            righe.append(f"ZIP {nome} file={len(voci)}")
+            righe += _riassunto_nomi(voci)
+            (cartella / nome).unlink()
     archivio.unlink()
     return righe
 
