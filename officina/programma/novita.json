@@ -46,6 +46,10 @@
         "Corretto: premendo «Avvia gara» la gara dei 120 FPS si fermava subito con «È un difetto del programma». Ora scarica davvero i video pubblici, solo dopo il tuo clic. Se internet non va, te lo dice e riparte da dove era"
       ],
       [
+        "riprova",
+        "Corretto: la gara dei 120 FPS si fermava con «il modello che serve non è ancora stato preparato». Ora, prima della corsa, scarica e controlla da sola GIMM-VFI e LDF-VFI (circa 6,5 GB). Premi di nuovo «Avvia gara»: riparte da dove era"
+      ],
+      [
         "video",
         "Nei video la parte che scegli la segue SAM 3.1, solo sulla scheda video: se è occupata aspetta il suo turno. Scegliere con un clic resta a SAM 3. SAM 3.1 chiede di accettare la licenza di Meta su Hugging Face"
       ],

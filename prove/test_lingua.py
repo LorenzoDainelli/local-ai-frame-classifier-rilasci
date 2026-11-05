@@ -284,6 +284,13 @@ def test_nessun_filo_puo_morire_in_silenzio():
             "`Sosta._gira` prende dentro qualunque errore di un giro, lo scrive "
             "nel registro e riprova al giro dopo: chi aspetta la fine della "
             "prima copia resta segnato nella carta e riparte lo stesso",
+        "officina/impronte/rifacimento.py":
+            "`Rifacimento._gira` prende dentro qualunque errore di un giro, lo "
+            "scrive nel registro e riprova al giro dopo",
+        "officina/web/strade/gara120.py":
+            "il filo che rimette in coda i video da rifare a 120 FPS prende "
+            "dentro qualunque errore e lo scrive nel registro: si riprova al "
+            "prossimo avvio del programma",
     }
 
     radice = Path(__file__).resolve().parent.parent

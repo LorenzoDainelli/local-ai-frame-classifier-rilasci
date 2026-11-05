@@ -263,12 +263,14 @@
     {% if in_grande %}
     <section class="carta mg-non-rifatte" id="in-grande" aria-labelledby="mg-in-grande-titolo">
         <h2 id="mg-in-grande-titolo">Da rifare in {{ in_grande.misura }}</h2>
-        <p class="piccolo">Il miglioramento ora arriva a {{ in_grande.misura }}. Ho buttato
-        le copie migliorate fatte in FHD e rimesso al loro posto gli originali:
-        <b class="numeri">{{ in_grande.rimesse|numero }}</b>
-        {{ 'file è' if in_grande.rimesse == 1 else 'file sono' }} di nuovo in coda e sul disco
-        si sono liberati <b class="numeri">{{ in_grande.liberati }}</b>.
-        Il lavoro non parte da solo: premi Avvia quando vuoi.</p>
+        <p class="piccolo"><b class="numeri">{{ in_grande.rimesse|numero }}</b>
+        {{ 'file è' if in_grande.rimesse == 1 else 'file sono' }} di nuovo in coda: premi Avvia
+        quando vuoi.{% call spiega("Cosa è successo") %}
+            <p>Il miglioramento ora arriva a {{ in_grande.misura }}. Ho buttato le copie migliorate
+            fatte in FHD e rimesso al loro posto gli originali.</p>
+            <p>Sul disco si sono liberati <b class="numeri">{{ in_grande.liberati }}</b>. Il
+            lavoro non parte da solo.</p>
+        {% endcall %}</p>
         {% if in_grande.saltate %}
         <p class="piccolo attenuato">Questi restano come sono, per il motivo scritto accanto:</p>
         <ul class="mg-non-rifatte-elenco minuscolo">
@@ -284,12 +286,14 @@
     {% if a_centoventi %}
     <section class="carta mg-non-rifatte" id="a-120" aria-labelledby="mg-a-120-titolo">
         <h2 id="mg-a-120-titolo">Da rifare a 120 FPS</h2>
-        <p class="piccolo">La gara dei 120 FPS ha un vincitore. Ho buttato le copie migliorate
-        dei video sotto i 120 FPS e rimesso al loro posto gli originali:
-        <b class="numeri">{{ a_centoventi.rimesse|numero }}</b>
-        {{ 'video è' if a_centoventi.rimesse == 1 else 'video sono' }} di nuovo in coda e sul
-        disco si sono liberati <b class="numeri">{{ a_centoventi.liberati }}</b>.
-        Il lavoro non parte da solo: premi Avvia quando vuoi.</p>
+        <p class="piccolo"><b class="numeri">{{ a_centoventi.rimesse|numero }}</b>
+        {{ 'video è' if a_centoventi.rimesse == 1 else 'video sono' }} di nuovo in coda: premi
+        Avvia quando vuoi.{% call spiega("Cosa è successo") %}
+            <p>La gara dei 120 FPS ha un vincitore. Ho buttato le copie migliorate dei video
+            sotto i 120 FPS e rimesso al loro posto gli originali.</p>
+            <p>Sul disco si sono liberati <b class="numeri">{{ a_centoventi.liberati }}</b>. Il
+            lavoro non parte da solo.</p>
+        {% endcall %}</p>
         {% if a_centoventi.saltate %}
         <p class="piccolo attenuato">Questi restano come sono, per il motivo scritto accanto:</p>
         <ul class="mg-non-rifatte-elenco minuscolo">

@@ -44,6 +44,7 @@ ENTRATA = "patch_embedding.weight"
 
 class MancaLdf(ErroreOfficina):
     codice = "motore_mancante"
+    senza_nomi = True
 
 
 class LdfNonCiSta(ErroreOfficina):

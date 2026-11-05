@@ -40,6 +40,7 @@ ARCHITETTURA = {
 
 class MancaGimm(ErroreOfficina):
     codice = "motore_mancante"
+    senza_nomi = True
 
 
 def riduzione(larghezza: int, altezza: int) -> float:

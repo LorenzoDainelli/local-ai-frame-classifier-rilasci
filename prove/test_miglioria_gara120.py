@@ -724,7 +724,8 @@ def _regista(tmp_path, monkeypatch, motori=None, fermati_dopo=None):
 
     archivio = SimpleNamespace(dove=SimpleNamespace(modelli=tmp_path))
     gara = gara120.Gara120(archivio, cartella=tmp_path, lancia=lancia,
-                           turno=TurnoDellaScheda())
+                           turno=TurnoDellaScheda(),
+                           prepara=lambda: azioni.append("prepara"))
     return gara, azioni, scaricati
 
 
@@ -735,7 +736,7 @@ def test_regista_fa_tutto_fino_al_voto(tmp_path, monkeypatch):
     gara, azioni, scaricati = _regista(tmp_path, monkeypatch)
     assert gara.fase() == gara120.CORSA
     gara._gira()
-    assert azioni == ["corsa", "clip"]
+    assert azioni == ["prepara", "corsa", "clip"]
     assert len(scaricati) == 2 and scaricati[1][0].startswith("s/a/")
     assert gara.fase() == gara120.VOTO
     assert gara.turno.chi is None
@@ -756,14 +757,14 @@ def test_regista_fermato_riprende(tmp_path, monkeypatch):
     pytest.importorskip("av")
     from officina.miglioria import gara120
 
-    gara, azioni, _ = _regista(tmp_path, monkeypatch, fermati_dopo=1)
+    gara, azioni, _ = _regista(tmp_path, monkeypatch, fermati_dopo=2)
     gara._gira()
-    assert azioni == ["corsa"]
+    assert azioni == ["prepara", "corsa"]
     assert any("riprende" in riga for riga in gara.lavoro.righe)
     assert gara.fase() == gara120.CLIP
     gara._fermati.clear()
     gara._gira()
-    assert azioni == ["corsa", "corsa", "clip"]
+    assert azioni == ["prepara", "corsa", "prepara", "corsa", "clip"]
     assert gara.fase() == gara120.VOTO
 
 
@@ -835,6 +836,78 @@ def test_regista_aspetta_la_scheda(tmp_path, monkeypatch):
 
     gara.lavoro.di = di
     gara._gira()
-    assert azioni == []
+    assert azioni == ["prepara"]
     assert "aspetto che la scheda si liberi" in gara.lavoro.righe
     assert gara.turno.chi is altro
+
+
+@pytest.mark.parametrize("pronti, attesi", [
+    ((), ["gimmvfi", "ldfvfi"]),
+    (("gimmvfi",), ["ldfvfi"]),
+    (("gimmvfi", "ldfvfi"), []),
+])
+def test_la_gara_scarica_i_motori_che_mancano(tmp_path, monkeypatch, pronti, attesi):
+    from officina.miglioria import gara120, preparazione
+
+    archivio = SimpleNamespace(dove=SimpleNamespace(modelli=tmp_path))
+    gara = gara120.Gara120(archivio, cartella=tmp_path / "gara")
+    scaricati = []
+    monkeypatch.setattr(preparazione, "e_pronto",
+                        lambda cartella, nome="seedvr2": nome in pronti)
+
+    def prepara(cartella, di, a_che_punto=None, nome="seedvr2", titolo="", **_):
+        assert Path(cartella) == tmp_path
+        a_che_punto(5, 10)
+        scaricati.append((nome, titolo))
+
+    monkeypatch.setattr(preparazione, "prepara", prepara)
+    gara._prepara_i_motori()
+    assert [nome for nome, _ in scaricati] == attesi
+    nomi = dict(gara120.MOTORI)
+    assert all(titolo == nomi[nome] for nome, titolo in scaricati)
+    for nome in attesi:
+        assert any(nomi[nome] in riga for riga in gara.lavoro.righe)
+    assert not gara.lavoro.numeri
+
+
+def test_la_gara_fermata_non_scarica_i_motori(tmp_path, monkeypatch):
+    from officina.miglioria import gara120, preparazione
+
+    archivio = SimpleNamespace(dove=SimpleNamespace(modelli=tmp_path))
+    gara = gara120.Gara120(archivio, cartella=tmp_path / "gara")
+    monkeypatch.setattr(preparazione, "e_pronto", lambda cartella, nome="seedvr2": False)
+    monkeypatch.setattr(preparazione, "prepara",
+                        lambda *a, **k: pytest.fail("non doveva scaricare"))
+    gara._fermati.set()
+    with pytest.raises(gara120.Fermata):
+        gara._prepara_i_motori()
+
+
+def test_la_gara_scarica_i_motori_prima_della_corsa(tmp_path, monkeypatch):
+    from officina.miglioria import gara120, preparazione
+
+    gara, azioni, _ = _regista(tmp_path, monkeypatch)
+    gara._prepara = gara._prepara_i_motori
+    monkeypatch.setattr(preparazione, "e_pronto", lambda cartella, nome="seedvr2": False)
+    monkeypatch.setattr(preparazione, "prepara",
+                        lambda cartella, di, nome="seedvr2", **_: azioni.append(nome))
+    gara._gira()
+    assert azioni[:3] == ["gimmvfi", "ldfvfi", "corsa"]
+    assert gara.fase() == gara120.VOTO
+
+
+def test_senza_i_motori_la_gara_dice_quale_manca(tmp_path, monkeypatch):
+    from officina.miglioria import gara120_stanza as stanza
+    from officina.miglioria import gimmvfi, ldfvfi, rete
+
+    monkeypatch.setattr(rete, "chiudi", lambda: None)
+    lavoro = {"azione": "corsa", "dati": str(tmp_path), "risultati": str(tmp_path),
+              "cartella_modelli": str(tmp_path)}
+    for chi in (gimmvfi.GimmVFI, lambda cartella: ldfvfi.LdfVFI(cartella)):
+        def motori(lavoro, chi=chi):
+            chi(lavoro["cartella_modelli"])
+
+        messaggi = []
+        assert stanza.un_lavoro(lavoro, messaggi.append, motori) == 1
+        assert messaggi[-1]["guasto"] == "motore_mancante"
+        assert "non è ancora stato scaricato" in messaggi[-1]["spiegazione"]

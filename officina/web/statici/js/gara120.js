@@ -4,7 +4,7 @@ const pagina = document.getElementById("gara120");
 const OGNI = 5000;
 const GIGA = 2 ** 30;
 const FASI = {
-    scarico: "Quando premi «Avvia gara», per prima cosa scarica e controlla i video pubblici (circa 21 GB).",
+    scarico: "Quando premi «Avvia gara», per prima cosa scarica e controlla i video pubblici (circa 21 GB) e i due modelli in gara, GIMM-VFI e LDF-VFI (circa 6,5 GB).",
     corsa: "La corsa sui 430 casi è a metà: riprende da dove era.",
     clip: "La corsa è finita: mancano i video del voto alla cieca.",
     voto: "I video del voto sono pronti: tocca a te.",

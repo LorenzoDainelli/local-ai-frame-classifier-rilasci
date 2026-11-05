@@ -22,6 +22,7 @@ RISULTATI = "risultati"
 ASPETTA_LA_SCHEDA = 30.0
 MODULO = "officina.miglioria.gara120_stanza"
 SCARICO, CORSA, CLIP, VOTO, VOTATA = "scarico", "corsa", "clip", "voto", "votata"
+MOTORI = (("gimmvfi", "GIMM-VFI"), ("ldfvfi", "LDF-VFI"))
 SENZA_RETE = ("Non riesco a scaricare i video pubblici della gara: controlla che "
               "internet funzioni e premi di nuovo «Avvia gara». Riprende da dove era.")
 
@@ -34,7 +35,7 @@ class Gara120:
 
     def __init__(self, archivio, cartella: Path | None = None,
                  lancia: Callable[[dict, Callable], dict] | None = None, turno=None,
-                 scarica_da_hf=None, dalla_rete=None, api=None):
+                 scarica_da_hf=None, dalla_rete=None, api=None, prepara=None):
         from officina.web.lavori import Lavoro
 
         self.archivio = archivio
@@ -46,6 +47,7 @@ class Gara120:
         self._hf = scarica_da_hf
         self._rete = dalla_rete
         self._api = api
+        self._prepara = prepara or self._prepara_i_motori
         self.lavoro = Lavoro(COSA)
         self._fermati = threading.Event()
         self._processo: subprocess.Popen | None = None
@@ -133,6 +135,8 @@ class Gara120:
                            self._hf)
             self.lavoro.di("scarico e controllo X-TEST e Adobe240 (l'archivio di XVFI)")
             sc.scarica_xvfi(self.dati, self._al_byte, self._rete)
+            self.lavoro.senza_numeri()
+            self._prepara()
         self.lavoro.senza_numeri()
         self._controlla()
         piano = corsa.scrivi_piano(self.dati, elenco, sc.cartelle_adobe(self.dati))
@@ -159,6 +163,19 @@ class Gara120:
             raise Fermata()
         registro.evento("gara_120.clip_pronte", quante=len(clip))
         self.lavoro.di("i video del voto sono pronti: tocca a te")
+
+    def _prepara_i_motori(self) -> None:
+        from officina.miglioria import preparazione
+
+        cartella_modelli = Path(self.archivio.dove.modelli)
+        for nome, titolo in MOTORI:
+            if preparazione.e_pronto(cartella_modelli, nome):
+                continue
+            self._controlla()
+            self.lavoro.di(f"scarico e controllo {titolo}, che corre nella gara")
+            preparazione.prepara(cartella_modelli, di=self.lavoro.di,
+                                 a_che_punto=self._al_byte, nome=nome, titolo=titolo)
+            self.lavoro.senza_numeri()
 
     def _prendi_la_scheda(self) -> None:
         detto = False
