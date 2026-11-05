@@ -5,6 +5,7 @@ import collections
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 
 REPO = "facebook/sam3.1"
@@ -20,29 +21,53 @@ def impronta(file: Path) -> str:
 
 
 def chiavi_del_seguire(pesi: dict) -> dict:
-    mappa = {}
-    for nome, (forma, _tipo) in pesi.items():
-        if nome.startswith("tracker.model."):
-            mappa[nome[len("tracker.model."):]] = forma
-        elif nome.startswith("detector.backbone.vision_backbone."):
-            mappa["backbone." + nome[len("detector.backbone."):]] = forma
-    return mappa
+    from officina.ritocco import sam31
+
+    return {k: v[0] for k, v in sam31.pesi_del_seguire(pesi).items()}
+
+
+class _FilmatoFinto:
+
+    def __init__(self, quanti: int, larghezza: int, altezza: int) -> None:
+        self.quanti, self.larghezza, self.altezza = quanti, larghezza, altezza
+
+    def quadro(self, indice: int):
+        import numpy
+        from PIL import Image
+
+        tela = numpy.full((self.altezza, self.larghezza, 3), 30, dtype=numpy.uint8)
+        x = 8 + indice * 4
+        tela[20:44, x:x + 24] = (220, 40, 40)
+        return Image.fromarray(tela)
+
+
+def _sul_processore(torch) -> None:
+    vero = torch.zeros
+
+    def zeri(*parti, **scelte):
+        if str(scelte.get("device", "")).startswith("cuda"):
+            scelte["device"] = "cpu"
+        return vero(*parti, **scelte)
+
+    torch.zeros = zeri
+    torch.Tensor.cuda = lambda tensore, *parti, **scelte: tensore
 
 
 def confronta(codice: Path, letto: Path, uscita: Path) -> None:
-    import sys
-
+    import numpy
     import torch
 
-    sys.path.insert(0, str(codice))
-    from sam3.model_builder import build_sam3_multiplex_video_model
+    from officina.ritocco import sam31, segui
 
-    with torch.device("meta"):
-        modello = build_sam3_multiplex_video_model(load_from_HF=False, device="meta")
+    _sul_processore(torch)
+    sam31.carica_il_pacchetto(codice)
+    fuori: dict = {"moduli_fuori": sam31.moduli_fuori(codice)}
+    torch.manual_seed(0)
+    modello = sam31.costruisci().eval()
     voluti = {k: list(v.shape) for k, v in modello.state_dict().items()}
     dati = json.loads(letto.read_text(encoding="utf-8"))
     nel_file = chiavi_del_seguire(dati["pesi"])
-    fuori = {
+    fuori.update({
         "voluti": len(voluti),
         "nel_file": len(nel_file),
         "mancano": sorted(set(voluti) - set(nel_file)),
@@ -51,9 +76,24 @@ def confronta(codice: Path, letto: Path, uscita: Path) -> None:
                                 if voluti[k] != nel_file[k]),
         "tipi": sorted({t for _f, t in dati["pesi"].values()}),
         "numeri_seguire": sum(int(torch.Size(f).numel()) for f in nel_file.values()),
-    }
+    })
+    filmato = _FilmatoFinto(4, 96, 64)
+    scelta = numpy.zeros((64, 96), dtype=bool)
+    scelta[20:44, 12:36] = True
+    seguitore = segui.Seguitore(Path("modelli") / "corpi" / "sam3")
+    seguitore._modello, seguitore._dispositivo = modello, "cpu"
+    visti: list = []
+    fatti = seguitore.segui(filmato, {1: scelta}, [segui.Tratto(1, 0, 3)],
+                            lambda indice, da, maschera, sicurezza: visti.append(
+                                [indice, da, len(maschera), round(sicurezza, 4)]))
+    fuori["seguiti"] = {"fatti": fatti, "ordine": [v[0] for v in visti], "visti": visti}
+    fuori["va"] = (not fuori["moduli_fuori"] and not fuori["mancano"]
+                   and not fuori["avanzano"] and not fuori["forme_diverse"]
+                   and fuori["seguiti"]["ordine"] == [1, 2, 3, 0])
     uscita.write_text(json.dumps(fuori, indent=1), encoding="utf-8")
     print(json.dumps(fuori, indent=1))
+    if not fuori["va"]:
+        raise SystemExit(1)
 
 
 def main() -> None:
@@ -64,6 +104,7 @@ def main() -> None:
     parti.add_argument("--letto", default="sam31.json")
     scelte = parti.parse_args()
     if scelte.confronta:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         confronta(Path(scelte.confronta), Path(scelte.letto), Path(scelte.uscita))
         return
 

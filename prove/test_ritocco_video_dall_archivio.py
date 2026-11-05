@@ -445,13 +445,13 @@ def test_ad_archivio_chiuso_il_seguito_si_ferma_col_motivo_e_poi_riprende(clic, 
     seguito_id = _bozza(scena, filmato_id, chiave)
     scena.situazione.forzata = CHIUSO
     errore = _fermato(lambda: seguire.segui_ora(scena.archivio, seguito_id, clic, sam3,
-                                                percorso, chiave, scheda=False))
+                                                percorso, chiave, scheda=True))
     assert errore.codice == copia.SICURO_CHIUSO
     riga = _seguito(scena, seguito_id)
     assert (riga["stato"], riga["guasto"]) == (seguiti.FALLITO, copia.SOLO_NELL_ARCHIVIO)
     assert sceglitore_finto.seguiti(sam3) == []
     scena.situazione.forzata = None
-    seguire.segui_ora(scena.archivio, seguito_id, clic, sam3, percorso, chiave, scheda=False)
+    seguire.segui_ora(scena.archivio, seguito_id, clic, sam3, percorso, chiave, scheda=True)
     riga = _seguito(scena, seguito_id)
     assert (riga["stato"], riga["guasto"]) == (seguiti.SEGUITO, None)
     [seguito] = sceglitore_finto.seguiti(sam3)
@@ -622,12 +622,12 @@ def test_a_parte_il_video_si_legge_dall_archivio_in_un_altro_processo(a_parte, c
         QUANTI, LARGA, ALTA)
     assert in_disparte.sta_girando(ritocco_web.A)
     seguito_id = _bozza(scena, filmato_id, chiave)
-    seguire.segui_ora(scena.archivio, seguito_id, clic, sam3, percorso, chiave, scheda=False)
+    seguire.segui_ora(scena.archivio, seguito_id, clic, sam3, percorso, chiave, scheda=True)
     [seguito] = sceglitore_finto.seguiti(sam3)
     assert seguito["percorso"] == DALL_ARCHIVIO and seguito["pid"] != os.getpid()
     assert _seguito(scena, seguito_id)["stato"] == seguiti.SEGUITO
     scena.situazione.forzata = CHIUSO
-    errore = _fermato(lambda: clic.segui(sam3, chiave + "#", percorso, {}, [], scheda=False))
+    errore = _fermato(lambda: clic.segui(sam3, chiave + "#", percorso, {}, [], scheda=True))
     assert (errore.messaggio, errore.codice) == CHIUSO_ORA
 
 

@@ -204,26 +204,15 @@ def test_se_la_scheda_e_occupata_aspetta_in_fila_e_lo_dice(apri, importato):
     assert _seguito_tutto(cliente, seguito_id)
 
 
-def test_senza_scheda_resta_in_coda_e_la_segue_la_coda(apri, importato):
+def test_senza_scheda_il_seguito_si_ferma_e_dice_perche(apri, importato):
     cliente = apri("SenzaScheda")
     file_id = _file_di(importato, "giro.mp4")
     _pronto(cliente, file_id)
     seguito_id = _scegli(cliente, file_id)["seguito"]["id"]
-    assert _aspetta(lambda: _stato(cliente, seguito_id)["stato"] == seguiti.IN_CODA)
-    stima = cliente.post(f"/api/ritocco-video/{file_id}/stima", json={
-        "parti": [{"seguito": seguito_id, "cosa": elenco.VOLTO}]}).json()
-    assert stima["scheda"] is False and stima["secondi"] >= QUANTI
-
-    salvato = cliente.post(f"/api/ritocco-video/{file_id}/salva", json={
-        "parti": [{"seguito": seguito_id, "cosa": elenco.VOLTO}]})
-    assert salvato.status_code == 200, salvato.text
-    cliente.post(f"/api/ritocco-video/{file_id}/chiudi", json={})
-
-    ritoccatore = coda_ritocco.il_ritoccatore(importato)
-    assert ritoccatore.lavoro.aspetta_che_finisca(60)
+    assert _aspetta(lambda: _stato(cliente, seguito_id)["stato"] == seguiti.FALLITO)
     with importato.lettura() as connessione:
-        assert coda.per_id(connessione, salvato.json()["lavoro"])["stato"] == coda.DA_RIVEDERE
-        assert seguiti.per_id(connessione, seguito_id)["stato"] == seguiti.SEGUITO
+        riga = seguiti.per_id(connessione, seguito_id)
+    assert riga["guasto"] == ritocco_web.SENZA_SCHEDA
 
 
 def test_metti_in_coda_poi_la_parte_non_si_cambia_piu(apri, importato):

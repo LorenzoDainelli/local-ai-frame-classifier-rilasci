@@ -1,0 +1,44 @@
+{
+ "deposito": "facebookresearch/sam3",
+ "commit": "f1647e8d0c1d280991f4d1b7d974c2704537fe66",
+ "licenza": "SAM License",
+ "file": {
+  "LICENSE": "4dea99bfaa016e21bc860d73f344236bd1e5c4977d1a9a8fd32f822b500ae1be",
+  "sam3/logger.py": "886d7b6101ab3cc07f40348a67054101ad87ca2ab9b3546fef1113f3e19db51e",
+  "sam3/model/__init__.py": "5737b3ba20d7549b2fce53c995fa80c331b116d1f958980d99bf6f161e28e3a6",
+  "sam3/model/act_ckpt_utils.py": "913317a663cf0f19317feb66ea43ff7a86e44393f39af3731ba3d33dfff93a82",
+  "sam3/model/box_ops.py": "2d1a11337f1db93ccd87132319716cf68b215c59fa51e43416bdad7ab30c8151",
+  "sam3/model/data_misc.py": "2de49374056d39398f6d90f0326d0ebe75c4c0890a7a0ff281da704ed5ccaa34",
+  "sam3/model/decoder.py": "392f77936a5a2ed294ed1244dffda73b0eaa139c13466e17a4c969ae70e732ec",
+  "sam3/model/io_utils.py": "8bf0d036bc616a2429a258fa3a91d733e7c64621fe1616fa0c129c29c0fca637",
+  "sam3/model/memory.py": "6712af0db3bed4e2dffd812884d42db48e6d3572bb1273505745dda8b900e0e3",
+  "sam3/model/model_misc.py": "5ea3ffd044625cc5ca01517dd06ca632ac711b5788c97dd6fe1e812ca161473d",
+  "sam3/model/multiplex_mask_decoder.py": "c0123cc42f81743e74e83019c77bb0d0a2ed381cdfc4726e1c52eebf91b9462e",
+  "sam3/model/multiplex_utils.py": "ab182bac28542cec0d1cc6b35d07d451e93108a4dae7c0f96e1cdc114720f2d6",
+  "sam3/model/necks.py": "0caaefd34e8674973d28b7afde9d87abaaa2eda00d977a592923fe9eeb1cbc05",
+  "sam3/model/position_encoding.py": "6ec4e053bad5d17035f9ea8f60a032f60c51ba5ce5a5a174b4b2fe0de62749f6",
+  "sam3/model/sam3_tracker_utils.py": "dc5fdeba2d4416f273394a9bd4450dff050608db6009a4546ca68adbaa24a640",
+  "sam3/model/video_tracking_multiplex.py": "f8895d64aec6823eb305d73cc20ea4aad34999289cd7a74fcf48137130b01868",
+  "sam3/model/video_tracking_multiplex_demo.py": "d57ac540b400d5cb37377fc84810f75c2721f1b6e6ee9c8f119b5d6af7a6a80c",
+  "sam3/model/vitdet.py": "1afa9731f0d86b81be2530259d21d7fdfec4823f62a16290466b2cdcae8df612",
+  "sam3/model/vl_combiner.py": "59377a3147bf7751e620df75b777afcc584f36985fe99469b8275fc7cdab1071",
+  "sam3/perflib/__init__.py": "e25fa5fb31908e816f0ce0f55dae8715076f47ca9ffcbc34335e60cf74bfbd21",
+  "sam3/perflib/connected_components.py": "f09bb5b905a12e0aeb6e7f1096af839015230f007dc47c43a1de7893a355dbd1",
+  "sam3/perflib/fa3.py": "3b7292118f30f3fdea9850f16e27a6cf0cd8b7b2d427bc1dd8be2abceeb28fe0",
+  "sam3/perflib/fused.py": "f528109e043331da4c240741d1403812b2020801d8f01af0b5fbf0c6e93c1af6",
+  "sam3/sam/__init__.py": "9fd565929cc73505a78397f87c558d721b4df92a279551a4860bf8947baa8ae0",
+  "sam3/sam/common.py": "e64cb707f7c332761b34ac1135718e699a8271d4c5c4f42831d5fa393d2edc86",
+  "sam3/sam/mask_decoder.py": "91136783214aa8e89d6284d675bf846689b322869402c9afb01f43a734ee8b98",
+  "sam3/sam/prompt_encoder.py": "76b1543e050eed1f29bed3a41653e0a0475bb965fb4debdb425c37ad1ce2ffaf",
+  "sam3/sam/rope.py": "e90c4bd3a1de44402fc2e8baba5a5621829002fd8f5136b63738743951da9290",
+  "sam3/sam/transformer.py": "4885315b97577a5ece6ab53f45318fb629b16c240d96315064bf71a152effc6e"
+ },
+ "pesi": [
+  {
+   "nome": "sam3.1_multiplex.pt",
+   "repo": "facebook/sam3.1",
+   "sha256": "0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6",
+   "byte_circa": 3502755717
+  }
+ ]
+}

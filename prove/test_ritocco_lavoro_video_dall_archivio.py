@@ -46,7 +46,7 @@ def _dati(scena) -> bytes:
 def _seguito_pronto(scena, clic, sam3, file_id: int) -> tuple[int, str]:
     _, percorso, chiave = ritocco_video._il_video(file_id)
     seguito_id = video_di_prova._bozza(scena, file_id, chiave)
-    seguire.segui_ora(scena.archivio, seguito_id, clic, sam3, percorso, chiave, scheda=False)
+    seguire.segui_ora(scena.archivio, seguito_id, clic, sam3, percorso, chiave, scheda=True)
     return seguito_id, chiave
 
 

@@ -6,6 +6,9 @@ on:
     paths:
       - "strumenti/guarda_sam31.py"
       - ".github/workflows/sam31.yml"
+      - "officina/ritocco/sam31.py"
+      - "officina/ritocco/sam31_pezzi.py"
+      - "officina/ritocco/segui.py"
   workflow_dispatch:
 
 permissions:
@@ -44,10 +47,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
   confronta:
-    name: I pezzi vanno al posto giusto
+    name: I pezzi vanno al posto giusto e segue un video finto
     needs: guarda
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,7 +64,8 @@ jobs:
       - name: Le librerie e il codice di Meta
         run: |
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
-          python -m pip install timm ftfy regex iopath huggingface_hub numpy
+          python -m pip install timm==1.0.31 einops==0.8.2 opencv-python-headless==4.14.0.94 \
+            numpy==2.4.6 pillow==13.0.0 tqdm typing_extensions
           git clone -q https://github.com/facebookresearch/sam3 sam3-originale
           git -C sam3-originale checkout -q f1647e8d0c1d280991f4d1b7d974c2704537fe66
       - name: Il confronto

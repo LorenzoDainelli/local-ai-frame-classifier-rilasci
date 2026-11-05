@@ -35,7 +35,13 @@ NON_GUARDA = ("Non sono riuscito a guardare questo scatto per sceglierne una par
 NON_SEGUE = ("Non sono riuscito a seguire la parte scelta nel video. Il video non è stato "
              "toccato.")
 SCHEDA_OCCUPATA = "La scheda video è occupata: lo seguo appena si libera."
+SENZA_SCHEDA = ("Per seguire la parte scelta nel video serve la scheda video, che "
+                "adesso non c'è. Il video non è stato toccato.")
+SCHEDA_PIENA = ("La memoria della scheda video è finita mentre seguivo la parte scelta. "
+                "Il video non è stato toccato: chiudi i programmi che usano la scheda "
+                "e riprova.")
 OGNI_QUANTI = 8
+CODICI_DEL_SEGUIRE = ("ritocco_senza_scheda", "ritocco_scheda_piena", "motore_mancante")
 FERMATI = ("fermati", "ferma", "basta")
 DI_MANO = ("guarda", "scegli", "prepara")
 PRIMA_DI_RIPRENDERE = 3.0
@@ -55,6 +61,19 @@ def _con_riserva(sceglitore, fai, sulla_scheda: bool):
         registro.avviso("ritocco.scheda_piena")
         sceglitore.spegni()
         return fai(False)
+
+
+def _solo_sulla_scheda(sceglitore, fai, sulla_scheda: bool):
+    if not sulla_scheda:
+        raise ErroreOfficina(SENZA_SCHEDA, codice="ritocco_senza_scheda")
+    try:
+        return fai(True)
+    except Exception as guasto:
+        if not torcia.memoria_finita(guasto):
+            raise
+        registro.avviso("ritocco.scheda_piena")
+        sceglitore.spegni()
+        raise ErroreOfficina(SCHEDA_PIENA, codice="ritocco_scheda_piena") from guasto
 
 
 def _sul_fotogramma(fotogramma) -> dict:
@@ -95,7 +114,7 @@ def _la_foto(percorso):
 
 
 def _il_codice(guasto: ErroreOfficina) -> dict:
-    if isinstance(guasto, copia.RitoccoFermato):
+    if isinstance(guasto, copia.RitoccoFermato) or guasto.codice in CODICI_DEL_SEGUIRE:
         return {"codice": guasto.codice}
     return {}
 
@@ -139,7 +158,7 @@ def _segui(sceglitore, numero, chiave, percorso, scelte, tratti, sulla_scheda, n
 
     pezzi = [segui.Tratto(*tratto) for tratto in tratti]
     with _la_foto(percorso) as video:
-        dati = _con_riserva(
+        dati = _solo_sulla_scheda(
             sceglitore, lambda scheda: sceglitore.segui(chiave, video, scelte, pezzi, scheda,
                                                         al_fotogramma, al_passo, fermati),
             sulla_scheda)
@@ -388,6 +407,8 @@ class AlClic:
         elif self._sfondo is not None:
             lavori.turno.passa(self._sfondo, self.lavoro)
         self._accendi(Path(cartella))
+        if tipo == "segui" and not self._scheda:
+            raise ErroreOfficina(SENZA_SCHEDA, codice="ritocco_senza_scheda")
         if sfondo is not None:
             sulla_scheda = self._scheda
         elif scheda is None:

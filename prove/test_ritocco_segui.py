@@ -166,25 +166,39 @@ def test_si_sceglie_su_un_fotogramma_del_video(strumento, sam3, video):
         al_clic.scegli(sam3, "v1", video, [], None, fotogramma=QUANTI + 4)
 
 
-def test_senza_scheda_libera_il_seguito_aspetta(strumento, sam3, video):
+def test_senza_scheda_non_segue_e_lo_dice(strumento, sam3, video):
     al_clic = strumento("SenzaScheda")
-    with pytest.raises(ritocco_web.SchedaOccupata):
+    with pytest.raises(ErroreOfficina) as preso:
         al_clic.segui(sam3, "v1", video, {5: _quadrato(5)}, [segui.Tratto(5, 0, 19)])
+    assert preso.value.messaggio == ritocco_web.SENZA_SCHEDA
+    assert preso.value.codice == "ritocco_senza_scheda"
+    assert sceglitore_finto.seguiti(sam3) == []
+
+
+def test_con_la_scheda_occupata_il_seguito_aspetta(strumento, sam3, video):
     altro = lavori.Lavoro("miglioramento")
     occupante = strumento()
     assert lavori.turno.prendi_se_libera(altro)
     with pytest.raises(ritocco_web.SchedaOccupata):
         occupante.segui(sam3, "v1", video, {5: _quadrato(5)}, [segui.Tratto(5, 0, 19)])
+    with pytest.raises(ErroreOfficina) as preso:
+        occupante.segui(sam3, "v1", video, {5: _quadrato(5)}, [segui.Tratto(5, 0, 19)],
+                        scheda=False)
+    assert preso.value.messaggio == ritocco_web.SENZA_SCHEDA
+    assert sceglitore_finto.seguiti(sam3) == []
     lavori.turno.lascia(altro)
-    esito = occupante.segui(sam3, "v1", video, {5: _quadrato(5)}, [segui.Tratto(5, 0, 19)],
-                            scheda=False)
-    assert esito["fatti"] == QUANTI and esito["dove"] == "processore"
+    esito = occupante.segui(sam3, "v1", video, {5: _quadrato(5)}, [segui.Tratto(5, 0, 19)])
+    assert esito["fatti"] == QUANTI and esito["dove"] == "scheda"
+    assert [r["dove"] for r in sceglitore_finto.seguiti(sam3)] == ["scheda"]
 
 
-def test_se_la_scheda_finisce_la_memoria_segue_sul_processore(strumento, sam3, video):
+def test_se_la_scheda_finisce_la_memoria_non_passa_al_processore(strumento, sam3, video):
     al_clic = strumento("Piena")
-    esito = al_clic.segui(sam3, "v1", video, {5: _quadrato(5)}, [segui.Tratto(5, 0, 19)])
-    assert esito["fatti"] == QUANTI and esito["dove"] == "processore"
+    with pytest.raises(ErroreOfficina) as preso:
+        al_clic.segui(sam3, "v1", video, {5: _quadrato(5)}, [segui.Tratto(5, 0, 19)])
+    assert preso.value.messaggio == ritocco_web.SCHEDA_PIENA
+    assert preso.value.codice == "ritocco_scheda_piena"
+    assert sceglitore_finto.seguiti(sam3) == []
 
 
 def test_un_guasto_nel_seguire_non_dice_dove_stanno_i_file(strumento, sam3, video):
@@ -303,13 +317,16 @@ def test_una_scelta_sola_non_si_toglie(archivio):
         assert sorted(seguiti.scelte(connessione, seguito_id)) == [4]
 
 
-def test_senza_scheda_il_seguito_va_in_coda(archivio, strumento, sam3, video):
+def test_senza_scheda_il_seguito_si_ferma_e_dice_perche(archivio, strumento, sam3, video):
     al_clic = strumento("SenzaScheda")
     file_id = _file_video(archivio, video)
     seguito_id = _seguito(archivio, file_id, {5: _quadrato(5)})
-    assert seguire.segui_ora(archivio, seguito_id, al_clic, sam3, video, "v1")["in_coda"]
+    with pytest.raises(ErroreOfficina):
+        seguire.segui_ora(archivio, seguito_id, al_clic, sam3, video, "v1")
     with archivio.lettura() as connessione:
-        assert seguiti.come_sta(connessione, seguito_id)["stato"] == seguiti.IN_CODA
+        stato = seguiti.come_sta(connessione, seguito_id)
+    assert stato["stato"] == seguiti.FALLITO and stato["guasto"] == ritocco_web.SENZA_SCHEDA
+    assert sceglitore_finto.seguiti(sam3) == []
 
 
 def test_un_guasto_lo_segna_fallito_con_parole_semplici(archivio, strumento, sam3, video):

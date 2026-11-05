@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
+from officina.errori import ErroreOfficina
 from officina.ritocco import maschere
 
 TENUTI = 32
@@ -60,14 +61,21 @@ def _mai() -> bool:
     return False
 
 
+SENZA_SCHEDA = ("Per seguire la parte scelta nel video serve la scheda video, che adesso "
+                "non c'è. Il video non è stato toccato.")
+
+
+class SenzaScheda(ErroreOfficina):
+    codice = "ritocco_senza_scheda"
+
+
 class Seguitore:
 
     def __init__(self, cartella: Path):
         self.cartella = Path(cartella)
+        self.cartella_modelli = self.cartella.parent.parent
         self._modello = None
-        self._preparatore = None
         self._dispositivo: str | None = None
-        self._tipo = None
 
     @property
     def dispositivo(self) -> str | None:
@@ -77,27 +85,18 @@ class Seguitore:
         return PROCESSORE if self._dispositivo in (None, "cpu") else SCHEDA
 
     def accendi(self, sulla_scheda: bool) -> str:
-        import torch
-        from transformers import Sam3TrackerVideoModel, Sam3TrackerVideoProcessor
-
         from officina.descrittori import torcia
-        from officina.descrittori.grandi import _come_si_chiama_il_tipo
+        from officina.ritocco import sam31
 
         macchina = torcia.macchina()
-        voluto = macchina.dispositivo if sulla_scheda and macchina.e_scheda_video else "cpu"
+        if not sulla_scheda or not macchina.e_scheda_video:
+            raise SenzaScheda(SENZA_SCHEDA)
+        voluto = macchina.dispositivo
         if self._modello is not None and voluto == self._dispositivo:
             return voluto
         self.spegni()
-        tipo = torch.float32
-        if voluto == "cuda" and torch.cuda.is_bf16_supported():
-            tipo = torch.bfloat16
-        self._preparatore = Sam3TrackerVideoProcessor.from_pretrained(
-            str(self.cartella), local_files_only=True)
-        modello = Sam3TrackerVideoModel.from_pretrained(
-            str(self.cartella), local_files_only=True, **{_come_si_chiama_il_tipo(): tipo})
-        modello.to(voluto)
-        modello.eval()
-        self._modello, self._dispositivo, self._tipo = modello, voluto, tipo
+        self._modello = sam31.carica(self.cartella_modelli, voluto)
+        self._dispositivo = voluto
         return voluto
 
     def spegni(self) -> None:
@@ -106,7 +105,6 @@ class Seguitore:
         from officina.descrittori import torcia
 
         self._modello = None
-        self._preparatore = None
         self._dispositivo = None
         torcia.libera()
 
@@ -115,6 +113,8 @@ class Seguitore:
               fermati: Callable[[], bool] = _mai) -> int:
         fatti = 0
         for tratto in tratti:
+            if fermati():
+                break
             fatti += self._un_tratto(filmato, scelte[tratto.da], tratto, al_fotogramma, fermati)
         return fatti
 
@@ -122,51 +122,61 @@ class Seguitore:
         import numpy
         import torch
 
-        sessione = self._preparatore.init_video_session(
-            inference_device=self._dispositivo, inference_state_device=self._dispositivo,
-            video_storage_device="cpu", dtype=self._tipo)
-        sessione.video_height, sessione.video_width = filmato.altezza, filmato.larghezza
-        self._preparatore.add_inputs_to_inference_session(
-            inference_session=sessione, frame_idx=tratto.da, obj_ids=OGGETTO,
-            input_masks=torch.from_numpy(numpy.asarray(maschera, dtype=bool)))
+        from officina.ritocco import sam31
+
+        modello = self._modello
         fatti = 0
-        ordine = [(tratto.da, False)]
-        ordine += [(indice, False) for indice in range(tratto.da + 1, tratto.fine + 1)]
-        ordine += [(indice, True) for indice in range(tratto.da - 1, tratto.inizio - 1, -1)]
-        for indice, indietro in ordine:
-            if fermati():
-                break
-            ingresso = self._preparatore(images=filmato.quadro(indice), device=self._dispositivo,
-                                         return_tensors="pt")
-            with torch.inference_mode():
-                uscita = self._modello(inference_session=sessione,
-                                       frame=ingresso.pixel_values[0].to(self._tipo),
-                                       frame_idx=indice, reverse=indietro)
-            maschera_qui, sicurezza = self._leggi(uscita, filmato)
-            al_fotogramma(indice, tratto.da, maschera_qui, sicurezza)
-            fatti += 1
-            _sfoltisci(sessione, indice, {tratto.da})
+        dispositivo = torch.device(self._dispositivo)
+        with torch.inference_mode(), torch.autocast(dispositivo.type, dtype=torch.bfloat16):
+            stato = modello.init_state(
+                video_height=filmato.altezza, video_width=filmato.larghezza,
+                num_frames=filmato.quanti)
+            stato["device"] = dispositivo
+            stato["storage_device"] = dispositivo
+            stato["images"] = sam31.Quadri(filmato)
+            scelta = torch.from_numpy(numpy.asarray(maschera, dtype=bool))[None]
+            modello.add_new_masks(inference_state=stato, frame_idx=tratto.da,
+                                  obj_ids=[OGGETTO], masks=scelta)
+            for indietro, quanti in ((False, tratto.fine - tratto.da),
+                                     (True, tratto.da - tratto.inizio)):
+                if indietro and quanti <= 0:
+                    break
+                modello.propagate_in_video_preflight(stato, run_mem_encoder=True)
+                giro = modello.propagate_in_video(
+                    stato, start_frame_idx=tratto.da, max_frame_num_to_track=quanti,
+                    reverse=indietro, tqdm_disable=True)
+                try:
+                    for indice, _, _, piena, punteggi in giro:
+                        if indietro and indice == tratto.da:
+                            continue
+                        if fermati():
+                            return fatti
+                        maschera_qui, sicurezza = _leggi(piena, punteggi, filmato)
+                        al_fotogramma(int(indice), tratto.da, maschera_qui, sicurezza)
+                        fatti += 1
+                        _sfoltisci(stato, int(indice), tratto.da)
+                finally:
+                    giro.close()
         return fatti
 
-    def _leggi(self, uscita, filmato) -> tuple[bytes, float]:
-        import torch
 
-        punteggio = float(torch.sigmoid(uscita.object_score_logits.float().reshape(-1)[0]))
-        piena = self._preparatore.post_process_masks(
-            [uscita.pred_masks.float()], original_sizes=[[filmato.altezza, filmato.larghezza]],
-            mask_threshold=SOGLIA, binarize=True)[0]
-        maschera = piena[0, 0].cpu().numpy().astype(bool)
-        if punteggio < 0.5 or not maschera.any():
-            return b"", punteggio
-        return maschere.comprimi(maschera, (0, 0), filmato.larghezza, filmato.altezza), punteggio
+def _leggi(piena, punteggi, filmato) -> tuple[bytes, float]:
+    import torch
+
+    punteggio = float(torch.sigmoid(punteggi.float().reshape(-1)[0]))
+    maschera = (piena[0, 0].float() > SOGLIA).cpu().numpy()
+    if punteggio < 0.5 or not maschera.any():
+        return b"", punteggio
+    return maschere.comprimi(maschera, (0, 0), filmato.larghezza, filmato.altezza), punteggio
 
 
-def _sfoltisci(sessione, indice: int, da_tenere: set[int]) -> None:
-    for uscite in sessione.output_dict_per_obj.values():
+def _lontano(numero: int, indice: int, da: int) -> bool:
+    return abs(numero - indice) > TENUTI and abs(numero - da) > TENUTI
+
+
+def _sfoltisci(stato: dict, indice: int, da: int) -> None:
+    contenitori = [stato["output_dict"], *stato["output_dict_per_obj"].values()]
+    for uscite in contenitori:
         per_fotogramma = uscite["non_cond_frame_outputs"]
-        for numero in [numero for numero in per_fotogramma
-                       if abs(numero - indice) > TENUTI and numero not in da_tenere]:
+        for numero in [n for n in per_fotogramma if _lontano(n, indice, da)]:
             del per_fotogramma[numero]
-    quadri = sessione.processed_frames or {}
-    for numero in [numero for numero in quadri if numero != indice and numero not in da_tenere]:
-        del quadri[numero]
