@@ -285,29 +285,26 @@ def piano_snu() -> list[str]:
     righe = [f"CENTRI_UGUALI {all(set(i) == set(insiemi[0]) for i in insiemi)}"]
     info = HfApi().dataset_info(SNU[0], revision=SNU[1], files_metadata=True)
     file_hf = {s.rfilename: s for s in info.siblings or []}
-    presenti: dict = {}
-    veri_nomi: dict = {}
-    for nome in file_hf:
-        if nome.endswith(".png"):
-            numero = int(nome.rsplit("/", 1)[1].split(".")[0])
-            presenti.setdefault(_cartella(nome), set()).add(numero)
-            veri_nomi[(_cartella(nome), numero)] = nome
+    presenti, veri_nomi = g.presenti_da_nomi(file_hf)
     for scena, numeri in sorted(presenti.items()):
         buchi = max(numeri) - min(numeri) + 1 - len(numeri)
         esempio = veri_nomi[(scena, min(numeri))]
         righe.append(f"SCENA {scena} da={min(numeri)} a={max(numeri)} buchi={buchi} "
                      f"es={esempio}")
     casi = g.piano(sorted(set(insiemi[3])), presenti)
-    elenco = [[c.nome, c.gruppo, c.scena, c.passo, c.volte, c.rovina, list(c.tenuti),
-               list(c.veri)] for c in casi]
-    righe.append("CASI " + json.dumps(elenco))
-    byte = 0
-    servono = sorted({(c.scena, n) for c in casi for n in c.servono()})
-    for scena, numero in servono:
-        voce = file_hf[veri_nomi[(scena, numero)]]
-        byte += voce.size
-        righe.append(f"S {voce.lfs.sha256} {voce.size} {numero} {voce.rfilename}")
-    righe.append(f"TOTALE file={len(servono)} byte={byte}")
+    gruppi: dict = {}
+    for c in casi:
+        chiave = f"{c.gruppo}/p{c.passo}x{c.volte}/{c.rovina}"
+        gruppi[chiave] = gruppi.get(chiave, 0) + 1
+    righe += [f"GRUPPO {k} {v}" for k, v in sorted(gruppi.items())]
+    testo = g.testo_casi(casi)
+    righe.append(f"IMPRONTA_CASI {g.impronta(testo)} casi={len(casi)}")
+    elenco = g.righe_file(casi, veri_nomi,
+                          lambda n: (file_hf[n].lfs.sha256, file_hf[n].size))
+    byte = sum(int(r.split()[1]) for r in elenco)
+    righe.append(f"IMPRONTA_FILE {g.impronta(chr(10).join(elenco))}")
+    righe.append(f"TOTALE file={len(elenco)} byte={byte}")
+    righe += ["CASI " + testo] + ["S " + r for r in elenco]
     return righe
 
 
@@ -321,7 +318,7 @@ def main() -> None:
     scelte = lettore.parse_args()
     if scelte.piano:
         righe = piano_snu()
-        print("\n".join(righe), flush=True)
+        print("\n".join(r for r in righe if not r.startswith(("S ", "CASI "))), flush=True)
         scelte.uscita.write_text("\n".join(righe), encoding="utf-8")
         return
     if scelte.impronte:

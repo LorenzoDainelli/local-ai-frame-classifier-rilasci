@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass, field
 
 PRIMA_DEL_NOME = "data/SNU-FILM/"
@@ -100,10 +101,42 @@ def piano(centri: list[tuple[str, int]], presenti: dict[str, set[int]]) -> list[
     return casi
 
 
+def presenti_da_nomi(nomi) -> tuple[dict[str, set[int]], dict[tuple[str, int], str]]:
+    presenti: dict[str, set[int]] = {}
+    veri_nomi: dict[tuple[str, int], str] = {}
+    for nome in nomi:
+        if nome.endswith(".png") and "/" in nome:
+            cartella, file = nome.rsplit("/", 1)
+            numero = int(file.split(".")[0])
+            presenti.setdefault(cartella, set()).add(numero)
+            veri_nomi[(cartella, numero)] = nome
+    return presenti, veri_nomi
+
+
+def testo_casi(casi: list[Caso]) -> str:
+    return json.dumps([[c.nome, c.gruppo, c.scena, c.passo, c.volte, c.rovina,
+                        list(c.tenuti), list(c.veri)] for c in casi])
+
+
+def righe_file(casi: list[Caso], veri_nomi: dict, voce) -> list[str]:
+    servono = sorted({(c.scena, n) for c in casi for n in c.servono()})
+    righe = []
+    for scena, numero in servono:
+        nome = veri_nomi[(scena, numero)]
+        impronta, peso = voce(nome)
+        righe.append(f"{impronta} {peso} {numero} {nome}")
+    return righe
+
+
+def impronta(testo: str) -> str:
+    return hashlib.sha256(testo.encode()).hexdigest()
+
+
 def file_che_servono(casi: list[Caso]) -> list[str]:
     tutti = {f"{c.scena}/{n:06d}.png" for c in casi for n in c.servono()}
     return sorted(tutti)
 
 
 __all__ = ["Caso", "DIFFICILE", "DIFFICILISSIMO", "FACILE", "MOSSO", "OTTURATORE", "QUANTI",
-           "ROVINE", "centri_dalla_lista", "file_che_servono", "finestra", "piano"]
+           "ROVINE", "centri_dalla_lista", "file_che_servono", "finestra", "impronta",
+           "piano", "presenti_da_nomi", "righe_file", "testo_casi"]
