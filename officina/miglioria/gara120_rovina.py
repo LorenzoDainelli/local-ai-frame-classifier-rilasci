@@ -98,7 +98,15 @@ def prepara(caso, prendi) -> tuple[list, list]:
         entrate = [rumore(q, seme(caso.nome, n)) for q, n in zip(entrate, caso.tenuti)]
     elif caso.rovina == "compresso":
         entrate = compresso(entrate)
+        veri = _veri_compressi(caso, veri, prendi)
     return entrate, veri
+
+
+def _veri_compressi(caso, veri: list, prendi) -> list:
+    prima = max(t for t in caso.tenuti if t < min(caso.veri))
+    dopo = min(t for t in caso.tenuti if t > max(caso.veri))
+    fila = [prendi(prima)] + list(veri) + [prendi(dopo)]
+    return compresso(fila)[1:-1]
 
 
 __all__ = ["buio", "compresso", "mosso", "prepara", "rumore", "seme"]

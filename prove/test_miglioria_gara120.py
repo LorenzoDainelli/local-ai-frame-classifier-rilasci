@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import random
 import tarfile
 import zipfile
 from pathlib import Path
@@ -13,10 +14,12 @@ from PIL import Image
 
 from officina.descrittori.scaricamento import ScaricamentoFallito
 from officina.miglioria import gara120_casi as g
+from officina.miglioria import gara120_corsa as corsa
 from officina.miglioria import gara120_fonti as fonti
 from officina.miglioria import gara120_rovina as rovina
 from officina.miglioria import gara120_scarica as sc
 from officina.miglioria import gara120_voti as voti
+from officina.miglioria import gara120_voto as voto
 
 
 @pytest.fixture(autouse=True)
@@ -326,3 +329,311 @@ def test_cancella_toglie_tutto(tmp_path):
     assert sc.cancella(casa) == 5
     assert not casa.exists()
     assert sc.cancella(casa) == 0
+
+
+def test_prepara_compresso_comprime_anche_il_vero(monkeypatch):
+    chiamate = []
+
+    def finto(quadri):
+        chiamate.append(len(quadri))
+        return [np.asarray(q) // 2 for q in quadri]
+
+    monkeypatch.setattr(rovina, "compresso", finto)
+    caso = g.Caso("n", g.DIFFICILISSIMO, "s", 32, 4, "compresso", (0, 32), (8, 16, 24))
+
+    def prendi(numero):
+        return np.full((8, 8, 3), 100 + numero, np.uint8)
+
+    entrate, veri = rovina.prepara(caso, prendi)
+    assert chiamate == [2, 5]
+    assert [int(v[0, 0, 0]) for v in veri] == [54, 58, 62]
+    assert int(entrate[0][0, 0, 0]) == 50
+
+
+def test_compresso_vero_con_pyav():
+    pytest.importorskip("av")
+    quadri = [np.random.default_rng(n).integers(0, 255, (36, 50, 3), dtype=np.uint8)
+              for n in range(5)]
+    tornati = rovina.compresso(quadri)
+    assert len(tornati) == 5
+    assert all(t.shape == (36, 50, 3) for t in tornati)
+
+
+class _MotoreFinto:
+
+    def __init__(self, nome, sbaglio=0, non_ci_sta=None):
+        self.nome = nome
+        self.sbaglio = sbaglio
+        self.non_ci_sta = non_ci_sta
+        self.chiamate = 0
+        self.spento = 0
+
+    def firma(self):
+        return {"nome": self.nome}
+
+    def video(self, quadri, volte):
+        quadri = [np.asarray(q, dtype=np.float64) for q in quadri]
+        self.chiamate += 1
+        if self.non_ci_sta is not None:
+            raise self.non_ci_sta("grande")
+        for prima, dopo in zip(quadri, quadri[1:]):
+            yield prima.astype(np.uint8)
+            for j in range(1, volte):
+                mezzo = prima + (dopo - prima) * j / volte + self.sbaglio
+                yield np.clip(np.rint(mezzo), 0, 255).astype(np.uint8)
+        for _ in range(volte):
+            yield quadri[-1].astype(np.uint8)
+
+    def spegni(self):
+        self.spento += 1
+
+
+class _NonCiSta(Exception):
+    pass
+
+
+def _gara_finta(tmp_path, monkeypatch):
+    monkeypatch.setattr(corsa, "_clip_xtest", lambda: [])
+    nomi = {}
+    for numero in range(1, 200):
+        nome = f"s/a/{numero:05d}.png"
+        posto = tmp_path / "dati" / sc.SNU / nome
+        posto.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(np.full((16, 16, 3), numero, np.uint8)).save(posto)
+        nomi[nome] = ("0" * 64, 1)
+    presenti, veri_nomi = g.presenti_da_nomi(nomi)
+    casi = [g.Caso("s/a/000100/p8x4", g.DIFFICILE, "s/a", 8, 4, None,
+                   *g.finestra(100, 8, 4)),
+            g.Caso("s/a/000100/p16x4/buio", g.DIFFICILISSIMO, "s/a", 16, 4, "buio",
+                   *g.finestra(100, 16, 4))]
+    elenco = sc.Elenco(casi, nomi, veri_nomi, presenti)
+    corsa.scrivi_piano(tmp_path / "dati", elenco, {})
+    return tmp_path / "dati", tmp_path / "risultati"
+
+
+def test_indice_trova_il_posto_nell_uscita():
+    caso = g.Caso("x", g.DIFFICILE, "s", 8, 4, None, (88, 96, 104, 112), (98, 100, 102))
+    assert [corsa.indice(caso, v) for v in caso.veri] == [(5, 4), (6, 4), (7, 4)]
+    caso = g.Caso("x", g.DIFFICILISSIMO, "s", 32, 4, None, (0, 32), (8, 16, 24))
+    assert [corsa.indice(caso, v)[0] for v in caso.veri] == [1, 2, 3]
+    with pytest.raises(ValueError):
+        corsa.indice(caso, 40)
+
+
+def test_piano_si_rilegge_uguale(tmp_path, monkeypatch):
+    dati, _ = _gara_finta(tmp_path, monkeypatch)
+    piano = corsa.leggi_piano(dati)
+    assert [c.nome for c in piano.casi] == ["s/a/000100/p8x4", "s/a/000100/p16x4/buio"]
+    assert piano.casi[0].tenuti == (88, 96, 104, 112)
+    prendi = corsa.prendi_per(dati, piano, piano.casi[0])
+    assert int(prendi(96)[0, 0, 0]) == 96
+
+
+def test_corsa_intera_e_classifica(tmp_path, monkeypatch):
+    dati, risultati = _gara_finta(tmp_path, monkeypatch)
+    gimm, ldf = _MotoreFinto("g", sbaglio=3), _MotoreFinto("l", sbaglio=0)
+    visti = []
+    registro = corsa.corri(dati, risultati, gimm, ldf,
+                           al_caso=lambda f, a, b: visti.append((f, a, b)))
+    assert visti[-1] == (corsa.LDF, 4, 4)
+    assert gimm.spento == 1 and ldf.spento == 1
+    piano = corsa.leggi_piano(dati)
+    esito = corsa.classifiche(registro, piano.casi)
+    assert esito["tutto"]["primo"] in (corsa.LDF, corsa.FUSIONE)
+    assert esito["tutto"]["medie"][corsa.GIMM]["casi"] == 2
+    assert esito["difficilissimi"]["medie"][corsa.GIMM]["casi"] == 1
+
+
+def test_corsa_riprende_senza_rifare(tmp_path, monkeypatch):
+    dati, risultati = _gara_finta(tmp_path, monkeypatch)
+    gimm, ldf = _MotoreFinto("g"), _MotoreFinto("l")
+    fatti = []
+    corsa.corri(dati, risultati, gimm, ldf, fermati=lambda: len(fatti) >= 1,
+                al_caso=lambda *a: fatti.append(a))
+    assert gimm.chiamate == 1 and ldf.chiamate == 0
+    gimm2, ldf2 = _MotoreFinto("g"), _MotoreFinto("l")
+    corsa.corri(dati, risultati, gimm2, ldf2)
+    assert gimm2.chiamate == 1 and ldf2.chiamate == 2
+
+
+def test_corsa_ricomincia_se_cambia_un_modello(tmp_path, monkeypatch):
+    dati, risultati = _gara_finta(tmp_path, monkeypatch)
+    corsa.corri(dati, risultati, _MotoreFinto("g"), _MotoreFinto("l"))
+    nuovo = _MotoreFinto("g2")
+    corsa.corri(dati, risultati, nuovo, _MotoreFinto("l"))
+    assert nuovo.chiamate == 2
+
+
+def test_ldf_che_non_ci_sta_conta_come_zero(tmp_path, monkeypatch):
+    dati, risultati = _gara_finta(tmp_path, monkeypatch)
+    registro = corsa.corri(dati, risultati, _MotoreFinto("g"),
+                           _MotoreFinto("l", non_ci_sta=_NonCiSta),
+                           non_ci_sta=(_NonCiSta,))
+    piano = corsa.leggi_piano(dati)
+    esito = corsa.classifica(registro, piano.casi)
+    assert esito["medie"][corsa.LDF]["non_riusciti"] == 2
+    assert esito["medie"][corsa.LDF]["somiglianza"] == 0.0
+    assert esito["primo"] == corsa.GIMM
+
+
+def _registro_con(tmp_path, medie: dict[str, dict]):
+    caso = g.Caso("c", g.DIFFICILISSIMO, "s", 8, 4, None, (1, 9), (3,))
+    registro = corsa.Risultati(tmp_path)
+    registro.ricomincia({"x": 1})
+    registro.aggiungi({"fase": corsa.GIMM, "nome": "c", "secondi": 1,
+                       "voti": [medie[corsa.GIMM]]})
+    registro.aggiungi({"fase": corsa.LDF, "nome": "c", "secondi": 2, "fondere": 0.1,
+                       "voti": [medie[corsa.LDF]], "voti_fusione": [medie[corsa.FUSIONE]]})
+    return registro, [caso]
+
+
+def test_primo_solo_con_due_misure_su_tre(tmp_path):
+    def v(a, b, c):
+        return {"somiglianza": a, "struttura": b, "zona_peggiore": c}
+
+    registro, casi = _registro_con(tmp_path, {corsa.GIMM: v(30, 0.9, 20),
+                                              corsa.LDF: v(31, 0.8, 19),
+                                              corsa.FUSIONE: v(29, 0.85, 21)})
+    esito = corsa.classifica(registro, casi)
+    assert esito["vincitori"] == {"somiglianza": corsa.LDF, "struttura": corsa.GIMM,
+                                  "zona_peggiore": corsa.FUSIONE}
+    assert esito["primo"] is None
+    registro, casi = _registro_con(tmp_path, {corsa.GIMM: v(30, 0.9, 20),
+                                              corsa.LDF: v(31, 0.95, 19),
+                                              corsa.FUSIONE: v(29, 0.85, 21)})
+    assert corsa.classifica(registro, casi)["primo"] == corsa.LDF
+
+
+def test_risultati_ignorano_una_riga_tagliata(tmp_path):
+    registro = corsa.Risultati(tmp_path)
+    registro.ricomincia({"x": 1})
+    registro.aggiungi({"fase": corsa.GIMM, "nome": "a"})
+    with open(tmp_path / corsa.RISULTATI, "a", encoding="utf-8") as uscita:
+        uscita.write('{"fase": "gimm", "nom')
+    di_nuovo = corsa.Risultati(tmp_path)
+    assert list(di_nuovo.fatti(corsa.GIMM)) == ["a"]
+    di_nuovo.aggiungi({"fase": corsa.GIMM, "nome": "b"})
+    assert list(corsa.Risultati(tmp_path).fatti(corsa.GIMM)) == ["a", "b"]
+
+
+def _registro_per_scegliere(tmp_path, casi, scarti, non_riusciti=()):
+    registro = corsa.Risultati(tmp_path)
+    registro.ricomincia({"x": 1})
+    for caso, scarto in zip(casi, scarti):
+        buono = {"somiglianza": 30.0, "struttura": 0.9, "zona_peggiore": 20.0}
+        altro = {"somiglianza": 30.0 + scarto, "struttura": 0.9, "zona_peggiore": 20.0}
+        registro.aggiungi({"fase": corsa.GIMM, "nome": caso.nome, "secondi": 1,
+                           "voti": [buono]})
+        if caso.nome in non_riusciti:
+            registro.aggiungi({"fase": corsa.LDF, "nome": caso.nome, "non_riuscito": True})
+        else:
+            registro.aggiungi({"fase": corsa.LDF, "nome": caso.nome, "secondi": 1,
+                               "fondere": 0, "voti": [altro], "voti_fusione": [buono]})
+    return registro
+
+
+def test_voto_sceglie_solo_difficilissimi_snu_e_due_per_scena(tmp_path):
+    casi = [g.Caso(f"a/{k}", g.DIFFICILISSIMO, "a", 16, 4, "buio") for k in range(3)]
+    casi += [g.Caso("b/0", g.DIFFICILISSIMO, "b", 16, 4, "rumore"),
+             g.Caso("c/0", g.DIFFICILE, "c", 8, 4),
+             g.Caso("xtest/z/p32x4", g.DIFFICILISSIMO, "xtest/z", 32, 4),
+             g.Caso("d/0", g.DIFFICILISSIMO, "d", 16, 4, "buio")]
+    registro = _registro_per_scegliere(tmp_path, casi, [9, 8, 7, 1, 50, 50, 40],
+                                       non_riusciti={"d/0"})
+    scelti = voto.scegli(registro, casi, quanti=20)
+    assert [c.nome for c in scelti] == ["a/0", "a/1", "b/0"]
+    assert [c.nome for c in voto.scegli(registro, casi, quanti=2)] == ["a/0", "a/1"]
+    rifiuta = voto.scegli(registro, casi, adatto=lambda c: c.nome != "a/0")
+    assert [c.nome for c in rifiuta] == ["a/1", "a/2", "b/0"]
+
+
+def test_clip_resta_dentro_i_fotogrammi():
+    caso = g.Caso("s/a/1000/p16x4/buio", g.DIFFICILISSIMO, "s/a", 16, 4, "buio",
+                  *g.finestra(1000, 16, 4))
+    clip = voto.clip_di(caso, set(range(1, 5000)))
+    assert clip.tenuti[1] - clip.tenuti[0] == 16
+    assert set(caso.tenuti) <= set(clip.tenuti)
+    assert clip.veri[1] - clip.veri[0] == 4
+    assert (clip.tenuti[0], clip.tenuti[-1]) == (clip.veri[0], clip.veri[-1])
+    assert clip.tenuti[-1] - clip.tenuti[0] <= 480
+    assert len(clip.veri) == (len(clip.tenuti) - 1) * 4 + 1
+    vicino = voto.clip_di(caso, set(range(950, 1200)))
+    assert min(vicino.tenuti) >= 950 and max(vicino.tenuti) < 1200
+    assert voto.clip_di(caso, set(range(990, 1060))) is None
+
+
+def test_clip_mosso_lascia_posto_all_otturatore():
+    caso = g.Caso("s/a/1000/p8x4/mosso", g.DIFFICILISSIMO, "s/a", 8, 4, g.MOSSO,
+                  *g.finestra(1000, 8, 4))
+    clip = voto.clip_di(caso, set(range(900, 1100)))
+    assert min(clip.tenuti) + g.OTTURATORE[0] >= 900
+    assert max(clip.tenuti) + g.OTTURATORE[1] < 1100
+
+
+def _clip_finta(rovinato=None):
+    return g.Caso("s/a/100/p8x4", g.DIFFICILISSIMO, "s/a", 8, 4, rovinato,
+                  tuple(range(80, 144, 8)), tuple(range(80, 137, 2)))
+
+
+def _prendi(numero):
+    quadro = np.zeros((32, 48, 3), np.uint8)
+    quadro[:, :, 0] = numero % 256
+    quadro[:, (numero % 40):(numero % 40) + 8, 1] = 200
+    return quadro
+
+
+def test_fai_clip_scrive_i_video_e_si_riprende(tmp_path):
+    clip = [_clip_finta(), _clip_finta("buio")]
+    gimm, ldf = _MotoreFinto("g", sbaglio=2), _MotoreFinto("l")
+    visti = []
+    voto.fai_clip(tmp_path, clip, lambda c: _prendi, gimm, ldf,
+                  al_clip=lambda a, b: visti.append((a, b)),
+                  fermati=lambda: len(visti) >= 3)
+    assert not voto.clip_pronte(tmp_path)
+    (tmp_path / voto.CARTELLA).mkdir(exist_ok=True)
+    (tmp_path / voto.CARTELLA / voto.CLIP).write_text(g.testo_casi(clip), encoding="utf-8")
+    gimm2, ldf2 = _MotoreFinto("g"), _MotoreFinto("l")
+    voto.fai_clip(tmp_path, clip, lambda c: _prendi, gimm2, ldf2)
+    assert gimm2.chiamate == 0 and ldf2.chiamate == 1
+    assert voto.clip_pronte(tmp_path)
+    assert voto.leggi_clip(tmp_path) == clip
+    import av
+
+    for numero in range(2):
+        casa = tmp_path / voto.CARTELLA / f"{numero:02d}"
+        assert not (casa / "gimm.npz").exists()
+        for nome in (*corsa.CONCORRENTI, voto.VERO):
+            with av.open(str(casa / f"{nome}.mp4")) as dentro:
+                flusso = dentro.streams.video[0]
+                assert sum(1 for _ in dentro.decode(flusso)) == 29
+                assert round(float(flusso.average_rate)) == 120
+        assert voto.secondi_di(tmp_path, numero, corsa.FUSIONE) is not None
+
+
+def test_voto_cieco_e_vero_dopo(tmp_path):
+    (tmp_path / voto.CARTELLA).mkdir()
+    prima = voto.lettere(tmp_path, 0, random.Random(1))
+    assert sorted(prima["lettere"].values()) == sorted(corsa.CONCORRENTI)
+    assert voto.lettere(tmp_path, 0, random.Random(2)) == prima
+    with pytest.raises(PermissionError):
+        voto.video_di(tmp_path, 0, None)
+    scelto = prima["lettere"]["B"]
+    assert voto.video_di(tmp_path, 0, "B").name == f"{scelto}.mp4"
+    voto.vota(tmp_path, 0, "B", 12.34)
+    voto.vota(tmp_path, 0, "A")
+    assert voto.video_di(tmp_path, 0, None).name == f"{voto.VERO}.mp4"
+    conto = voto.conto(tmp_path, 2)
+    assert conto["punti"][scelto] == 1 and conto["votati"] == 1 and conto["primo"] is None
+    voto.lettere(tmp_path, 1, random.Random(3))
+    seconda = voto.lettere(tmp_path, 1)
+    lettera = next(k for k, v in seconda["lettere"].items() if v == scelto)
+    voto.vota(tmp_path, 1, lettera)
+    assert voto.conto(tmp_path, 2)["primo"] == scelto
+    with pytest.raises(KeyError):
+        voto.vota(tmp_path, 5, "A")
+
+
+def test_vincitore_solo_se_d_accordo():
+    assert voto.vincitore(corsa.LDF, corsa.LDF) == corsa.LDF
+    assert voto.vincitore(corsa.LDF, corsa.GIMM) is None
+    assert voto.vincitore(None, corsa.GIMM) is None
