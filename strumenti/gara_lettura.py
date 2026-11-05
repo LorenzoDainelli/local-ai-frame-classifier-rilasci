@@ -226,7 +226,7 @@ class Qwen:
 
 def _llama_adatto(nome: str) -> bool:
     nome = nome.lower()
-    if not re.search(r"\.(zip|tar\.gz)$", nome):
+    if not re.search(r"\.(zip|tar\.gz|tgz|tar\.xz|txz|tar\.bz2)$", nome):
         return False
     if not re.search(r"(ubuntu|linux)", nome) or not re.search(r"(x64|x86_64|amd64)", nome):
         return False
@@ -249,13 +249,14 @@ def _llama(cartella: Path) -> Path:
             rilascio = candidato
             break
     if not scelti:
-        primo = rilasci[0] if rilasci else {}
+        pieni = [r for r in rilasci if len(r.get("assets", [])) > 1]
+        primo = pieni[0] if pieni else (rilasci[0] if rilasci else {})
         raise RuntimeError("nessun llama.cpp per linux x64 negli ultimi rilasci; nel "
                            + str(primo.get("tag_name")) + " ci sono: "
                            + ", ".join(a["name"] for a in primo.get("assets", [])))
     cartella.mkdir(parents=True, exist_ok=True)
     archivio = _scarica(scelti[0]["browser_download_url"], cartella / scelti[0]["name"])
-    if archivio.name.endswith(".zip"):
+    if archivio.name.lower().endswith(".zip"):
         with zipfile.ZipFile(archivio) as zz:
             zz.extractall(cartella)
     else:
