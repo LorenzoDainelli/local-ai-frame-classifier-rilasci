@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from officina.descrittori import radio4
+from officina.descrittori import radio4, torcia
 
 FRASI = [
     "a dog running on the beach", "Un cane che corre sulla spiaggia!",
@@ -130,6 +130,11 @@ def main() -> int:
     parser.add_argument("--uscita", required=True)
     parser.add_argument("--casa", default="lavoro-radio4/casa")
     a = parser.parse_args()
+    import huggingface_hub.constants
+    import transformers
+
+    torcia.con_la_rete_accesa()
+    print("RETE", huggingface_hub.constants.HF_HUB_OFFLINE, transformers.__version__, flush=True)
     with open(a.uscita, "w", encoding="utf-8") as uscita:
         prepara(uscita, Path(a.casa))
         return 0 if confronta(uscita, Path(a.casa)) else 1
