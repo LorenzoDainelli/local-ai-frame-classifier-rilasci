@@ -43,6 +43,13 @@ class Fette:
         self.ffn = int(ffn)
         self.domande = int(domande)
         self.tessere = int(tessere)
+        self.fuori = False
+
+    def esci(self) -> bool:
+        if self.fuori:
+            return False
+        self.fuori = True
+        return True
 
     def dimezza(self, pezzi: int) -> bool:
         prima = (self.ffn, self.domande, self.tessere)
@@ -52,7 +59,8 @@ class Fette:
         return (self.ffn, self.domande, self.tessere) != prima
 
     def scelte(self) -> dict:
-        return {"ffn": self.ffn, "domande": self.domande, "tessere": self.tessere}
+        return {"ffn": self.ffn, "domande": self.domande, "tessere": self.tessere,
+                **({"fuori": True} if self.fuori else {})}
 
 
 def vicine(griglia: Griglia, it: int, ih: int, iw: int,
@@ -166,10 +174,16 @@ def _a_pezzi(indici: list[int], quanti: int):
         yield indici[da:da + max(1, quanti)]
 
 
+def _righe(dato, indici, dispositivo):
+    return dato.index_select(0, _dove(dato, indici)).to(dispositivo)
+
+
 def passa_l_attenzione(attn, prima, dopo, x, griglia: Griglia, giri_di, fette: Fette,
-                       finestra: tuple[int, int, int] = FINESTRA) -> None:
+                       finestra: tuple[int, int, int] = FINESTRA,
+                       dispositivo=None) -> None:
     import torch
 
+    dispositivo = x.device if dispositivo is None else dispositivo
     cache: dict[int, tuple] = {}
 
     def prepara(ih: int) -> None:
@@ -179,8 +193,8 @@ def passa_l_attenzione(attn, prima, dopo, x, griglia: Griglia, giri_di, fette: F
         indici = riga(griglia, ih)
         for pezzo in _a_pezzi(indici, fette.tessere):
             k, v = chiavi(attn, prima, x, pezzo, giri_di(pezzo))
-            tutte_k.append(k)
-            tutte_v.append(v)
+            tutte_k.append(k.to(x.device))
+            tutte_v.append(v.to(x.device))
         cache[ih] = ({n: i for i, n in enumerate(indici)}, torch.cat(tutte_k),
                      torch.cat(tutte_v))
 
@@ -191,7 +205,7 @@ def passa_l_attenzione(attn, prima, dopo, x, griglia: Griglia, giri_di, fette: F
             dove, ck, cv = cache[ih]
             k.append(ck[dove[indice]])
             v.append(cv[dove[indice]])
-        return torch.stack(k), torch.stack(v)
+        return torch.stack(k).to(dispositivo), torch.stack(v).to(dispositivo)
 
     for ih in range(griglia.nh):
         for altra in righe_servono(griglia, ih, finestra):
@@ -204,8 +218,10 @@ def passa_l_attenzione(attn, prima, dopo, x, griglia: Griglia, giri_di, fette: F
                 fatte.append((pezzo, guarda(attn, q, k, v, fette)))
             del k, v
         for pezzo, uscita in fatte:
-            dove = torch.tensor(pezzo, device=x.device)
-            x.index_copy_(0, dove, dopo(x.index_select(0, dove), dove, uscita))
+            dove = _dove(x, pezzo)
+            vecchio = x.index_select(0, dove).to(uscita.device)
+            nuovo = dopo(vecchio, _dove(uscita, pezzo), uscita)
+            x.index_copy_(0, dove, nuovo.to(x.device))
         cache.pop(ih - finestra[1], None)
 
 
@@ -213,37 +229,38 @@ def passa_il_ffn(blocco, x, c_shift, c_scale, c_gate, fette: Fette) -> None:
     per = pezzi_per_volta(fette.ffn, x.shape[1])
     for da in range(0, x.shape[0], per):
         a = da + per
-        pezzo = x[da:a]
+        pezzo = x[da:a].to(c_scale.device)
         dentro = (blocco.norm3(pezzo.float()) * (1 + c_scale[da:a]) + c_shift[da:a])
         uscita = blocco.ffn(dentro.type_as(pezzo))
-        x[da:a] = (pezzo.float() + uscita.float() * c_gate[da:a]).type_as(pezzo)
+        x[da:a] = (pezzo.float() + uscita.float() * c_gate[da:a]).type_as(pezzo).to(x.device)
 
 
 def blocco_a_fette(blocco, x, temb, griglia: Griglia, giri_di, fette: Fette,
                    finestra: tuple[int, int, int] = FINESTRA):
     misto = blocco.scale_shift_table + temb.float()
+    dispositivo = misto.device
     shift, scale, gate, c_shift, c_scale, c_gate = (parte.unsqueeze(1)
                                                     for parte in misto.unbind(1))
 
     def prima_uno(dato, indici):
-        dove = _dove(dato, indici)
-        pezzo = dato.index_select(0, dove)
+        dove = _dove(misto, indici)
+        pezzo = _righe(dato, indici, dispositivo)
         return (blocco.norm1(pezzo.float()) * (1 + scale[dove]) + shift[dove]).type_as(pezzo)
 
     def dopo_uno(vecchio, dove, uscita):
         return (vecchio.float() + uscita * gate[dove]).type_as(vecchio)
 
     def prima_due(dato, indici):
-        pezzo = dato.index_select(0, _dove(dato, indici))
+        pezzo = _righe(dato, indici, dispositivo)
         return blocco.norm2(pezzo.float()).type_as(pezzo)
 
     def dopo_due(vecchio, _dove_, uscita):
         return vecchio + uscita
 
     passa_l_attenzione(blocco.attn1, prima_uno, dopo_uno, x, griglia, giri_di, fette,
-                       finestra)
+                       finestra, dispositivo)
     passa_l_attenzione(blocco.attn2, prima_due, dopo_due, x, griglia, _senza_giri, fette,
-                       finestra)
+                       finestra, dispositivo)
     passa_il_ffn(blocco, x, c_shift, c_scale, c_gate, fette)
     return x
 
@@ -268,7 +285,19 @@ def _avanti_del_blocco(blocco, griglia_di, fette_di, giri_di_di, x, temb):
     return blocco_a_fette(blocco, x, temb, griglia_di(), giri_di_di(), fette_di())
 
 
-def avanti(modello, entrata, tempo, fette: Fette, giri_di=None):
+def _in_ram(forma, tipo, _in_piu=0):
+    import torch
+
+    return torch.empty(forma, dtype=tipo)
+
+
+def byte_della_cache(griglia: Griglia, interno: int, tipo,
+                     finestra: tuple[int, int, int] = FINESTRA) -> int:
+    righe = min(griglia.nh, 2 * finestra[1] + 1)
+    return 2 * righe * griglia.nt * griglia.nw * griglia.pezzi * interno * int(tipo.itemsize)
+
+
+def avanti(modello, entrata, tempo, fette: Fette, giri_di=None, foglio=None):
     import torch
 
     uno, nt, nh, nw, canali, t, h, w = entrata.shape
@@ -279,12 +308,15 @@ def avanti(modello, entrata, tempo, fette: Fette, giri_di=None):
     tessere = entrata.reshape(griglia.tessere, canali, t, h, w)
     interno = modello.patch_embedding.out_channels
     tipo = modello.patch_embedding.weight.dtype
-    x = torch.empty(griglia.tessere, griglia.pezzi, interno, dtype=tipo,
-                    device=entrata.device)
+    forma = (griglia.tessere, griglia.pezzi, interno)
+    if fette.fuori:
+        x = (foglio or _in_ram)(forma, tipo, byte_della_cache(griglia, interno, tipo))
+    else:
+        x = torch.empty(forma, dtype=tipo, device=entrata.device)
     per = pezzi_per_volta(fette.ffn, griglia.pezzi)
     for da in range(0, griglia.tessere, per):
         fatto = modello.patch_embedding(tessere[da:da + per])
-        x[da:da + per] = fatto.flatten(2).transpose(1, 2)
+        x[da:da + per] = fatto.flatten(2).transpose(1, 2).to(x.device)
     del fatto
     temb, proiezione, _testo, _immagine = modello.condition_embedder(
         tempo.reshape(griglia.tessere), None, None)
@@ -296,14 +328,14 @@ def avanti(modello, entrata, tempo, fette: Fette, giri_di=None):
     for blocco in modello.blocks:
         x = blocco(x, proiezione)
     shift, scale = modello.scale_shift_table.view(2, 1, 1, -1) + temb.unsqueeze(1)
-    shift = shift.to(x.device)
-    scale = scale.to(x.device)
+    shift = shift.to(entrata.device)
+    scale = scale.to(entrata.device)
     uscita_canali = modello.proj_out.out_features // (p_t * p_h * p_w)
     uscita = torch.empty(griglia.tessere, uscita_canali, t, h, w, dtype=x.dtype,
-                         device=x.device)
+                         device=entrata.device)
     for da in range(0, griglia.tessere, per):
         a = da + per
-        pezzo = x[da:a]
+        pezzo = x[da:a].to(entrata.device)
         fatto = (modello.norm_out(pezzo.float()) * (1 + scale[da:a]) + shift[da:a])
         fatto = modello.proj_out(fatto.type_as(pezzo))
         quante = fatto.shape[0]
@@ -329,5 +361,6 @@ def prepara(modello) -> None:
     aggancia(modello, griglia_di, fette_di, giri_di_di)
 
 
-__all__ = ["FINESTRA", "Fette", "Griglia", "avanti", "blocco_a_fette", "gruppi", "prepara",
+__all__ = ["FINESTRA", "Fette", "Griglia", "avanti", "blocco_a_fette", "byte_della_cache",
+           "gruppi", "prepara",
            "riga", "righe_servono", "rotazioni", "ruota", "vicine"]

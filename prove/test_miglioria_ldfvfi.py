@@ -7,7 +7,8 @@ import types
 import numpy as np
 import pytest
 
-from officina.miglioria import ldf_fette, ldf_giro, ldfvfi, scaricamento, seedvr2_blocchi
+from officina.miglioria import (ldf_fette, ldf_foglio, ldf_giro, ldfvfi, scaricamento,
+                                seedvr2_blocchi)
 
 PACCHETTO_FINTO = {
     "training/models/precond.py": (
@@ -435,6 +436,7 @@ def _caricamento_finto(monkeypatch, tmp_path, motivo=None, fuori=(), versione="2
     motore.casa = tmp_path
     motore._dit = None
     motore._tipo_voluto = None
+    motore.foglio = ldf_foglio.Foglio(tmp_path / ldf_foglio.CARTELLA, ldfvfi.CHI)
     return motore, visto
 
 
@@ -460,6 +462,23 @@ def test_una_torch_vecchia_non_apre_i_pesi_di_ldf(monkeypatch, tmp_path):
     assert sorted(visto["moduli"]) == sorted(
         f"{ldfvfi.PACCHETTO}.models.{nome}"
         for nome in ("precond", "transformer_wan", "vae2_1_cond_v2"))
+
+
+def test_caricando_si_buttano_i_fogli_rimasti(monkeypatch, tmp_path):
+    motore, _visto = _caricamento_finto(monkeypatch, tmp_path, versione="2.5.1+cu121")
+    rimasto = tmp_path / ldf_foglio.CARTELLA / "foglio-4242.bin"
+    rimasto.parent.mkdir()
+    rimasto.write_bytes(b"x" * 8)
+    with pytest.raises(ldfvfi.scheda.TorchTroppoVecchio):
+        motore._carica()
+    assert not rimasto.exists()
+
+
+def test_il_foglio_sta_nella_casa_di_ldf(tmp_path, monkeypatch):
+    monkeypatch.setattr(ldfvfi.scaricamento, "e_in_casa", lambda *_a: True)
+    motore = ldfvfi.LdfVFI(str(tmp_path))
+    assert motore.foglio.cartella == scaricamento.dove(tmp_path, ldfvfi.NOME) / "appoggio"
+    assert motore.foglio.chi == "LDF-VFI" and not motore.fette.fuori
 
 
 def test_i_blocchi_parlano_di_ldf():

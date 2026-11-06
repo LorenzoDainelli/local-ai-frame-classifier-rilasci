@@ -138,6 +138,94 @@ def fette(motore) -> dict:
     return {"forma": list(atteso.shape), "prove": esiti}
 
 
+def _foglio_in(cartella: Path, ram):
+    from officina.miglioria import ldf_foglio
+
+    return ldf_foglio.Foglio(cartella, "LDF-VFI", ram_libera=lambda: ram)
+
+
+def fuori(motore, cartella: Path) -> dict:
+    import torch
+
+    from officina.miglioria import ldf_fette, ldf_foglio
+
+    dit = motore._dit
+    canali = dit.patch_embedding.in_channels
+    generatore = torch.Generator().manual_seed(5)
+    entrata = torch.randn(1, 3, 3, 4, canali, 2, 4, 4, generator=generatore)
+    tempo = torch.randint(0, 1000, (1, 3, 3, 4), generator=generatore)
+    esito: dict = {}
+    with torch.no_grad():
+        atteso = ldf_fette.avanti(dit, entrata, tempo, ldf_fette.Fette(1, 1, 1))
+        for dove, ram in ((ldf_foglio.RAM, None), (ldf_foglio.DISCO, 0)):
+            fette = ldf_fette.Fette(1, 1, 1)
+            fette.esci()
+            foglio = _foglio_in(cartella, ram)
+            fatto = ldf_fette.avanti(dit, entrata, tempo, fette, foglio=foglio)
+            esito[dove] = {"foglio": foglio.dove, "byte": foglio.byte,
+                           "uguale": bool(torch.equal(fatto, atteso))}
+            foglio.lascia()
+            esito[dove]["file_rimasti"] = sorted(f.name for f in cartella.glob("*.bin"))
+            if (not esito[dove]["uguale"] or foglio.usato != dove
+                    or esito[dove]["file_rimasti"]):
+                raise AssertionError("fuori dalla scheda non è uguale: "
+                                     + json.dumps(esito))
+    foglio = _foglio_in(cartella, 0)
+    prova = torch.randn(3, 7, generator=generatore).to(torch.bfloat16)
+    foglio((3, 7), torch.bfloat16).copy_(prova)
+    esito["bf16_sul_disco"] = bool(torch.equal(foglio((3, 7), torch.bfloat16), prova))
+    foglio.lascia()
+    if not esito["bf16_sul_disco"]:
+        raise AssertionError("il foglio sul disco non tiene i bf16: " + json.dumps(esito))
+    return esito
+
+
+class _SempreFuori:
+
+    def __init__(self, fette) -> None:
+        self.__dict__["_fette"] = fette
+
+    def __getattr__(self, nome):
+        if nome == "fuori":
+            return True
+        return getattr(self._fette, nome)
+
+    def __setattr__(self, nome, valore) -> None:
+        if nome != "fuori":
+            setattr(self._fette, nome, valore)
+
+
+def video_fuori(motore, cartella: Path, quanti: int, volte: int, passi: int) -> dict:
+    import numpy as np
+
+    from officina.miglioria import ldf_fette, ldf_foglio
+
+    quadri = _video(quanti, 64, 48)
+    motore.passi = passi
+    vecchie, vecchio = motore.fette, motore.foglio
+    motore.fette = ldf_fette.Fette()
+    try:
+        attesi = [np.array(q) for q in motore.video(iter(quadri), volte)]
+        esito: dict = {"quanti": quanti, "volte": volte, "passi": passi,
+                       "quadri": len(attesi)}
+        for dove, ram in ((ldf_foglio.RAM, None), (ldf_foglio.DISCO, 0)):
+            motore.fette = _SempreFuori(ldf_fette.Fette())
+            motore.foglio = _foglio_in(cartella, ram)
+            fatti = [np.array(q) for q in motore.video(iter(quadri), volte)]
+            diversi = [n for n, (a, b) in enumerate(zip(fatti, attesi, strict=True))
+                       if not np.array_equal(a, b)]
+            esito[dove] = {"diversi": diversi[:10], "tempi": motore.tempi[-1],
+                           "file_rimasti": sorted(f.name for f in cartella.glob("*.bin"))}
+            if (diversi or len(fatti) != len(attesi)
+                    or motore.tempi[-1].get("foglio") != dove
+                    or esito[dove]["file_rimasti"]):
+                raise AssertionError("il video fuori dalla scheda non è uguale: "
+                                     + json.dumps(esito, default=str))
+    finally:
+        motore.fette, motore.foglio = vecchie, vecchio
+    return esito
+
+
 def _funzioni(file: Path, nomi: tuple[str, ...], dove: dict) -> None:
     albero = ast.parse(file.read_text(encoding="utf-8"))
     scelte = [nodo for nodo in albero.body
@@ -283,6 +371,11 @@ def principale() -> int:
         motore._carica()
         esito["caricato_in_secondi"] = round(time.monotonic() - partito)
         esito["fette"] = fette(motore)
+        scrivi()
+        appoggio = argomenti.casa / "appoggio-collaudo"
+        esito["fuori"] = fuori(motore, appoggio)
+        scrivi()
+        esito["video_fuori"] = video_fuori(motore, appoggio, 22, 4, 1)
         scrivi()
         esito["come_l_originale"] = [come_l_originale(motore, argomenti.originale, 22, 4, 1),
                                      come_l_originale(motore, argomenti.originale, 7, 2, 2)]

@@ -142,6 +142,9 @@ class FluidoFinto:
     def dove_stanno(self):
         return None
 
+    def foglio(self):
+        return None
+
     def uscite(self, apri, volte):
         ultimo = None
         for quadro in apri():

@@ -11,7 +11,7 @@ from typing import Iterable, Iterator
 
 from officina.descrittori import torcia
 from officina.errori import ErroreOfficina
-from officina.miglioria import ldf_fette, ldf_giro, scaricamento, seedvr2_blocchi
+from officina.miglioria import ldf_fette, ldf_foglio, ldf_giro, scaricamento, seedvr2_blocchi
 from officina.programma import scheda
 
 NOME = "ldfvfi"
@@ -252,6 +252,7 @@ class LdfVFI:
         self.alto = 0
         self.largo = 0
         self.fette = ldf_fette.Fette()
+        self.foglio = ldf_foglio.Foglio(self.casa / ldf_foglio.CARTELLA, CHI)
         self.tempi: list[dict] = []
         self.secondi_dei_passi: list[float] = []
         self.al_passo = None
@@ -322,6 +323,7 @@ class LdfVFI:
         if self._dit is not None:
             return self._dit
         moduli = self._moduli()
+        self.foglio.pulisci()
         import torch
 
         scheda.controlla_che_torch_legga_in_sicurezza(torch)
@@ -434,8 +436,9 @@ class LdfVFI:
         t = t.mul(1000).to(dtype=torch.long)
         entrata = torch.cat([xt, y, m], dim=-4)
         pezzi = pezzi_per_tessera(entrata.shape[-3:], self._dit.config.patch_size)
-        return self._riprova(lambda: ldf_fette.avanti(self._dit, entrata, t, self.fette),
-                             lambda: self.fette.dimezza(pezzi))
+        return self._riprova(
+            lambda: ldf_fette.avanti(self._dit, entrata, t, self.fette, foglio=self.foglio),
+            lambda: self.fette.dimezza(pezzi) or self.fette.esci())
 
     def passo_fatto(self) -> None:
         adesso = time.monotonic()
@@ -461,21 +464,29 @@ class LdfVFI:
         self._carica()
         torch.manual_seed(SEME)
         self._partito = time.monotonic()
+        self.fette.fuori = False
+        self.foglio.nuovo_video()
         giro = ldf_giro.Giro(self, volte, self.passi)
         ultimo = None
-        for numero, quadro in enumerate(giro.quadri(lettore)):
-            ultimo = quadro.permute(1, 2, 0).contiguous().numpy()
-            if numero and numero % volte == 0 and al_quadro is not None:
-                al_quadro(numero // volte)
-            yield ultimo
-        for _ in range(volte - 1):
-            yield ultimo
-        self._ricorda(torch)
+        try:
+            for numero, quadro in enumerate(giro.quadri(lettore)):
+                ultimo = quadro.permute(1, 2, 0).contiguous().numpy()
+                if numero and numero % volte == 0 and al_quadro is not None:
+                    al_quadro(numero // volte)
+                yield ultimo
+            for _ in range(volte - 1):
+                yield ultimo
+            self._ricorda(torch)
+        finally:
+            self.foglio.lascia()
 
     def _ricorda(self, torch) -> None:
         tempi: dict = {"passi": len(self.secondi_dei_passi),
                        "secondi": round(sum(self.secondi_dei_passi), 1),
                        "fette": self.fette.scelte(), "mucchio": self._vae.batch_size}
+        if self.foglio.usato is not None:
+            tempi["foglio"] = self.foglio.usato
+            tempi["foglio_gb"] = self.foglio.giga()
         if self.dispositivo.type == "cuda":
             tempi["picco_mb"] = torch.cuda.max_memory_allocated() // 2 ** 20
         stanno = self._blocchi.dove_stanno()
@@ -493,6 +504,7 @@ class LdfVFI:
             torch.cuda.empty_cache()
 
     def spegni(self) -> None:
+        self.foglio.lascia()
         self._blocchi.togli()
         self._dit = None
         self._vae = None

@@ -49,6 +49,8 @@ MESSAGGI = {
     RAM_POCA_COL_DISCO: ("per SeedVR2 la RAM libera non basta, anche tenendo una parte dei "
                          "pesi sul disco"),
     "motore_mancante": "il modello che serve non è ancora stato preparato",
+    "spazio_modelli": ("LDF-VFI non sta nella scheda video e sul disco dei modelli non c'è "
+                       "spazio per appoggiare i calcoli"),
     "stanza_caduta": "il modello si è fermato di colpo",
     "stanza_muta": "il modello non ha detto com'è andata",
     "solo_foto": "questo modello migliora solo le foto",

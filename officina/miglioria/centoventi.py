@@ -73,7 +73,20 @@ def con_chi(usati) -> str:
         return ""
     detto = a_parole(fatto.get("da"), ritmo(fatto.get("a")))
     motore = NOMI.get(str(fatto.get("motore")))
-    return f"{detto} con {motore}" if motore else detto
+    detto = f"{detto} con {motore}" if motore else detto
+    return detto + appoggiato(fatto.get("foglio"))
+
+
+def appoggiato(foglio) -> str:
+    if not isinstance(foglio, dict) or foglio.get("dove") not in ("ram", "disco"):
+        return ""
+    dove = "nella RAM" if foglio["dove"] == "ram" else "sul disco dei modelli"
+    try:
+        giga = f"{float(foglio.get('gb') or 0):.1f}".removesuffix(".0").replace(".", ",")
+    except (TypeError, ValueError):
+        return ""
+    return (f" (LDF-VFI non stava nella scheda video: {giga} GB di calcoli appoggiati "
+            f"{dove}, più lento ma con lo stesso risultato)")
 
 
 def a_parole(fps, verso: Fraction | None) -> str:

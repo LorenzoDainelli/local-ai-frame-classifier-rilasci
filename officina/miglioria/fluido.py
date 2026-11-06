@@ -51,7 +51,12 @@ class Motore:
                 for motore in (self.gimm, self.ldf) if motore is not None]
 
     def dove_stanno(self) -> dict | None:
-        return self.ldf.dove_stanno() if self.ldf is not None else None
+        return self.ldf.dove_stanno if self.ldf is not None else None
+
+    def foglio(self) -> dict | None:
+        from officina.miglioria import ldf_foglio
+
+        return ldf_foglio.riassunto(self.ldf.tempi) if self.ldf is not None else None
 
     def uscite(self, apri: Callable[[], Iterable], volte: int) -> Iterator:
         if self.fusione is not None:

@@ -84,6 +84,14 @@
       [
         "riprova",
         "Quando c'è il vincitore, i video sotto i 120 FPS già approvati o da rivedere tornano in coda e l'originale torna al suo posto. Il lavoro non parte da solo: premi Avvia. I video ritoccati restano come sono"
+      ],
+      [
+        "video",
+        "Se un video è troppo grande per la scheda video, LDF-VFI non si ferma più: appoggia i suoi calcoli nella RAM e, se non basta, sul disco dei modelli. È più lento, ma il risultato è identico. In revisione leggi dove li ha appoggiati"
+      ],
+      [
+        "riprova",
+        "Corretto: i video portati a 120 FPS con LDF-VFI o con la Fusione si sarebbero fermati alla fine del lavoro con «difetto del programma». Ora finiscono"
       ]
     ],
     "tecnico": [
@@ -99,7 +107,8 @@
       "All'avvio <code>rifai.in_grande</code> segna <code>miglioria_4k_dal</code> una volta sola e rimette in coda le righe finite prima in FHD (e le fallite <code>gia_grande</code> sotto il tetto) con lo stesso giro di <code>rifai.tutto</code>; quelle rimaste per l'archivio chiuso si rifanno nel giro (regola 581).",
       "C-RADIOv4-H (<code>descrittori.radio4</code>): codice NVIDIA fissato nel programma, niente <code>torch.hub</code>; pth e file del testo con sha256 fissati, visione e testo convertiti in safetensors, adattatore <code>siglip2-g</code>. Su GitHub dà gli stessi numeri dell'originale (diff 0,0 su 12 lotti di foto e sulle frasi) (regola 580).",
       "<code>descrittori.SUPERATI</code> toglie SigLIP 2 dalla coda delle impronte quando C-RADIOv4-H è in casa; <code>ricerca.per_le_parole</code> usa le vecchie finché <code>quanti_da_fare</code> della nuova non è 0; poi <code>sgombero.togli_le_superate</code> (a fine coda e all'avvio) cancella le impronte di SigLIP 2 e scrive numero e byte nella carta (<code>modelli_tolti</code>); al riavvio dopo <code>sgombero.compatta_se_serve</code> fa <code>VACUUM</code> e <code>wal_checkpoint(TRUNCATE)</code> una volta sola, se la RAM libera è almeno il doppio del database e sul disco c'è il suo peso più 1 GB, e scrive i byte liberati.",
-      "Regola 582: <code>centoventi.arrivo</code> sceglie 120 o 119,88; <code>fluido.fai</code> salva tratti da 2 s già compressi in <code>.fluidi</code> e <code>video.unisci_tratti</code> li unisce con l'audio; <code>rifai.a_centoventi</code> rimette in coda i video fatti senza."
+      "Regola 582: <code>centoventi.arrivo</code> sceglie 120 o 119,88; <code>fluido.fai</code> salva tratti da 2 s già compressi in <code>.fluidi</code> e <code>video.unisci_tratti</code> li unisce con l'audio; <code>rifai.a_centoventi</code> rimette in coda i video fatti senza.",
+      "<code>ldf_fette.Fette.esci</code> scatta dopo l'ultimo dimezzamento: <code>ldf_fette.avanti</code> tiene il foglio <code>x</code> e la cache delle chiavi fuori dalla scheda (<code>ldf_foglio.Foglio</code>: RAM se ce n'è col margine di 3 GB, se no <code>torch.from_file</code> in <code>miglioria/ldfvfi/appoggio</code>, cancellato a fine video) e porta sulla scheda solo le righe che calcola, con le stesse operazioni nello stesso ordine; <code>fluido.Motore.dove_stanno</code> leggeva una proprietà come funzione."
     ]
   },
   {

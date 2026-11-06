@@ -231,6 +231,7 @@ def _a_centoventi(originale, piano, lavoro: dict, fatti, verso, uscita: Path, fr
         fluido.fai(motore, apri, piano.fps, verso, tratti, entrati, al_passo,
                    filtro=lambda quadri: _col_freno(quadri, frenato))
         stanno = motore.dove_stanno()
+        foglio = motore.foglio()
         usati = motore.usati()
     finally:
         motore.spegni()
@@ -238,7 +239,7 @@ def _a_centoventi(originale, piano, lavoro: dict, fatti, verso, uscita: Path, fr
     pezzi.butta(tratti.dove)
     return {"usati": usati,
             "fps": {"da": str(centoventi.ritmo(piano.fps)), "a": str(verso),
-                    "motore": nome}}, stanno
+                    "motore": nome, **({"foglio": foglio} if foglio else {})}}, stanno
 
 
 def _firma(originale, motore, larghezza: int, altezza: int) -> dict:
