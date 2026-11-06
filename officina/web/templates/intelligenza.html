@@ -26,7 +26,7 @@
 {% block corpo %}
 <div class="corpo">
 <main class="zona-principale">
-<div class="pagina ia" data-ia data-corre="{{ 1 if corre else 0 }}" data-adesso="{{ fila.adesso }}">
+<div class="pagina ia" data-ia data-corre="{{ 1 if corre else 0 }}" data-adesso="{{ fila.adesso }}" data-da-sole="{{ 1 if fila.impronte_da_sole else 0 }}" data-aspetta="{{ fila.aspetta_la_scheda }}">
     <header class="ia-testa">
         <h1 class="titolo-pagina">Intelligenza artificiale</h1>
         <p class="sottotitolo">Qui il programma guarda le tue foto, tutto su questo computer. Accendi i lavori che vuoi: partono uno dopo l'altro.</p>
@@ -42,7 +42,8 @@
         {% set manca_scatti = [manca, totale]|min %}
         {% set fatti = totale - manca_scatti %}
         {% set vivo = fila.lavori[k] %}
-        {% set adesso = corre and fila.adesso == k %}
+        {% set da_sole = not corre and fila.impronte_da_sole and k == "impronte" %}
+        {% set adesso = (corre and fila.adesso == k) or da_sole %}
         {% set in_fila = corre and k in fila.scelti and not adesso and loop.index0 > (ORDINE.index(fila.adesso) if fila.adesso else -1) %}
         {% set gia = corre and not adesso and not in_fila %}
         {% set guasto_qui = not corre and fila.dove_guasto == k and fila.guasto %}
@@ -52,7 +53,7 @@
             <div class="ia-carta-t">
                 <span class="ia-icona">{{ icona(L.icona, 20) }}</span>
                 <label class="interruttore" title="{{ 'Acceso: parte' if acceso else 'Spento: non parte' }}">
-                    <input type="checkbox" name="scelti" value="{{ k }}" {{ 'checked' if acceso }} {{ 'disabled' if not si_tocca or adesso }} data-scelta="{{ k }}">
+                    <input type="checkbox" name="scelti" value="{{ k }}" {{ 'checked' if acceso }} {{ 'disabled' if not si_tocca or (adesso and corre) }} data-scelta="{{ k }}">
                     <span class="binario"></span>
                     <span class="solo-per-chi-ascolta">{{ L.nome }}</span>
                 </label>
@@ -62,6 +63,7 @@
                 <p>{{ L.dice }}</p>
             </div>
             {% if adesso %}
+            {% if da_sole %}<span class="bollino" data-da-sole-scritta>Partite da sole</span>{% endif %}
             <div class="ia-num numeri"><span data-fatti>{{ (vivo.fatti or 0)|numero }}</span> <small>di <span data-totale>{{ (vivo.totale or manca)|numero }}</span></small></div>
             <div class="ia-stato">
                 <span class="barretta"><span data-barra style="width:{{ vivo.percento or 0 }}%"></span></span>
@@ -158,6 +160,12 @@
             </span>
             {% endfor %}
         </div>
+        {% if corre and fila.aspetta_la_scheda %}
+        <span class="piccolo tenue" data-aspetta-scritta>Aspetto la scheda video: la sta usando {{ fila.aspetta_la_scheda }}.</span>
+        {% elif fila.impronte_da_sole %}
+        <span class="piccolo tenue" data-da-sole-nota>Le impronte sono partite da sole. Se avvii, si fermano e ripartono nella tua fila.</span>
+        <button class="tasto-comando" type="submit" formaction="/misura/impronte/ferma" data-ferma-da-sole>{{ icona('ferma', 14) }} Ferma le impronte</button>
+        {% endif %}
         {% if corre %}
         <span class="ia-fermando piccolo tenue" {% if not fila.sta_fermando %}hidden{% endif %} data-fermando><span class="gira-poco"></span> Mi sto fermando…</span>
         <button class="tasto-comando" type="submit" formaction="/intelligenza/ferma" {% if fila.sta_fermando %}hidden{% endif %} data-ferma>{{ icona('ferma', 14) }} Ferma</button>

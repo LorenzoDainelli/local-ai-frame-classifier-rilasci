@@ -47,37 +47,48 @@ pagina?.querySelector("[data-ferma]")?.addEventListener("click", () => {
     pagina.querySelector("[data-fermando]")?.removeAttribute("hidden");
 });
 
-if (corre) {
-    const adesso = pagina.dataset.adesso;
+const firmaDi = (dati) => [dati.sta_lavorando ? 1 : 0, dati.sta_lavorando ? dati.adesso || "" : "",
+    dati.impronte_da_sole ? 1 : 0, dati.aspetta_la_scheda || ""].join("|");
+const firma = pagina ? firmaDi({
+    sta_lavorando: corre, adesso: pagina.dataset.adesso,
+    impronte_da_sole: pagina.dataset.daSole === "1", aspetta_la_scheda: pagina.dataset.aspetta,
+}) : "";
+
+function mettiNumeri(dati, chiave) {
+    const vivo = dati.lavori[chiave] || {};
+    const carta = pagina.querySelector(`[data-lavoro="${chiave}"]`);
+    if (!carta) return;
+    const pct = vivo.percento || 0;
+    const metti = (sel, testo) => { const el = carta.querySelector(sel); if (el) el.textContent = testo; };
+    metti("[data-fatti]", numero(vivo.fatti));
+    if (vivo.totale) metti("[data-totale]", numero(vivo.totale));
+    metti("[data-pct]", String(pct));
+    metti("[data-manca]", vivo.quanto_manca ? ` · ${vivo.quanto_manca}` : "");
+    const barra = carta.querySelector("[data-barra]");
+    if (barra) barra.style.width = `${pct}%`;
+    (vivo.modelli || []).forEach((m) => {
+        const riga = carta.querySelector(`[data-modello="${m.nome}"]`);
+        if (!riga) return;
+        riga.classList.toggle("ora", !!m.adesso);
+        riga.classList.toggle("fatto", m.percento >= 100);
+        const sua = riga.querySelector("[data-barra-modello]");
+        if (sua) sua.style.width = `${m.percento}%`;
+        const scritta = riga.querySelector("[data-pct-modello]");
+        if (scritta) scritta.textContent = String(m.percento);
+    });
+}
+
+if (pagina) {
     const orologio = setInterval(async () => {
         let dati;
-        try { dati = await chiedi("/api/intelligenza"); } catch (errore) { return; }
-        if (!dati.sta_lavorando || dati.adesso !== adesso) {
+        try { dati = await chiedi("/api/intelligenza?solo_fila=1"); } catch (errore) { return; }
+        if (firmaDi(dati) !== firma) {
             clearInterval(orologio);
             window.location.reload();
             return;
         }
-        const vivo = dati.lavori[adesso] || {};
-        const carta = pagina.querySelector(`[data-lavoro="${adesso}"]`);
-        if (!carta) return;
-        const pct = vivo.percento || 0;
-        const metti = (sel, testo) => { const el = carta.querySelector(sel); if (el) el.textContent = testo; };
-        metti("[data-fatti]", numero(vivo.fatti));
-        if (vivo.totale) metti("[data-totale]", numero(vivo.totale));
-        metti("[data-pct]", String(pct));
-        metti("[data-manca]", vivo.quanto_manca ? ` · ${vivo.quanto_manca}` : "");
-        const barra = carta.querySelector("[data-barra]");
-        if (barra) barra.style.width = `${pct}%`;
-        (vivo.modelli || []).forEach((m) => {
-            const riga = carta.querySelector(`[data-modello="${m.nome}"]`);
-            if (!riga) return;
-            riga.classList.toggle("ora", !!m.adesso);
-            riga.classList.toggle("fatto", m.percento >= 100);
-            const sua = riga.querySelector("[data-barra-modello]");
-            if (sua) sua.style.width = `${m.percento}%`;
-            const scritta = riga.querySelector("[data-pct-modello]");
-            if (scritta) scritta.textContent = String(m.percento);
-        });
+        if (dati.sta_lavorando && dati.adesso) mettiNumeri(dati, dati.adesso);
+        else if (dati.impronte_da_sole) mettiNumeri(dati, "impronte");
         if (dati.sta_fermando) {
             pagina.querySelector("[data-fermando]")?.removeAttribute("hidden");
             pagina.querySelector("[data-ferma]")?.setAttribute("hidden", "");

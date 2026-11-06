@@ -300,7 +300,7 @@ def parti_impronte(descrittore: str = Form(""), dove_torno: str = Form("")):
 def parti_le_impronte_per(archivio, descrittore: str = "") -> bool:
     from officina.impronte.motore import Coda
 
-    if comune.lavoro_impronte_passata.sta_lavorando:
+    if comune.lavoro_impronte_passata.sta_lavorando or comune.lavoro_ia.sta_lavorando:
         return False
     quali = _quali_in_coda(descrittore, archivio)
     if not quali:

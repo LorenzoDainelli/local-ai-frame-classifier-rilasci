@@ -423,6 +423,16 @@ def quanti_mancano_ia(archivio) -> dict:
             "modelli_impronte": [r["titolo"] for r in righe]}
 
 
+def impronte_da_sole() -> bool:
+    return (comune.lavoro_impronte_passata.sta_lavorando
+            and not comune.lavoro_ia.sta_lavorando)
+
+
+def chi_tiene_la_scheda() -> str:
+    cosa = comune.lavoro_ia.numeri.get("in_attesa_della_scheda") or ""
+    return lavori.NOMI_NEL_TURNO.get(cosa, cosa)
+
+
 def come_va_la_fila_ia() -> dict:
     corre = comune.lavoro_ia.sta_lavorando
     lavori_qui = {}
@@ -452,6 +462,8 @@ def come_va_la_fila_ia() -> dict:
         "dove_guasto": "" if corre else comune.fila_ia["dove_guasto"],
         "lavori": lavori_qui,
         "aspetta_la_copia": sosta.per_la_copia.aspetta_la_copia(sosta.IA),
+        "impronte_da_sole": impronte_da_sole(),
+        "aspetta_la_scheda": chi_tiene_la_scheda() if corre else "",
     }
 
 
@@ -509,6 +521,8 @@ def parti_la_fila(archivio, scelti) -> bool:
         return False
     if not archivio.di_prova and sosta.per_la_copia.aspetta(sosta.IA, scelti=voluti):
         return False
+    if impronte_da_sole():
+        misura.ferma_le_impronte(aspetta=0)
     comune.fila_ia.update({"scelti": voluti, "adesso": "", "fermata": False,
                     "dove_guasto": ""})
     if in_disparte.A_PARTE:
@@ -553,6 +567,8 @@ def ferma_l_intelligenza():
 
 
 @strada.get("/api/intelligenza")
-def api_intelligenza():
+def api_intelligenza(solo_fila: bool = False):
+    if solo_fila:
+        return JSONResponse(come_va_la_fila_ia())
     return JSONResponse({**come_va_la_fila_ia(),
                          "mancano": quanti_mancano_ia(accesso.aperto())})

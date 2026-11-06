@@ -34,6 +34,11 @@ class TurnoDellaScheda:
     def chi(self) -> Lavoro | None:
         return self._chi
 
+    @property
+    def libera(self) -> bool:
+        with self._cambiato:
+            return self._chi is None and not self._in_attesa
+
     def prendi(self, lavoro: Lavoro, nome: str) -> bool:
         with self._cambiato:
             self._rinunce.discard(nome)

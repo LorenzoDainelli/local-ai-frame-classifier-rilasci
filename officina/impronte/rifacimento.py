@@ -26,11 +26,26 @@ def da_rifare(archivio) -> str | None:
     return None
 
 
-def _occupata() -> bool:
-    from officina.web import sosta
+def quanti_restano(archivio, nome: str) -> int:
+    from officina import descrittori
+    from officina.modello import impronte as magazzino
 
-    return bool(sosta.per_la_copia.attiva or sosta.per_la_copia.in_attesa()
-                or sosta.per_la_copia.si_fermano())
+    versione = descrittori.scheda(nome).versione
+    with archivio.lettura() as connessione:
+        return int(magazzino.quanti_da_fare(connessione, nome, versione) or 0)
+
+
+def _occupata() -> bool:
+    from officina.web import lavori, sosta
+    from officina.web.strade import comune
+
+    if (sosta.per_la_copia.attiva or sosta.per_la_copia.in_attesa()
+            or sosta.per_la_copia.si_fermano()):
+        return True
+    if not lavori.turno.libera:
+        return True
+    return bool(comune.lavoro_ia.sta_lavorando
+                or comune.lavoro_impronte_passata.sta_lavorando)
 
 
 def _parti(archivio, nome: str) -> bool:
@@ -48,11 +63,13 @@ def _l_archivio():
 class Rifacimento:
 
     def __init__(self, *, archivio=_l_archivio, occupata=_occupata, parti=_parti,
-                 ogni: float = OGNI):
+                 ogni: float = OGNI, restano=quanti_restano):
         self._archivio = archivio
         self._occupata = occupata
         self._parti = parti
         self._ogni = ogni
+        self._restano = restano
+        self._ultimo: tuple[str, int] | None = None
         self._basta = threading.Event()
         self._fermato = threading.Event()
         self._filo: threading.Thread | None = None
@@ -72,8 +89,12 @@ class Rifacimento:
         nome = da_rifare(archivio)
         if nome is None or self._occupata():
             return None
+        giro = (nome, self._restano(archivio, nome))
+        if giro == self._ultimo:
+            return None
         if not self._parti(archivio, nome):
             return None
+        self._ultimo = giro
         registro.evento("impronte.rifacimento_partito", nome=registro.Parola(nome))
         return nome
 
@@ -99,4 +120,4 @@ class Rifacimento:
 
 del_programma = Rifacimento()
 
-__all__ = ["OGNI", "Rifacimento", "da_rifare", "del_programma"]
+__all__ = ["OGNI", "Rifacimento", "da_rifare", "del_programma", "quanti_restano"]
