@@ -135,10 +135,13 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             self._webview = webview
         return self._webview
 
-    def fai(self, azione) -> dict:
+    def fai(self, azione, *, solo_lettura: bool = False) -> dict:
         try:
-            with self._lucchetto:
+            if solo_lettura:
                 risposta = azione()
+            else:
+                with self._lucchetto:
+                    risposta = azione()
         except ErroreOfficina as errore:
             return {"errore": errore.messaggio}
         except Exception as guasto:

@@ -6,11 +6,23 @@ const DAL_FISSO = new Set(["stato_del_programma", "come_vanno_i_motori", "prepar
 const locale = () => window.pywebview && window.pywebview.api;
 let fisso = null;
 
-async function chiediAlFisso(azione, argomenti) {
+const PAZIENZA = 8000;
+
+function entro(promessa, millisecondi) {
+    let timer;
+    const scade = new Promise((_, no) => {
+        timer = setTimeout(() => no(new Error("tempo scaduto")), millisecondi);
+    });
+    return Promise.race([promessa, scade]).finally(() => clearTimeout(timer));
+}
+
+async function chiediAlFisso(azione, argomenti, millisecondi = PAZIENZA) {
+    const ferma = new AbortController();
+    const timer = setTimeout(() => ferma.abort(), millisecondi);
     const risposta = await fetch(`/api/programma/${azione}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(argomenti),
-    });
+        body: JSON.stringify(argomenti), signal: ferma.signal,
+    }).finally(() => clearTimeout(timer));
     if (!risposta.ok) throw new Error(String(risposta.status));
     return risposta.json();
 }
@@ -29,7 +41,7 @@ export async function apriLArchivioSicuro(password) {
 
 async function guardaSeEIlFisso() {
     try {
-        await chiediAlFisso("aggiornamento", []);
+        await chiediAlFisso("aggiornamento", [], 4000);
     } catch (errore) {
         return;
     }
@@ -98,9 +110,27 @@ function chiaveAParole(s) {
     return "Non c'è. Serve solo per scaricare DINOv3.";
 }
 
+function nonRisponde(si) {
+    const avviso = dentro("non-risponde");
+    if (avviso) avviso.hidden = !si;
+    const riprova = tasto("riprova");
+    if (riprova) riprova.hidden = !si;
+    if (!si) return;
+    ["aggiornamento", "motori", "chiave"].forEach((chi) => scrivi(chi, "Non lo so ancora."));
+}
+
 async function riempi() {
-    const stato = await api().stato_del_programma();
-    if (!stato || stato.errore) return;
+    let stato = null;
+    try {
+        stato = await entro(Promise.resolve().then(() => api().stato_del_programma()), PAZIENZA);
+    } catch (guasto) {
+        stato = null;
+    }
+    if (!stato || stato.errore) {
+        nonRisponde(true);
+        return null;
+    }
+    nonRisponde(false);
     scrivi("versione", `${stato.versione} · ${stato.canale}`);
     scrivi("aggiornamento", aggiornamentoAParole(stato.aggiornamento));
     const a = stato.aggiornamento;
@@ -336,6 +366,7 @@ misuraLaForza();
 
 function collega() {
     document.querySelectorAll("[data-solo-nel-programma]").forEach((e) => { e.hidden = false; });
+    window.dispatchEvent(new Event("programma-collegato"));
     passwordDalPonte();
     window.chiediDiChiudere = (testo) => {
         chiediSeSi({ titolo: "Chiudo il programma?", sotto: testo, tasto: "Chiudi", annulla: "Resta aperto" })
@@ -364,7 +395,15 @@ function collega() {
         if (dentro("campo-chiave")) collegaLaChiave();
         return;
     }
-    riempi().then((stato) => { if (stato && stato.motori.lavora) seguiIMotori(); });
+    const primaVolta = () => riempi().then((stato) => {
+        if (stato && stato.motori.lavora) seguiIMotori();
+    });
+    primaVolta();
+    tasto("riprova").addEventListener("click", () => {
+        ["aggiornamento", "motori", "chiave"].forEach((chi) => scrivi(chi, "Chiedo al programma…"));
+        nonRisponde(false);
+        primaVolta();
+    });
     tasto("aggiorna").addEventListener("click", aggiorna);
     tasto("motori").addEventListener("click", async () => {
         const m = await api().prepara_i_motori();

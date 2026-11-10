@@ -22,6 +22,10 @@ function unGruppoAllaVolta() {
         mostra(sezione);
     }));
     window.addEventListener("hashchange", () => mostra(sezioneDi(location.hash), false));
+    window.addEventListener("programma-collegato", () => {
+        const chiesta = sezioneDi(location.hash);
+        if (chiesta && chiesta.id === "programma") mostra(chiesta, false);
+    });
     mostra(sezioneDi(location.hash), false);
 }
 

@@ -692,6 +692,9 @@ def test_stanza_dice_il_guasto(tmp_path, monkeypatch):
     lavoro = {"azione": "corsa", "dati": str(tmp_path), "risultati": str(tmp_path)}
     assert stanza.un_lavoro(lavoro, messaggi.append, rotti) == 1
     assert messaggi[-1]["guasto"] == "rotto"
+    passi = messaggi[-1]["passi"]
+    assert passi.startswith("Guasto: RuntimeError")
+    assert "gara120_stanza" in passi and "niente" not in passi
 
 
 def _regista(tmp_path, monkeypatch, motori=None, fermati_dopo=None):
@@ -911,3 +914,18 @@ def test_senza_i_motori_la_gara_dice_quale_manca(tmp_path, monkeypatch):
         assert stanza.un_lavoro(lavoro, messaggi.append, motori) == 1
         assert messaggi[-1]["guasto"] == "motore_mancante"
         assert "non è ancora stato scaricato" in messaggi[-1]["spiegazione"]
+
+
+def test_regista_porta_i_passi_del_guasto_fino_alla_pagina(tmp_path, monkeypatch):
+    from officina.errori import ErroreOfficina
+
+    def rotti(lavoro):
+        raise RuntimeError("C:/Users/qualcuno/segreto.mp4")
+
+    gara, _, _ = _regista(tmp_path, monkeypatch, motori=rotti)
+    with pytest.raises(ErroreOfficina) as preso:
+        gara._gira()
+    assert preso.value.codice == "rotto"
+    assert preso.value.dettaglio.startswith("Guasto: RuntimeError")
+    assert "segreto" not in preso.value.dettaglio
+    assert "qualcuno" not in preso.value.dettaglio

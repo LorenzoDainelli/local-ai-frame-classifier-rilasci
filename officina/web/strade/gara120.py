@@ -55,7 +55,6 @@ def _nomi() -> dict:
 def _stato() -> dict:
     gara = la_gara(accesso.aperto())
     stato = gara.lavoro.come_va()
-    stato.pop("dettaglio", None)
     stato["fase"] = gara.fase()
     stato["occupa"] = gara.occupa()
     stato["esito"] = gara.esito()

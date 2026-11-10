@@ -104,6 +104,14 @@
       [
         "chip",
         "In Intelligenza artificiale vedi le impronte partite da sole, con il tasto per fermarle. Se un lavoro aspetta la scheda video, ti dice chi la sta usando. La pagina si aggiorna da sola, senza cliccare"
+      ],
+      [
+        "riprova",
+        "In Impostazioni la parte «Il programma» non resta più vuota: la versione si vede sempre, e se il programma è occupato lo dice e ti dà il tasto «Riprova»"
+      ],
+      [
+        "chip",
+        "Se la gara dei 120 FPS si ferma per un guasto, sotto vedi «Dettagli del guasto» con il tasto «Copia»: dentro ci sono solo i pezzi del programma dove si è rotto, niente nomi di foto o cartelle"
       ]
     ],
     "tecnico": [
@@ -121,7 +129,8 @@
       "<code>descrittori.SUPERATI</code> toglie SigLIP 2 dalla coda delle impronte quando C-RADIOv4-H è in casa; <code>ricerca.per_le_parole</code> usa le vecchie finché <code>quanti_da_fare</code> della nuova non è 0; poi <code>sgombero.togli_le_superate</code> (a fine coda e all'avvio) cancella le impronte di SigLIP 2 e scrive numero e byte nella carta (<code>modelli_tolti</code>); al riavvio dopo <code>sgombero.compatta_se_serve</code> fa <code>VACUUM</code> e <code>wal_checkpoint(TRUNCATE)</code> una volta sola, se la RAM libera è almeno il doppio del database e sul disco c'è il suo peso più 1 GB, e scrive i byte liberati.",
       "Regola 582: <code>centoventi.arrivo</code> sceglie 120 o 119,88; <code>fluido.fai</code> salva tratti da 2 s già compressi in <code>.fluidi</code> e <code>video.unisci_tratti</code> li unisce con l'audio; <code>rifai.a_centoventi</code> rimette in coda i video fatti senza.",
       "<code>ldf_fette.Fette.esci</code> scatta dopo l'ultimo dimezzamento: <code>ldf_fette.avanti</code> tiene il foglio <code>x</code> e la cache delle chiavi fuori dalla scheda (<code>ldf_foglio.Foglio</code>: RAM se ce n'è col margine di 3 GB, se no <code>torch.from_file</code> in <code>miglioria/ldfvfi/appoggio</code>, cancellato a fine video) e porta sulla scheda solo le righe che calcola, con le stesse operazioni nello stesso ordine; <code>fluido.Motore.dove_stanno</code> leggeva una proprietà come funzione.",
-      "<code>rifacimento.Rifacimento</code> ricorda modello e quante ne restano e non riparte a vuoto; <code>_occupata</code> guarda anche <code>lavori.turno.libera</code>, la fila e le impronte; <code>misura.parti_le_impronte_per</code> non parte mentre gira la fila; <code>intelligenza.parti_la_fila</code> ferma le impronte da sole; <code>/api/intelligenza?solo_fila=1</code> dà <code>impronte_da_sole</code> e <code>aspetta_la_scheda</code>, e la pagina lo interroga sempre."
+      "<code>rifacimento.Rifacimento</code> ricorda modello e quante ne restano e non riparte a vuoto; <code>_occupata</code> guarda anche <code>lavori.turno.libera</code>, la fila e le impronte; <code>misura.parti_le_impronte_per</code> non parte mentre gira la fila; <code>intelligenza.parti_la_fila</code> ferma le impronte da sole; <code>/api/intelligenza?solo_fila=1</code> dà <code>impronte_da_sole</code> e <code>aspetta_la_scheda</code>, e la pagina lo interroga sempre.",
+      "<code>PontePrincipale.stato_del_programma</code> non prende più il lucchetto del programma; la pagina aspetta al massimo 8 s. <code>gara120_stanza</code> manda <code>passi_del_guasto</code>, che arriva nella pagina come dettaglio."
     ]
   },
   {

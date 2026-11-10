@@ -360,6 +360,15 @@ jobs:
           python-version: "3.13"
       - name: Prepara il pacchetto
         run: python installatore/prepara.py --versione "2.0.0-beta.0" --canale beta
+      - name: I file di passaggio sul disco più libero
+        run: |
+          Get-PSDrive -PSProvider FileSystem | Format-Table Name, @{n="Liberi (GB)";e={[math]::Round($_.Free / 1GB, 1)}}
+          $libero = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free } | Sort-Object Free -Descending | Select-Object -First 1
+          $dove = "$($libero.Name):\passaggio"
+          New-Item -ItemType Directory -Force -Path $dove | Out-Null
+          "TEMP=$dove" >> $env:GITHUB_ENV
+          "TMP=$dove" >> $env:GITHUB_ENV
+          Write-Output "File di passaggio in $dove"
       - name: Scarica, installa e prova i motori
         env:
           OFFICINA_CHIAVE_COLLAUDO: ${{ secrets.HF_TOKEN }}

@@ -88,7 +88,8 @@ def un_lavoro(lavoro: dict, manda, motori=_motori) -> int:
                       else "memoria_scheda_finita")
         dove = diario.dove_si_e_rotto(errore)
         manda({**{chiave: str(valore) for chiave, valore in dove.items()},
-               "tipo": str(dove.get("guasto", "")), "guasto": codice})
+               "tipo": str(dove.get("guasto", "")), "guasto": codice,
+               "passi": diario.passi_del_guasto(errore)})
         return 1
     manda({"fatto": esito})
     return 0

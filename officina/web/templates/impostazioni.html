@@ -99,13 +99,19 @@
                 <div class="riga">
                     <div class="lato">
                         <div class="nome">Versione</div>
-                        <p class="ds" data-programma="versione"></p>
+                        <p class="ds" data-programma="versione">{{ versione_programma }}</p>
+                        <p class="ds" data-programma="non-risponde" role="status" hidden>Il programma
+                            non risponde adesso: forse sta finendo un altro lavoro.</p>
+                    </div>
+                    <div class="in-fila">
+                        <button class="tasto-comando" type="button"
+                                data-programma-fai="riprova" hidden>Riprova</button>
                     </div>
                 </div>
                 <div class="riga">
                     <div class="lato">
                         <div class="nome">Aggiornamenti</div>
-                        <p class="ds" data-programma="aggiornamento"></p>
+                        <p class="ds" data-programma="aggiornamento">Chiedo al programma…</p>
                     </div>
                     <div class="in-fila">
                         <button class="tasto-comando principale" type="button"
@@ -115,7 +121,7 @@
                 <div class="riga">
                     <div class="lato">
                         <div class="nome">I motori dei modelli</div>
-                        <p class="ds" data-programma="motori"></p>
+                        <p class="ds" data-programma="motori">Chiedo al programma…</p>
                         <div class="avanzamento" data-programma="barra-motori" hidden>
                             <div class="fatto" style="width:0%"></div></div>
                     </div>
@@ -127,7 +133,7 @@
                 <div class="riga">
                     <div class="lato">
                         <div class="nome">Chiave di Hugging Face</div>
-                        <p class="ds" data-programma="chiave"></p>
+                        <p class="ds" data-programma="chiave">Chiedo al programma…</p>
                         <div class="in-fila" data-programma="campo-chiave" hidden>
                             <input class="campo" type="password" autocomplete="off"
                                    spellcheck="false" placeholder="hf_..."

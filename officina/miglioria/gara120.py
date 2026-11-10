@@ -206,8 +206,10 @@ class Gara120:
             raise Fermata()
         if "guasto" in esito:
             detto = str(esito.get("spiegazione") or "") or a_parole(str(esito["guasto"]))
-            raise ErroreOfficina(detto or "La gara si è fermata per un guasto.",
-                                 codice=str(esito["guasto"]))
+            guasto = ErroreOfficina(detto or "La gara si è fermata per un guasto.",
+                                    codice=str(esito["guasto"]))
+            guasto.dettaglio = str(esito.get("passi") or "")
+            raise guasto
         return esito.get("fatto") or {}
 
     def fase(self) -> str:

@@ -92,7 +92,14 @@ def impostazioni(richiesta: Request):
         "nodi_rimessi": _nodi_rimessi(richiesta.query_params.get("rimesso")),
         "motore_120_gara": centoventi.dalla_gara(archivio),
         "nomi_120": fluido.NOMI,
+        "versione_programma": _versione_del_programma(),
     })
+
+
+def _versione_del_programma() -> str:
+    from officina.programma import aggiornamenti
+
+    return f"{aggiornamenti.versione_attuale()} · {aggiornamenti.canale_attuale()}"
 
 
 def _versione_tenuta(chiesta: str | None) -> str | None:

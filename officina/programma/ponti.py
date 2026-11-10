@@ -115,7 +115,7 @@ class PontePrincipale:
         return self._programma.fai(self._programma.rifiuta_aggiornamento)
 
     def stato_del_programma(self) -> dict:
-        return self._programma.fai(self._programma.stato_del_programma)
+        return self._programma.fai(self._programma.stato_del_programma, solo_lettura=True)
 
     def prepara_i_motori(self) -> dict:
         return self._programma.fai(self._programma.prepara_i_motori_da_dentro)

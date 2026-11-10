@@ -32,6 +32,9 @@ function scriviStato() {
     if (stato.guasto) riga = stato.guasto;
     if (stato.aspetta_la_copia) riga = "Parte appena l'Archivio sicuro finisce la prima copia.";
     qui("g1-riga").textContent = riga;
+    const dettaglio = !lavora && stato.guasto ? (stato.dettaglio || "") : "";
+    qui("g1-dettaglio").hidden = !dettaglio;
+    qui("g1-passi").textContent = dettaglio ? `Gara dei 120 FPS\n${stato.guasto}\n${dettaglio}` : "";
     const barra = qui("g1-barra");
     barra.hidden = !(lavora && stato.da_scaricare);
     barra.firstElementChild.style.width = `${stato.percento || 0}%`;
@@ -201,6 +204,20 @@ if (pagina) {
     qui("g1-ferma").addEventListener("click", () => premi("ferma"));
     qui("g1-cancella").addEventListener("click", () => { qui("g1-sicuro").hidden = false; });
     qui("g1-cancella-no").addEventListener("click", () => { qui("g1-sicuro").hidden = true; });
+    qui("g1-copia").addEventListener("click", async () => {
+        const testo = qui("g1-passi");
+        try {
+            await navigator.clipboard.writeText(testo.textContent);
+            qui("g1-copia").textContent = "Copiato";
+        } catch (guasto) {
+            const scelta = document.createRange();
+            scelta.selectNodeContents(testo);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(scelta);
+            qui("g1-copia").textContent = "Selezionato: premi Ctrl+C";
+        }
+    });
     qui("g1-cancella-si").addEventListener("click", () => {
         qui("g1-sicuro").hidden = true;
         premi("cancella");

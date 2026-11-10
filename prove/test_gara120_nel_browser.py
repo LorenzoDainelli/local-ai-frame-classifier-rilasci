@@ -115,3 +115,22 @@ def test_a_meta_larghezza_niente_scorre_di_lato(apri):
     pagina = apri("/gara-120", larga=900)
     assert pagina.evaluate("document.documentElement.scrollWidth <= innerWidth")
     assert apri.errori == []
+
+
+def test_il_guasto_si_vede_con_i_suoi_passi_e_si_copia(apri):
+    apri.gara.lavoro.guasto = "difetto imprevisto: il dettaglio tecnico è nel registro"
+    apri.gara.lavoro.dettaglio = "Guasto: RuntimeError\n  ldfvfi · avanti · riga 12"
+    pagina = apri("/gara-120")
+    assert pagina.locator("[data-g1-dettaglio]").is_visible()
+    pagina.locator("[data-g1-dettaglio] summary").click()
+    testo = pagina.locator("[data-g1-passi]").inner_text()
+    assert "Gara dei 120 FPS" in testo and "ldfvfi · avanti · riga 12" in testo
+    pagina.locator("[data-g1-copia]").click()
+    pagina.wait_for_timeout(200)
+    assert pagina.locator("[data-g1-copia]").inner_text() in ("Copiato", "Selezionato: premi Ctrl+C")
+    assert apri.errori == []
+
+
+def test_senza_guasto_niente_dettagli(apri):
+    pagina = apri("/gara-120")
+    assert not pagina.locator("[data-g1-dettaglio]").is_visible()
