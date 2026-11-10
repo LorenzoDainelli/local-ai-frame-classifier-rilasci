@@ -211,6 +211,72 @@ def test_il_pacchetto_si_carica_col_suo_nome_e_la_spinta_nostra(tmp_path, pulito
     assert gimmvfi.carica_il_pacchetto(cartella) is pacchetto
 
 
+class _SenzaTurtle:
+
+    def find_spec(self, nome, percorso=None, obiettivo=None):
+        if nome == "turtle":
+            raise ModuleNotFoundError("No module named 'turtle'", name="turtle")
+        return None
+
+
+@pytest.fixture
+def senza_turtle(monkeypatch):
+    monkeypatch.delitem(sys.modules, "turtle", raising=False)
+    monkeypatch.setattr(sys, "meta_path", [_SenzaTurtle(), *sys.meta_path])
+
+
+def _con_un_pezzo_che_arriva_dopo(radice):
+    file = dict(PACCHETTO_FINTO)
+    chiave = "src/models/generalizable_INR/gimmvfi_f.py"
+    file[chiave] = file[chiave] + (
+        b"def costruisci():\n"
+        b"    from .lento import Lento\n"
+        b"    return Lento()\n")
+    file["src/models/generalizable_INR/lento.py"] = (
+        b"from turtle import forward\n"
+        b"from dataclasses import dataclass\n"
+        b"@dataclass\n"
+        b"class Dentro:\n"
+        b"    lati: int = 3\n"
+        b"@dataclass\n"
+        b"class Lento:\n"
+        b"    dentro: Dentro = Dentro()\n")
+    return _scrivi(radice, file)
+
+
+def test_senza_turtle_vero_il_pezzo_che_arriva_dopo_si_rompe_fuori(
+        tmp_path, pulito, senza_turtle):
+    gimmvfi.carica_il_pacchetto(_con_un_pezzo_che_arriva_dopo(tmp_path))
+    fatto = sys.modules[gimmvfi.PACCHETTO + ".generalizable_INR.gimmvfi_f"]
+    with pytest.raises(ModuleNotFoundError):
+        fatto.costruisci()
+
+
+def test_senza_turtle_vero_il_pezzo_che_arriva_dopo_si_carica_col_codice_di_gimm(
+        tmp_path, pulito, senza_turtle):
+    import dataclasses
+
+    cartella = _con_un_pezzo_che_arriva_dopo(tmp_path)
+    gimmvfi.carica_il_pacchetto(cartella)
+    fatto = sys.modules[gimmvfi.PACCHETTO + ".generalizable_INR.gimmvfi_f"]
+    with gimmvfi.col_codice_di_gimm():
+        lento = fatto.costruisci()
+    assert lento.dentro.lati == 3
+    assert "turtle" not in sys.modules
+    assert dataclasses.dataclass.__module__ == "dataclasses"
+    assert gimmvfi.moduli_fuori(cartella) == []
+
+
+def test_col_codice_di_gimm_non_tocca_un_turtle_che_ce_gia(monkeypatch):
+    import types
+
+    vero = types.ModuleType("turtle")
+    monkeypatch.setitem(sys.modules, "turtle", vero)
+    with gimmvfi.col_codice_di_gimm():
+        assert sys.modules["turtle"] is vero
+    assert sys.modules["turtle"] is vero
+
+
 def test_le_classi_di_gimm_reggono_un_predefinito_come_in_python_vecchio(tmp_path, pulito):
     import dataclasses
 

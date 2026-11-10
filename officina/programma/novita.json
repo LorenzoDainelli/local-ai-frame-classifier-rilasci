@@ -112,9 +112,14 @@
       [
         "chip",
         "Se la gara dei 120 FPS si ferma per un guasto, sotto vedi «Dettagli del guasto» con il tasto «Copia»: dentro ci sono solo i pezzi del programma dove si è rotto, niente nomi di foto o cartelle"
+      ],
+      [
+        "riprova",
+        "Corretto: la gara dei 120 FPS si fermava con «difetto imprevisto» appena partiva GIMM-VFI, perché su Windows mancava un pezzo che il suo codice chiede. Premi di nuovo «Avvia gara»: riparte da dove era"
       ]
     ],
     "tecnico": [
+      "GIMM-VFI: il <code>turtle</code> finto e le classi come in Python vecchio restano anche mentre si costruisce la rete (<code>col_codice_di_gimm</code>), perché FlowFormer carica <code>convnext</code> solo lì. Il collaudo «Motori veri su Windows» ora scarica GIMM-VFI e LDF-VFI e li fa girare davvero su tre quadri piccoli (<code>--miglioria</code>).",
       "Tolti <code>PeCore</code>, <code>pe_visione.py</code>, le sue revisioni e impronte fissate, la conversione dei pesi e la voce in <code>modelli_in_casa.OBBLIGATORI</code> (regola 574, che supera la 420).",
       "Migrazione 73: <code>DELETE FROM impronte WHERE descrittore = 'pecore'</code>, e il numero tolto va nello <code>stato</code> come <code>pecore_impronte_tolte</code>.",
       "All'avvio <code>descrittori.sgombero.sgombra</code> cancella <code>modelli/pecore</code>, somma i byte liberati e le impronte tolte nella carta (<code>modelli_tolti</code>); la riga coi numeri veri compare qui sopra.",

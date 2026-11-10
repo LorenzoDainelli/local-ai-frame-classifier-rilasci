@@ -112,11 +112,8 @@ def _classi_come_in_python_vecchio():
         dataclasses.dataclass = vera
 
 
-def carica_il_pacchetto(cartella: Path):
-    gia = sys.modules.get(PACCHETTO)
-    if gia is not None:
-        return gia
-    _timm_di_gimm()
+@contextlib.contextmanager
+def col_codice_di_gimm():
     messi = []
     for nome in FINTI:
         if nome not in sys.modules:
@@ -124,6 +121,19 @@ def carica_il_pacchetto(cartella: Path):
             finto.forward = None
             sys.modules[nome] = finto
             messi.append(nome)
+    try:
+        with scaricamento.senza_scrivere_bytecode(), _classi_come_in_python_vecchio():
+            yield
+    finally:
+        for nome in messi:
+            sys.modules.pop(nome, None)
+
+
+def carica_il_pacchetto(cartella: Path):
+    gia = sys.modules.get(PACCHETTO)
+    if gia is not None:
+        return gia
+    _timm_di_gimm()
     sys.modules[SPINTA] = gimm_spinta
     inizio = Path(cartella) / "__init__.py"
     forma = importlib.util.spec_from_file_location(
@@ -131,16 +141,13 @@ def carica_il_pacchetto(cartella: Path):
     pacchetto = importlib.util.module_from_spec(forma)
     sys.modules[PACCHETTO] = pacchetto
     try:
-        with scaricamento.senza_scrivere_bytecode(), _classi_come_in_python_vecchio():
+        with col_codice_di_gimm():
             forma.loader.exec_module(pacchetto)
     except BaseException:
         for nome in [n for n in sys.modules
                      if n == PACCHETTO or n.startswith(PACCHETTO + ".")]:
             sys.modules.pop(nome, None)
         raise
-    finally:
-        for nome in messi:
-            sys.modules.pop(nome, None)
     return pacchetto
 
 
@@ -208,7 +215,11 @@ class GimmVFI:
 
         fatto.initialize_Flowformer = senza_pesi_vecchi
         scelte = configurazioni.GIMMVFIConfig.create(ARCHITETTURA)
-        rete = fatto.GIMMVFI_F(scelte)
+        with col_codice_di_gimm():
+            rete = fatto.GIMMVFI_F(scelte)
+        if moduli_fuori(cartella):
+            raise MancaGimm("Il codice del modello che porta i video a 120 FPS non "
+                            "viene dalla sua cartella: per sicurezza non lo uso.")
         stato = torch.load(str(self.casa / scaricamento.PESI / PESI), map_location="cpu",
                            weights_only=True)
         rete.load_state_dict(stato["state_dict"], strict=True)

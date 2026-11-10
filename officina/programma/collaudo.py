@@ -251,6 +251,65 @@ def _corpi() -> dict:
     return esito
 
 
+PROVA_LA_MIGLIORIA = r"""
+import json, sys, tempfile, time
+sys.path.extend(sys.argv[1:])
+from pathlib import Path
+import numpy as np
+from officina.miglioria import gimmvfi, ldfvfi, scaricamento
+casa = Path(tempfile.mkdtemp(prefix="modelli-miglioria-"))
+quadri = []
+for numero in range(3):
+    quadro = np.zeros((128, 192, 3), np.uint8)
+    quadro[..., 0] = np.linspace(0, 255, 192, dtype=np.uint8)[None, :]
+    quadro[..., 1] = np.linspace(0, 255, 128, dtype=np.uint8)[:, None]
+    quadro[40:72, 20 + 30 * numero:52 + 30 * numero] = 255
+    quadri.append(quadro)
+esito = {}
+for nome, fai in (("gimmvfi", lambda: gimmvfi.GimmVFI(str(casa))),
+                  ("ldfvfi", lambda: ldfvfi.LdfVFI(str(casa), passi=1))):
+    inizio = time.monotonic()
+    scaricamento.scarica(casa, nome=nome, al_passo=lambda riga: print(riga, file=sys.stderr))
+    scaricati = round(time.monotonic() - inizio)
+    motore = fai()
+    partito = time.monotonic()
+    usciti = list(motore.video(iter(quadri), 2))
+    motore.spegni()
+    esito[nome] = {"scaricati_in_secondi": scaricati,
+                   "secondi": round(time.monotonic() - partito, 1),
+                   "usciti": len(usciti),
+                   "forme": sorted({tuple(int(x) for x in q.shape) for q in usciti}),
+                   "tipi": sorted({str(q.dtype) for q in usciti}),
+                   "medie": [round(float(q.mean()), 1) for q in usciti]}
+print(json.dumps(esito))
+"""
+
+
+def _miglioria() -> dict:
+    import subprocess
+
+    import officina
+    from officina.miglioria.lavoro import percorsi_della_stanza
+    from officina.programma import librerie
+
+    if librerie.manca_la_miglioria():
+        librerie.Installatore().installa(["miglioria"])
+    fatto = subprocess.run(
+        [librerie.python_per_i_comandi(), "-c", PROVA_LA_MIGLIORIA,
+         *percorsi_della_stanza(), str(Path(officina.__file__).resolve().parent.parent)],
+        capture_output=True, text=True, timeout=5400)
+    if fatto.returncode != 0:
+        raise AssertionError("i motori dei 120 FPS non girano: "
+                             + (fatto.stderr or "")[-3000:])
+    esito = json.loads(fatto.stdout.strip().splitlines()[-1])
+    for nome, riga in esito.items():
+        giusti = riga["forme"] == [[128, 192, 3]] and riga["tipi"] == ["uint8"]
+        if riga["usciti"] != 6 or not giusti:
+            raise AssertionError(f"{nome} non ha dato i quadri giusti: " + json.dumps(esito))
+    esito["passi"] = (fatto.stderr or "").splitlines()[-20:]
+    return esito
+
+
 def _finestra(entro: float) -> dict:
     from officina.programma import avvio, carta, ponti
 
@@ -379,7 +438,7 @@ def _finestra_col_forziere(entro: float) -> dict:
 
 def esegui(dove_scrivere: Path, con_la_finestra: bool = False, entro: float = 120.0,
            con_i_motori: bool = False, con_il_forziere: bool = False,
-           con_i_corpi: bool = False) -> int:
+           con_i_corpi: bool = False, con_la_miglioria: bool = False) -> int:
     casa = Path(tempfile.mkdtemp(prefix="collaudo-"))
     os.environ["OFFICINA_CASA_PROGRAMMA"] = str(casa / "casa")
     os.environ["OFFICINA_ARCHIVIO"] = str(casa / "archivio")
@@ -403,6 +462,8 @@ def esegui(dove_scrivere: Path, con_la_finestra: bool = False, entro: float = 12
         risultati.append(_prova("motori", _motori))
         if con_i_corpi:
             risultati.append(_prova("corpi", _corpi))
+        if con_la_miglioria:
+            risultati.append(_prova("miglioria", _miglioria))
     tutto = {"python": sys.version, "eseguibile": sys.executable,
              "piattaforma": sys.platform, "prove": risultati,
              "ok": all(r["ok"] for r in risultati)}
@@ -415,4 +476,5 @@ def principale(argomenti: list[str]) -> int:
     return esegui(dove, con_la_finestra="--finestra" in argomenti,
                   con_i_motori="--motori" in argomenti,
                   con_il_forziere="--forziere" in argomenti,
-                  con_i_corpi="--corpi" in argomenti)
+                  con_i_corpi="--corpi" in argomenti,
+                  con_la_miglioria="--miglioria" in argomenti)

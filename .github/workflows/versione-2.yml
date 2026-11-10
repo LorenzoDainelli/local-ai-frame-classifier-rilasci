@@ -348,7 +348,7 @@ jobs:
     name: Motori veri su Windows
     if: (github.event_name == 'workflow_dispatch' && inputs.motori == 'si') || contains(github.event.head_commit.message, '[motori]')
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     env:
       PYTHONUTF8: "1"
     steps:
@@ -373,7 +373,7 @@ jobs:
         env:
           OFFICINA_CHIAVE_COLLAUDO: ${{ secrets.HF_TOKEN }}
         run: |
-          costruzione\python\python.exe -m officina.programma --collaudo collaudo-motori.json --motori --corpi
+          costruzione\python\python.exe -m officina.programma --collaudo collaudo-motori.json --motori --corpi --miglioria
           $esito = $LASTEXITCODE
           Get-Content collaudo-motori.json
           exit $esito
