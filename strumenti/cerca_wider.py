@@ -135,6 +135,7 @@ def main() -> int:
                            voce.compress_size, "MODO", voce.compress_type, "VOLTI",
                            [(v["x"], v["y"], v["l"], v["a"], v["sfocato"], v["coperto"],
                              v["di_lato"], v["luce"]) for v in volti])
+            scrivi(uscita, "FINE", deposito)
             return 0
     return 1
 
