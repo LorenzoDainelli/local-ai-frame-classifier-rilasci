@@ -7,17 +7,29 @@ function secondi(valore) {
     return valore == null ? "?" : `${valore.toFixed(1).replace(".", ",")} s`;
 }
 
+function tempi(righe) {
+    const vecchio = righe.reduce((somma, uno) => somma + (uno.secondi_vecchio || 0), 0);
+    const nuovo = righe.reduce((somma, uno) => somma + (uno.secondi_nuovo || 0), 0);
+    return vecchio && nuovo ? ` vecchio ${secondi(vecchio)}, nuovo ${secondi(nuovo)}` : "";
+}
+
+function parte(righe, cosa, idea) {
+    if (!righe.length) return "";
+    if (righe.every((uno) => uno.uguale)) {
+        return `${cosa}: ${righe.length} identici bit per bit,${tempi(righe)}; ${idea} si può accendere.`;
+    }
+    const diversi = righe.filter((uno) => !uno.uguale).map((uno) => uno.nome);
+    const instabili = righe.some((uno) => !uno.stabile);
+    const perche = instabili ? " Anche il modo vecchio è uscito diverso da sé stesso." : "";
+    return `${cosa}: diversi ${diversi.join(", ")}; ${idea} resta spenta.${perche}`;
+}
+
 function racconto(esito) {
     if (!esito) return "";
-    const clip = esito.clip || [];
-    const vecchio = clip.reduce((somma, uno) => somma + (uno.secondi_vecchio || 0), 0);
-    const nuovo = clip.reduce((somma, uno) => somma + (uno.secondi_nuovo || 0), 0);
-    const tempi = vecchio && nuovo ? ` Vecchio ${secondi(vecchio)}, nuovo ${secondi(nuovo)}.` : "";
-    if (esito.passata) return `Prova passata: ${clip.length} video identici bit per bit.${tempi}`;
-    const diversi = clip.filter((uno) => !uno.uguale).map((uno) => uno.nome);
-    const instabili = clip.filter((uno) => !uno.stabile).length;
-    const perche = instabili ? " Anche il modo vecchio è uscito diverso da sé stesso." : "";
-    return `Prova non passata: diversi ${diversi.join(", ")}. L'idea resta spenta.${perche}`;
+    const video = parte(esito.clip || [], "Video", "la compressione in parallelo");
+    const foto = parte(esito.foto || [], "Foto", "il giro di LucidFlux");
+    const inizio = esito.passata ? "Prova passata." : (esito.idee || []).length ? "Prova passata in parte." : "Prova non passata.";
+    return [inizio, video, foto].filter(Boolean).join(" ");
 }
 
 function scrivi(stato) {
@@ -27,7 +39,7 @@ function scrivi(stato) {
     const testo = riga.querySelector("[data-prova-veloce-stato]");
     avvia.hidden = stato.sta_lavorando;
     ferma.hidden = !stato.sta_lavorando;
-    idea.hidden = !(stato.esito && stato.esito.passata) || stato.sta_lavorando;
+    idea.hidden = !(stato.passate || []).length || stato.sta_lavorando;
     idea.classList.toggle("acceso", Boolean(stato.accesa));
     idea.setAttribute("aria-checked", stato.accesa ? "true" : "false");
     if (stato.sta_lavorando) {

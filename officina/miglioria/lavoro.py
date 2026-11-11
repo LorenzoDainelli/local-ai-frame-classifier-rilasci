@@ -14,13 +14,15 @@ from officina.archivio.database import adesso
 from officina.errori import ErroreOfficina
 from officina.importazione import impronta
 from officina.miglioria import (attesa, catena, centoventi, coda, da_guardare, fedelta,
-                                fluido, motori, persone, pezzi, previsione, scambio, sfida,
-                                video)
+                                fluido, mezzi, motori, persone, pezzi, previsione, scambio,
+                                sfida, video)
 from officina.modello import file_media
 from officina.sicuro.dall_archivio import CHIUSO, CHIUSO_ADESSO, DIVERSA, PERSA, SI_APRE
 from officina.web.lavori import Lavoro
 
 MARGINE_DI_SPAZIO = 512 * 1024 * 1024
+PER_GIRO = 25
+GIRO = "officina.miglioria.giro_lucidflux_stanza"
 QUANTO_PUO_CRESCERE = 12
 BYTE_PER_PIXEL_DEI_PEZZI = 2
 DA_RIFARE_DOPO = {CHIUSO_ADESSO, PERSA}
@@ -333,6 +335,15 @@ def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
     return esito_della_stanza(esito, rotto, codice_di_uscita)
 
 
+def _lancia_il_giro(lavoro: dict, al_passo: Callable[[int, int], None],
+                    ricorda: Callable[[subprocess.Popen], None]) -> dict:
+    return lancia_la_stanza(lavoro, al_passo, ricorda, modulo=GIRO)
+
+
+def _versione_di_lucidflux() -> str:
+    return str(motori.classe(motori.FOTO, motori.LUCIDFLUX).versione)
+
+
 def _versione_di_seedvr2() -> str:
     from officina.miglioria.rifai import versione_di_adesso
 
@@ -343,12 +354,15 @@ class Miglioratore:
 
     def __init__(self, archivio, lancia: Callable[..., dict] | None = None,
                  motori_scelti: dict | None = None,
-                 sfidanti_pronti: Callable[[], bool] | None = None):
+                 sfidanti_pronti: Callable[[], bool] | None = None,
+                 lancia_il_giro: Callable[..., dict] | None = None):
         from officina.miglioria import accesa
 
         self.archivio = archivio
         self._accesa = accesa.StanzaAccesa()
         self._lancia = lancia or self._accesa.lancia
+        self._lancia_il_giro = lancia_il_giro or _lancia_il_giro
+        self._mezzi_provati: set[int] = set()
         self.motori_scelti = motori_scelti
         self._sfidanti_pronti = sfidanti_pronti or self._ci_sono_tutti_e_due
         self.lavoro = Lavoro("miglioramento", scheda=True)
@@ -437,22 +451,133 @@ class Miglioratore:
         self._saltate_in_sfida = set()
         self._salta = set()
         self._disco = False
+        self._mezzi_provati = set()
+        self._pulisci_i_mezzi()
         try:
             while not self._fermati.is_set():
+                self._giro_della_coda()
+                if self._fermati.is_set():
+                    break
                 with self.archivio.scrittura() as connessione:
                     riga = coda.prossima(connessione, self._salta)
                     if riga is None:
                         break
                     coda.segna(connessione, riga["id"], coda.IN_LAVORO, guasto=None)
                 self._uno(riga)
+                self._mezzo_finito(riga["id"])
                 fatti += 1
                 senza_memoria = self._conta_la_memoria(riga["id"], senza_memoria)
             fatti += self._riprendi_la_sfida()
         finally:
             self._accesa.spegni()
+            self._pulisci_i_mezzi()
             self.adesso = {}
             registro.evento("miglioria.giro", fatti=fatti,
                             fermato=self._fermati.is_set())
+
+    def _giro_acceso(self) -> bool:
+        from officina.miglioria import veloce
+
+        return veloce.GIRO_LUCIDFLUX in self._veloce()
+
+    def _cartella_dei_mezzi(self) -> Path:
+        return mezzi.cartella(self.archivio.dove)
+
+    def _pulisci_i_mezzi(self) -> None:
+        with self.archivio.lettura() as connessione:
+            tenuti = {riga["id"] for riga in coda.in_stato(connessione, coda.IN_CODA)}
+            tenuti |= {riga["id"] for riga in sfida.da_riprendere(connessione)}
+        mezzi.pulisci(self._cartella_dei_mezzi(), tenuti)
+
+    def _mezzo_finito(self, miglioria_id: int) -> None:
+        with self.archivio.lettura() as connessione:
+            riga = coda.per_id(connessione, miglioria_id)
+        if riga is None or riga["stato"] != coda.IN_CODA:
+            mezzi.butta(self._cartella_dei_mezzi(), miglioria_id)
+
+    def _c_e_il_mezzo(self, miglioria_id: int, impronta_originale: str) -> bool:
+        return mezzi.c_e(self._cartella_dei_mezzi(), miglioria_id, impronta_originale,
+                         _versione_di_lucidflux())
+
+    def _da_mettere_nel_giro(self, riga) -> bool:
+        if riga["id"] in self._mezzi_provati:
+            return False
+        originale = Path(riga["percorso_originale"])
+        if not originale.is_file():
+            return False
+        if self._c_e_il_mezzo(riga["id"], riga["impronta_originale"]):
+            return False
+        return impronta.del_file(originale) == riga["impronta_originale"]
+
+    def _giro_della_coda(self) -> None:
+        if not self._giro_acceso():
+            return
+        with self.archivio.lettura() as connessione:
+            righe = [riga for riga in coda.prossime(connessione, self._salta,
+                                                     PER_GIRO * 4)
+                     if riga["genere_del_file"] == "immagine"]
+            prima = coda.prossima(connessione, self._salta)
+        if not righe or prima is None or prima["id"] != righe[0]["id"]:
+            return
+        if not (self._in_sfida("immagine")
+                or self._scelti().get("foto") == motori.LUCIDFLUX):
+            return
+        self._un_giro(righe)
+
+    def _un_giro(self, righe: list) -> None:
+        if not righe or not self._da_mettere_nel_giro(righe[0]):
+            return
+        scelte = []
+        for riga in righe:
+            if len(scelte) >= PER_GIRO or self._fermati.is_set():
+                break
+            if self._da_mettere_nel_giro(riga):
+                scelte.append(riga)
+        if not scelte:
+            return
+        self._mezzi_provati.update(riga["id"] for riga in scelte)
+        self._accesa.spegni()
+        cartella = self._cartella_dei_mezzi()
+        lavoro = {
+            "giro": [{"id": int(riga["id"]), "originale": str(riga["percorso_originale"])}
+                     for riga in scelte],
+            "cartella": str(cartella),
+            "misura": self._tetto(),
+            "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
+            "percorsi": percorsi_della_stanza(),
+            "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli)},
+        }
+        self.adesso = {"nome": f"giro LucidFlux, {len(scelte)} foto", "fatti": 0,
+                       "totale": len(scelte), "giro_lucidflux": len(scelte),
+                       "partito_il": time.time()}
+        self.lavoro.di(f"LucidFlux si carica una volta sola e fa {len(scelte)} foto; "
+                       "poi SeedVR2 le finisce")
+        try:
+            esito = self._lancia_il_giro(lavoro, self._al_passo, self._ricorda)
+        finally:
+            self._processo = None
+            self.adesso = {}
+        if self._fermati.is_set():
+            return
+        fatti = (esito.get("fatto") or {}).get("mezzi") or esito.get("mezzi") or {}
+        pronti = sum(1 for valore in fatti.values() if valore in ("fatto", "gia_fatto"))
+        registro.evento("miglioria.giro_lucidflux", foto=len(scelte), pronti=pronti,
+                        guasto=registro.Parola(str(esito.get("guasto") or "")))
+        if "guasto" in esito:
+            self.lavoro.di(f"il giro LucidFlux si è fermato ({a_parole(esito['guasto'])}): "
+                           "le foto che mancano si fanno come prima")
+
+    def _col_mezzo(self, lavoro: dict, miglioria_id: int) -> dict:
+        if (lavoro.get("genere") != "immagine" or lavoro.get("dall_archivio")
+                or (lavoro.get("motori") or {}).get("foto") != motori.LUCIDFLUX
+                or not self._giro_acceso()):
+            return lavoro
+        with self.archivio.lettura() as connessione:
+            riga = coda.per_id(connessione, miglioria_id)
+        if riga is None or not self._c_e_il_mezzo(miglioria_id, riga["impronta_originale"]):
+            return lavoro
+        return dict(lavoro, mezzo={"cartella": str(self._cartella_dei_mezzi()),
+                                   "id": int(miglioria_id)})
 
     def _rifai_in_grande(self) -> None:
         from officina.miglioria import rifai
@@ -549,6 +674,7 @@ class Miglioratore:
         parziale = finale.with_name(finale.name + attesa.PARZIALE)
 
         lavoro = self._il_lavoro(genere, originale, riga["file_id"], piu)
+        lavoro = self._col_mezzo(lavoro, miglioria_id)
         al_passo = self._al_passo
         in_sfida = self._in_sfida(genere)
         self._prevedi(partito, file, lavoro, in_sfida)
@@ -766,6 +892,11 @@ class Miglioratore:
         if self._fermati.is_set():
             parziale.unlink(missing_ok=True)
             return None
+        if esito.get("guasto") == mezzi.MezzoRotto.codice and lavoro.get("mezzo"):
+            registro.avviso("miglioria.mezzo_rotto")
+            mezzi.butta(Path(lavoro["mezzo"]["cartella"]), int(lavoro["mezzo"]["id"]))
+            senza = {chiave: lavoro[chiave] for chiave in lavoro if chiave != "mezzo"}
+            return self._una_versione(senza, parziale, al_passo)
         if "guasto" in esito and esito["guasto"] not in DA_RIPRENDERE:
             pezzi.butta(pezzi.cartella(parziale))
             pezzi.butta(fluido.cartella(parziale))
@@ -822,8 +953,9 @@ class Miglioratore:
             self.lavoro.di(f"lavoro «{originale.name}» per la sfida alla cieca: "
                            f"{sfida.NOMI[motore]}, versione {passo} di {len(sfida.SFIDANTI)}")
             scelti = dict(lavoro["motori"], foto=motore)
+            versione = self._col_mezzo(dict(lavoro, motori=scelti), miglioria_id)
             inizio = time.monotonic()
-            esito = self._una_versione(dict(lavoro, motori=scelti), parziale, al_passo)
+            esito = self._una_versione(versione, parziale, al_passo)
             durata = time.monotonic() - inizio
             if esito is None or esito.get("guasto") in DA_RIFARE_DOPO | RAM_POCHE:
                 sfida.butta([dati[0] for dati in fatte.values()])
@@ -898,13 +1030,18 @@ class Miglioratore:
         self.lavoro.di(f"LucidFlux riprende {len(da_fare)} foto già fatte da SeedVR2, "
                        "per la sfida alla cieca")
         fatte = 0
-        for riga in da_fare:
+        for numero, riga in enumerate(da_fare):
             if self._fermati.is_set():
                 break
             with self.archivio.lettura() as connessione:
                 if not sfida.si_fa(connessione, True) or sfida.in_pausa(connessione):
                     break
+            if self._giro_acceso():
+                self._un_giro(da_fare[numero:])
+                if self._fermati.is_set():
+                    break
             self._riprendi_una(riga)
+            mezzi.butta(self._cartella_dei_mezzi(), riga["id"])
             fatte += 1
         return fatte
 
@@ -937,6 +1074,7 @@ class Miglioratore:
         parziale = arrivo.with_name(arrivo.name + attesa.PARZIALE)
         lavoro = self._il_lavoro("immagine", originale, riga["file_id"], piu)
         lavoro["motori"] = dict(lavoro["motori"], foto=motori.LUCIDFLUX)
+        lavoro = self._col_mezzo(lavoro, miglioria_id)
         inizio = time.monotonic()
         esito = self._una_versione(lavoro, parziale, self._al_passo)
         durata = time.monotonic() - inizio

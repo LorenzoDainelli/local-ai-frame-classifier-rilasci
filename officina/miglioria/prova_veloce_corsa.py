@@ -10,7 +10,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Callable, Iterable, Iterator
 
-from officina.miglioria import attesa, catena, fluido, pezzi, veloce, video
+from officina.miglioria import attesa, catena, fluido, mezzi, motori, pezzi, veloce, video
 
 PIANO = "piano.json"
 GIRI = "giri.jsonl"
@@ -27,6 +27,8 @@ SUONO = 48000
 CAMPIONI = 1024
 PER_PEZZO = 30
 MISURA = "fhd"
+FOTO = "foto"
+MEZZI = "mezzi"
 ORIGINALE_OPZIONI = {
     video.H264: {"crf": "16", "preset": "medium"},
     video.HEVC: {"crf": "18", "preset": "medium", "x265-params": "log-level=error"},
@@ -320,6 +322,86 @@ def _segna(cartella: Path, giro: dict) -> None:
         os.fsync(fuori.fileno())
 
 
+def _uscita_foto(cartella_foto: Path, nome: str, originale: Path) -> Path:
+    return cartella_foto / attesa.NOME / nome / f"1-uscita{originale.suffix}.parziale"
+
+
+def _una_foto(cartella_foto: Path, lavoro: dict, nome: str, mezzo: dict | None
+              ) -> tuple[str, float]:
+    uscita = _uscita_foto(cartella_foto, nome, Path(lavoro["originale"]))
+    _pulisci(uscita)
+    uscita.parent.mkdir(parents=True, exist_ok=True)
+    questo = {k: v for k, v in lavoro.items() if k not in ("veloce", "mezzo")}
+    questo["uscita"] = str(uscita)
+    if mezzo is not None:
+        questo["mezzo"] = mezzo
+    partito = time.perf_counter()
+    catena.foto(questo)
+    secondi = time.perf_counter() - partito
+    firma_del_file = impronta(uscita)
+    _pulisci(uscita)
+    return firma_del_file, secondi
+
+
+def foto_vecchia(cartella: Path, uno: dict, lavoro: dict, numero: int) -> dict:
+    motori.spegni_tutti()
+    try:
+        firma_del_file, secondi = _una_foto(cartella / FOTO / uno["nome"], lavoro,
+                                            f"giro-{numero}", None)
+    finally:
+        motori.spegni_tutti()
+    return {"clip": uno["nome"], "giro": numero, "modo": VECCHIO,
+            "impronta": firma_del_file, "secondi": round(secondi, 2)}
+
+
+def foto_nuove(cartella: Path, foto: list[dict], lavori: dict[str, dict], numero: int,
+               freno=None) -> list[dict]:
+    if not foto:
+        return []
+    motori.spegni_tutti()
+    base = cartella / FOTO / MEZZI
+    shutil.rmtree(base, ignore_errors=True)
+    opzioni = lavori[foto[0]["nome"]].get("opzioni", {})
+    partito = time.perf_counter()
+    acceso = motori.classe(motori.FOTO, motori.LUCIDFLUX)(**opzioni, tieni=True)
+    try:
+        for indice, uno in enumerate(foto, 1):
+            esito_del_mezzo = catena.solo_lucidflux(lavori[uno["nome"]], acceso, base,
+                                                    indice, freno)
+            if esito_del_mezzo not in ("fatto", "gia_fatto"):
+                raise mezzi.MezzoRotto(f"La prova non ha messo da parte LucidFlux "
+                                       f"({esito_del_mezzo}).")
+    finally:
+        acceso.spegni()
+    quota = (time.perf_counter() - partito) / len(foto)
+    fatti = []
+    try:
+        for indice, uno in enumerate(foto, 1):
+            firma_del_file, secondi = _una_foto(
+                cartella / FOTO / uno["nome"], lavori[uno["nome"]], f"giro-{numero}",
+                {"cartella": str(base), "id": indice})
+            fatti.append({"clip": uno["nome"], "giro": numero, "modo": NUOVO,
+                          "impronta": firma_del_file, "secondi": round(quota + secondi, 2)})
+    finally:
+        motori.spegni_tutti()
+        shutil.rmtree(base, ignore_errors=True)
+    return fatti
+
+
+def lavoro_della_foto(cartella: Path, uno: dict, lavoro: dict) -> dict:
+    sorgente = Path(uno["file"][0])
+    originale = cartella / FOTO / uno["nome"] / f"originale{sorgente.suffix.lower()}"
+    if not originale.is_file():
+        originale.parent.mkdir(parents=True, exist_ok=True)
+        provvisorio = originale.with_name(originale.name + ".in-corso")
+        shutil.copyfile(sorgente, provvisorio)
+        os.replace(provvisorio, originale)
+    suo = {k: v for k, v in lavoro.items() if k not in ("fps120", "veloce", "mezzo")}
+    suo.update(genere="immagine", originale=str(originale), persone=[],
+               motori={"foto": motori.LUCIDFLUX, "volti": None})
+    return suo
+
+
 def riassunto(clip: dict, giri: list[dict], volte: int = VOLTE) -> dict:
     suoi = [giro for giro in giri if giro.get("clip") == clip["nome"]]
     vecchi = [giro["impronta"] for giro in suoi if giro["modo"] == VECCHIO]
@@ -331,16 +413,24 @@ def riassunto(clip: dict, giri: list[dict], volte: int = VOLTE) -> dict:
         secondi = [giro["secondi"] for giro in suoi if giro["modo"] == modo]
         return round(sum(secondi) / len(secondi), 2) if secondi else None
 
-    return {"nome": clip["nome"], "codec": clip["codec"], "fps120": clip.get("fps120"),
+    return {"nome": clip["nome"], "codec": clip.get("codec"), "fps120": clip.get("fps120"),
             "gruppo": clip.get("gruppo"), "vecchi": vecchi, "nuovi": nuovi,
             "stabile": stabile, "uguale": uguale, "secondi_vecchio": media(VECCHIO),
             "secondi_nuovo": media(NUOVO)}
 
 
-def esito(clip: list[dict], giri: list[dict], volte: int = VOLTE) -> dict:
+def esito(clip: list[dict], giri: list[dict], volte: int = VOLTE,
+          foto: list[dict] | None = None, giri_foto: list[dict] | None = None) -> dict:
     righe = [riassunto(uno, giri, volte) for uno in clip]
-    return {"clip": righe, "passata": bool(righe) and all(r["uguale"] for r in righe),
-            "idee": [veloce.SCRITTURA]}
+    righe_foto = [riassunto(uno, giri_foto or [], volte) for uno in foto or []]
+    idee = []
+    if righe and all(riga["uguale"] for riga in righe):
+        idee.append(veloce.SCRITTURA)
+    if righe_foto and all(riga["uguale"] for riga in righe_foto):
+        idee.append(veloce.GIRO_LUCIDFLUX)
+    provate = int(bool(righe)) + int(bool(righe_foto))
+    return {"clip": righe, "foto": righe_foto, "idee": idee,
+            "passata": provate > 0 and len(idee) == provate}
 
 
 def leggi_esito(cartella: Path) -> dict | None:
@@ -356,11 +446,31 @@ def scrivi_esito(cartella: Path, dati: dict) -> None:
     os.replace(provvisorio, Path(cartella) / ESITO)
 
 
+def _le_foto(cartella: Path, foto: list[dict], lavoro: dict, volte: int, avanti,
+             freno=None) -> None:
+    dove = cartella / FOTO
+    dove.mkdir(parents=True, exist_ok=True)
+    lavori = {uno["nome"]: lavoro_della_foto(cartella, uno, lavoro) for uno in foto}
+    for numero, modo in ordine(volte):
+        gia = {giro["clip"] for giro in giri_fatti(dove) if giro.get("giro") == numero}
+        mancano = [uno for uno in foto if uno["nome"] not in gia]
+        if modo == VECCHIO:
+            for uno in mancano:
+                _segna(dove, foto_vecchia(cartella, uno, lavori[uno["nome"]], numero))
+        else:
+            for fatto in foto_nuove(cartella, mancano, lavori, numero, freno):
+                _segna(dove, fatto)
+        for _uno in foto:
+            avanti()
+
+
 def corri(cartella: Path, clip: list[dict], lavoro: dict,
           al_passo: Callable[[int, int], None] | None = None, freno=None,
-          racconta=None, volte: int = VOLTE) -> dict:
+          racconta=None, volte: int = VOLTE, foto: list[dict] | None = None,
+          lavoro_foto: dict | None = None) -> dict:
     cartella = Path(cartella)
-    totale = passi(clip, volte)
+    foto = list(foto or [])
+    totale = passi(clip, volte) + len(foto) * 2 * volte
     fatti = [0]
 
     def avanti() -> None:
@@ -389,13 +499,16 @@ def corri(cartella: Path, clip: list[dict], lavoro: dict,
             if numero not in gia:
                 _segna(cartella, un_giro(cartella_clip, uno, suo, numero, modo))
             avanti()
-    dati = esito(clip, giri_fatti(cartella), volte)
+    if foto:
+        _le_foto(cartella, foto, lavoro_foto or lavoro, volte, avanti, freno)
+    dati = esito(clip, giri_fatti(cartella), volte, foto, giri_fatti(cartella / FOTO))
     scrivi_esito(cartella, dati)
     return dati
 
 
-__all__ = ["ESITO", "FISSI", "GIRI", "MISURA", "NUOVO", "ORIGINALE", "PIANO", "REGISTRATI",
-           "Registratore", "Riproduttore", "VECCHIO", "VOLTE", "con_il_fluido", "corri",
-           "esito", "fai_l_originale", "giri_fatti", "impronta", "la_scheda",
-           "leggi_esito", "misura_piccola", "ordine", "passi", "registra",
-           "registrati_buoni", "riassunto", "scrivi_esito", "un_giro"]
+__all__ = ["ESITO", "FISSI", "FOTO", "GIRI", "MEZZI", "MISURA", "NUOVO", "ORIGINALE", "PIANO",
+           "REGISTRATI", "Registratore", "Riproduttore", "VECCHIO", "VOLTE", "con_il_fluido",
+           "corri", "esito", "fai_l_originale", "foto_nuove", "foto_vecchia", "giri_fatti",
+           "impronta", "la_scheda", "lavoro_della_foto", "leggi_esito", "misura_piccola",
+           "ordine", "passi", "registra", "registrati_buoni", "riassunto", "scrivi_esito",
+           "un_giro"]

@@ -8,7 +8,8 @@ from typing import Callable
 from officina.miglioria import ram
 
 SCRITTURA = "scrittura"
-IDEE = (SCRITTURA,)
+GIRO_LUCIDFLUX = "giro_lucidflux"
+IDEE = (SCRITTURA, GIRO_LUCIDFLUX)
 CHIAVE = "veloce_acceso"
 MARGINE = 3 * 2 ** 30
 MASSIMO_FILI = 3
@@ -114,5 +115,5 @@ class Segnale:
                 self._condizione.wait(ogni)
 
 
-__all__ = ["CHIAVE", "Fermo", "Fondo", "IDEE", "MARGINE", "SCRITTURA", "Segnale",
-           "accese", "acceso", "fili_per_scrivere", "peso_di"]
+__all__ = ["CHIAVE", "Fermo", "Fondo", "GIRO_LUCIDFLUX", "IDEE", "MARGINE", "SCRITTURA",
+           "Segnale", "accese", "acceso", "fili_per_scrivere", "peso_di"]

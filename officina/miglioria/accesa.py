@@ -15,6 +15,8 @@ ATTESA_DI_CHIUSURA = 60.0
 def resta_accesa(lavoro: dict) -> bool:
     foto = lavoro.get("genere") == "immagine"
     nome = (lavoro.get("motori") or {}).get("foto" if foto else "video")
+    if foto and nome == motori.LUCIDFLUX and lavoro.get("mezzo"):
+        nome = motori.SEEDVR2
     return motori.resta_acceso(motori.FOTO if foto else motori.VIDEO, str(nome))
 
 

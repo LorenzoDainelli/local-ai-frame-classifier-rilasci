@@ -25,6 +25,11 @@ ASPETTA_LA_SCHEDA = 30.0
 MODULO = "officina.miglioria.prova_veloce_stanza"
 PASSI = (4, 2, 1)
 MINIMO = 30
+QUANTE_FOTO = 6
+GRUPPI_FOTO = (casi_mod.DIFFICILISSIMO, casi_mod.DIFFICILE)
+PIANO_FOTO = "piano-foto.json"
+SENZA_LUCIDFLUX = ("LucidFlux non è pronto: la parte delle foto si salta e l'idea "
+                   "delle foto resta spenta.")
 SCHEMA = ((casi_mod.FACILE, video.H264, 60, False),
           (casi_mod.DIFFICILISSIMO, video.H264, 180, True),
           (casi_mod.DIFFICILISSIMO, video.HEVC, 60, False),
@@ -101,11 +106,27 @@ def nomi_di(clip: list[dict]) -> list[str]:
     return sorted({nome for uno in clip for nome in uno["nomi"]})
 
 
+def scegli_foto(elenco, quante: int = QUANTE_FOTO) -> list[dict]:
+    scelte, usate = [], set()
+    for gruppo in GRUPPI_FOTO:
+        for scena in sorted({caso.scena for caso in elenco.casi if caso.gruppo == gruppo}):
+            if len(scelte) >= quante:
+                return scelte
+            numeri = sorted(elenco.presenti.get(scena, ()))
+            if scena in usate or not numeri:
+                continue
+            usate.add(scena)
+            numero = numeri[len(numeri) // 2]
+            scelte.append({"nome": f"foto-{len(scelte) + 1}-{gruppo}", "gruppo": gruppo,
+                           "scena": scena, "nomi": [elenco.veri_nomi[(scena, numero)]]})
+    return scelte
+
+
 class ProvaVeloce:
 
     def __init__(self, archivio, cartella: Path | None = None,
                  lancia: Callable[[dict, Callable], dict] | None = None, turno=None,
-                 scarica_da_hf=None, api=None, prepara=None, pronta=None):
+                 scarica_da_hf=None, api=None, prepara=None, pronta=None, lucidflux=None):
         from officina.web.lavori import Lavoro
 
         modelli = Path(archivio.dove.modelli)
@@ -119,6 +140,7 @@ class ProvaVeloce:
         self._api = api
         self._prepara = prepara or self._prepara_il_120
         self._pronta = pronta or self._seedvr2_pronto
+        self._lucidflux = lucidflux or self._lucidflux_pronto
         self.lavoro = Lavoro(COSA)
         self._fermati = threading.Event()
         self._processo: subprocess.Popen | None = None
@@ -204,6 +226,29 @@ class ProvaVeloce:
 
         return preparazione.e_pronto(Path(self.archivio.dove.modelli))
 
+    def _lucidflux_pronto(self) -> bool:
+        from officina.miglioria import motori, preparazione
+
+        return preparazione.e_pronto(Path(self.archivio.dove.modelli), motori.LUCIDFLUX)
+
+    def _tetto(self) -> str:
+        from officina.miglioria import misura
+
+        return misura.tetto_vero(self.archivio.impostazione(misura.CHIAVE))
+
+    def _piano_foto(self, foto: list[dict], misura: str) -> None:
+        piano = {"foto": [dict(uno) for uno in foto],
+                 "misura": misura, "volte": corsa.VOLTE}
+        posto = self.cartella / PIANO_FOTO
+        try:
+            vecchio = json.loads(posto.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            vecchio = None
+        if vecchio != piano:
+            shutil.rmtree(self.corse / corsa.FOTO, ignore_errors=True)
+            self.cartella.mkdir(parents=True, exist_ok=True)
+            posto.write_text(json.dumps(piano), encoding="utf-8")
+
     def _prepara_il_120(self, nome: str) -> None:
         from officina.miglioria import preparazione
 
@@ -235,28 +280,42 @@ class ProvaVeloce:
         if not self._pronta():
             raise ErroreOfficina(SENZA_SEEDVR2, codice="prova_veloce_senza_seedvr2")
         scelti = self._motori()
+        con_le_foto = bool(self._lucidflux())
+        if not con_le_foto:
+            self.lavoro.di(SENZA_LUCIDFLUX)
         with self._in_rete():
             self.lavoro.di("controllo l'elenco di SNU-FILM")
             elenco = sc.elenco_snu(self.dati, api=self._api, scarica_da_hf=self._hf)
             self._controlla()
             clip = scegli_clip(elenco)
+            foto = scegli_foto(elenco) if con_le_foto else []
             self.lavoro.di("scarico e controllo i fotogrammi della prova")
-            sc.scarica_snu(self.dati, elenco, nomi_di(clip), self._al_pezzo, self._hf)
+            sc.scarica_snu(self.dati, elenco, nomi_di(clip + foto), self._al_pezzo,
+                           self._hf)
             self.lavoro.senza_numeri()
             self._prepara(scelti["fps120"])
         self._controlla()
         self._piano(clip, scelti)
+        tetto = self._tetto()
+        self._piano_foto(foto, tetto)
         casa = self.dati / sc.SNU
         da_fare = [{"nome": uno["nome"], "codec": uno["codec"], "gruppo": uno["gruppo"],
                     "fps120": scelti["fps120"] if uno["a_120"] else None,
                     "file": [str(casa / nome) for nome in uno["nomi"]]} for uno in clip]
-        self.lavoro.di(f"la prova: {len(clip)} video, {corsa.VOLTE} volte vecchio e "
-                       f"{corsa.VOLTE} volte nuovo")
-        esito = self._nella_stanza(da_fare, scelti)
-        if esito.get("passata"):
+        foto_da_fare = [{"nome": uno["nome"], "gruppo": uno["gruppo"],
+                         "file": [str(casa / nome) for nome in uno["nomi"]]} for uno in foto]
+        self.lavoro.di(f"la prova: {len(clip)} video e {len(foto)} foto, {corsa.VOLTE} "
+                       f"volte vecchio e {corsa.VOLTE} volte nuovo")
+        esito = self._nella_stanza(da_fare, scelti, foto_da_fare, tetto)
+        idee = [idea for idea in esito.get("idee") or [] if idea in veloce.IDEE]
+        if idee:
             self.accendi(True)
-            registro.evento("prova_veloce.passata")
-            self.lavoro.di("prova passata: il video esce identico, idea accesa")
+            registro.evento("prova_veloce.passata", idee=len(idee))
+        if esito.get("passata"):
+            self.lavoro.di("prova passata: tutto esce identico, idee accese")
+        elif idee:
+            self.lavoro.di("prova passata solo in parte: si accende solo quello che esce "
+                           "identico")
         else:
             registro.evento("prova_veloce.non_passata")
             self.lavoro.di("prova non passata: l'idea resta spenta")
@@ -272,7 +331,8 @@ class ProvaVeloce:
             if self._fermati.wait(ASPETTA_LA_SCHEDA):
                 raise Fermata()
 
-    def _nella_stanza(self, clip: list[dict], scelti: dict) -> dict:
+    def _nella_stanza(self, clip: list[dict], scelti: dict, foto: list[dict] | None = None,
+                      tetto: str | None = None) -> dict:
         from officina.miglioria.lavoro import a_parole, percorsi_della_stanza
 
         self._prendi_la_scheda()
@@ -284,6 +344,9 @@ class ProvaVeloce:
                                  "opzioni": {"cartella_modelli":
                                              str(self.archivio.dove.modelli)}},
                       "percorsi": percorsi_della_stanza()}
+            if foto:
+                lavoro["foto"] = foto
+                lavoro["lavoro_foto"] = dict(lavoro["lavoro"], misura=tetto)
             esito = self._lancia(lavoro, self.lavoro.a_che_punto_a_pezzi)
         finally:
             self._processo = None
@@ -302,17 +365,29 @@ class ProvaVeloce:
     def esito(self) -> dict | None:
         return corsa.leggi_esito(self.corse)
 
+    def passate(self) -> list[str]:
+        esito = self.esito() or {}
+        if "foto" not in esito:
+            return [veloce.SCRITTURA] if esito.get("passata") else []
+        idee = esito.get("idee")
+        if not isinstance(idee, list):
+            return []
+        return [idea for idea in veloce.IDEE if idea in idee]
+
     def accesa(self) -> bool:
-        return veloce.SCRITTURA in veloce.accese(self.archivio.impostazione(veloce.CHIAVE))
+        accese = veloce.accese(self.archivio.impostazione(veloce.CHIAVE))
+        return any(idea in accese for idea in veloce.IDEE)
 
     def accendi(self, acceso: bool) -> None:
-        if acceso and not (self.esito() or {}).get("passata"):
+        passate = self.passate()
+        if acceso and not passate:
             raise ErroreOfficina(NON_PASSATA, codice="prova_veloce_non_passata")
         valore = self.archivio.impostazione(veloce.CHIAVE)
         valore = dict(valore) if isinstance(valore, dict) else {}
-        valore[veloce.SCRITTURA] = bool(acceso)
+        for idea in veloce.IDEE:
+            valore[idea] = bool(acceso) and idea in passate
         self.archivio.imposta(veloce.CHIAVE, valore)
 
 
 __all__ = ["CARTELLA", "COSA", "Fermata", "ProvaVeloce", "di_fila", "nomi_di",
-           "piu_lunga", "scegli_clip"]
+           "piu_lunga", "scegli_clip", "scegli_foto"]

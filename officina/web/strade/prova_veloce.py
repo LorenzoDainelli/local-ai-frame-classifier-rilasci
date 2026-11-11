@@ -49,6 +49,7 @@ def _stato() -> dict:
     stato = prova.lavoro.come_va()
     stato["esito"] = prova.esito()
     stato["accesa"] = prova.accesa()
+    stato["passate"] = prova.passate()
     stato["aspetta_la_copia"] = sosta.per_la_copia.aspetta_la_copia(sosta.PROVA_VELOCE)
     return stato
 

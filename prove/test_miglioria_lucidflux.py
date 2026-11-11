@@ -229,6 +229,81 @@ def test_prima_dell_ultimo_passo_la_scheda_resta_solo_all_immagine(monkeypatch):
     assert codice.index("_libera_la_scheda(") < codice.index(".decode(")
 
 
+class _Dato:
+
+    def __init__(self, dove: str, quanti: int = 10) -> None:
+        self.dove = dove
+        self.quanti = quanti
+        self.is_cuda = dove == "cuda"
+
+    def numel(self) -> int:
+        return self.quanti
+
+    def element_size(self) -> int:
+        return 2
+
+    def to(self, dove):
+        return _Dato(str(getattr(dove, "type", dove)), self.quanti)
+
+
+class _Parte:
+
+    def __init__(self, dove: str, in_ram: bool = False) -> None:
+        self.data = _Dato(dove)
+        if in_ram:
+            self._in_ram = True
+
+
+class _Modulo:
+
+    def __init__(self, *parti) -> None:
+        self.parti = list(parti)
+
+    def parameters(self):
+        return list(self.parti)
+
+    def buffers(self):
+        return []
+
+
+def _tenuto(monkeypatch, libera):
+    import sys
+    import types
+
+    svuotata = []
+    monkeypatch.setitem(sys.modules, "torch", types.SimpleNamespace(
+        cuda=types.SimpleNamespace(empty_cache=lambda: svuotata.append(1))))
+    monkeypatch.setattr(lucidflux, "ram_libera", lambda: libera)
+    motore = object.__new__(lucidflux.LucidFlux)
+    motore.tieni = True
+    motore._parcheggiati = None
+    motore._scambio = types.SimpleNamespace(togli=lambda: None)
+    dispositivo = types.SimpleNamespace(type="cuda")
+    comune = _Parte("cuda")
+    ramo = _Modulo(_Parte("cuda"), comune)
+    flusso = _Modulo(comune, _Parte("cuda"), _Parte("cpu", in_ram=True))
+    pezzi = {"flusso": flusso, "ramo": ramo, "ae": "ae", "dispositivo": dispositivo}
+    motore._pezzi = pezzi
+    return motore, pezzi, svuotata
+
+
+def test_tenuto_acceso_parcheggia_in_ram_e_riprende_senza_ricaricare(monkeypatch):
+    motore, pezzi, svuotata = _tenuto(monkeypatch, 2 ** 40)
+    motore._libera_la_scheda(pezzi)
+    assert motore._pezzi is pezzi and svuotata == [1]
+    tutte = pezzi["ramo"].parti + pezzi["flusso"].parti
+    assert {parte.data.dove for parte in tutte} == {"cpu"}
+    assert len(motore._parcheggiati) == 3
+    assert motore._carica() is pezzi and motore._parcheggiati is None
+    assert [parte.data.dove for parte in tutte] == ["cuda", "cuda", "cuda", "cuda", "cpu"]
+
+
+def test_tenuto_acceso_ma_senza_ram_libera_la_scheda_come_prima(monkeypatch):
+    motore, pezzi, _svuotata = _tenuto(monkeypatch, 0)
+    motore._libera_la_scheda(pezzi)
+    assert motore._pezzi is None and motore._parcheggiati is None
+
+
 def test_i_messaggi_di_lucidflux_si_possono_mostrare():
     for errore in (lucidflux.MancaLucidFlux, lucidflux.RamPoca, lucidflux.SoloFoto):
         assert errore.senza_nomi is True

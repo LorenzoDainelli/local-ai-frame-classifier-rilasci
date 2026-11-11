@@ -65,6 +65,13 @@ def _classe(indirizzo: str):
     return getattr(importlib.import_module(modulo), nome)
 
 
+def classe(elenco: dict[str, str], nome: str):
+    indirizzo = elenco.get(nome)
+    if indirizzo is None:
+        raise MotoreSconosciuto(nome)
+    return _classe(indirizzo)
+
+
 class Acceso:
 
     def __init__(self, motore) -> None:

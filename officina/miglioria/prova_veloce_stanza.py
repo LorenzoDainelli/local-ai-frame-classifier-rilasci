@@ -39,8 +39,14 @@ def un_lavoro(lavoro: dict, manda) -> int:
         def al_passo(fatti: int, totale: int) -> None:
             manda({"fatti": int(fatti), "totale": int(totale)})
 
+        from officina.descrittori import torcia
+
+        freno = torcia.Freno(int(lavoro["lavoro"].get("intensita", 100)))
         esito = corsa.corri(Path(lavoro["cartella"]), lavoro["clip"], lavoro["lavoro"],
-                            al_passo=al_passo, volte=int(lavoro.get("volte") or corsa.VOLTE))
+                            al_passo=al_passo, freno=freno,
+                            volte=int(lavoro.get("volte") or corsa.VOLTE),
+                            foto=lavoro.get("foto") or [],
+                            lavoro_foto=lavoro.get("lavoro_foto"))
     except ErroreOfficina as errore:
         messaggio = {"guasto": errore.codice}
         from officina.miglioria.seedvr2_blocchi import RamPoca

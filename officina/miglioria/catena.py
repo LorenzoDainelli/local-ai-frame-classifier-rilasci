@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Callable, Iterable, Iterator
 
 from officina.errori import ErroreOfficina
-from officina.miglioria import (centoventi, date, fluido, metadati, misura, motori, pezzi,
-                                veloce, video)
+from officina.miglioria import (centoventi, date, fluido, metadati, mezzi, misura, motori,
+                                pezzi, veloce, video)
 from officina.sicuro.dall_archivio import DallArchivio
 
 GIA_GRANDE = "gia_grande"
@@ -79,8 +79,8 @@ def _passaggi(nome: str, larghezza: int, altezza: int, quale: str) -> list:
 
 
 def _un_passaggio(lavoro: dict, nome: str, immagine, larghezza: int, altezza: int,
-                  freno, misura_del_motore: dict):
-    motore = motori.apri(motori.FOTO, nome, **lavoro.get("opzioni", {}))
+                  freno, misura_del_motore: dict, acceso=None):
+    motore = acceso or motori.apri(motori.FOTO, nome, **lavoro.get("opzioni", {}))
     try:
         partito = time.monotonic()
         grande = motore.foto(immagine, larghezza, altezza)
@@ -95,12 +95,60 @@ def _un_passaggio(lavoro: dict, nome: str, immagine, larghezza: int, altezza: in
         usato = {"nome": motore.nome, "versione": motore.versione,
                  "larghezza": larghezza, "altezza": altezza}
     finally:
-        motore.spegni()
+        if acceso is None:
+            motore.spegni()
     if grande.size != (larghezza, altezza):
         from PIL import Image
 
         grande = grande.resize((larghezza, altezza), Image.Resampling.LANCZOS)
     return grande, usato
+
+
+def _timbro_del_mezzo(originale: Path, prima: tuple[int, int], passaggio) -> dict:
+    from officina.importazione import impronta
+
+    classe = motori.classe(motori.FOTO, passaggio[0])
+    return mezzi.timbro(impronta.del_file(originale), classe.nome, classe.versione,
+                        prima, passaggio[1])
+
+
+def _dal_mezzo(lavoro: dict, originale, prima: tuple[int, int], passaggi: list):
+    mezzo = lavoro.get("mezzo")
+    if not mezzo or isinstance(originale, DallArchivio):
+        return None
+    if passaggi[0][0] != motori.LUCIDFLUX:
+        return None
+    suo = _timbro_del_mezzo(originale, prima, passaggi[0])
+    letto = mezzi.leggi(Path(mezzo["cartella"]), int(mezzo["id"]), suo)
+    if letto is None:
+        raise mezzi.MezzoRotto("Il passaggio di LucidFlux messo da parte non torna.")
+    immagine, usato, misura_del_motore = letto
+    return immagine, dict(usato), dict(misura_del_motore)
+
+
+def solo_lucidflux(lavoro: dict, acceso, cartella: Path, miglioria_id: int,
+                   freno=None) -> str:
+    originale = Path(lavoro["originale"])
+    aperta = metadati.apri(originale)
+    larghezza, altezza = aperta.immagine.size
+    quale = tetto(lavoro)
+    if misura.e_gia_grande(larghezza, altezza, quale):
+        return "non_serve"
+    passaggi = _passaggi(motori.LUCIDFLUX, larghezza, altezza, quale)
+    nome, (fino_larghezza, fino_altezza) = passaggi[0]
+    if nome != motori.LUCIDFLUX:
+        return "non_serve"
+    suo = _timbro_del_mezzo(originale, (larghezza, altezza), passaggi[0])
+    if mezzi.leggi(cartella, miglioria_id, suo) is not None:
+        return "gia_fatto"
+    if not mezzi.ci_sta(cartella, fino_larghezza, fino_altezza):
+        return "spazio"
+    misura_del_motore: dict = {}
+    grande, usato = _un_passaggio(lavoro, nome, aperta.immagine, fino_larghezza,
+                                  fino_altezza, freno, misura_del_motore, acceso=acceso)
+    if not mezzi.scrivi(cartella, miglioria_id, grande, suo, usato, misura_del_motore):
+        return "non_scritto"
+    return "fatto"
 
 
 def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
@@ -119,9 +167,13 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
     usati = []
     misura_del_motore = {}
     grande = aperta.immagine
+    dal_mezzo = _dal_mezzo(lavoro, originale, (larghezza, altezza), passaggi)
     for numero, (nome, (fino_larghezza, fino_altezza)) in enumerate(passaggi, 1):
-        grande, usato = _un_passaggio(lavoro, nome, grande, fino_larghezza,
-                                      fino_altezza, freno, misura_del_motore)
+        if numero == 1 and dal_mezzo is not None:
+            grande, usato, misura_del_motore = dal_mezzo
+        else:
+            grande, usato = _un_passaggio(lavoro, nome, grande, fino_larghezza,
+                                          fino_altezza, freno, misura_del_motore)
         usati.append(usato)
         _passo(al_passo, numero, passi)
     if len(usati) == 1:

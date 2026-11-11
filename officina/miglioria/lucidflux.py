@@ -173,7 +173,8 @@ class LucidFlux:
     nome = NOME
     versione = "flux-dev-bf16"
 
-    def __init__(self, cartella_modelli: str | None = None, **_opzioni) -> None:
+    def __init__(self, cartella_modelli: str | None = None, tieni: bool = False,
+                 **_opzioni) -> None:
         if not cartella_modelli or not lucidflux_pesi.e_in_casa(Path(cartella_modelli)):
             raise MancaLucidFlux("LucidFlux non è ancora stato scaricato.")
         self.casa = lucidflux_pesi.dove(Path(cartella_modelli))
@@ -181,6 +182,8 @@ class LucidFlux:
         self._pezzi = None
         self._scambio: Scambiatore | None = None
         self.dove_stanno: dict | None = None
+        self.tieni = bool(tieni)
+        self._parcheggiati: list | None = None
 
     def _dispositivo(self):
         import torch
@@ -247,6 +250,8 @@ class LucidFlux:
 
     def _carica(self):
         if self._pezzi is not None:
+            if self._parcheggiati is not None:
+                self._riprendi(self._pezzi)
             return self._pezzi
         import torch
         from safetensors.torch import load_file
@@ -368,9 +373,44 @@ class LucidFlux:
             grande = grande.resize((larghezza, altezza), Image.Resampling.LANCZOS)
         return grande
 
+    def _in_scheda(self, pezzi: dict) -> list:
+        visti: set[int] = set()
+        parti = []
+        for modulo, tutte in ((pezzi["ramo"], True), (pezzi["flusso"], False)):
+            for parte in list(modulo.parameters()) + list(modulo.buffers()):
+                if id(parte) in visti or (not tutte and hasattr(parte, "_in_ram")):
+                    continue
+                visti.add(id(parte))
+                if parte.data.is_cuda:
+                    parti.append(parte)
+        return parti
+
+    def _parcheggia(self, pezzi: dict) -> bool:
+        import torch
+
+        if pezzi["dispositivo"].type != "cuda":
+            return True
+        parti = self._in_scheda(pezzi)
+        peso = sum(parte.data.numel() * parte.data.element_size() for parte in parti)
+        libera = ram_libera()
+        if libera is not None and libera - MARGINE_RAM < peso:
+            return False
+        for parte in parti:
+            parte.data = parte.data.to("cpu")
+        self._parcheggiati = parti
+        torch.cuda.empty_cache()
+        return True
+
+    def _riprendi(self, pezzi: dict) -> None:
+        parti, self._parcheggiati = self._parcheggiati or [], None
+        for parte in parti:
+            parte.data = parte.data.to(pezzi["dispositivo"])
+
     def _libera_la_scheda(self, pezzi: dict) -> None:
         import torch
 
+        if getattr(self, "tieni", False) and self._parcheggia(pezzi):
+            return
         if self._scambio is not None:
             self._scambio.togli()
         self._scambio = None
@@ -388,6 +428,7 @@ class LucidFlux:
             self._scambio.togli()
         self._scambio = None
         self._pezzi = None
+        self._parcheggiati = None
         try:
             import torch
 

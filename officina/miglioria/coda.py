@@ -248,6 +248,18 @@ def per_id(connessione: sqlite3.Connection, miglioria_id: int) -> sqlite3.Row | 
     return uno(connessione, "SELECT * FROM migliorie WHERE id = ?", miglioria_id)
 
 
+def prossime(connessione: sqlite3.Connection, salta=(), quante: int = 1) -> list:
+    return tutti(connessione,
+                 "SELECT m.*, f.genere AS genere_del_file FROM migliorie m "
+                 "JOIN file_media f ON f.id = m.file_id "
+                 "JOIN scatti s ON s.id = f.scatto_id WHERE m.stato = ? "
+                 "AND m.id NOT IN (SELECT value FROM json_each(?))"
+                 + gruppi.clausola(connessione, "miglioramento")
+                 + " ORDER BY m.id LIMIT ?",
+                 IN_CODA, json.dumps(sorted({int(numero) for numero in salta})),
+                 int(quante))
+
+
 def prossima(connessione: sqlite3.Connection, salta=()) -> sqlite3.Row | None:
     return uno(connessione,
                "SELECT m.* FROM migliorie m JOIN file_media f ON f.id = m.file_id "

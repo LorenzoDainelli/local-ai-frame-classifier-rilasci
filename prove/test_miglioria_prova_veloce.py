@@ -223,7 +223,7 @@ def test_le_clip_sono_quattro_e_di_scene_diverse(tmp_path):
         prova_veloce.scegli_clip(type(_elenco(tmp_path))([], {}, {}, {}))
 
 
-def _prova(tmp_path, monkeypatch, lancia=None):
+def _prova(tmp_path, monkeypatch, lancia=None, lucidflux=None):
     from officina.miglioria import gara120_scarica as sc
     from officina.miglioria import motori, prova_veloce, rete
     from officina.miglioria import prova_veloce_stanza as stanza
@@ -248,7 +248,8 @@ def _prova(tmp_path, monkeypatch, lancia=None):
     archivio.valori["miglioria_video"] = "finto"
     prova = prova_veloce.ProvaVeloce(archivio, cartella=tmp_path / "prova",
                                      lancia=lancia or in_casa, turno=TurnoDellaScheda(),
-                                     prepara=lambda nome: None, pronta=lambda: True)
+                                     prepara=lambda nome: None, pronta=lambda: True,
+                                     lucidflux=lucidflux or (lambda: False))
     return prova, archivio
 
 
@@ -262,7 +263,7 @@ def test_la_prova_passa_e_accende_l_idea(tmp_path, piccolo, fluido_finto, monkey
     prova._gira()
     assert prova.lavoro.guasto == "", prova.lavoro.dettaglio
     assert prova.esito()["passata"]
-    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True}
+    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": False}
     assert prova.accesa() and prova.turno.chi is None
     prova.accendi(False)
     assert not prova.accesa()
@@ -292,3 +293,60 @@ def test_un_guasto_nella_stanza_diventa_un_messaggio(tmp_path, monkeypatch):
     with pytest.raises(Exception):
         prova._corri()
     assert prova.turno.chi is None
+
+
+def test_le_foto_sono_difficili_di_scene_diverse_e_a_meta(tmp_path):
+    from officina.miglioria import prova_veloce
+
+    foto = prova_veloce.scegli_foto(_elenco(tmp_path))
+    assert [uno["scena"] for uno in foto] == ["d/due", "d/uno"]
+    assert [uno["nomi"] for uno in foto] == [["d/due/00021.png"], ["d/uno/00021.png"]]
+    assert all(uno["gruppo"] == "difficilissimo" for uno in foto)
+    assert len(prova_veloce.scegli_foto(_elenco(tmp_path), 1)) == 1
+
+
+def test_con_lucidflux_la_prova_fa_anche_le_foto_e_accende_le_due_idee(
+        tmp_path, piccolo, fluido_finto, monkeypatch):
+    from officina.miglioria import motori, veloce
+    from prove.test_miglioria_giro_lucidflux import QUI, FintoLucid
+
+    monkeypatch.setitem(motori.FOTO, motori.LUCIDFLUX, f"{QUI}:FintoLucid")
+    monkeypatch.setitem(motori.FOTO, motori.SEEDVR2, f"{QUI}:FintoSeed")
+    monkeypatch.setattr(FintoLucid, "creati", 0)
+    prova, archivio = _prova(tmp_path, monkeypatch, lucidflux=lambda: True)
+    prova._gira()
+    assert prova.lavoro.guasto == "", prova.lavoro.dettaglio
+    esito = prova.esito()
+    assert esito["passata"] and esito["idee"] == ["scrittura", "giro_lucidflux"]
+    assert len(esito["foto"]) == 2 and all(uno["uguale"] for uno in esito["foto"])
+    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": True}
+    assert FintoLucid.creati == 2 * 2 + 2
+    prova.accendi(False)
+    assert archivio.valori[veloce.CHIAVE] == {"scrittura": False, "giro_lucidflux": False}
+
+
+def test_foto_diverse_accendono_solo_la_scrittura(tmp_path, piccolo, fluido_finto,
+                                                  monkeypatch):
+    from officina.miglioria import motori, veloce
+    from prove.test_miglioria_giro_lucidflux import QUI, FintoLucid
+
+    class Ballerino(FintoLucid):
+        def foto(self, immagine, larghezza, altezza):
+            grande = super().foto(immagine, larghezza, altezza)
+            if self.tieni:
+                grande.putpixel((0, 0), (1, 2, 3))
+            return grande
+
+    monkeypatch.setattr(FintoLucid, "creati", 0)
+    monkeypatch.setitem(motori.FOTO, motori.LUCIDFLUX, "x:y")
+    monkeypatch.setattr(motori, "_classe", lambda indirizzo: (
+        Ballerino if indirizzo == "x:y" else
+        __import__(QUI, fromlist=["FintoSeed"]).FintoSeed
+        if indirizzo == "officina.miglioria.seedvr2:SeedVR2"
+        else getattr(__import__(indirizzo.split(":")[0], fromlist=["_"]),
+                     indirizzo.split(":")[1])))
+    prova, archivio = _prova(tmp_path, monkeypatch, lucidflux=lambda: True)
+    prova._gira()
+    esito = prova.esito()
+    assert not esito["passata"] and esito["idee"] == ["scrittura"]
+    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": False}

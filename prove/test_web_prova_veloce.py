@@ -44,3 +44,14 @@ def test_l_idea_si_accende_solo_dopo_la_prova_passata(cliente, archivio):
     assert not cliente.post("/api/prova-veloce/idea",
                             json={"accesa": False}).json()["accesa"]
     assert veloce.accese(archivio.impostazione(veloce.CHIAVE)) == []
+
+
+def test_passata_in_parte_accende_solo_le_idee_passate(cliente, archivio):
+    cartella = strade._prova.corse
+    cartella.mkdir(parents=True)
+    corsa.scrivi_esito(cartella, {"passata": False, "clip": [{"uguale": False}],
+                                  "foto": [{"uguale": True}], "idee": [veloce.GIRO_LUCIDFLUX]})
+    stato = cliente.get("/api/prova-veloce").json()
+    assert stato["passate"] == [veloce.GIRO_LUCIDFLUX]
+    assert cliente.post("/api/prova-veloce/idea", json={"accesa": True}).json()["accesa"]
+    assert veloce.accese(archivio.impostazione(veloce.CHIAVE)) == [veloce.GIRO_LUCIDFLUX]
