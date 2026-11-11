@@ -344,6 +344,25 @@
                         <a class="tasto-comando" href="/gara-120">Apri la gara</a>
                     </div>
                 </div>
+
+                <div class="riga" data-prova-veloce>
+                    <div class="lato">
+                        <div class="nome">Miglioramento più veloce</div>
+                        <p class="ds">Si accende solo se la prova di velocità dà video identici bit per bit: <b>i tuoi video non entrano mai</b>.{% call spiega("Come funziona") %}
+                            <p>La prova fa gli stessi video pubblici col modo vecchio e col modo
+                            nuovo, tre volte ciascuno, e li confronta byte per byte.</p>
+                            <p>Mentre la scheda ingrandisce, il processore comprime il video
+                            finito invece di aspettare la fine. Il risultato è lo stesso, bit per
+                            bit: cambia solo quando lo fa. Se la RAM libera è poca, aspetta.</p>{% endcall %}</p>
+                        <p class="ds" data-prova-veloce-stato></p>
+                    </div>
+                    <div class="in-fila">
+                        <button class="commuta" type="button" role="switch" aria-checked="false"
+                                aria-label="Compressione in parallelo" data-prova-veloce-idea hidden><i></i></button>
+                        <button class="tasto-comando" type="button" data-prova-veloce-avvia>Avvia la prova</button>
+                        <button class="tasto-comando nudo" type="button" data-prova-veloce-ferma hidden>Ferma</button>
+                    </div>
+                </div>
             </div>
 
             <p class="sd" style="margin-top:var(--s3)">
@@ -918,4 +937,5 @@
 <script type="module" src="/statici/js/copia_esterna.js"></script>
 <script type="module" src="/statici/js/impostazioni_versioni.js"></script>
 <script type="module" src="/statici/js/gara_video.js"></script>
+<script type="module" src="/statici/js/prova_veloce.js"></script>
 {% endblock %}

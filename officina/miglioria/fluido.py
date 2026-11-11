@@ -5,7 +5,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Callable, Iterable, Iterator
 
-from officina.miglioria import centoventi, pezzi
+from officina.miglioria import centoventi, pezzi, veloce
 
 GIMM, LDF, FUSIONE = "gimm", "ldf", "fusione"
 MOTORI = (GIMM, LDF, FUSIONE)
@@ -136,7 +136,8 @@ def scelti(quadri: Iterable, fps, verso: Fraction, volte: int, gia: int,
 def fai(motore: Motore, apri: Callable[[int], Iterable], fps, verso: Fraction,
         tratti: Tratti, entrati: int,
         al_passo: Callable[[int, int], None] | None = None,
-        filtro: Callable[[Iterator], Iterator] | None = None) -> None:
+        filtro: Callable[[Iterator], Iterator] | None = None,
+        dietro: bool = False) -> None:
     if tratti.finito:
         return
     volte = centoventi.volte(fps, verso)
@@ -153,23 +154,28 @@ def fai(motore: Motore, apri: Callable[[int], Iterable], fps, verso: Fraction,
         scelte = filtro(scelte)
     mucchio: list = []
     visti = gia if partenza else 0
-    for quadro in scelte:
-        if visti < gia:
+    fondo = veloce.Fondo(veloce.fili_per_scrivere(), acceso=dietro)
+    try:
+        for quadro in scelte:
+            if visti < gia:
+                visti += 1
+                continue
             visti += 1
-            continue
-        visti += 1
-        mucchio.append(quadro)
-        if len(mucchio) >= per_tratto:
-            tratti.salva(gia, mucchio)
+            mucchio.append(quadro)
+            if len(mucchio) >= per_tratto:
+                fondo.metti(tratti.salva, veloce.peso_di(mucchio), gia, mucchio)
+                gia += len(mucchio)
+                mucchio = []
+                if al_passo is not None:
+                    al_passo(gia, max(totale, gia))
+        if mucchio:
+            fondo.metti(tratti.salva, veloce.peso_di(mucchio), gia, mucchio)
             gia += len(mucchio)
-            mucchio = []
             if al_passo is not None:
                 al_passo(gia, max(totale, gia))
-    if mucchio:
-        tratti.salva(gia, mucchio)
-        gia += len(mucchio)
-        if al_passo is not None:
-            al_passo(gia, max(totale, gia))
+        fondo.fine()
+    finally:
+        fondo.butta()
     tratti.segna_finito()
 
 

@@ -692,11 +692,17 @@ class Miglioratore:
             "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
             "misura": self._tetto(),
             **({"fps120": self._fps120()} if genere == "video" and self._fps120() else {}),
+            **({"veloce": accese} if (accese := self._veloce()) else {}),
             "percorsi": percorsi_della_stanza(),
             "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli),
                         **({"disco": True} if self._disco else {})},
             **(piu or {}),
         }
+
+    def _veloce(self) -> list[str]:
+        from officina.miglioria import veloce
+
+        return veloce.accese(self.archivio.impostazione(veloce.CHIAVE))
 
     def _fps120(self) -> str | None:
         return getattr(self, "_motore_120", None)

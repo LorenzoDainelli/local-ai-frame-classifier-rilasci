@@ -151,6 +151,7 @@ SOLO_QUESTA_MACCHINA = {
     "griglia_altezza_riga",
     "blocco_dopo_minuti",
     "cartella_raccolta",
+    "veloce_acceso",
 }
 
 

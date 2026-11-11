@@ -116,6 +116,14 @@
       [
         "riprova",
         "Corretto: la gara dei 120 FPS si fermava con «difetto imprevisto» appena partiva GIMM-VFI, perché su Windows mancava un pezzo che il suo codice chiede. Premi di nuovo «Avvia gara»: riparte da dove era"
+      ],
+      [
+        "migliora",
+        "In Impostazioni › Elaborazione c'è «Miglioramento più veloce»: mentre la scheda ingrandisce, il processore comprime già il video invece di aspettare la fine. Il video esce identico, bit per bit"
+      ],
+      [
+        "sfida",
+        "Prima di accenderlo premi «Avvia la prova»: fa 4 video pubblici col modo vecchio e col nuovo, tre volte ciascuno, e li confronta byte per byte. Se sono identici l'idea si accende da sola, e puoi spegnerla"
       ]
     ],
     "tecnico": [
@@ -135,7 +143,8 @@
       "Regola 582: <code>centoventi.arrivo</code> sceglie 120 o 119,88; <code>fluido.fai</code> salva tratti da 2 s già compressi in <code>.fluidi</code> e <code>video.unisci_tratti</code> li unisce con l'audio; <code>rifai.a_centoventi</code> rimette in coda i video fatti senza.",
       "<code>ldf_fette.Fette.esci</code> scatta dopo l'ultimo dimezzamento: <code>ldf_fette.avanti</code> tiene il foglio <code>x</code> e la cache delle chiavi fuori dalla scheda (<code>ldf_foglio.Foglio</code>: RAM se ce n'è col margine di 3 GB, se no <code>torch.from_file</code> in <code>miglioria/ldfvfi/appoggio</code>, cancellato a fine video) e porta sulla scheda solo le righe che calcola, con le stesse operazioni nello stesso ordine; <code>fluido.Motore.dove_stanno</code> leggeva una proprietà come funzione.",
       "<code>rifacimento.Rifacimento</code> ricorda modello e quante ne restano e non riparte a vuoto; <code>_occupata</code> guarda anche <code>lavori.turno.libera</code>, la fila e le impronte; <code>misura.parti_le_impronte_per</code> non parte mentre gira la fila; <code>intelligenza.parti_la_fila</code> ferma le impronte da sole; <code>/api/intelligenza?solo_fila=1</code> dà <code>impronte_da_sole</code> e <code>aspetta_la_scheda</code>, e la pagina lo interroga sempre.",
-      "<code>PontePrincipale.stato_del_programma</code> non prende più il lucchetto del programma; la pagina aspetta al massimo 8 s. <code>gara120_stanza</code> manda <code>passi_del_guasto</code>, che arriva nella pagina come dettaglio."
+      "<code>PontePrincipale.stato_del_programma</code> non prende più il lucchetto del programma; la pagina aspetta al massimo 8 s. <code>gara120_stanza</code> manda <code>passi_del_guasto</code>, che arriva nella pagina come dettaglio.",
+      "<code>veloce.Fondo</code> comprime pezzi e tratti dietro, con tetto di RAM; <code>catena._Scrittore</code> scrive il video mentre arrivano i pezzi (<code>pezzi.segui</code>). Spento finché <code>prova_veloce</code> non passa: SNU-FILM, 4 clip H.264/HEVC, due a 120 FPS con il fluido registrato, giri V,N,V,N,V,N con sha256."
     ]
   },
   {

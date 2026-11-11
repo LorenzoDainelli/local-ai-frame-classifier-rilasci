@@ -28,7 +28,7 @@ async function salva(chiave, valore) {
     }
 }
 
-tutti(".commuta").forEach((interruttore) => {
+tutti(".commuta[data-chiave]").forEach((interruttore) => {
     interruttore.addEventListener("click", () => {
         const acceso = !interruttore.classList.contains("acceso");
         interruttore.classList.toggle("acceso", acceso);

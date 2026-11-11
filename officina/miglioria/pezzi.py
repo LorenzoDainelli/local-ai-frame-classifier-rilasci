@@ -56,6 +56,7 @@ class Pezzi:
         (dove / FIRMA).write_text(json.dumps(self.firma), "utf-8")
         for resto in dove.glob(f"*{IN_CORSO}"):
             resto.unlink(missing_ok=True)
+        self.segnale = None
 
     def elenco(self) -> list[tuple[int, int, Path]]:
         trovati = []
@@ -82,6 +83,11 @@ class Pezzi:
 
     def segna_finito(self) -> None:
         (self.dove / FINITO).write_text("", "utf-8")
+        self._avvisa()
+
+    def _avvisa(self) -> None:
+        if self.segnale is not None:
+            self.segnale.avvisa()
 
     def salva(self, inizio: int, quadri: list) -> None:
         import numpy as np
@@ -102,12 +108,39 @@ class Pezzi:
             for pacchetto in traccia.encode():
                 fuori.mux(pacchetto)
         os.replace(provvisorio, self.dove / nome)
+        self._avvisa()
 
     def rileggi(self) -> Iterator:
+        return self._leggi(self.elenco())
+
+    def segui(self) -> Iterator:
+        return self._leggi(self._man_mano())
+
+    def _man_mano(self) -> Iterator:
+        atteso = 0
+        dati = 0
+        while True:
+            pronti: list = []
+
+            def pronto() -> bool:
+                pronti[:] = [voce for voce in self.elenco() if voce[0] >= atteso]
+                return bool(pronti) or self.finito
+
+            self.segnale.aspetta(pronto)
+            if not pronti:
+                if len(list(self.dove.glob(f"*{FINE}"))) != dati:
+                    raise PezzoRotto("Un pezzo del video già migliorato manca.")
+                return
+            for voce in pronti:
+                yield voce
+                atteso += voce[1]
+                dati += 1
+
+    def _leggi(self, file_in_fila) -> Iterator:
         from officina.immagini import fotogrammi
 
         av = fotogrammi.decodificatore()
-        for _inizio, quanti, file in self.elenco():
+        for _inizio, quanti, file in file_in_fila:
             letti = 0
             try:
                 with av.open(str(file)) as dentro:
