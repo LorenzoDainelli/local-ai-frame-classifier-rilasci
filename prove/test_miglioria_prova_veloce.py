@@ -79,9 +79,10 @@ def test_la_prova_passa_e_riprende_senza_rifare(tmp_path, piccolo, fluido_finto,
     dati = corsa.corri(tmp_path / "prova", clip, LAVORO,
                        al_passo=lambda f, t: passi.append((f, t)), volte=2)
     assert dati["passata"], dati
-    totale = corsa.passi(clip, 2) + corsa.passi_del_precarico(clip, [], 2)
+    totale = corsa.passi(clip, 2) + corsa.passi_del_precarico(clip, [], 2) + 4
     assert passi[-1] == (totale, totale)
-    assert dati["idee"] == ["scrittura", "precarico"]
+    assert dati["idee"] == ["scrittura", "precarico", "impronte_fili"]
+    assert dati["fili"][0]["uguale"] and dati["volti"] == []
     assert [riga["nome"] for riga in dati["scheda"]] == ["scheda-a"]
     assert all(riga["uguale"] for riga in dati["scheda"])
     assert corsa.leggi_esito(tmp_path / "prova")["passata"]
@@ -95,6 +96,7 @@ def test_la_prova_passa_e_riprende_senza_rifare(tmp_path, piccolo, fluido_finto,
     monkeypatch.setattr(corsa, "un_giro", mai)
     monkeypatch.setattr(corsa.catena, "solo_la_scheda", mai)
     monkeypatch.setattr(fluido, "Motore", mai)
+    monkeypatch.setattr(corsa, "un_giro_di_fili", mai)
     assert corsa.corri(tmp_path / "prova", clip, LAVORO, volte=2)["passata"]
 
 
@@ -119,7 +121,7 @@ def test_se_il_precarico_cambia_un_bit_resta_spento_solo_lui(tmp_path, piccolo,
 
     monkeypatch.setattr(corsa, "impronta_dei_quadri", sporca)
     dati = corsa.corri(tmp_path / "prova", clip, LAVORO, volte=2)
-    assert not dati["passata"] and dati["idee"] == ["scrittura"]
+    assert not dati["passata"] and dati["idee"] == ["scrittura", "impronte_fili"]
     assert not dati["scheda"][0]["uguale"]
 
 
@@ -263,7 +265,14 @@ def test_le_clip_sono_quattro_e_di_scene_diverse(tmp_path):
         prova_veloce.scegli_clip(type(_elenco(tmp_path))([], {}, {}, {}))
 
 
-def _prova(tmp_path, monkeypatch, lancia=None, lucidflux=None):
+def _accese(*idee: str) -> dict:
+    from officina.miglioria import veloce
+
+    assert set(idee) <= set(veloce.IDEE)
+    return {idea: idea in idee for idea in veloce.IDEE}
+
+
+def _prova(tmp_path, monkeypatch, lancia=None, lucidflux=None, volti=None, wider=None):
     from officina.miglioria import gara120_scarica as sc
     from officina.miglioria import motori, prova_veloce, rete
     from officina.miglioria import prova_veloce_stanza as stanza
@@ -289,7 +298,8 @@ def _prova(tmp_path, monkeypatch, lancia=None, lucidflux=None):
     prova = prova_veloce.ProvaVeloce(archivio, cartella=tmp_path / "prova",
                                      lancia=lancia or in_casa, turno=TurnoDellaScheda(),
                                      prepara=lambda nome: None, pronta=lambda: True,
-                                     lucidflux=lucidflux or (lambda: False))
+                                     lucidflux=lucidflux or (lambda: False),
+                                     volti=volti or (lambda: []), wider=wider)
     return prova, archivio
 
 
@@ -303,8 +313,8 @@ def test_la_prova_passa_e_accende_l_idea(tmp_path, piccolo, fluido_finto, monkey
     prova._gira()
     assert prova.lavoro.guasto == "", prova.lavoro.dettaglio
     assert prova.esito()["passata"]
-    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": False,
-                                              "precarico": True}
+    assert archivio.valori[veloce.CHIAVE] == _accese("scrittura", "precarico",
+                                                     "impronte_fili", "lavori_dietro")
     assert prova.accesa() and prova.turno.chi is None
     prova.accendi(False)
     assert not prova.accesa()
@@ -359,14 +369,14 @@ def test_con_lucidflux_la_prova_fa_anche_le_foto_e_accende_le_due_idee(
     assert prova.lavoro.guasto == "", prova.lavoro.dettaglio
     esito = prova.esito()
     assert esito["passata"]
-    assert esito["idee"] == ["scrittura", "giro_lucidflux", "precarico"]
+    assert esito["idee"] == ["scrittura", "giro_lucidflux", "precarico", "impronte_fili",
+                             "lavori_dietro"]
     assert len(esito["foto"]) == 2 and all(uno["uguale"] for uno in esito["foto"])
-    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": True,
-                                              "precarico": True}
+    assert archivio.valori[veloce.CHIAVE] == _accese(
+        "scrittura", "giro_lucidflux", "precarico", "impronte_fili", "lavori_dietro")
     assert FintoLucid.creati == 2 * 2 + 2 + 2 * 2
     prova.accendi(False)
-    assert archivio.valori[veloce.CHIAVE] == {"scrittura": False, "giro_lucidflux": False,
-                                              "precarico": False}
+    assert archivio.valori[veloce.CHIAVE] == _accese()
 
 
 def test_foto_diverse_accendono_solo_la_scrittura(tmp_path, piccolo, fluido_finto,
@@ -392,6 +402,63 @@ def test_foto_diverse_accendono_solo_la_scrittura(tmp_path, piccolo, fluido_fint
     prova, archivio = _prova(tmp_path, monkeypatch, lucidflux=lambda: True)
     prova._gira()
     esito = prova.esito()
-    assert not esito["passata"] and esito["idee"] == ["scrittura", "precarico"]
-    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": False,
-                                              "precarico": True}
+    assert not esito["passata"]
+    assert esito["idee"] == ["scrittura", "precarico", "impronte_fili", "lavori_dietro"]
+    assert archivio.valori[veloce.CHIAVE] == _accese("scrittura", "precarico",
+                                                     "impronte_fili", "lavori_dietro")
+
+
+def test_i_lavori_dietro_si_provano_su_due_video_di_fila(tmp_path, piccolo, fluido_finto,
+                                                          monkeypatch):
+    clip = _clip(tmp_path)
+    clip[1]["fps120"] = None
+    assert [uno["nome"] for uno in corsa.per_il_dietro(clip)] == ["a", "b"]
+    fili = []
+    vera = corsa._coda_del_video
+
+    def coda(uscita):
+        import threading
+
+        fili.append(threading.current_thread().name)
+        return vera(uscita)
+
+    monkeypatch.setattr(corsa, "_coda_del_video", coda)
+    dati = corsa.corri(tmp_path / "prova", clip, LAVORO, volte=2)
+    assert dati["passata"], dati
+    assert "lavori_dietro" in dati["idee"]
+    [riga] = dati["dietro"]
+    assert riga["uguale"] and len(set(riga["vecchi"])) == 1
+    assert sum(nome.startswith("miglioria-dietro") for nome in fili) == 4
+    assert len(fili) == 8
+    assert not list((tmp_path / "prova").rglob("*.mp4.parziale"))
+
+    def mai(*_argomenti, **_chiavi):
+        raise AssertionError("rifatto")
+
+    monkeypatch.setattr(corsa, "un_giro_dietro", mai)
+    monkeypatch.setattr(corsa, "un_giro", mai)
+    monkeypatch.setattr(corsa.catena, "solo_la_scheda", mai)
+    monkeypatch.setattr(corsa, "un_giro_di_fili", mai)
+    assert "lavori_dietro" in corsa.corri(tmp_path / "prova", clip, LAVORO,
+                                          volte=2)["idee"]
+
+
+def test_se_dietro_cambia_un_bit_resta_spento_solo_lui(tmp_path, piccolo, fluido_finto,
+                                                      monkeypatch):
+    clip = _clip(tmp_path)
+    clip[1]["fps120"] = None
+    vera = corsa._coda_del_video
+
+    def sporca(uscita):
+        import threading
+
+        firme = vera(uscita)
+        if threading.current_thread().name.startswith("miglioria-dietro"):
+            firme[1] = "0" * 64
+        return firme
+
+    monkeypatch.setattr(corsa, "_coda_del_video", sporca)
+    dati = corsa.corri(tmp_path / "prova", clip, LAVORO, volte=2)
+    assert not dati["passata"]
+    assert "lavori_dietro" not in dati["idee"] and "scrittura" in dati["idee"]
+    assert dati["dietro"][0]["stabile"] and not dati["dietro"][0]["uguale"]

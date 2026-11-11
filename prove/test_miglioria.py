@@ -687,3 +687,27 @@ def test_lo_spazio_che_serve_cresce_con_la_misura():
     assert lavoro.quanto_puo_crescere() == lavoro.quanto_puo_crescere("4k")
     assert lavoro.quanto_puo_crescere("2k") == pytest.approx(
         lavoro.QUANTO_PUO_CRESCERE * 2560 * 1440 / (1920 * 1080))
+
+
+def test_la_coda_fa_prima_i_lavori_corti_e_poi_gli_altri(importato, monkeypatch):
+    from officina.miglioria import ordine
+
+    _metti(importato, "breve.MOV", "piccola.jpg")
+    secondi = {"video": 900.0, "immagine": 10.0}
+    chiesti = []
+
+    def stimatore(connessione, versione, **fattori):
+        chiesti.append(fattori)
+        return lambda riga, **altri: (secondi[riga["genere_del_file"]], 1.0)
+
+    monkeypatch.setattr(ordine, "stimatore", stimatore)
+    miglioratore = lavoro.Miglioratore(importato, motori_scelti=SCELTI)
+    with importato.lettura() as connessione:
+        fila = miglioratore._in_fila(connessione)
+    assert [riga["genere_del_file"] for riga in fila] == ["immagine", "video"]
+    assert chiesti and chiesti[0]["intensita"] == 100
+    secondi["immagine"] = 5000.0
+    with importato.lettura() as connessione:
+        assert miglioratore._prossima(connessione)["genere_del_file"] == "video"
+    _gira(importato)
+    assert len(_riga(importato, coda.DA_RIVEDERE)) == 2

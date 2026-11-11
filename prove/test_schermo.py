@@ -180,6 +180,51 @@ def test_il_ponte_porta_le_pagine_del_fisso_e_non_lascia_niente_in_cache(porta, 
         ponte.ferma()
 
 
+def test_se_il_fisso_non_risponde_i_dati_ricevono_un_errore_e_non_una_pagina(
+        porta, archivio_pieno, monkeypatch):
+    import json
+
+    fisso = _abbina(porta)
+    chiuso = []
+    ponte = collega.Ponte(fisso, collega.entra(fisso, "cavallo-batteria"),
+                          quando_chiuso=lambda: chiuso.append(True))
+    ponte.parti()
+    dati_json = {"accept": "application/json"}
+    try:
+        vicino, biscotto = _vicino(ponte)
+
+        def zitto():
+            raise TimeoutError("il fisso non risponde")
+
+        monkeypatch.setattr(ponte, "_verso_il_fisso", zitto)
+        vicino.request("GET", "/api/gara-120", headers={**dati_json, **biscotto})
+        risposta = vicino.getresponse()
+        dati = json.loads(risposta.read())
+        assert risposta.status == 504
+        assert risposta.getheader("content-type") == "application/json"
+        assert dati["messaggio"] == collega.FISSO_ZITTO
+        assert chiuso == [] and not ponte.chiuso
+        monkeypatch.undo()
+
+        vicino.request("GET", "/api/gara-120", headers={**dati_json, **biscotto})
+        risposta = vicino.getresponse()
+        assert risposta.status == 200
+        json.loads(risposta.read())
+
+        porta.stacca()
+        vicino.request("GET", "/api/gara-120", headers={**dati_json, **biscotto})
+        risposta = vicino.getresponse()
+        dati = json.loads(risposta.read())
+        assert risposta.status == 503 and dati["messaggio"] == collega.FISSO_CHIUSO
+        assert chiuso == [True]
+        vicino.request("GET", "/stato", headers={"accept": "text/html", **biscotto})
+        risposta = vicino.getresponse()
+        assert b"collegamento con il fisso" in risposta.read()
+        assert chiuso == [True]
+    finally:
+        ponte.ferma()
+
+
 def test_il_ponte_rifiuta_i_comandi_che_arrivano_da_altre_pagine(porta, archivio_pieno):
     fisso = _abbina(porta)
     ponte = collega.Ponte(fisso, collega.entra(fisso, "cavallo-batteria"))

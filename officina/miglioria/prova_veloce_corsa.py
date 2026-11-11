@@ -31,6 +31,12 @@ MISURA = "fhd"
 FOTO = "foto"
 MEZZI = "mezzi"
 PRECARICO = "precarico"
+VOLTI = "volti"
+FILI = "fili"
+DIETRO = "dietro"
+QUANTE_PER_I_FILI = 60
+IDEA_DEI_VOLTI = {motori.CODEFORMER: veloce.VOLTI_ACCESI,
+                  motori.FACEME: veloce.FACEME_ACCESO}
 QUADRI_FLUIDO = 24
 VOLTE_FLUIDO = 4
 ORIGINALE_OPZIONI = {
@@ -510,6 +516,186 @@ def giri_del_precarico(cartella: Path) -> list[dict]:
     return giri_fatti(cartella / PRECARICO) + vecchi
 
 
+def lavoro_dei_volti(cartella: Path, uno: dict, lavoro: dict, motore: str) -> dict:
+    suo = lavoro_della_foto(cartella / VOLTI, uno, lavoro)
+    suo.update(persone=list(uno.get("persone") or []) if motore == motori.FACEME else [],
+               motori={"foto": motori.SEEDVR2, "volti": motore})
+    return suo
+
+
+def volti_vecchi(cartella: Path, uno: dict, lavoro: dict, motore: str,
+                 numero: int) -> dict:
+    motori.spegni_tutti()
+    try:
+        firma_del_file, secondi = _una_foto(
+            cartella / VOLTI / FOTO / uno["nome"], lavoro, f"{motore}-{numero}", None)
+    finally:
+        motori.spegni_tutti()
+    return _riga(f"{motore}-{uno['nome']}", numero, VECCHIO, firma_del_file, secondi)
+
+
+def volti_nuovi(cartella: Path, volti: list[dict], lavori: dict[str, dict], motore: str,
+                numero: int) -> list[dict]:
+    motori.spegni_tutti()
+    fatti = []
+    try:
+        for uno in volti:
+            firma_del_file, secondi = _una_foto(
+                cartella / VOLTI / FOTO / uno["nome"], lavori[uno["nome"]],
+                f"{motore}-{numero}", None, [IDEA_DEI_VOLTI[motore]])
+            fatti.append(_riga(f"{motore}-{uno['nome']}", numero, NUOVO, firma_del_file,
+                               secondi))
+    finally:
+        motori.spegni_tutti()
+    return fatti
+
+
+def righe_dei_volti(volti: list[dict], motore: str) -> list[dict]:
+    return [dict(uno, nome=f"{motore}-{uno['nome']}") for uno in volti]
+
+
+def _i_volti(cartella: Path, volti: list[dict], lavoro: dict, quali: list[str],
+             volte: int, avanti) -> None:
+    dove = cartella / VOLTI
+    dove.mkdir(parents=True, exist_ok=True)
+    for motore in quali:
+        lavori = {uno["nome"]: lavoro_dei_volti(cartella, uno, lavoro, motore)
+                  for uno in volti}
+        for numero, modo in ordine(volte):
+            gia = {giro["clip"] for giro in giri_fatti(dove) if giro.get("giro") == numero}
+            mancano = [uno for uno in volti if f"{motore}-{uno['nome']}" not in gia]
+            if modo == VECCHIO:
+                for uno in mancano:
+                    _segna(dove, volti_vecchi(cartella, uno, lavori[uno["nome"]], motore,
+                                              numero))
+            elif mancano:
+                for fatto in volti_nuovi(cartella, volti, lavori, motore, numero):
+                    if fatto["clip"] not in gia:
+                        _segna(dove, fatto)
+            for _uno in volti:
+                avanti()
+
+
+def lati_delle_impronte() -> list[int]:
+    from officina import descrittori
+
+    return sorted({int(scheda.lato) for scheda in descrittori.SCHEDE.values()})
+
+
+def _ritagli_di(percorso: str) -> list[bytes]:
+    from officina.descrittori import preparazione
+    from officina.immagini import lettura
+
+    pezzi_suoi = []
+    for lato in lati_delle_impronte():
+        immagine = lettura.copia_di_lavoro(Path(percorso), lato * 4)
+        for ritaglio in preparazione.tre_inquadrature(immagine, lato):
+            pezzi_suoi.append(f"{lato}|{ritaglio.inquadratura}|{ritaglio.riquadro}|"
+                              f"{ritaglio.immagine.size}|".encode())
+            pezzi_suoi.append(ritaglio.immagine.tobytes())
+    return pezzi_suoi
+
+
+def un_giro_di_fili(file: list[str], numero: int, modo: str) -> dict:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from officina.impronte import motore as impronte
+
+    partito = time.perf_counter()
+    if modo == NUOVO:
+        with ThreadPoolExecutor(max_workers=impronte.FILI) as fili:
+            tutti = list(fili.map(_ritagli_di, file))
+    else:
+        tutti = [_ritagli_di(uno) for uno in file]
+    secondi = time.perf_counter() - partito
+    calcolo = hashlib.sha256()
+    for suoi in tutti:
+        for pezzo in suoi:
+            calcolo.update(pezzo)
+    return _riga(FILI, numero, modo, calcolo.hexdigest(), secondi)
+
+
+def file_per_i_fili(clip: list[dict], foto: list[dict], volti: list[dict]) -> list[str]:
+    tutti = [nome for uno in list(volti) + list(foto) + list(clip) for nome in uno["file"]]
+    buoni = [nome for nome in dict.fromkeys(tutti)
+             if nome.lower().rsplit(".", 1)[-1] in ("jpg", "jpeg", "png")]
+    return buoni[:QUANTE_PER_I_FILI]
+
+
+def per_il_dietro(clip: list[dict]) -> list[dict]:
+    senza = con_lo_scambio(clip)
+    return senza[:2] if len(senza) >= 2 else []
+
+
+def _coda_del_video(uscita: Path) -> list[str]:
+    from officina.importazione import impronta as impronta_del_file
+    from officina.miglioria import da_guardare
+
+    copia = uscita.with_name("copia-da-guardare.mp4")
+    da_guardare.ricodifica(uscita, copia)
+    return [impronta(uscita), impronta(copia), impronta_del_file.del_file(uscita)]
+
+
+def un_giro_dietro(cartella: Path, due: list[dict], lavori: dict[str, dict], numero: int,
+                   modo: str) -> dict:
+    from officina.miglioria import dietro
+
+    uscite = []
+    for uno in due:
+        uscita = _in_revisione(cartella / uno["nome"], f"dietro-{numero}")
+        _pulisci(uscita)
+        shutil.copytree(cartella / uno["nome"] / FISSI, pezzi.cartella(uscita))
+        uscite.append(uscita)
+    fila = dietro.Dietro(disco=lambda _dove: shutil.disk_usage(cartella),
+                         libera=lambda: None)
+    firme: list[list[str]] = [[] for _uno in due]
+    try:
+        partito = time.perf_counter()
+        for posto, (uno, uscita) in enumerate(zip(due, uscite, strict=True)):
+            questo = {k: v for k, v in lavori[uno["nome"]].items() if k != "veloce"}
+            catena.filmato(dict(questo, uscita=str(uscita)))
+            if modo == NUOVO:
+                fila.metti(lambda posto=posto, uscita=uscita:
+                           firme[posto].extend(_coda_del_video(uscita)), 0)
+            else:
+                firme[posto].extend(_coda_del_video(uscita))
+        fila.aspetta()
+        secondi = time.perf_counter() - partito
+    finally:
+        fila.aspetta()
+        for uscita in uscite:
+            _pulisci(uscita)
+    calcolo = hashlib.sha256()
+    for suoi in firme:
+        if len(suoi) != 3:
+            raise pezzi.PezzoRotto("La prova dei lavori dietro non ha finito un video.")
+        for firma in suoi:
+            calcolo.update(firma.encode())
+    return _riga(DIETRO, numero, modo, calcolo.hexdigest(), secondi)
+
+
+def _il_dietro(cartella: Path, due: list[dict], lavoro: dict, volte: int, avanti) -> None:
+    dove = cartella / DIETRO
+    dove.mkdir(parents=True, exist_ok=True)
+    lavori = {uno["nome"]: _lavoro_del_video(lavoro, cartella / uno["nome"] / ORIGINALE, uno)
+              for uno in due}
+    gia = {giro["giro"] for giro in giri_fatti(dove)}
+    for numero, modo in ordine(volte):
+        if numero not in gia:
+            _segna(dove, un_giro_dietro(cartella, due, lavori, numero, modo))
+        avanti()
+
+
+def _i_fili(cartella: Path, file: list[str], volte: int, avanti) -> None:
+    dove = cartella / FILI
+    dove.mkdir(parents=True, exist_ok=True)
+    gia = {giro["giro"] for giro in giri_fatti(dove)}
+    for numero, modo in ordine(volte):
+        if numero not in gia:
+            _segna(dove, un_giro_di_fili(file, numero, modo))
+        avanti()
+
+
 def riassunto(clip: dict, giri: list[dict], volte: int = VOLTE) -> dict:
     suoi = [giro for giro in giri if giro.get("clip") == clip["nome"]]
     vecchi = [giro["impronta"] for giro in suoi if giro["modo"] == VECCHIO]
@@ -529,7 +715,10 @@ def riassunto(clip: dict, giri: list[dict], volte: int = VOLTE) -> dict:
 
 def esito(clip: list[dict], giri: list[dict], volte: int = VOLTE,
           foto: list[dict] | None = None, giri_foto: list[dict] | None = None,
-          giri_scheda: list[dict] | None = None) -> dict:
+          giri_scheda: list[dict] | None = None, volti: list[dict] | None = None,
+          giri_volti: list[dict] | None = None, quali_volti: list[str] | None = None,
+          giri_fili: list[dict] | None = None,
+          giri_dietro: list[dict] | None = None) -> dict:
     righe = [riassunto(uno, giri, volte) for uno in clip]
     righe_foto = [riassunto(uno, giri_foto or [], volte) for uno in foto or []]
     righe_scheda = ([riassunto(uno, giri_scheda, volte)
@@ -543,7 +732,26 @@ def esito(clip: list[dict], giri: list[dict], volte: int = VOLTE,
     if righe_scheda and all(riga["uguale"] for riga in righe_scheda):
         idee.append(veloce.PRECARICO)
     provate = int(bool(righe)) + int(bool(righe_foto)) + int(bool(righe_scheda))
-    return {"clip": righe, "foto": righe_foto, "scheda": righe_scheda, "idee": idee,
+    righe_volti = []
+    for motore in quali_volti or []:
+        sue = [riassunto(uno, giri_volti or [], volte)
+               for uno in righe_dei_volti(volti or [], motore)]
+        righe_volti.extend(sue)
+        provate += int(bool(sue))
+        if sue and all(riga["uguale"] for riga in sue):
+            idee.append(IDEA_DEI_VOLTI[motore])
+    righe_fili = ([riassunto({"nome": FILI}, giri_fili, volte)]
+                  if giri_fili is not None else [])
+    provate += int(bool(righe_fili))
+    if righe_fili and all(riga["uguale"] for riga in righe_fili):
+        idee.append(veloce.IMPRONTE_FILI)
+    righe_dietro = ([riassunto({"nome": DIETRO}, giri_dietro, volte)]
+                    if giri_dietro is not None else [])
+    provate += int(bool(righe_dietro))
+    if righe_dietro and all(riga["uguale"] for riga in righe_dietro):
+        idee.append(veloce.LAVORI_DIETRO)
+    return {"clip": righe, "foto": righe_foto, "scheda": righe_scheda,
+            "volti": righe_volti, "fili": righe_fili, "dietro": righe_dietro, "idee": idee,
             "passata": provate > 0 and len(idee) == provate}
 
 
@@ -614,11 +822,18 @@ def _lavoro_del_video(lavoro: dict, originale: Path, uno: dict) -> dict:
 def corri(cartella: Path, clip: list[dict], lavoro: dict,
           al_passo: Callable[[int, int], None] | None = None, freno=None,
           racconta=None, volte: int = VOLTE, foto: list[dict] | None = None,
-          lavoro_foto: dict | None = None) -> dict:
+          lavoro_foto: dict | None = None, volti: list[dict] | None = None,
+          quali_volti: list[str] | None = None) -> dict:
     cartella = Path(cartella)
     foto = list(foto or [])
-    totale = (passi(clip, volte) + len(foto) * 2 * volte
-              + passi_del_precarico(clip, foto, volte))
+    volti = list(volti or [])
+    quali_volti = [motore for motore in quali_volti or [] if motore in IDEA_DEI_VOLTI]
+    per_i_fili = file_per_i_fili(clip, foto, volti)
+    due = per_il_dietro(clip)
+    totale = (2 * volte * bool(due) + passi(clip, volte) + len(foto) * 2 * volte
+              + passi_del_precarico(clip, foto, volte)
+              + len(quali_volti) * len(volti) * 2 * volte
+              + (2 * volte if per_i_fili else 0))
     fatti = [0]
 
     def avanti() -> None:
@@ -647,13 +862,22 @@ def corri(cartella: Path, clip: list[dict], lavoro: dict,
     if foto:
         _le_foto(cartella, foto, lavoro_foto or lavoro, volte, avanti, freno)
     _il_precarico(cartella, clip, lavoro, foto, lavoro_foto or lavoro, volte, avanti)
+    if volti and quali_volti:
+        _i_volti(cartella, volti, lavoro_foto or lavoro, quali_volti, volte, avanti)
+    if per_i_fili:
+        _i_fili(cartella, per_i_fili, volte, avanti)
+    if due:
+        _il_dietro(cartella, due, lavoro, volte, avanti)
     dati = esito(clip, giri_fatti(cartella), volte, foto, giri_fatti(cartella / FOTO),
-                 giri_del_precarico(cartella))
+                 giri_del_precarico(cartella), volti, giri_fatti(cartella / VOLTI),
+                 quali_volti, giri_fatti(cartella / FILI) if per_i_fili else None,
+                 giri_fatti(cartella / DIETRO) if due else None)
     scrivi_esito(cartella, dati)
     return dati
 
 
-__all__ = ["ESITO", "FISSI", "FOTO", "GIRI", "MEZZI", "MISURA", "NUOVO", "ORIGINALE", "PIANO",
+__all__ = ["DIETRO", "ESITO",
+           "FISSI", "FOTO", "GIRI", "MEZZI", "MISURA", "NUOVO", "ORIGINALE", "PIANO",
            "PRECARICO", "con_ldf", "con_lo_scambio", "fluido_col_precarico",
            "foto_col_precarico", "giri_del_precarico", "impronta_dei_quadri",
            "passi_del_precarico", "righe_del_precarico", "scheda_col_precarico",
@@ -661,4 +885,4 @@ __all__ = ["ESITO", "FISSI", "FOTO", "GIRI", "MEZZI", "MISURA", "NUOVO", "ORIGIN
            "corri", "esito", "fai_l_originale", "foto_nuove", "foto_vecchia", "giri_fatti",
            "impronta", "la_scheda", "lavoro_della_foto", "leggi_esito", "misura_piccola",
            "ordine", "passi", "registra", "registrati_buoni", "riassunto", "scrivi_esito",
-           "un_giro"]
+           "per_il_dietro", "un_giro", "un_giro_dietro"]

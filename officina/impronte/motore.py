@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -26,6 +27,12 @@ QUANTI_ALLA_VOLTA = 64
 PRIMA_DI_STIMARE = 12
 
 QUANTI_SALTATI_SI_RICORDANO = 100
+
+FILI = 4
+INSIEME = ("jpg", "jpeg", "png")
+CHIAVE_VELOCE = "veloce_acceso"
+IDEA_DEI_FILI = "impronte_fili"
+_FATTA, _ROTTA, _FERMA = "fatta", "rotta", "ferma"
 
 
 @dataclass
@@ -106,6 +113,14 @@ class _Pronto:
     fotogrammi: int
 
 
+def _piu_fili(archivio) -> bool:
+    try:
+        valore = archivio.impostazione(CHIAVE_VELOCE)
+    except Exception:
+        return False
+    return isinstance(valore, dict) and valore.get(IDEA_DEI_FILI) is True
+
+
 class Passata:
 
     def __init__(self, archivio: Archivio, nome: str,
@@ -125,6 +140,8 @@ class Passata:
         self._fermati = threading.Event()
         self._misure: list[float] = []
         self._saltati_in_questa_passata: set[int] = set()
+        self.fili = FILI if _piu_fili(archivio) else 1
+        self._uno_alla_volta = threading.Lock()
 
 
     def ferma(self) -> None:
@@ -255,30 +272,43 @@ class Passata:
         fotogrammi = 0
         fatte: list = []
 
-        for riga in righe:
-            if self.fermata:
+        for riga, (esito, dato) in zip(righe, self._una_per_una(righe), strict=True):
+            if esito == _FERMA:
                 break
-            try:
-                ritagli, quanti_fotogrammi = self._ritagli_di(riga)
-            except estrattore.Fermato:
-                break
-            except DaRifare as errore:
-                saltati.append((riga["id"], errore.codice))
-            except FileNonLeggibile as errore:
-                saltati.append((riga["id"], errore.codice))
-                non_si_aprono.append(
-                    (riga["id"], errore.codice, errore.file_id))
-            except Exception as errore:
-                saltati.append((riga["id"], "errore_imprevisto"))
-                non_si_aprono.append((riga["id"], "errore_imprevisto", None))
-                registro.errore("impronte.scatto_rotto", **registro.dove_si_e_rotto(errore))
-            else:
+            if esito == _FATTA:
+                ritagli, quanti_fotogrammi = dato
                 fotogrammi += quanti_fotogrammi
                 lavori.extend(ritagli)
+            elif isinstance(dato, DaRifare):
+                saltati.append((riga["id"], dato.codice))
+            elif isinstance(dato, FileNonLeggibile):
+                saltati.append((riga["id"], dato.codice))
+                non_si_aprono.append((riga["id"], dato.codice, dato.file_id))
+            else:
+                saltati.append((riga["id"], "errore_imprevisto"))
+                non_si_aprono.append((riga["id"], "errore_imprevisto", None))
+                registro.errore("impronte.scatto_rotto", **registro.dove_si_e_rotto(dato))
             fatte.append(riga)
 
         return _Pronto(righe=fatte, lavori=lavori, saltati=saltati,
                        non_si_aprono=non_si_aprono, fotogrammi=fotogrammi)
+
+    def _una_riga(self, riga) -> tuple[str, object]:
+        if self.fermata:
+            return _FERMA, None
+        try:
+            return _FATTA, self._ritagli_di(riga)
+        except estrattore.Fermato:
+            return _FERMA, None
+        except Exception as errore:
+            return _ROTTA, errore
+
+    def _una_per_una(self, righe):
+        if self.fili <= 1 or len(righe) <= 1:
+            return (self._una_riga(riga) for riga in righe)
+        with ThreadPoolExecutor(max_workers=min(self.fili, len(righe)),
+                                thread_name_prefix="impronte-fili") as fili:
+            return list(fili.map(self._una_riga, righe))
 
     def _fai_un_gruppo(self, descrittore: Descrittore, pronto: _Pronto) -> int:
         righe, lavori = pronto.righe, pronto.lavori
@@ -328,7 +358,11 @@ class Passata:
                                    codice="file_non_trovato",
                                    file_id=principale["id"])
 
-        with dall_archivio.attento(percorso):
+        in_fila = (principale["genere"] != "immagine"
+                   or isinstance(percorso, dall_archivio.DallArchivio)
+                   or str(percorso).lower().rsplit(".", 1)[-1] not in INSIEME)
+        with (self._uno_alla_volta if in_fila else contextlib.nullcontext()), \
+                dall_archivio.attento(percorso):
             if principale["genere"] == "immagine":
                 try:
                     immagine = lettura.copia_di_lavoro(percorso, self.carta.lato * 4)

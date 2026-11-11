@@ -37,6 +37,10 @@ NON_E_LUI = ("Il fisso che risponde non è quello abbinato: per sicurezza non mi
 SPIATO = ("Il codice non torna, oppure qualcuno nella rete si è messo in mezzo. "
           "Controlla le sei cifre sul fisso e riprova.")
 
+FISSO_ZITTO = ("Il fisso non ha risposto in tempo: il lavoro sul fisso va avanti, "
+               "riprovo da solo fra poco.")
+FISSO_CHIUSO = "Il collegamento con il fisso è chiuso. Ricollegati dalla finestra."
+
 BISCOTTO = "officina_ponte"
 INGRESSO = "/__schermo/chiave/"
 NON_DALLA_FINESTRA = ("Questa pagina si apre solo dalla finestra del programma "
@@ -484,9 +488,22 @@ class Ponte:
         gestore.end_headers()
         if gestore.command != "HEAD":
             gestore.wfile.write(corpo)
+        self._segna_chiuso()
+
+    def _segna_chiuso(self) -> None:
         if not self.chiuso:
             self.chiuso = True
             self.quando_chiuso()
+
+    def _in_json(self, gestore: BaseHTTPRequestHandler, stato: int, messaggio: str) -> None:
+        corpo = json.dumps({"messaggio": messaggio, "codice": "fisso_lontano"}).encode()
+        gestore.send_response(stato)
+        gestore.send_header("content-type", "application/json")
+        gestore.send_header("cache-control", "no-store")
+        gestore.send_header("content-length", str(len(corpo)))
+        gestore.end_headers()
+        if gestore.command != "HEAD":
+            gestore.wfile.write(corpo)
 
     def _manda(self, gestore: BaseHTTPRequestHandler, corpo: bytes, tipo: str) -> None:
         gestore.send_response(200)
@@ -654,10 +671,18 @@ class Ponte:
             self.guarda_l_aggiornamento()
         if pagina and risposta is not None and risposta.status < 400:
             self.ultima_pagina = gestore.path
+        if risposta is None and not pagina:
+            registro.avviso("schermo.fisso_non_risponde")
+            self._in_json(gestore, 504, FISSO_ZITTO)
+            return
         if risposta is None or (risposta.status == 401 and risposta.getheader(CHIUSO)):
             if risposta is not None:
                 risposta.read()
-            self._chiuso(gestore)
+            if pagina:
+                self._chiuso(gestore)
+            else:
+                self._in_json(gestore, 503, FISSO_CHIUSO)
+                self._segna_chiuso()
             return
         try:
             self._rimanda(gestore, risposta)

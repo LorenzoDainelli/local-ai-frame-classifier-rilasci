@@ -15,7 +15,7 @@ from officina.errori import ErroreOfficina
 from officina.miglioria import gara120_casi as casi_mod
 from officina.miglioria import gara120_scarica as sc
 from officina.miglioria import prova_veloce_corsa as corsa
-from officina.miglioria import veloce, video
+from officina.miglioria import motori, prova_volti, veloce, video
 
 COSA = "prova_veloce"
 CARTELLA = "prova-veloce"
@@ -36,6 +36,8 @@ SCHEMA = ((casi_mod.FACILE, video.H264, 60, False),
           (casi_mod.FACILE, video.HEVC, 180, True))
 PREPARA = {"gimm": (("gimmvfi", "GIMM-VFI"),), "ldf": (("ldfvfi", "LDF-VFI"),),
            "fusione": (("gimmvfi", "GIMM-VFI"), ("ldfvfi", "LDF-VFI"))}
+SENZA_VOLTI = ("CodeFormer non è pronto: la parte dei volti si salta e la sua idea "
+               "resta spenta.")
 SENZA_RETE = ("Non riesco a scaricare i fotogrammi pubblici della prova: controlla che "
               "internet funzioni e premi di nuovo «Avvia la prova». Riprende da dove era.")
 SENZA_SEEDVR2 = ("Per la prova serve SeedVR2 pronto: prima prepara il miglioramento "
@@ -126,7 +128,8 @@ class ProvaVeloce:
 
     def __init__(self, archivio, cartella: Path | None = None,
                  lancia: Callable[[dict, Callable], dict] | None = None, turno=None,
-                 scarica_da_hf=None, api=None, prepara=None, pronta=None, lucidflux=None):
+                 scarica_da_hf=None, api=None, prepara=None, pronta=None, lucidflux=None,
+                 volti=None, wider=None):
         from officina.web.lavori import Lavoro
 
         modelli = Path(archivio.dove.modelli)
@@ -141,6 +144,8 @@ class ProvaVeloce:
         self._prepara = prepara or self._prepara_il_120
         self._pronta = pronta or self._seedvr2_pronto
         self._lucidflux = lucidflux or self._lucidflux_pronto
+        self._volti = volti
+        self._wider = wider
         self.lavoro = Lavoro(COSA)
         self._fermati = threading.Event()
         self._processo: subprocess.Popen | None = None
@@ -294,6 +299,14 @@ class ProvaVeloce:
                            self._hf)
             self.lavoro.senza_numeri()
             self._prepara(scelti["fps120"])
+            quali_volti = self._volti_pronti()
+            volti = []
+            if quali_volti:
+                self.lavoro.di("scarico e controllo le foto con i volti (WIDER FACE)")
+                volti = prova_volti.scarica(self.dati, self._al_pezzo, self._wider)
+                self.lavoro.senza_numeri()
+            else:
+                self.lavoro.di(SENZA_VOLTI)
         self._controlla()
         self._piano(clip, scelti)
         tetto = self._tetto()
@@ -306,7 +319,8 @@ class ProvaVeloce:
                          "file": [str(casa / nome) for nome in uno["nomi"]]} for uno in foto]
         self.lavoro.di(f"la prova: {len(clip)} video e {len(foto)} foto, {corsa.VOLTE} "
                        f"volte vecchio e {corsa.VOLTE} volte nuovo")
-        esito = self._nella_stanza(da_fare, scelti, foto_da_fare, tetto)
+        esito = self._nella_stanza(da_fare, scelti, foto_da_fare, tetto, volti,
+                                   quali_volti)
         idee = [idea for idea in esito.get("idee") or [] if idea in veloce.IDEE]
         if idee:
             self.accendi(True)
@@ -331,8 +345,21 @@ class ProvaVeloce:
             if self._fermati.wait(ASPETTA_LA_SCHEDA):
                 raise Fermata()
 
+    def _volti_pronti(self) -> list[str]:
+        if self._volti is not None:
+            return list(self._volti())
+        from officina.miglioria.lavoro import volti_da_soli
+
+        modelli = Path(self.archivio.dove.modelli)
+        if volti_da_soli(modelli, senza_faceme=True) is None:
+            return []
+        if volti_da_soli(modelli) == motori.FACEME:
+            return [motori.CODEFORMER, motori.FACEME]
+        return [motori.CODEFORMER]
+
     def _nella_stanza(self, clip: list[dict], scelti: dict, foto: list[dict] | None = None,
-                      tetto: str | None = None) -> dict:
+                      tetto: str | None = None, volti: list[dict] | None = None,
+                      quali_volti: list[str] | None = None) -> dict:
         from officina.miglioria.lavoro import a_parole, percorsi_della_stanza
 
         self._prendi_la_scheda()
@@ -344,9 +371,12 @@ class ProvaVeloce:
                                  "opzioni": {"cartella_modelli":
                                              str(self.archivio.dove.modelli)}},
                       "percorsi": percorsi_della_stanza()}
-            if foto:
-                lavoro["foto"] = foto
+            if foto or volti:
+                lavoro["foto"] = foto or []
                 lavoro["lavoro_foto"] = dict(lavoro["lavoro"], misura=tetto)
+            if volti and quali_volti:
+                lavoro["volti"] = volti
+                lavoro["quali_volti"] = quali_volti
             esito = self._lancia(lavoro, self.lavoro.a_che_punto_a_pezzi)
         finally:
             self._processo = None

@@ -53,10 +53,12 @@ def apri(navigatore, archivio, monkeypatch, tmp_path):
                       headers={k: v for k, v in risposta.headers.items()
                                if k.lower() not in ("content-length", "content-encoding")})
 
-    def apri_a(dove: str, larga: int = 1440):
+    def apri_a(dove: str, larga: int = 1440, prima=None):
         pagina = navigatore.new_page(viewport={"width": larga, "height": 900})
         pagina.on("pageerror", lambda e: errori.append(f"js: {e}"))
         pagina.route("http://prova/**", passa)
+        if prima is not None:
+            prima(pagina)
         pagina.goto(f"http://prova{dove}", wait_until="load")
         pagina.wait_for_timeout(300)
         aperte.append(pagina)
@@ -77,6 +79,31 @@ def test_senza_niente_si_vede_solo_avvia(apri):
     assert not pagina.locator("[data-g1-cancella]").is_visible()
     assert not pagina.locator("[data-g1-voto]").is_visible()
     assert "scarica" in pagina.locator("[data-g1-fase]").inner_text()
+    assert apri.errori == []
+
+
+def test_se_il_fisso_tarda_la_pagina_riprova_da_sola(apri, monkeypatch):
+    import json
+
+    vero = strade._stato
+    monkeypatch.setattr(strade, "_stato", lambda: {**vero(), "sta_lavorando": True})
+    chieste = []
+
+    def una_volta_zitto(rotta):
+        chieste.append(1)
+        if len(chieste) == 1:
+            rotta.fulfill(status=504, content_type="application/json",
+                          body=json.dumps({"messaggio": "Il fisso non ha risposto in tempo."}))
+        else:
+            rotta.fallback()
+
+    pagina = apri("/gara-120", prima=lambda p: p.route("http://prova/api/gara-120",
+                                                        una_volta_zitto))
+    riga = pagina.locator("[data-g1-riga]")
+    sync_api.expect(riga).to_contain_text("non ha risposto", timeout=15000)
+    sync_api.expect(riga).not_to_contain_text("risposto", timeout=15000)
+    assert len(chieste) >= 2
+    assert "sta lavorando" in pagina.locator("[data-g1-fase]").inner_text()
     assert apri.errori == []
 
 

@@ -136,6 +136,26 @@
       [
         "migliora",
         "Nuovo «precarico»: mentre la scheda video calcola un pezzo di SeedVR2, LucidFlux o LDF-VFI, il pezzo dopo arriva già dalla RAM o dal disco. Si accende solo se la prova esce identica bit per bit. Se manca memoria si toglie da solo"
+      ],
+      [
+        "migliora",
+        "CodeFormer e FaceMe, che sistemano i volti, restano in RAM fra una foto e l'altra invece di ricaricarsi ogni volta. Si accendono solo se la prova, con 6 foto pubbliche difficili di volti, esce identica bit per bit"
+      ],
+      [
+        "impronta",
+        "Le impronte aprono e ritagliano 4 foto alla volta invece di una. Le impronte escono identiche: si accende solo se la prova lo conferma, e puoi spegnerlo"
+      ],
+      [
+        "migliora",
+        "Finito un file, la scheda video passa subito al file dopo: copia da guardare, impronta e «da rivedere» li finisce il processore intanto, se ci sono almeno 50 GB liberi e 3 GB di RAM. Si accende solo se la prova lo conferma, e puoi spegnerlo"
+      ],
+      [
+        "orologio",
+        "La coda del miglioramento fa prima i file col modello già caricato, e fra questi i più corti, così vedi prima i primi risultati. Chi aspetta da più di 2 ore passa davanti"
+      ],
+      [
+        "riprova",
+        "Corretto: dal portatile la gara dei 120 FPS poteva mostrare «Unexpected token» e smettere di aggiornarsi se il fisso tardava a rispondere. Ora dice che il fisso non ha risposto e riprova da sola ogni 5 secondi"
       ]
     ],
     "tecnico": [
@@ -158,7 +178,11 @@
       "<code>PontePrincipale.stato_del_programma</code> non prende più il lucchetto del programma; la pagina aspetta al massimo 8 s. <code>gara120_stanza</code> manda <code>passi_del_guasto</code>, che arriva nella pagina come dettaglio.",
       "<code>veloce.Fondo</code> comprime pezzi e tratti dietro, con tetto di RAM; <code>catena._Scrittore</code> scrive il video mentre arrivano i pezzi (<code>pezzi.segui</code>). Spento finché <code>prova_veloce</code> non passa: SNU-FILM, 4 clip H.264/HEVC, due a 120 FPS con il fluido registrato, giri V,N,V,N,V,N con sha256.",
       "Giro LucidFlux (<code>veloce.GIRO_LUCIDFLUX</code>): <code>giro_lucidflux_stanza</code> apre LucidFlux una volta con <code>tieni=True</code> (pesi parcheggiati in RAM fra una foto e l'altra) e scrive il passaggio di mezzo con <code>mezzi.scrivi</code>: PNG riletto e confrontato con sha256 dei pixel, timbro con impronta dell'originale e versione. <code>catena.foto</code> lo usa solo se <code>mezzi.leggi</code> torna; se no <code>mezzo_rotto</code> e la foto si rifà come prima. Fuori le foto solo nell'Archivio sicuro (regola 583).",
-      "Precarico (<code>veloce.PRECARICO</code>): <code>miglioria.precarico.Precarico</code> copia il blocco dopo su uno stream CUDA a parte con eventi e <code>record_stream</code>; dal disco passa da un appoggio fissato (un blocco in meno in RAM). SeedVR2 <code>blocks_to_swap</code>+1, LucidFlux un blocco in meno sulla scheda; con memoria finita si toglie per primo. La prova lo confronta con sha256 dei fotogrammi (scheda, LDF) e dei file (foto)."
+      "Precarico (<code>veloce.PRECARICO</code>): <code>miglioria.precarico.Precarico</code> copia il blocco dopo su uno stream CUDA a parte con eventi e <code>record_stream</code>; dal disco passa da un appoggio fissato (un blocco in meno in RAM). SeedVR2 <code>blocks_to_swap</code>+1, LucidFlux un blocco in meno sulla scheda; con memoria finita si toglie per primo. La prova lo confronta con sha256 dei fotogrammi (scheda, LDF) e dei file (foto).",
+      "Volti tenuti (<code>veloce.VOLTI_ACCESI</code>, <code>veloce.FACEME_ACCESO</code>): <code>motori.apri(..., tieni=True)</code> avvolge il motore in <code>Parcheggiato</code>; <code>parcheggia()</code> sposta le reti in RAM e <code>motori.libera_per</code> le spegne davvero se la RAM serve. FaceMe dimentica <code>_visti</code> come appena caricato. La prova usa 6 foto di WIDER FACE (<code>miglioria.prova_volti</code>, revisione e sha256 fissati, prese a pezzi dallo zip con Range).",
+      "Impronte a più fili (<code>veloce.IMPRONTE_FILI</code>): <code>impronte.motore.Passata</code> apre e ritaglia con 4 fili in ordine; il calcolo resta su un filo, e video, file dall'archivio e formati diversi da jpg e png vanno uno alla volta. La prova confronta le impronte di 60 file nei due modi.",
+      "Lavori dietro (<code>veloce.LAVORI_DIETRO</code>): <code>miglioria.dietro.Dietro</code> (un filo, in ordine) fa <code>_finisci</code> (copie da guardare, <code>impronta.del_file</code>, <code>DA_RIVEDERE</code>, secondi misurati alla fine della scheda) mentre la scheda passa al file dopo; solo se il disco resta sopra max(50 GB, 10%) contando i file ancora dietro e la RAM libera è almeno 3 GB. Originali solo nell'archivio come prima (regola 583). Se si rompe, fallisce solo quel lavoro; «Ferma» lo aspetta. La prova confronta 2 video di fila e le loro copie da guardare.",
+      "Ordine della coda (<code>miglioria.ordine.Ordine</code>): gruppi per modello, prima quello caricato, poi i più corti (secondi della previsione se ci sono per tutto il gruppo, se no pixel per fotogrammi); dopo 2 ore di attesa si passa davanti in ordine di arrivo."
     ]
   },
   {

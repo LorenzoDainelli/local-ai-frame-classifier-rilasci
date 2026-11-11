@@ -187,6 +187,8 @@ async function guarda() {
         scriviStato();
     } catch (errore) {
         qui("g1-riga").textContent = errore.message;
+        clearTimeout(pagina.tra);
+        pagina.tra = setTimeout(guarda, OGNI);
     }
 }
 

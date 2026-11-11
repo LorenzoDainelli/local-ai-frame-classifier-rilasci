@@ -14,8 +14,9 @@ from officina.archivio.database import adesso
 from officina.errori import ErroreOfficina
 from officina.importazione import impronta
 from officina.miglioria import (attesa, catena, centoventi, coda, da_guardare, fedelta,
-                                fluido, mezzi, motori, persone, pezzi, previsione, scambio,
-                                sfida, video)
+                                fluido, mezzi, motori, ordine, persone, pezzi, previsione,
+                                scambio, sfida, video)
+from officina.miglioria import dietro as dietro_mod
 from officina.modello import file_media
 from officina.sicuro.dall_archivio import CHIUSO, CHIUSO_ADESSO, DIVERSA, PERSA, SI_APRE
 from officina.web.lavori import Lavoro
@@ -375,6 +376,8 @@ class Miglioratore:
         self._misura: dict | None = None
         self._scelta: str | None = None
         self._risposta = threading.Event()
+        self._ordine = ordine.Ordine()
+        self._dietro = dietro_mod.Dietro()
 
     @property
     def sta_lavorando(self) -> bool:
@@ -459,10 +462,11 @@ class Miglioratore:
                 if self._fermati.is_set():
                     break
                 with self.archivio.scrittura() as connessione:
-                    riga = coda.prossima(connessione, self._salta)
+                    riga = self._prossima(connessione)
                     if riga is None:
                         break
                     coda.segna(connessione, riga["id"], coda.IN_LAVORO, guasto=None)
+                self._ordine.ultimo = self._modello_di(riga, self._scelti())
                 self._uno(riga)
                 self._mezzo_finito(riga["id"])
                 fatti += 1
@@ -470,10 +474,39 @@ class Miglioratore:
             fatti += self._riprendi_la_sfida()
         finally:
             self._accesa.spegni()
+            if self._dietro.quanti:
+                self.lavoro.di("finisco dietro i file già fatti sulla scheda")
+            self._dietro.aspetta()
             self._pulisci_i_mezzi()
             self.adesso = {}
             registro.evento("miglioria.giro", fatti=fatti,
                             fermato=self._fermati.is_set())
+
+    @staticmethod
+    def _modello_di(riga, scelti: dict) -> str:
+        return str(scelti.get("foto" if riga["genere_del_file"] == "immagine" else "video"))
+
+    def _in_fila(self, connessione) -> list:
+        righe = ordine.in_coda(connessione, self._salta)
+        scelti = self._scelti()
+        if len(righe) > 1:
+            self._guarda_il_120()
+        stima_di = ordine.stimatore(
+            connessione, _versione_di_seedvr2(), tetto=self._tetto(),
+            intensita=int(self.archivio.impostazione("intensita_scheda") or 100))
+
+        def stima(riga):
+            immagine = riga["genere_del_file"] == "immagine"
+            return stima_di(riga, dall_archivio=bool(riga["nell_archivio"]),
+                            lucidflux=immagine and scelti.get("foto") == motori.LUCIDFLUX,
+                            fluido=None if immagine else self._fps120())
+
+        return self._ordine.in_fila(righe, lambda riga: self._modello_di(riga, scelti),
+                                    stima)
+
+    def _prossima(self, connessione):
+        fila = self._in_fila(connessione)
+        return fila[0] if fila else None
 
     def _giro_acceso(self) -> bool:
         from officina.miglioria import veloce
@@ -513,11 +546,10 @@ class Miglioratore:
         if not self._giro_acceso():
             return
         with self.archivio.lettura() as connessione:
-            righe = [riga for riga in coda.prossime(connessione, self._salta,
-                                                     PER_GIRO * 4)
-                     if riga["genere_del_file"] == "immagine"]
-            prima = coda.prossima(connessione, self._salta)
-        if not righe or prima is None or prima["id"] != righe[0]["id"]:
+            fila = self._in_fila(connessione)
+        righe = [riga for riga in fila if riga["genere_del_file"] == "immagine"]
+        righe = righe[:PER_GIRO * 4]
+        if not righe or fila[0]["id"] != righe[0]["id"]:
             return
         if not (self._in_sfida("immagine")
                 or self._scelti().get("foto") == motori.LUCIDFLUX):
@@ -699,10 +731,48 @@ class Miglioratore:
             return
 
         os.replace(parziale, finale)
-        if genere == "video":
-            self._copie_da_guardare(miglioria_id, originale, finale, dal_disco=piu is None)
         fatto = esito["fatto"]
         fedele = self._fedelta(genere, letto, finale)
+        misura, self._misura = self._misura, None
+        dal_disco = piu is None
+        dopo = (miglioria_id, originale, genere, finale, fatto, fedele, dal_disco, misura)
+        if dal_disco and self._va_dietro(finale):
+            fine = time.monotonic()
+            self.lavoro.di(f"«{originale.name}» finisce dietro, "
+                           "la scheda passa al file dopo")
+            self._dietro.metti(lambda: self._finisci_dietro(*dopo, fine=fine),
+                               finale.stat().st_size)
+            return
+        self._finisci(*dopo)
+
+    def _va_dietro(self, finale: Path) -> bool:
+        from officina.miglioria import veloce
+
+        if veloce.LAVORI_DIETRO not in self._veloce():
+            return False
+        try:
+            byte = finale.stat().st_size
+        except OSError:
+            return False
+        return self._dietro.ci_sta(finale.parent, byte)
+
+    def _finisci_dietro(self, miglioria_id: int, *dopo, fine: float) -> None:
+        try:
+            self._finisci(miglioria_id, *dopo, fine=fine, dietro=True)
+        except Exception as guasto:
+            registro.errore("miglioria.dietro_rotto", **registro.dove_si_e_rotto(guasto))
+            try:
+                self._fallita(miglioria_id, "rotto")
+            except Exception as ancora:
+                registro.errore("miglioria.dietro_non_segnato",
+                                **registro.dove_si_e_rotto(ancora))
+
+    def _finisci(self, miglioria_id: int, originale: Path, genere: str, finale: Path,
+                 fatto: dict, fedele: dict, dal_disco: bool, misura: dict | None,
+                 fine: float | None = None, dietro: bool = False) -> None:
+        if genere == "video":
+            self._copie_da_guardare(miglioria_id, originale, finale, dal_disco=dal_disco,
+                                    dietro=dietro)
         sua_impronta = impronta.del_file(finale)
         with self.archivio.scrittura() as connessione:
             coda.segna(connessione, miglioria_id, coda.DA_RIVEDERE,
@@ -712,7 +782,7 @@ class Miglioratore:
                        altezza_dopo=int(fatto.get("altezza") or 0) or None,
                        motori=json.dumps(fatto.get("motori") or []),
                        finita_il=adesso())
-            self._misurato(connessione, miglioria_id, fatto)
+            self._misurato(connessione, miglioria_id, fatto, misura, fine)
         self.lavoro.di(f"pronto da rivedere: «{originale.name}»{misura_del_motore(fatto)}")
 
     def _originale(self, riga, originale: Path):
@@ -864,8 +934,10 @@ class Miglioratore:
         if prevista is not None:
             self.adesso["prevista"] = prevista
 
-    def _misurato(self, connessione, miglioria_id: int, fatto: dict) -> None:
-        misura, self._misura = self._misura, None
+    def _misurato(self, connessione, miglioria_id: int, fatto: dict,
+                  misura: dict | None = None, fine: float | None = None) -> None:
+        if misura is None:
+            misura, self._misura = self._misura, None
         if misura is None or not any(
                 isinstance(motore, dict) and (
                     motore.get("nome") == centoventi.NOME
@@ -873,7 +945,7 @@ class Miglioratore:
                         and motore.get("versione") == misura["versione"]))
                 for motore in fatto.get("motori") or []):
             return
-        secondi = time.monotonic() - misura["partito"]
+        secondi = (time.monotonic() if fine is None else fine) - misura["partito"]
         previsione.registra(connessione, miglioria_id, misura["versione"], secondi,
                             misura["prevista"], misura["fattori"])
         registro.evento("miglioria.secondi", secondi=round(secondi, 1),
@@ -1123,7 +1195,8 @@ class Miglioratore:
         self.lavoro.di(f"«{originale.name}» resta solo di SeedVR2: {perche}")
 
     def _copie_da_guardare(self, miglioria_id: int, originale: Path,
-                           finale: Path, dal_disco: bool = True) -> None:
+                           finale: Path, dal_disco: bool = True,
+                           dietro: bool = False) -> None:
         lati = {da_guardare.DOPO: finale}
         if dal_disco:
             lati[da_guardare.PRIMA] = originale
@@ -1132,7 +1205,8 @@ class Miglioratore:
         self.lavoro.di(f"preparo la copia da guardare di «{originale.name}»")
         try:
             da_guardare.fai(self.archivio.dove, miglioria_id, lati,
-                            fermati=self._fermati, al_passo=self.lavoro.a_che_punto)
+                            fermati=None if dietro else self._fermati,
+                            al_passo=None if dietro else self.lavoro.a_che_punto)
         except da_guardare.Fermato:
             return
         except Exception as errore:

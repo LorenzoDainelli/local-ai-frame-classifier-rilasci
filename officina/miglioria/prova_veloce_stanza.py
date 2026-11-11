@@ -46,7 +46,9 @@ def un_lavoro(lavoro: dict, manda) -> int:
                             al_passo=al_passo, freno=freno,
                             volte=int(lavoro.get("volte") or corsa.VOLTE),
                             foto=lavoro.get("foto") or [],
-                            lavoro_foto=lavoro.get("lavoro_foto"))
+                            lavoro_foto=lavoro.get("lavoro_foto"),
+                            volti=lavoro.get("volti") or [],
+                            quali_volti=lavoro.get("quali_volti") or [])
     except ErroreOfficina as errore:
         messaggio = {"guasto": errore.codice}
         from officina.miglioria.seedvr2_blocchi import RamPoca

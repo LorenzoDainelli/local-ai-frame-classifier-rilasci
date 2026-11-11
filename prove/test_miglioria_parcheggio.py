@@ -242,6 +242,10 @@ def test_faceme_sposta_tutto_e_lo_riporta(torcia_finta):
 def test_la_catena_chiede_di_tenere_i_volti_solo_con_l_idea(monkeypatch):
     from officina.miglioria import catena, veloce
 
-    assert veloce.VOLTI_ACCESI in veloce.IDEE
+    from officina.miglioria import motori as m
+
+    assert catena._idea_dei_volti(m.CODEFORMER) == veloce.VOLTI_ACCESI
+    assert catena._idea_dei_volti(m.FACEME) == veloce.FACEME_ACCESO
+    assert {veloce.VOLTI_ACCESI, veloce.FACEME_ACCESO} <= set(veloce.IDEE)
     sorgente = __import__("inspect").getsource(catena.foto)
-    assert "tieni=veloce.acceso(lavoro, veloce.VOLTI_ACCESI)" in sorgente
+    assert "tieni=veloce.acceso(lavoro, _idea_dei_volti(volti))" in sorgente

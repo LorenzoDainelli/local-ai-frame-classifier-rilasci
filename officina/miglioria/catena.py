@@ -62,6 +62,10 @@ def esegui(lavoro: dict, al_passo: Callable[[int, int], None] | None = None,
     return filmato(lavoro, al_passo, freno, racconta)
 
 
+def _idea_dei_volti(nome: str) -> str:
+    return veloce.FACEME_ACCESO if nome == motori.FACEME else veloce.VOLTI_ACCESI
+
+
 def precarica(motore, lavoro: dict) -> None:
     try:
         motori.vero(motore).precarico = veloce.acceso(lavoro, veloce.PRECARICO)
@@ -190,7 +194,7 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
     volti = lavoro["motori"].get("volti")
     if volti:
         motore_volti = motori.apri(motori.VOLTI, volti,
-                                   tieni=veloce.acceso(lavoro, veloce.VOLTI_ACCESI),
+                                   tieni=veloce.acceso(lavoro, _idea_dei_volti(volti)),
                                    **lavoro.get("opzioni", {}))
         try:
             partito = time.monotonic()

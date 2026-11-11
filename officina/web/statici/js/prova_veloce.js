@@ -13,10 +13,10 @@ function tempi(righe) {
     return vecchio && nuovo ? ` vecchio ${secondi(vecchio)}, nuovo ${secondi(nuovo)}` : "";
 }
 
-function parte(righe, cosa, idea, spenta = "spenta") {
+function parte(righe, cosa, idea, spenta = "spenta", quanti = `${righe.length} identici`) {
     if (!righe.length) return "";
     if (righe.every((uno) => uno.uguale)) {
-        return `${cosa}: ${righe.length} identici bit per bit,${tempi(righe)}; ${idea} si può accendere.`;
+        return `${cosa}: ${quanti} bit per bit,${tempi(righe)}; ${idea} si può accendere.`;
     }
     const diversi = righe.filter((uno) => !uno.uguale).map((uno) => uno.nome);
     const instabili = righe.some((uno) => !uno.stabile);
@@ -29,8 +29,13 @@ function racconto(esito) {
     const video = parte(esito.clip || [], "Video", "la compressione in parallelo");
     const foto = parte(esito.foto || [], "Foto", "il giro di LucidFlux");
     const scheda = parte(esito.scheda || [], "Scheda video", "il precarico", "spento");
+    const volti = esito.volti || [];
+    const codeformer = parte(volti.filter((uno) => uno.nome.startsWith("codeformer-")), "Volti con CodeFormer", "tenere CodeFormer caricato", "spento");
+    const faceme = parte(volti.filter((uno) => uno.nome.startsWith("faceme-")), "Volti con FaceMe", "tenere FaceMe caricato", "spento");
+    const fili = parte(esito.fili || [], "Impronte", "fare le impronte con più fili", "spento", "le impronte di 60 file identiche");
+    const dietro = parte(esito.dietro || [], "Lavori dietro", "finire dietro i file già fatti", "spento", "2 video di fila con copie da guardare identici");
     const inizio = esito.passata ? "Prova passata." : (esito.idee || []).length ? "Prova passata in parte." : "Prova non passata.";
-    return [inizio, video, foto, scheda].filter(Boolean).join(" ");
+    return [inizio, video, foto, scheda, codeformer, faceme, fili, dietro].filter(Boolean).join(" ");
 }
 
 function scrivi(stato) {
