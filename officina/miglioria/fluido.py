@@ -29,6 +29,7 @@ class Motore:
         from officina.miglioria.ldfvfi import LdfVFI
 
         self.nome = nome
+        self.precarico = False
         self.gimm = GimmVFI(cartella_modelli) if nome in (GIMM, FUSIONE) else None
         self.ldf = LdfVFI(cartella_modelli, disco=disco) if nome in (LDF, FUSIONE) else None
         self.fusione = None
@@ -59,6 +60,8 @@ class Motore:
         return ldf_foglio.riassunto(self.ldf.tempi) if self.ldf is not None else None
 
     def uscite(self, apri: Callable[[], Iterable], volte: int) -> Iterator:
+        if self.ldf is not None:
+            self.ldf.precarico = self.precarico
         if self.fusione is not None:
             return self.fusione.video(apri, volte)
         if self.gimm is not None:

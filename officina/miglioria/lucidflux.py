@@ -9,7 +9,8 @@ from pathlib import Path
 from PIL import Image
 
 from officina.errori import ErroreOfficina
-from officina.miglioria import lucidflux_pesi, scaricamento
+from officina.miglioria import lucidflux_pesi, motori, scaricamento
+from officina.miglioria.precarico import Precarico
 
 NOME = "lucidflux"
 SEME = 42
@@ -82,6 +83,7 @@ class Scambiatore:
         self.fissa = fissa
         self.fuori: list = []
         self._ganci: list = []
+        self.precarico = Precarico()
 
     def metti_fuori(self, blocco, in_ram: bool = True) -> None:
         import torch
@@ -95,11 +97,16 @@ class Scambiatore:
                     self.fissa = False
             parte._in_ram = copia
             parte.data = copia
+        blocco._officina_numero = len(self.fuori)
         self._ganci.append(blocco.register_forward_pre_hook(self._entra))
         self._ganci.append(blocco.register_forward_hook(self._esce))
         self.fuori.append(blocco)
 
     def _entra(self, blocco, _ingresso) -> None:
+        if self.precarico.attivo(self.dispositivo):
+            self.precarico.entra(self.fuori, blocco._officina_numero, self.dispositivo,
+                                 _parti_di)
+            return
         for parte in list(blocco.parameters()) + list(blocco.buffers()):
             parte.data = parte._in_ram.to(self.dispositivo, non_blocking=True)
 
@@ -108,9 +115,14 @@ class Scambiatore:
             parte.data = parte._in_ram
 
     def togli(self) -> None:
+        self.precarico.lascia()
         for gancio in self._ganci:
             gancio.remove()
         self._ganci = []
+
+
+def _parti_di(blocco) -> list:
+    return list(blocco.parameters()) + list(blocco.buffers())
 
 
 def finto_timm() -> None:
@@ -184,6 +196,8 @@ class LucidFlux:
         self.dove_stanno: dict | None = None
         self.tieni = bool(tieni)
         self._parcheggiati: list | None = None
+        self.precarico = False
+        self._con_precarico = False
 
     def _dispositivo(self):
         import torch
@@ -229,9 +243,23 @@ class LucidFlux:
                 pesi_blocchi.append(sum(_conta(file.get_slice(n).get_shape()) * 2
                                         for n in nomi if n.startswith(prefisso)))
             dentro = in_ram = len(blocchi)
+            appoggio = 0
             if dispositivo.type == "cuda":
                 dal_disco = all(file.get_slice(n).get_dtype() == "BF16" for n in nomi)
-                dentro, in_ram = dove_vanno(pesi_blocchi, posto, ram_libera(), dal_disco)
+                grande = max(pesi_blocchi, default=0)
+                con_precarico = getattr(self, "_con_precarico", False)
+                if con_precarico:
+                    posto -= grande
+                libera = motori.libera_per(MARGINE_RAM + sum(pesi_blocchi), ram_libera())
+                dentro, in_ram = dove_vanno(pesi_blocchi, posto, libera, dal_disco)
+                if con_precarico and in_ram < len(blocchi) and libera is not None:
+                    try:
+                        dentro, in_ram = dove_vanno(pesi_blocchi, posto, libera - grande,
+                                                    dal_disco)
+                    except RamPoca:
+                        pass
+                    else:
+                        appoggio = grande
                 self.dove_stanno = {"scheda": in_giga(sum(pesi_blocchi[:dentro])),
                                     "ram": in_giga(sum(pesi_blocchi[dentro:in_ram])),
                                     "disco": in_giga(sum(pesi_blocchi[in_ram:]))}
@@ -243,12 +271,18 @@ class LucidFlux:
         modello.load_state_dict(stato, strict=False, assign=True)
         del stato
         self._scambio = Scambiatore(dispositivo)
+        self._scambio.precarico.accendi(getattr(self, "_con_precarico", False))
+        if appoggio:
+            self._scambio.precarico.fai_appoggio(appoggio)
         for numero, blocco in enumerate(blocchi[dentro:], start=dentro):
             self._scambio.metti_fuori(blocco, in_ram=numero < in_ram)
         modello.eval()
         return modello, dentro, len(blocchi)
 
     def _carica(self):
+        vuole = bool(getattr(self, "precarico", False))
+        if self._pezzi is not None and getattr(self, "_con_precarico", False) != vuole:
+            self.spegni()
         if self._pezzi is not None:
             if self._parcheggiati is not None:
                 self._riprendi(self._pezzi)
@@ -258,6 +292,7 @@ class LucidFlux:
 
         s = self._importa()
         dispositivo = self._dispositivo()
+        self._con_precarico = vuole
         tipo = torch.bfloat16 if dispositivo.type == "cuda" else torch.float32
         rami = lucidflux_pesi.rialza(load_file(str(self.pesi / lucidflux_pesi.RAMI)))
         ramo = s["lucidflux"].load_dual_condition_branch(
@@ -392,7 +427,7 @@ class LucidFlux:
             return True
         parti = self._in_scheda(pezzi)
         peso = sum(parte.data.numel() * parte.data.element_size() for parte in parti)
-        libera = ram_libera()
+        libera = motori.libera_per(MARGINE_RAM + peso, ram_libera())
         if libera is not None and libera - MARGINE_RAM < peso:
             return False
         for parte in parti:
@@ -409,6 +444,9 @@ class LucidFlux:
     def _libera_la_scheda(self, pezzi: dict) -> None:
         import torch
 
+        precarico = getattr(getattr(self, "_scambio", None), "precarico", None)
+        if precarico is not None:
+            precarico.svuota()
         if getattr(self, "tieni", False) and self._parcheggia(pezzi):
             return
         if self._scambio is not None:

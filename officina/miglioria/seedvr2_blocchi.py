@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 from officina.errori import ErroreOfficina
+from officina.miglioria.precarico import Precarico
 
 MARGINE_RAM = 3 * 2 ** 30
 GIGA = 2 ** 30
@@ -82,6 +83,12 @@ def _svuota_la_ram_fissata() -> None:
             pass
 
 
+def _fai_posto(serve: int, libera: int | None) -> int | None:
+    from officina.miglioria import motori
+
+    return motori.libera_per(serve, libera)
+
+
 class Blocchi:
 
     def __init__(self, disco: bool = False, fissa: bool = True,
@@ -96,6 +103,7 @@ class Blocchi:
         self.girato = False
         self.dispositivo = None
         self._ganci: list = []
+        self.precarico = Precarico()
 
     def _copia(self, dato):
         if self.fissa:
@@ -110,13 +118,28 @@ class Blocchi:
         blocchi = list(modello.blocks)[:max(quanti, 0)]
         if blocchi == self.fuori and all(getattr(b, "_officina", False) for b in blocchi):
             return
+        nuovi = {id(blocco) for blocco in blocchi}
+        tutti = {id(blocco) for blocco in modello.blocks}
+        vecchi = [blocco for blocco in self.fuori
+                  if id(blocco) not in nuovi and id(blocco) in tutti]
         self.togli()
+        for blocco in vecchi:
+            blocco.to(modello.main_device)
         pesi = [peso(blocco) for blocco in blocchi]
         fisso = max(peso(modello) - sum(pesi), 0)
+        libera = _fai_posto(MARGINE_RAM + fisso + sum(pesi), libera)
         dentro = quanti_in_ram(pesi, libera, fisso, self.disco, self.chi)
+        if self.precarico.acceso and dentro < len(pesi):
+            try:
+                dentro = quanti_in_ram(pesi, libera, fisso + max(pesi), self.disco, self.chi)
+            except RamPoca:
+                pass
+            else:
+                self.precarico.fai_appoggio(max(pesi))
         self.dispositivo = modello.main_device
         self.pesi, self.fisso = pesi, fisso
         for numero, blocco in enumerate(blocchi):
+            blocco._officina_numero = numero
             for parte in _parti(blocco):
                 parte._dal_file = parte.data
                 parte._in_ram = self._copia(parte.data) if numero < dentro else parte.data
@@ -128,6 +151,10 @@ class Blocchi:
             self.in_ram.append(numero < dentro)
 
     def _entra(self, blocco, _ingresso) -> None:
+        if self.precarico.attivo(self.dispositivo):
+            self.precarico.entra(self.fuori, blocco._officina_numero, self.dispositivo,
+                                 _parti)
+            return
         for parte in _parti(blocco):
             parte.data = parte._in_ram.to(self.dispositivo, non_blocking=True)
 
@@ -150,6 +177,7 @@ class Blocchi:
     def ribilancia(self, libera: int | None) -> bool:
         if libera is None or not self.fuori:
             return False
+        libera = _fai_posto(MARGINE_RAM + self.fisso + sum(self.pesi), libera)
         posto = libera - MARGINE_RAM - (self.fisso if not self.girato else 0)
         cambiato = False
         if posto < 0:
@@ -161,14 +189,33 @@ class Blocchi:
                     posto += self.pesi[numero]
                     cambiato = True
             if cambiato:
+                self._appoggio_se_serve()
                 _svuota_la_ram_fissata()
             return cambiato
+        if self.precarico.acceso and not self.precarico.ha_appoggio():
+            fuori = sum(p for p, dentro in zip(self.pesi, self.in_ram, strict=True)
+                        if not dentro)
+            if fuori > posto:
+                posto -= max(self.pesi)
         for numero in range(len(self.fuori)):
             if not self.in_ram[numero] and self.pesi[numero] <= posto:
                 self._nella_ram(numero)
                 posto -= self.pesi[numero]
                 cambiato = True
+        manca = not all(self.in_ram) and not self.precarico.ha_appoggio()
+        if manca and self.precarico.acceso:
+            self.precarico.fai_appoggio(max(self.pesi))
         return cambiato
+
+    def _appoggio_se_serve(self) -> None:
+        if not self.precarico.acceso or all(self.in_ram) or self.precarico.ha_appoggio():
+            return
+        for numero in reversed(range(len(self.fuori))):
+            if self.in_ram[numero]:
+                self._sul_disco(numero)
+                break
+        _svuota_la_ram_fissata()
+        self.precarico.fai_appoggio(max(self.pesi))
 
     def dove_stanno(self) -> dict | None:
         if not self.fuori:
@@ -178,6 +225,7 @@ class Blocchi:
                 "disco": in_giga(sum(self.pesi) - in_ram)}
 
     def togli(self) -> None:
+        self.precarico.lascia()
         for gancio in self._ganci:
             gancio.remove()
         for blocco in self.fuori:
@@ -188,8 +236,9 @@ class Blocchi:
                 for nome in ("_in_ram", "_dal_file"):
                     if hasattr(parte, nome):
                         delattr(parte, nome)
-            if hasattr(blocco, "_officina"):
-                del blocco._officina
+            for nome in ("_officina", "_officina_numero"):
+                if hasattr(blocco, nome):
+                    delattr(blocco, nome)
         tenuti = any(self.in_ram)
         self._ganci, self.fuori, self.in_ram, self.pesi = [], [], [], []
         self.fisso = 0

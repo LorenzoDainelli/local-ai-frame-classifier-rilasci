@@ -62,6 +62,13 @@ def esegui(lavoro: dict, al_passo: Callable[[int, int], None] | None = None,
     return filmato(lavoro, al_passo, freno, racconta)
 
 
+def precarica(motore, lavoro: dict) -> None:
+    try:
+        motori.vero(motore).precarico = veloce.acceso(lavoro, veloce.PRECARICO)
+    except AttributeError:
+        pass
+
+
 def tetto(lavoro: dict) -> str:
     return misura.tetto_vero(lavoro.get("misura"))
 
@@ -82,6 +89,7 @@ def _un_passaggio(lavoro: dict, nome: str, immagine, larghezza: int, altezza: in
                   freno, misura_del_motore: dict, acceso=None):
     motore = acceso or motori.apri(motori.FOTO, nome, **lavoro.get("opzioni", {}))
     try:
+        precarica(motore, lavoro)
         partito = time.monotonic()
         grande = motore.foto(immagine, larghezza, altezza)
         durata = time.monotonic() - partito
@@ -181,7 +189,9 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
 
     volti = lavoro["motori"].get("volti")
     if volti:
-        motore_volti = motori.apri(motori.VOLTI, volti, **lavoro.get("opzioni", {}))
+        motore_volti = motori.apri(motori.VOLTI, volti,
+                                   tieni=veloce.acceso(lavoro, veloce.VOLTI_ACCESI),
+                                   **lavoro.get("opzioni", {}))
         try:
             partito = time.monotonic()
             grande = motore_volti.sistema(grande, lavoro.get("persone", []))
@@ -318,6 +328,7 @@ def _ingrandisci(originale, piano, lavoro: dict, larghezza: int, altezza: int, f
                          **lavoro.get("opzioni", {}))
     stanno = None
     try:
+        precarica(motore, lavoro)
         fatti = pezzi.Pezzi(pezzi.cartella(Path(lavoro["uscita"])),
                             _firma(originale, motore, larghezza, altezza))
         if al_via is not None:
@@ -338,6 +349,7 @@ def _a_centoventi(originale, piano, lavoro: dict, fatti, verso, uscita: Path, fr
     codec = video.codec_di_arrivo(piano.codec)
     opzioni = dict(video.OPZIONI[codec])
     motore = fluido.Motore(nome, deposito=uscita.parent, **lavoro.get("opzioni", {}))
+    precarica(motore, lavoro)
     stanno = None
     try:
         sorgente = (dict(fatti.firma) if fatti is not None

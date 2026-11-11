@@ -30,9 +30,9 @@ class MancaSeedVR2(ErroreOfficina):
     codice = "motore_mancante"
 
 
-def impostazioni(stretto: bool = False) -> dict:
+def impostazioni(stretto: bool = False, precarico: bool = False) -> dict:
     return {
-        "blocks_to_swap": BLOCCHI_STRETTI if stretto else BLOCCHI_NORMALI,
+        "blocks_to_swap": (BLOCCHI_STRETTI if stretto else BLOCCHI_NORMALI) + int(precarico),
         "swap_io_components": stretto,
         "tile": TESSERA,
         "overlap": SOVRAPPOSTA,
@@ -62,6 +62,7 @@ class SeedVR2:
         self._avanza = None
         self.tempi: list[dict] = []
         self._blocchi = seedvr2_blocchi.Blocchi(disco=disco)
+        self.precarico = False
 
     quadri_per_volta = QUADRI_PER_VOLTA
 
@@ -138,7 +139,7 @@ class SeedVR2:
             for chiave in list(self._ctx):
                 if chiave not in TENUTI:
                     del self._ctx[chiave]
-        scelte = impostazioni(self.stretto)
+        scelte = impostazioni(self.stretto, self._blocchi.precarico.attivo("cuda"))
         tessera = (scelte["tile"], scelte["tile"])
         sopra = (scelte["overlap"], scelte["overlap"])
         esecutore, cache = utili.prepare_runner(
@@ -162,17 +163,20 @@ class SeedVR2:
         return esecutore
 
     def _ingrandisci(self, quadri, larghezza: int, altezza: int):
-        try:
-            return self._una_volta(quadri, larghezza, altezza)
-        except Exception as errore:
-            if self.stretto or not torcia.memoria_finita(errore):
-                raise
-        self.stretto = True
-        self._ctx = None
-        self._pronto = False
-        self._blocchi.togli()
-        self._s["memoria"].clear_memory(debug=self._s["debug"], deep=True, force=True)
-        return self._una_volta(quadri, larghezza, altezza)
+        self._blocchi.precarico.accendi(self.precarico)
+        while True:
+            try:
+                return self._una_volta(quadri, larghezza, altezza)
+            except Exception as errore:
+                if not torcia.memoria_finita(errore):
+                    raise
+                if self.stretto and not self._blocchi.precarico.togli("memoria"):
+                    raise
+            self.stretto = True
+            self._ctx = None
+            self._pronto = False
+            self._blocchi.togli()
+            self._s["memoria"].clear_memory(debug=self._s["debug"], deep=True, force=True)
 
     def _fase(self, nome: str):
         if self._avanza is None:
@@ -244,6 +248,9 @@ class SeedVR2:
         stanno = self._blocchi.dove_stanno()
         if stanno is not None:
             tempi.update({f"{dove}_gb": giga for dove, giga in stanno.items()})
+        precarico = getattr(self._blocchi, "precarico", None)
+        if precarico is not None and precarico.acceso:
+            tempi["precarico"] = precarico.riassunto()
         self._blocchi.girato = True
         self.tempi.append(tempi)
         uscita = ctx["final_video"].detach().to("cpu", torch.float32)

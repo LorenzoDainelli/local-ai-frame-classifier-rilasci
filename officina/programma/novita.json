@@ -132,6 +132,10 @@
       [
         "sfida",
         "La prova ora fa anche 6 foto pubbliche difficili, tre volte nel modo vecchio e tre nel nuovo. Si accende solo la parte che esce identica: se le foto non tornano, resta accesa solo quella dei video"
+      ],
+      [
+        "migliora",
+        "Nuovo «precarico»: mentre la scheda video calcola un pezzo di SeedVR2, LucidFlux o LDF-VFI, il pezzo dopo arriva già dalla RAM o dal disco. Si accende solo se la prova esce identica bit per bit. Se manca memoria si toglie da solo"
       ]
     ],
     "tecnico": [
@@ -153,7 +157,8 @@
       "<code>rifacimento.Rifacimento</code> ricorda modello e quante ne restano e non riparte a vuoto; <code>_occupata</code> guarda anche <code>lavori.turno.libera</code>, la fila e le impronte; <code>misura.parti_le_impronte_per</code> non parte mentre gira la fila; <code>intelligenza.parti_la_fila</code> ferma le impronte da sole; <code>/api/intelligenza?solo_fila=1</code> dà <code>impronte_da_sole</code> e <code>aspetta_la_scheda</code>, e la pagina lo interroga sempre.",
       "<code>PontePrincipale.stato_del_programma</code> non prende più il lucchetto del programma; la pagina aspetta al massimo 8 s. <code>gara120_stanza</code> manda <code>passi_del_guasto</code>, che arriva nella pagina come dettaglio.",
       "<code>veloce.Fondo</code> comprime pezzi e tratti dietro, con tetto di RAM; <code>catena._Scrittore</code> scrive il video mentre arrivano i pezzi (<code>pezzi.segui</code>). Spento finché <code>prova_veloce</code> non passa: SNU-FILM, 4 clip H.264/HEVC, due a 120 FPS con il fluido registrato, giri V,N,V,N,V,N con sha256.",
-      "Giro LucidFlux (<code>veloce.GIRO_LUCIDFLUX</code>): <code>giro_lucidflux_stanza</code> apre LucidFlux una volta con <code>tieni=True</code> (pesi parcheggiati in RAM fra una foto e l'altra) e scrive il passaggio di mezzo con <code>mezzi.scrivi</code>: PNG riletto e confrontato con sha256 dei pixel, timbro con impronta dell'originale e versione. <code>catena.foto</code> lo usa solo se <code>mezzi.leggi</code> torna; se no <code>mezzo_rotto</code> e la foto si rifà come prima. Fuori le foto solo nell'Archivio sicuro (regola 583)."
+      "Giro LucidFlux (<code>veloce.GIRO_LUCIDFLUX</code>): <code>giro_lucidflux_stanza</code> apre LucidFlux una volta con <code>tieni=True</code> (pesi parcheggiati in RAM fra una foto e l'altra) e scrive il passaggio di mezzo con <code>mezzi.scrivi</code>: PNG riletto e confrontato con sha256 dei pixel, timbro con impronta dell'originale e versione. <code>catena.foto</code> lo usa solo se <code>mezzi.leggi</code> torna; se no <code>mezzo_rotto</code> e la foto si rifà come prima. Fuori le foto solo nell'Archivio sicuro (regola 583).",
+      "Precarico (<code>veloce.PRECARICO</code>): <code>miglioria.precarico.Precarico</code> copia il blocco dopo su uno stream CUDA a parte con eventi e <code>record_stream</code>; dal disco passa da un appoggio fissato (un blocco in meno in RAM). SeedVR2 <code>blocks_to_swap</code>+1, LucidFlux un blocco in meno sulla scheda; con memoria finita si toglie per primo. La prova lo confronta con sha256 dei fotogrammi (scheda, LDF) e dei file (foto)."
     ]
   },
   {

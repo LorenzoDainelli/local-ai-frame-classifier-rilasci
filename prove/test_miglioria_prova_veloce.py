@@ -79,7 +79,11 @@ def test_la_prova_passa_e_riprende_senza_rifare(tmp_path, piccolo, fluido_finto,
     dati = corsa.corri(tmp_path / "prova", clip, LAVORO,
                        al_passo=lambda f, t: passi.append((f, t)), volte=2)
     assert dati["passata"], dati
-    assert passi[-1] == (corsa.passi(clip, 2), corsa.passi(clip, 2))
+    totale = corsa.passi(clip, 2) + corsa.passi_del_precarico(clip, [], 2)
+    assert passi[-1] == (totale, totale)
+    assert dati["idee"] == ["scrittura", "precarico"]
+    assert [riga["nome"] for riga in dati["scheda"]] == ["scheda-a"]
+    assert all(riga["uguale"] for riga in dati["scheda"])
     assert corsa.leggi_esito(tmp_path / "prova")["passata"]
     for uno in dati["clip"]:
         assert len(set(uno["vecchi"])) == 1 and uno["uguale"]
@@ -90,7 +94,43 @@ def test_la_prova_passa_e_riprende_senza_rifare(tmp_path, piccolo, fluido_finto,
 
     monkeypatch.setattr(corsa, "un_giro", mai)
     monkeypatch.setattr(corsa.catena, "solo_la_scheda", mai)
+    monkeypatch.setattr(fluido, "Motore", mai)
     assert corsa.corri(tmp_path / "prova", clip, LAVORO, volte=2)["passata"]
+
+
+def test_col_precarico_ldf_si_prova_anche_il_fluido(tmp_path, piccolo, fluido_finto):
+    clip = _clip(tmp_path)
+    clip[1]["fps120"] = "ldf"
+    dati = corsa.corri(tmp_path / "prova", clip, LAVORO, volte=2)
+    assert dati["passata"], dati
+    assert [riga["nome"] for riga in dati["scheda"]] == ["scheda-a", "fluido-b"]
+    assert len(set(dati["scheda"][1]["vecchi"] + dati["scheda"][1]["nuovi"])) == 1
+
+
+def test_se_il_precarico_cambia_un_bit_resta_spento_solo_lui(tmp_path, piccolo,
+                                                            fluido_finto, monkeypatch):
+    clip = _clip(tmp_path)[:1]
+    vero = corsa.impronta_dei_quadri
+    conti = {"n": 0}
+
+    def sporca(quadri):
+        conti["n"] += 1
+        return "0" * 64 if conti["n"] == 4 else vero(quadri)
+
+    monkeypatch.setattr(corsa, "impronta_dei_quadri", sporca)
+    dati = corsa.corri(tmp_path / "prova", clip, LAVORO, volte=2)
+    assert not dati["passata"] and dati["idee"] == ["scrittura"]
+    assert not dati["scheda"][0]["uguale"]
+
+
+def test_l_impronta_dei_quadri_vede_un_bit():
+    uno = np.zeros((4, 6, 3), dtype=np.uint8)
+    due = uno.copy()
+    due[3, 5, 2] = 1
+    assert corsa.impronta_dei_quadri([uno]) == corsa.impronta_dei_quadri([uno.copy()])
+    assert corsa.impronta_dei_quadri([uno]) != corsa.impronta_dei_quadri([due])
+    girato = uno.reshape(6, 4, 3)
+    assert corsa.impronta_dei_quadri([uno]) != corsa.impronta_dei_quadri([girato])
 
 
 def test_se_il_nuovo_cambia_un_bit_la_prova_non_passa(tmp_path, piccolo, fluido_finto,
@@ -263,7 +303,8 @@ def test_la_prova_passa_e_accende_l_idea(tmp_path, piccolo, fluido_finto, monkey
     prova._gira()
     assert prova.lavoro.guasto == "", prova.lavoro.dettaglio
     assert prova.esito()["passata"]
-    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": False}
+    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": False,
+                                              "precarico": True}
     assert prova.accesa() and prova.turno.chi is None
     prova.accendi(False)
     assert not prova.accesa()
@@ -317,12 +358,15 @@ def test_con_lucidflux_la_prova_fa_anche_le_foto_e_accende_le_due_idee(
     prova._gira()
     assert prova.lavoro.guasto == "", prova.lavoro.dettaglio
     esito = prova.esito()
-    assert esito["passata"] and esito["idee"] == ["scrittura", "giro_lucidflux"]
+    assert esito["passata"]
+    assert esito["idee"] == ["scrittura", "giro_lucidflux", "precarico"]
     assert len(esito["foto"]) == 2 and all(uno["uguale"] for uno in esito["foto"])
-    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": True}
-    assert FintoLucid.creati == 2 * 2 + 2
+    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": True,
+                                              "precarico": True}
+    assert FintoLucid.creati == 2 * 2 + 2 + 2 * 2
     prova.accendi(False)
-    assert archivio.valori[veloce.CHIAVE] == {"scrittura": False, "giro_lucidflux": False}
+    assert archivio.valori[veloce.CHIAVE] == {"scrittura": False, "giro_lucidflux": False,
+                                              "precarico": False}
 
 
 def test_foto_diverse_accendono_solo_la_scrittura(tmp_path, piccolo, fluido_finto,
@@ -348,5 +392,6 @@ def test_foto_diverse_accendono_solo_la_scrittura(tmp_path, piccolo, fluido_fint
     prova, archivio = _prova(tmp_path, monkeypatch, lucidflux=lambda: True)
     prova._gira()
     esito = prova.esito()
-    assert not esito["passata"] and esito["idee"] == ["scrittura"]
-    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": False}
+    assert not esito["passata"] and esito["idee"] == ["scrittura", "precarico"]
+    assert archivio.valori[veloce.CHIAVE] == {"scrittura": True, "giro_lucidflux": False,
+                                              "precarico": True}

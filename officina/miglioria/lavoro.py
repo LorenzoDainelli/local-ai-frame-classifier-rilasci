@@ -544,6 +544,7 @@ class Miglioratore:
             "cartella": str(cartella),
             "misura": self._tetto(),
             "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
+            **({"veloce": accese} if (accese := self._veloce()) else {}),
             "percorsi": percorsi_della_stanza(),
             "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli)},
         }

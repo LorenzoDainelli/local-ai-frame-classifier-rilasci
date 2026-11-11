@@ -84,8 +84,52 @@ class Acceso:
         pass
 
 
+class Parcheggiato(Acceso):
+
+    def __init__(self, motore, chiave: str) -> None:
+        super().__init__(motore)
+        self.chiave = chiave
+
+    def spegni(self) -> None:
+        try:
+            peso = int(self.motore.parcheggia())
+        except Exception:
+            _butta(self.chiave)
+            return
+        _parcheggiati[self.chiave] = peso
+
+
+def vero(motore):
+    return motore.motore if isinstance(motore, Acceso) else motore
+
+
 _accesi: dict | None = None
+_parcheggiati: dict[str, int] = {}
 caricati = 0
+
+
+def _butta(chiave: str) -> None:
+    _parcheggiati.pop(chiave, None)
+    acceso = (_accesi or {}).pop(chiave, None)
+    if acceso is not None:
+        try:
+            acceso.motore.spegni()
+        except Exception:
+            pass
+
+
+def parcheggiati() -> int:
+    return sum(_parcheggiati.values())
+
+
+def libera_per(serve: int, libera: int | None) -> int | None:
+    if libera is None or libera >= serve or not _parcheggiati:
+        return libera
+    for chiave in list(_parcheggiati):
+        _butta(chiave)
+    from officina.miglioria.seedvr2_blocchi import ram_libera
+
+    return ram_libera()
 
 
 def tieni_accesi() -> None:
@@ -107,6 +151,7 @@ def ancora_buoni() -> bool:
 
 def spegni_tutti() -> None:
     accesi = list((_accesi or {}).values())
+    _parcheggiati.clear()
     if _accesi is not None:
         _accesi.clear()
     for acceso in accesi:
@@ -116,16 +161,20 @@ def spegni_tutti() -> None:
             pass
 
 
-def apri(elenco: dict[str, str], nome: str, **opzioni):
+def apri(elenco: dict[str, str], nome: str, tieni: bool = False, **opzioni):
     global caricati
     indirizzo = elenco.get(nome)
     if indirizzo is None:
         raise MotoreSconosciuto(nome)
     classe = _classe(indirizzo)
-    if _accesi is None or getattr(classe, "resta_acceso", False) is not True:
+    sempre = getattr(classe, "resta_acceso", False) is True
+    a_riposo = bool(tieni) and callable(getattr(classe, "parcheggia", None))
+    if _accesi is None or not (sempre or a_riposo):
         return classe(**opzioni)
     chiave = json.dumps([indirizzo, opzioni], sort_keys=True, default=str)
     if chiave not in _accesi:
-        _accesi[chiave] = Acceso(classe(**opzioni))
+        motore = classe(**opzioni)
+        _accesi[chiave] = Acceso(motore) if sempre else Parcheggiato(motore, chiave)
         caricati += 1
+    _parcheggiati.pop(chiave, None)
     return _accesi[chiave]

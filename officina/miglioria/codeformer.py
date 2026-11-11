@@ -58,6 +58,10 @@ class CodeFormer:
 
     def _accendi(self):
         if self._reti is not None:
+            if self._reti.get("a_riposo"):
+                for nome in ("volto", "sagoma"):
+                    self._reti[nome].to(self._reti["dispositivo"])
+                self._reti["a_riposo"] = False
             return self._reti
         import torch
         from safetensors.torch import load_file
@@ -196,6 +200,22 @@ class CodeFormer:
         maschera[:, :b] = 0
         maschera[:, -b:] = 0
         return (maschera / 255.0).astype(np.float32)
+
+    def parcheggia(self) -> int:
+        reti = self._reti
+        if reti is None:
+            return 0
+        peso = sum(int(p.numel()) * int(p.element_size())
+                   for nome in ("volto", "sagoma")
+                   for p in list(reti[nome].parameters()) + list(reti[nome].buffers()))
+        if reti["dispositivo"] != "cpu" and not reti.get("a_riposo"):
+            import torch
+
+            for nome in ("volto", "sagoma"):
+                reti[nome].to("cpu")
+            reti["a_riposo"] = True
+            torch.cuda.empty_cache()
+        return peso
 
     def spegni(self) -> None:
         reti, self._reti, self._trova = self._reti, None, None

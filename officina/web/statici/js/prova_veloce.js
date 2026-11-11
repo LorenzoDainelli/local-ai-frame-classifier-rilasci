@@ -13,7 +13,7 @@ function tempi(righe) {
     return vecchio && nuovo ? ` vecchio ${secondi(vecchio)}, nuovo ${secondi(nuovo)}` : "";
 }
 
-function parte(righe, cosa, idea) {
+function parte(righe, cosa, idea, spenta = "spenta") {
     if (!righe.length) return "";
     if (righe.every((uno) => uno.uguale)) {
         return `${cosa}: ${righe.length} identici bit per bit,${tempi(righe)}; ${idea} si può accendere.`;
@@ -21,15 +21,16 @@ function parte(righe, cosa, idea) {
     const diversi = righe.filter((uno) => !uno.uguale).map((uno) => uno.nome);
     const instabili = righe.some((uno) => !uno.stabile);
     const perche = instabili ? " Anche il modo vecchio è uscito diverso da sé stesso." : "";
-    return `${cosa}: diversi ${diversi.join(", ")}; ${idea} resta spenta.${perche}`;
+    return `${cosa}: diversi ${diversi.join(", ")}; ${idea} resta ${spenta}.${perche}`;
 }
 
 function racconto(esito) {
     if (!esito) return "";
     const video = parte(esito.clip || [], "Video", "la compressione in parallelo");
     const foto = parte(esito.foto || [], "Foto", "il giro di LucidFlux");
+    const scheda = parte(esito.scheda || [], "Scheda video", "il precarico", "spento");
     const inizio = esito.passata ? "Prova passata." : (esito.idee || []).length ? "Prova passata in parte." : "Prova non passata.";
-    return [inizio, video, foto].filter(Boolean).join(" ");
+    return [inizio, video, foto, scheda].filter(Boolean).join(" ");
 }
 
 function scrivi(stato) {

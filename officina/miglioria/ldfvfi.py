@@ -244,6 +244,7 @@ class LdfVFI:
         self.passi = int(passi)
         self._tipo_voluto = tipo
         self._blocchi = seedvr2_blocchi.Blocchi(disco=disco, chi=CHI)
+        self.precarico = False
         self._dit = None
         self._vae = None
         self._maschera = None
@@ -438,7 +439,8 @@ class LdfVFI:
         pezzi = pezzi_per_tessera(entrata.shape[-3:], self._dit.config.patch_size)
         return self._riprova(
             lambda: ldf_fette.avanti(self._dit, entrata, t, self.fette, foglio=self.foglio),
-            lambda: self.fette.dimezza(pezzi) or self.fette.esci())
+            lambda: (self._blocchi.precarico.togli("memoria") or self.fette.dimezza(pezzi)
+                     or self.fette.esci()))
 
     def passo_fatto(self) -> None:
         adesso = time.monotonic()
@@ -461,7 +463,9 @@ class LdfVFI:
         import torch
 
         self.alto, self.largo = lettore.forma[:2]
+        self._blocchi.precarico.accendi(self.precarico)
         self._carica()
+        self._blocchi._appoggio_se_serve()
         torch.manual_seed(SEME)
         self._partito = time.monotonic()
         self.fette.fuori = False
@@ -492,6 +496,8 @@ class LdfVFI:
         stanno = self._blocchi.dove_stanno()
         if stanno is not None:
             tempi.update({f"{dove}_gb": giga for dove, giga in stanno.items()})
+        if self._blocchi.precarico.acceso:
+            tempi["precarico"] = self._blocchi.precarico.riassunto()
         self._blocchi.girato = True
         self.tempi.append(tempi)
 

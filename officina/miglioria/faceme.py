@@ -194,6 +194,9 @@ class FaceMe:
 
     def _accendi(self):
         if self._pezzi is not None:
+            if self._pezzi.get("a_riposo"):
+                self._sposta(self._pezzi["dispositivo"])
+                self._pezzi["a_riposo"] = False
             return self._pezzi
         import torch
         from diffusers import (AutoencoderKL, ControlNetModel, DDPMScheduler,
@@ -267,6 +270,37 @@ class FaceMe:
                                           controllo.float().cpu())
         finita = (rifatta[0].permute(1, 2, 0) * 127.5 + 127.5).numpy().clip(0, 255)
         return finita.astype(np.uint8)[:, :, ::-1].copy()
+
+    def _sposta(self, dove) -> None:
+        pezzi = self._pezzi
+        pezzi["catena"].to(dove)
+        pezzi["mix"].to(dove)
+        pezzi["occhio"].to(dove)
+        pezzi["testo"] = {nome: valore.to(dove) for nome, valore in pezzi["testo"].items()}
+
+    def _peso(self) -> int:
+        pezzi = self._pezzi
+        moduli = [pezzi["mix"], pezzi["occhio"]] + [
+            modulo for modulo in pezzi["catena"].components.values()
+            if hasattr(modulo, "parameters")]
+        peso = sum(int(p.numel()) * int(p.element_size()) for modulo in moduli
+                   for p in list(modulo.parameters()) + list(modulo.buffers()))
+        return peso + sum(int(v.numel()) * int(v.element_size())
+                          for v in pezzi["testo"].values())
+
+    def parcheggia(self) -> int:
+        self._visti = {}
+        peso = self.volti.parcheggia()
+        pezzi = self._pezzi
+        if pezzi is None:
+            return peso
+        if pezzi["dispositivo"] != "cpu" and not pezzi.get("a_riposo"):
+            import torch
+
+            self._sposta("cpu")
+            pezzi["a_riposo"] = True
+            torch.cuda.empty_cache()
+        return peso + self._peso()
 
     def spegni(self) -> None:
         pezzi, self._pezzi, self._occhi, self._visti = self._pezzi, None, None, {}

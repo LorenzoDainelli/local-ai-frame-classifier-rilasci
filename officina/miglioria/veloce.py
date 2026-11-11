@@ -9,7 +9,9 @@ from officina.miglioria import ram
 
 SCRITTURA = "scrittura"
 GIRO_LUCIDFLUX = "giro_lucidflux"
-IDEE = (SCRITTURA, GIRO_LUCIDFLUX)
+PRECARICO = "precarico"
+VOLTI_ACCESI = "volti_accesi"
+IDEE = (SCRITTURA, GIRO_LUCIDFLUX, PRECARICO, VOLTI_ACCESI)
 CHIAVE = "veloce_acceso"
 MARGINE = 3 * 2 ** 30
 MASSIMO_FILI = 3

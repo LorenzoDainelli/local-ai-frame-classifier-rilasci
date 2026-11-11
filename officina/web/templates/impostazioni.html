@@ -360,7 +360,13 @@
                             carica una volta e fa il suo passaggio su fino a 25 foto di fila;
                             poi SeedVR2 le finisce tutte. Il passaggio di mezzo si mette da
                             parte in PNG, che non perde nulla, e si ricontrolla pixel per pixel
-                            prima di usarlo: se non torna, quella foto si rifà come prima.</p>{% endcall %}</p>
+                            prima di usarlo: se non torna, quella foto si rifà come prima.</p>
+                            <p>Precarico: mentre la scheda calcola un pezzo del modello, il pezzo
+                            dopo viaggia già dalla RAM (o dal disco) alla scheda. I calcoli sono
+                            gli stessi, cambia solo quando arrivano i pesi. Per fargli posto si
+                            tiene un pezzo in meno nella scheda, e uno in meno nella RAM se i
+                            pesi stanno anche sul disco. Se manca memoria, il precarico si toglie
+                            da solo prima di ogni altra cosa.</p>{% endcall %}</p>
                         <p class="ds" data-prova-veloce-stato></p>
                     </div>
                     <div class="in-fila">

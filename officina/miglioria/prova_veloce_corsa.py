@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import itertools
 import json
 import os
 import shutil
@@ -29,6 +30,9 @@ PER_PEZZO = 30
 MISURA = "fhd"
 FOTO = "foto"
 MEZZI = "mezzi"
+PRECARICO = "precarico"
+QUADRI_FLUIDO = 24
+VOLTE_FLUIDO = 4
 ORIGINALE_OPZIONI = {
     video.H264: {"crf": "16", "preset": "medium"},
     video.HEVC: {"crf": "18", "preset": "medium", "x265-params": "log-level=error"},
@@ -326,8 +330,8 @@ def _uscita_foto(cartella_foto: Path, nome: str, originale: Path) -> Path:
     return cartella_foto / attesa.NOME / nome / f"1-uscita{originale.suffix}.parziale"
 
 
-def _una_foto(cartella_foto: Path, lavoro: dict, nome: str, mezzo: dict | None
-              ) -> tuple[str, float]:
+def _una_foto(cartella_foto: Path, lavoro: dict, nome: str, mezzo: dict | None,
+              idee: list[str] | None = None) -> tuple[str, float]:
     uscita = _uscita_foto(cartella_foto, nome, Path(lavoro["originale"]))
     _pulisci(uscita)
     uscita.parent.mkdir(parents=True, exist_ok=True)
@@ -335,6 +339,8 @@ def _una_foto(cartella_foto: Path, lavoro: dict, nome: str, mezzo: dict | None
     questo["uscita"] = str(uscita)
     if mezzo is not None:
         questo["mezzo"] = mezzo
+    if idee:
+        questo["veloce"] = list(idee)
     partito = time.perf_counter()
     catena.foto(questo)
     secondi = time.perf_counter() - partito
@@ -402,6 +408,108 @@ def lavoro_della_foto(cartella: Path, uno: dict, lavoro: dict) -> dict:
     return suo
 
 
+def impronta_dei_quadri(quadri: Iterable) -> str:
+    import numpy as np
+
+    calcolo = hashlib.sha256()
+    for quadro in quadri:
+        dato = np.ascontiguousarray(quadro)
+        calcolo.update(f"{dato.shape}|{dato.dtype}|".encode())
+        calcolo.update(dato.tobytes())
+    return calcolo.hexdigest()
+
+
+def _idee(modo: str) -> dict:
+    return {"veloce": [veloce.PRECARICO]} if modo == NUOVO else {}
+
+
+def _riga(nome: str, numero: int, modo: str, firma_del_file: str, secondi: float) -> dict:
+    return {"clip": nome, "giro": numero, "modo": modo, "impronta": firma_del_file,
+            "secondi": round(secondi, 2)}
+
+
+def _firma_letta(dove: Path) -> dict:
+    return json.loads((dove / pezzi.FIRMA).read_text("utf-8"))
+
+
+def scheda_col_precarico(cartella_clip: Path, clip: dict, lavoro: dict, numero: int,
+                         modo: str) -> dict:
+    uscita = _in_revisione(cartella_clip, f"precarico-{numero}")
+    _pulisci(uscita)
+    questo = {k: v for k, v in lavoro.items() if k not in ("veloce", "fps120")}
+    questo.update(uscita=str(uscita), **_idee(modo))
+    motori.spegni_tutti()
+    try:
+        partito = time.perf_counter()
+        fatti = catena.solo_la_scheda(questo)
+        secondi = time.perf_counter() - partito
+        firma_del_file = impronta_dei_quadri(pezzi.Pezzi(fatti, _firma_letta(fatti))
+                                             .rileggi())
+    finally:
+        motori.spegni_tutti()
+        _pulisci(uscita)
+    return _riga(f"scheda-{clip['nome']}", numero, modo, firma_del_file, secondi)
+
+
+def fluido_col_precarico(cartella_clip: Path, clip: dict, lavoro: dict, numero: int,
+                         modo: str) -> dict:
+    fissi = cartella_clip / FISSI
+    deposito = cartella_clip / attesa.NOME / f"fluido-precarico-{numero}"
+    shutil.rmtree(deposito, ignore_errors=True)
+    motori.spegni_tutti()
+    motore = fluido.Motore(clip["fps120"], deposito=deposito, **lavoro.get("opzioni", {}))
+    catena.precarica(motore, _idee(modo))
+    try:
+        firma = _firma_letta(fissi)
+
+        def apri() -> Iterator:
+            return itertools.islice(pezzi.Pezzi(fissi, firma).rileggi(), QUADRI_FLUIDO)
+
+        partito = time.perf_counter()
+        firma_del_file = impronta_dei_quadri(motore.uscite(apri, VOLTE_FLUIDO))
+        secondi = time.perf_counter() - partito
+    finally:
+        motore.spegni()
+        motori.spegni_tutti()
+        shutil.rmtree(deposito, ignore_errors=True)
+    return _riga(f"fluido-{clip['nome']}", numero, modo, firma_del_file, secondi)
+
+
+def foto_col_precarico(cartella: Path, uno: dict, lavoro: dict, numero: int) -> dict:
+    motori.spegni_tutti()
+    try:
+        firma_del_file, secondi = _una_foto(cartella / FOTO / uno["nome"], lavoro,
+                                            f"precarico-{numero}", None,
+                                            [veloce.PRECARICO])
+    finally:
+        motori.spegni_tutti()
+    return _riga(f"foto-{uno['nome']}", numero, NUOVO, firma_del_file, secondi)
+
+
+def con_lo_scambio(clip: list[dict]) -> list[dict]:
+    return [uno for uno in clip if not uno.get("fps120")]
+
+
+def con_ldf(clip: list[dict]) -> list[dict]:
+    return [uno for uno in clip if uno.get("fps120") in (fluido.LDF, fluido.FUSIONE)]
+
+
+def righe_del_precarico(clip: list[dict], foto: list[dict]) -> list[dict]:
+    return ([dict(uno, nome=f"scheda-{uno['nome']}") for uno in con_lo_scambio(clip)]
+            + [dict(uno, nome=f"fluido-{uno['nome']}") for uno in con_ldf(clip)]
+            + [dict(uno, nome=f"foto-{uno['nome']}") for uno in foto])
+
+
+def passi_del_precarico(clip: list[dict], foto: list[dict], volte: int = VOLTE) -> int:
+    return (len(con_lo_scambio(clip)) + len(con_ldf(clip))) * 2 * volte + len(foto) * volte
+
+
+def giri_del_precarico(cartella: Path) -> list[dict]:
+    vecchi = [dict(giro, clip=f"foto-{giro['clip']}") for giro in giri_fatti(cartella / FOTO)
+              if giro.get("modo") == VECCHIO]
+    return giri_fatti(cartella / PRECARICO) + vecchi
+
+
 def riassunto(clip: dict, giri: list[dict], volte: int = VOLTE) -> dict:
     suoi = [giro for giro in giri if giro.get("clip") == clip["nome"]]
     vecchi = [giro["impronta"] for giro in suoi if giro["modo"] == VECCHIO]
@@ -420,16 +528,22 @@ def riassunto(clip: dict, giri: list[dict], volte: int = VOLTE) -> dict:
 
 
 def esito(clip: list[dict], giri: list[dict], volte: int = VOLTE,
-          foto: list[dict] | None = None, giri_foto: list[dict] | None = None) -> dict:
+          foto: list[dict] | None = None, giri_foto: list[dict] | None = None,
+          giri_scheda: list[dict] | None = None) -> dict:
     righe = [riassunto(uno, giri, volte) for uno in clip]
     righe_foto = [riassunto(uno, giri_foto or [], volte) for uno in foto or []]
+    righe_scheda = ([riassunto(uno, giri_scheda, volte)
+                     for uno in righe_del_precarico(clip, foto or [])]
+                    if giri_scheda is not None else [])
     idee = []
     if righe and all(riga["uguale"] for riga in righe):
         idee.append(veloce.SCRITTURA)
     if righe_foto and all(riga["uguale"] for riga in righe_foto):
         idee.append(veloce.GIRO_LUCIDFLUX)
-    provate = int(bool(righe)) + int(bool(righe_foto))
-    return {"clip": righe, "foto": righe_foto, "idee": idee,
+    if righe_scheda and all(riga["uguale"] for riga in righe_scheda):
+        idee.append(veloce.PRECARICO)
+    provate = int(bool(righe)) + int(bool(righe_foto)) + int(bool(righe_scheda))
+    return {"clip": righe, "foto": righe_foto, "scheda": righe_scheda, "idee": idee,
             "passata": provate > 0 and len(idee) == provate}
 
 
@@ -464,13 +578,47 @@ def _le_foto(cartella: Path, foto: list[dict], lavoro: dict, volte: int, avanti,
             avanti()
 
 
+def _il_precarico(cartella: Path, clip: list[dict], lavoro: dict, foto: list[dict],
+                  lavoro_foto: dict, volte: int, avanti) -> None:
+    dove = cartella / PRECARICO
+    dove.mkdir(parents=True, exist_ok=True)
+    gia = {(giro["clip"], giro["giro"]) for giro in giri_fatti(dove)}
+    lavori = []
+    for uno in con_lo_scambio(clip):
+        lavori.append((f"scheda-{uno['nome']}", scheda_col_precarico, uno))
+    for uno in con_ldf(clip):
+        lavori.append((f"fluido-{uno['nome']}", fluido_col_precarico, uno))
+    for nome, fai, uno in lavori:
+        cartella_clip = cartella / uno["nome"]
+        suo = _lavoro_del_video(lavoro, cartella_clip / ORIGINALE, uno)
+        for numero, modo in ordine(volte):
+            if (nome, numero) not in gia:
+                _segna(dove, fai(cartella_clip, uno, suo, numero, modo))
+            avanti()
+    for uno in foto:
+        suo = lavoro_della_foto(cartella, uno, lavoro_foto)
+        for numero in range(1, 2 * volte, 2):
+            if (f"foto-{uno['nome']}", numero) not in gia:
+                _segna(dove, foto_col_precarico(cartella, uno, suo, numero))
+            avanti()
+
+
+def _lavoro_del_video(lavoro: dict, originale: Path, uno: dict) -> dict:
+    suo = {k: v for k, v in lavoro.items() if k not in ("fps120", "veloce")}
+    suo.update(genere="video", originale=str(originale), misura=MISURA)
+    if uno.get("fps120"):
+        suo["fps120"] = uno["fps120"]
+    return suo
+
+
 def corri(cartella: Path, clip: list[dict], lavoro: dict,
           al_passo: Callable[[int, int], None] | None = None, freno=None,
           racconta=None, volte: int = VOLTE, foto: list[dict] | None = None,
           lavoro_foto: dict | None = None) -> dict:
     cartella = Path(cartella)
     foto = list(foto or [])
-    totale = passi(clip, volte) + len(foto) * 2 * volte
+    totale = (passi(clip, volte) + len(foto) * 2 * volte
+              + passi_del_precarico(clip, foto, volte))
     fatti = [0]
 
     def avanti() -> None:
@@ -484,10 +632,7 @@ def corri(cartella: Path, clip: list[dict], lavoro: dict,
         if not originale.is_file():
             fai_l_originale(originale, _quadri_da(uno["file"]), uno["codec"],
                             len(uno["file"]))
-        suo = {k: v for k, v in lavoro.items() if k not in ("fps120", "veloce")}
-        suo.update(genere="video", originale=str(originale), misura=MISURA)
-        if uno.get("fps120"):
-            suo["fps120"] = uno["fps120"]
+        suo = _lavoro_del_video(lavoro, originale, uno)
         la_scheda(cartella_clip, suo, None, freno, racconta)
         avanti()
         if uno.get("fps120"):
@@ -501,12 +646,17 @@ def corri(cartella: Path, clip: list[dict], lavoro: dict,
             avanti()
     if foto:
         _le_foto(cartella, foto, lavoro_foto or lavoro, volte, avanti, freno)
-    dati = esito(clip, giri_fatti(cartella), volte, foto, giri_fatti(cartella / FOTO))
+    _il_precarico(cartella, clip, lavoro, foto, lavoro_foto or lavoro, volte, avanti)
+    dati = esito(clip, giri_fatti(cartella), volte, foto, giri_fatti(cartella / FOTO),
+                 giri_del_precarico(cartella))
     scrivi_esito(cartella, dati)
     return dati
 
 
 __all__ = ["ESITO", "FISSI", "FOTO", "GIRI", "MEZZI", "MISURA", "NUOVO", "ORIGINALE", "PIANO",
+           "PRECARICO", "con_ldf", "con_lo_scambio", "fluido_col_precarico",
+           "foto_col_precarico", "giri_del_precarico", "impronta_dei_quadri",
+           "passi_del_precarico", "righe_del_precarico", "scheda_col_precarico",
            "REGISTRATI", "Registratore", "Riproduttore", "VECCHIO", "VOLTE", "con_il_fluido",
            "corri", "esito", "fai_l_originale", "foto_nuove", "foto_vecchia", "giri_fatti",
            "impronta", "la_scheda", "lavoro_della_foto", "leggi_esito", "misura_piccola",
