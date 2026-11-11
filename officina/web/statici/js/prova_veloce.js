@@ -1,3 +1,4 @@
+import { scriviAvanzamento } from "/statici/js/avanzamento.js";
 import { chiedi, manda } from "/statici/js/comune.js";
 
 const riga = document.querySelector("[data-prova-veloce]");
@@ -59,6 +60,8 @@ function scrivi(stato) {
     } else {
         testo.textContent = racconto(stato.esito);
     }
+    scriviAvanzamento(riga.querySelector("[data-prova-veloce-avanza]"), stato,
+        Boolean(stato.aspetta_la_copia));
     clearTimeout(riga.tra);
     if (stato.sta_lavorando) riga.tra = setTimeout(guarda, OGNI);
 }

@@ -1,3 +1,4 @@
+import { scriviAvanzamento } from "/statici/js/avanzamento.js";
 import { chiedi, manda } from "/statici/js/comune.js";
 
 const riga = document.querySelector("[data-gara-video]");
@@ -21,6 +22,8 @@ function scrivi(stato) {
     } else {
         testo.textContent = "";
     }
+    scriviAvanzamento(riga.querySelector("[data-gara-video-avanza]"), stato,
+        Boolean(stato.aspetta_la_copia));
     clearTimeout(riga.tra);
     if (stato.sta_lavorando) riga.tra = setTimeout(guarda, OGNI);
 }

@@ -1,3 +1,4 @@
+import { scriviAvanzamento } from "/statici/js/avanzamento.js";
 import { chiedi, leggiDatiIncorporati, manda } from "/statici/js/comune.js";
 
 const pagina = document.getElementById("gara120");
@@ -35,9 +36,7 @@ function scriviStato() {
     const dettaglio = !lavora && stato.guasto ? (stato.dettaglio || "") : "";
     qui("g1-dettaglio").hidden = !dettaglio;
     qui("g1-passi").textContent = dettaglio ? `Gara dei 120 FPS\n${stato.guasto}\n${dettaglio}` : "";
-    const barra = qui("g1-barra");
-    barra.hidden = !(lavora && stato.da_scaricare);
-    barra.firstElementChild.style.width = `${stato.percento || 0}%`;
+    scriviAvanzamento(qui("g1-avanza"), stato, Boolean(stato.aspetta_la_copia));
     qui("g1-occupa").textContent = stato.occupa
         ? `I dati scaricati occupano ${(stato.occupa / GIGA).toFixed(1)} GB.` : "";
     scriviEsito();

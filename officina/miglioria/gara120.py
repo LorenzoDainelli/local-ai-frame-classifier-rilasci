@@ -126,21 +126,26 @@ class Gara120:
             torcia.rimetti_la_rete_com_era(prima)
 
     def _corri(self) -> None:
+        self.lavoro.fasi(snu=2, xvfi=6, motori=1, corsa=87, voto=1, clip=3)
         with self._in_rete():
             self.lavoro.di("controllo l'elenco di SNU-FILM")
             elenco = sc.elenco_snu(self.dati, api=self._api, scarica_da_hf=self._hf)
             self._controlla()
+            self.lavoro.fase("snu")
             self.lavoro.di("scarico e controllo i fotogrammi di SNU-FILM")
             sc.scarica_snu(self.dati, elenco, sc.nomi_che_servono(elenco), self._al_pezzo,
                            self._hf)
+            self.lavoro.fase("xvfi")
             self.lavoro.di("scarico e controllo X-TEST e Adobe240 (l'archivio di XVFI)")
             sc.scarica_xvfi(self.dati, self._al_byte, self._rete)
             self.lavoro.senza_numeri()
+            self.lavoro.fase("motori")
             self._prepara()
         self.lavoro.senza_numeri()
         self._controlla()
         piano = corsa.scrivi_piano(self.dati, elenco, sc.cartelle_adobe(self.dati))
         self.lavoro.di(f"la corsa: {len(piano.casi)} casi, prima GIMM-VFI e poi LDF-VFI")
+        self.lavoro.fase("corsa")
         esito = self._nella_stanza(stanza.CORSA)
         if min(esito.get("gimm", 0), esito.get("ldf", 0)) < len(piano.casi):
             raise Fermata()
@@ -152,11 +157,13 @@ class Gara120:
         if not clip:
             raise ErroreOfficina("Non trovo casi adatti per il voto alla cieca.",
                                  codice="gara_120_senza_voto")
+        self.lavoro.fase("voto")
         self.lavoro.di(f"scarico i fotogrammi delle {len(clip)} clip del voto")
         with self._in_rete():
             sc.scarica_snu(self.dati, elenco, voto.nomi_del_voto(clip, elenco),
                            self._al_pezzo, self._hf)
         self.lavoro.senza_numeri()
+        self.lavoro.fase("clip")
         self.lavoro.di("preparo i video del voto alla cieca")
         esito = self._nella_stanza(stanza.CLIP)
         if not esito.get("pronte"):
@@ -178,12 +185,19 @@ class Gara120:
             self.lavoro.senza_numeri()
 
     def _prendi_la_scheda(self) -> None:
+        try:
+            self._aspetta_la_scheda()
+        finally:
+            self.lavoro.in_pausa(False)
+
+    def _aspetta_la_scheda(self) -> None:
         detto = False
         while not self.turno.prendi_se_libera(self.lavoro):
             if self.turno.chi is self.lavoro:
                 return
             if not detto:
                 self.lavoro.di("aspetto che la scheda si liberi")
+                self.lavoro.in_pausa(True)
                 detto = True
             if self._fermati.wait(ASPETTA_LA_SCHEDA):
                 raise Fermata()

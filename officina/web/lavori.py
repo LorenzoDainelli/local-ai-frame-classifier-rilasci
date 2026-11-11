@@ -8,6 +8,7 @@ from typing import Callable
 from officina import registro
 from officina.archivio import accesso
 from officina.errori import ErroreOfficina
+from officina.web.avanzamento import Avanzamento
 
 QUANTE_RIGHE = 60
 
@@ -56,15 +57,18 @@ class TurnoDellaScheda:
             if nome in self._rinunce:
                 self._rinunce.discard(nome)
                 lavoro.numeri.pop("in_attesa_della_scheda", None)
+                lavoro.in_pausa(False)
                 return False
             if not avvisato:
                 lavoro.numeri["in_attesa_della_scheda"] = self._chi.cosa
+                lavoro.in_pausa(True)
                 lavoro.di("in attesa della scheda: la sta usando "
                           + NOMI_NEL_TURNO.get(self._chi.cosa, self._chi.cosa))
                 avvisato = True
             self._cambiato.wait(0.5)
         self._chi = lavoro
         lavoro.numeri.pop("in_attesa_della_scheda", None)
+        lavoro.in_pausa(False)
         if avvisato:
             lavoro.di("la scheda è libera: parto")
         return True
@@ -120,6 +124,7 @@ class Lavoro:
         self._filo: threading.Thread | None = None
         self._lucchetto = threading.Lock()
         self.riflesso: dict | None = None
+        self.avanzamento = Avanzamento()
 
     @property
     def sta_lavorando(self) -> bool:
@@ -128,9 +133,23 @@ class Lavoro:
             return bool(self.riflesso.get("sta_lavorando")) or filo_vivo
         return filo_vivo
 
+    def _numeri(self) -> dict:
+        if self.riflesso is not None:
+            return dict(self.numeri)
+        return {**self.numeri, **self.avanzamento.numeri()}
+
+    def fasi(self, **pesi: float) -> None:
+        self.avanzamento.fasi(pesi)
+
+    def fase(self, nome: str) -> None:
+        self.avanzamento.fase(nome)
+
+    def in_pausa(self, ferma: bool) -> None:
+        self.avanzamento.pausa(ferma)
+
     def fotografia(self) -> dict:
         return {"sta_lavorando": self.sta_lavorando, "righe": list(self.righe),
-                "numeri": dict(self.numeri), "guasto": self.guasto,
+                "numeri": self._numeri(), "guasto": self.guasto,
                 "dettaglio": self.dettaglio, "finito": self.finito}
 
     def rifletti(self, dati: dict) -> None:
@@ -160,6 +179,7 @@ class Lavoro:
         self.numeri["da_scaricare"] = attesi
         self.numeri["percento"] = quota
         self.numeri["unita"] = unita
+        self.avanzamento.passo(fatti, attesi)
 
     def a_che_punto_a_pezzi(self, fatti: int, attesi: int) -> None:
         self.a_che_punto(fatti, attesi, "pezzi")
@@ -176,6 +196,7 @@ class Lavoro:
                 return False
             self.righe.clear()
             self.numeri.clear()
+            self.avanzamento.ricomincia()
             self.guasto = ""
             self.dettaglio = ""
             self.finito = False
@@ -226,7 +247,7 @@ class Lavoro:
             "finito": self.finito and not self.sta_lavorando,
             "guasto": self.guasto,
             "dettaglio": self.dettaglio,
-            **self.numeri,
+            **self._numeri(),
         }
 
 

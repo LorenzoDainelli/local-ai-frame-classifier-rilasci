@@ -202,10 +202,17 @@ class Gara:
         return int(self.archivio.impostazione("intensita_scheda") or 100)
 
     def _prendi_la_scheda(self) -> None:
+        try:
+            self._aspetta_la_scheda()
+        finally:
+            self.lavoro.in_pausa(False)
+
+    def _aspetta_la_scheda(self) -> None:
         while not self.turno.prendi_se_libera(self.lavoro):
             if self.turno.chi is self.lavoro:
                 return
             self.lavoro.di("aspetto che la scheda si liberi")
+            self.lavoro.in_pausa(True)
             if self._fermati.wait(ASPETTA_LA_SCHEDA):
                 raise pellicola.Fermato()
 
@@ -222,7 +229,9 @@ class Gara:
         from officina.descrittori import torcia
 
         self.cartella.mkdir(parents=True, exist_ok=True)
+        self.lavoro.fasi(scarico=5, gara=95)
         if not prove(self.cartella) and self._scarica is not None:
+            self.lavoro.fase("scarico")
             self.lavoro.di("scarico i video pubblici di prova")
             self._scarica(self.cartella)
         clip = prove(self.cartella)
@@ -234,6 +243,7 @@ class Gara:
         fatti_dove = self.cartella / "fatti"
         fatti_dove.mkdir(exist_ok=True)
         totale = len(self.candidati) * len(clip)
+        self.lavoro.fase("gara")
         for indice, chi in enumerate(self.candidati):
             suoi = candidati.setdefault(chi, {"clip": {}})
             if suoi.get("non_pronto"):

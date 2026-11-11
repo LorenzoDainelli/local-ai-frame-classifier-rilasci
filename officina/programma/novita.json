@@ -156,9 +156,14 @@
       [
         "riprova",
         "Corretto: dal portatile la gara dei 120 FPS poteva mostrare «Unexpected token» e smettere di aggiornarsi se il fisso tardava a rispondere. Ora dice che il fisso non ha risposto e riprova da sola ogni 5 secondi"
+      ],
+      [
+        "orologio",
+        "Nella Prova di velocità, nella gara dei 120 FPS e nella gara dei video di Togli c'è una barra su tutto il lavoro, da 1 a 100%, con scritto quanto manca e a che ora finisce. Se aspetta la scheda o l'Archivio sicuro scrive «in pausa»."
       ]
     ],
     "tecnico": [
+      "Barra di avanzamento (<code>officina/web/avanzamento.py</code>): ogni lavoro divide il tutto in fasi con un peso; il tempo che manca si misura solo dentro la fase di adesso, dopo 60 s di riscaldo (così i casi già fatti che ripassano veloci alla ripresa non falsano la stima), su una finestra di 20 minuti; il tempo in pausa non conta e la barra resta fra 1 e 99% fino alla fine.",
       "GIMM-VFI: il <code>turtle</code> finto e le classi come in Python vecchio restano anche mentre si costruisce la rete (<code>col_codice_di_gimm</code>), perché FlowFormer carica <code>convnext</code> solo lì. Il collaudo «Motori veri su Windows» ora scarica GIMM-VFI e LDF-VFI e li fa girare davvero su tre quadri piccoli (<code>--miglioria</code>).",
       "Tolti <code>PeCore</code>, <code>pe_visione.py</code>, le sue revisioni e impronte fissate, la conversione dei pesi e la voce in <code>modelli_in_casa.OBBLIGATORI</code> (regola 574, che supera la 420).",
       "Migrazione 73: <code>DELETE FROM impronte WHERE descrittore = 'pecore'</code>, e il numero tolto va nello <code>stato</code> come <code>pecore_impronte_tolte</code>.",

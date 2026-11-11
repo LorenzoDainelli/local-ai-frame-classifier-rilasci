@@ -288,20 +288,24 @@ class ProvaVeloce:
         con_le_foto = bool(self._lucidflux())
         if not con_le_foto:
             self.lavoro.di(SENZA_LUCIDFLUX)
+        self.lavoro.fasi(scarico=3, motori=1, volti=1, prova=95)
         with self._in_rete():
             self.lavoro.di("controllo l'elenco di SNU-FILM")
             elenco = sc.elenco_snu(self.dati, api=self._api, scarica_da_hf=self._hf)
             self._controlla()
             clip = scegli_clip(elenco)
             foto = scegli_foto(elenco) if con_le_foto else []
+            self.lavoro.fase("scarico")
             self.lavoro.di("scarico e controllo i fotogrammi della prova")
             sc.scarica_snu(self.dati, elenco, nomi_di(clip + foto), self._al_pezzo,
                            self._hf)
             self.lavoro.senza_numeri()
+            self.lavoro.fase("motori")
             self._prepara(scelti["fps120"])
             quali_volti = self._volti_pronti()
             volti = []
             if quali_volti:
+                self.lavoro.fase("volti")
                 self.lavoro.di("scarico e controllo le foto con i volti (WIDER FACE)")
                 volti = prova_volti.scarica(self.dati, self._al_pezzo, self._wider)
                 self.lavoro.senza_numeri()
@@ -319,6 +323,7 @@ class ProvaVeloce:
                          "file": [str(casa / nome) for nome in uno["nomi"]]} for uno in foto]
         self.lavoro.di(f"la prova: {len(clip)} video e {len(foto)} foto, {corsa.VOLTE} "
                        f"volte vecchio e {corsa.VOLTE} volte nuovo")
+        self.lavoro.fase("prova")
         esito = self._nella_stanza(da_fare, scelti, foto_da_fare, tetto, volti,
                                    quali_volti)
         idee = [idea for idea in esito.get("idee") or [] if idea in veloce.IDEE]
@@ -335,12 +340,19 @@ class ProvaVeloce:
             self.lavoro.di("prova non passata: l'idea resta spenta")
 
     def _prendi_la_scheda(self) -> None:
+        try:
+            self._aspetta_la_scheda()
+        finally:
+            self.lavoro.in_pausa(False)
+
+    def _aspetta_la_scheda(self) -> None:
         detto = False
         while not self.turno.prendi_se_libera(self.lavoro):
             if self.turno.chi is self.lavoro:
                 return
             if not detto:
                 self.lavoro.di("aspetto che la scheda si liberi")
+                self.lavoro.in_pausa(True)
                 detto = True
             if self._fermati.wait(ASPETTA_LA_SCHEDA):
                 raise Fermata()

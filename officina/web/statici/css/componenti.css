@@ -464,3 +464,6 @@ kbd { font: 500 11px/1 var(--mono); padding: 3px 5px; border-radius: 5px; border
 .ambito-voce { display: block; width: 100%; text-align: left; min-height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--attenuato); font-size: var(--testo-comando); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .ambito-voce:hover, .ambito-voce:focus-visible { background: var(--superficie); color: var(--ink); }
 .ambito-voce.scelta { color: var(--ink); font-weight: 600; }
+.avanza { display: grid; gap: 4px; max-width: 420px; }
+.avanza-barra { height: 6px; border-radius: 3px; background: var(--linea); overflow: hidden; }
+.avanza-barra > span { display: block; height: 100%; width: 0; background: var(--accento); transition: width var(--gesto) var(--uscita); }
