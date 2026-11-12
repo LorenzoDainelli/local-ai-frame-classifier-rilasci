@@ -111,7 +111,7 @@ func scrivi(_ sorgente: URL, _ uscita: URL, _ nome: String) {
     ])!.outputImage!.cropped(to: sdr.extent)
         .transformed(by: CGAffineTransform(scaleX: 0.25, y: 0.25))
     if nome == "iso" {
-        scriviISO(hdr, uscita)
+        scriviISO(hdr.cropped(to: sdr.extent), uscita)
         FileHandle.standardError.write("mappa \(nome): \(mappa(uscita) ?? "nessuna")\n"
             .data(using: .utf8)!)
         return
