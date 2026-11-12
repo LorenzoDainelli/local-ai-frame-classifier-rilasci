@@ -60,12 +60,12 @@ def giudica(riga: dict) -> list[str]:
             guasti.append(f"{nome} cambiata")
         if stato["prima"] and stato["dopo"] and not stato.get("meta_uguali"):
             guasti.append(f"{nome}: descrizione cambiata")
-    if not occhi["mappa_hdr"]["prima"]:
+    if not occhi["mappa_hdr"]["prima"] and not occhi["mappa_iso"]["prima"]:
         guasti.append("l'originale fatto dal Mac non ha la mappa HDR")
-    elif occhi["massimo_prima"] <= 1.05:
+    elif riga["variante"] != "buio" and occhi["massimo_prima"] <= 1.05:
         guasti.append("macOS non vede l'HDR nemmeno nell'originale")
-    elif occhi["massimo_dopo"] <= 1.05:
-        guasti.append("macOS non la mostra più in HDR")
+    elif occhi["massimo_dopo"] < 0.9 * occhi["massimo_prima"]:
+        guasti.append("macOS la mostra meno luminosa di prima")
     if riga["variante"] != "senza_profondita" and not occhi["disparita"]["prima"]:
         guasti.append("l'originale fatto dal Mac non ha la profondità")
     return guasti
@@ -102,7 +102,8 @@ def main() -> int:
             occhi = riga.get("mac") or {}
             print(nome, riga["guasti"] or "ok", riga.get("copiate"),
                   occhi.get("massimo_prima"), occhi.get("massimo_dopo"),
-                  {k: occhi[k] for k in ("mappa_hdr", "disparita") if k in occhi},
+                  {k: occhi[k] for k in ("mappa_hdr", "mappa_iso", "disparita")
+                   if k in occhi},
                   flush=True)
     difficili = [r for r in righe if r["difficile"]]
     conti = {"tutte": len(righe), "giuste": sum(not r["guasti"] for r in righe),

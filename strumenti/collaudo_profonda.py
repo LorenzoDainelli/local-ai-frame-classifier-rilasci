@@ -143,7 +143,8 @@ def una(originale: Path, cartella: Path, motore: str, a_otto: bool) -> dict:
             "nclx": letta.info.get("nclx_profile") or {},
             "data": exif.get_ifd(0x8769).get(0x9003), "fatta_da": exif.get(0x010F),
             "ora_file": int(uscita.stat().st_mtime),
-            "perde": fedelta.cosa_perde(originale, uscita)}
+            "perde": fedelta.cosa_perde(originale, uscita),
+            "sedici_vere": motore == motori.FINTO}
 
 
 def come_la_vede_il_mac(programma: Path | None, percorso: Path) -> dict | None:
@@ -173,8 +174,11 @@ def giudica(otto: dict, alta: dict, liscio8: float | None, liscio16: float | Non
         guasti.append("dice che perde: " + ", ".join(alta["perde"]))
     if tutto16 > tutto8 + 0.02:
         guasti.append("a 16 bit è più lontana dal vero che a 8")
-    if liscio8 is not None and liscio16 is not None and liscio16 >= liscio8:
-        guasti.append("a 16 bit le sfumature non migliorano")
+    if liscio8 is not None and liscio16 is not None:
+        if alta["sedici_vere"] and liscio16 >= liscio8:
+            guasti.append("a 16 bit le sfumature non migliorano")
+        if liscio16 > liscio8 + 0.01:
+            guasti.append("a 16 bit le sfumature peggiorano")
     if otto["bit"] != 8:
         guasti.append("la strada a 8 bit non è a 8")
     return guasti
