@@ -49,6 +49,27 @@ def migliora(originale: Path, uscita: Path) -> dict:
             "misura": [larga, alta], "scatole": scatole}
 
 
+def diagnosi(originale: Path, migliorata: Path) -> dict:
+    vecchia = heif_scatole.leggi(originale.read_bytes())
+    ftyp = vecchia.ftyp
+    marche = [ftyp[i:i + 4].decode("latin-1") for i in range(0, len(ftyp), 4)]
+    voci = {n: [v.tipo.decode("latin-1"), v.bandiere,
+                [vecchia.proprieta[i - 1][4:8].decode("latin-1")
+                 for _, i in vecchia.legami.get(n, []) if i]]
+            for n, v in vecchia.voci.items()}
+    rimandi = [[t.decode("latin-1"), da, verso] for t, da, verso in vecchia.rimandi]
+    gruppi = [s.corpo.hex()[:160] for s in vecchia.altre if s.tipo == b"grpl"]
+    try:
+        fatta = heif_scatole.con_la_mappa_iso(migliorata.read_bytes(),
+                                              originale.read_bytes())
+        esito = "nessuna" if fatta is None else f"ok {len(fatta)}"
+    except Exception as errore:
+        esito = f"{type(errore).__name__}: {errore}"
+    return {"marche": marche, "primaria": vecchia.primaria, "voci": voci,
+            "rimandi": rimandi, "gruppi": gruppi,
+            "mappe_iso": heif_scatole.mappe_iso(vecchia), "esito": esito}
+
+
 def giudica(riga: dict) -> list[str]:
     guasti = []
     occhi = riga["mac"]
@@ -102,6 +123,9 @@ def main() -> int:
                                        text=True)
                 riga["mac"] = json.loads(occhi.stdout)
                 riga["guasti"] = giudica(riga)
+                if variante == "iso" and riga["guasti"]:
+                    riga["diagnosi"] = diagnosi(originale, migliorata)
+                    print("diagnosi", json.dumps(riga["diagnosi"], default=str), flush=True)
             except Exception as errore:
                 riga["guasti"] = [f"{type(errore).__name__}: {errore}"]
             righe.append(riga)
