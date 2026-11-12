@@ -160,9 +160,14 @@
       [
         "orologio",
         "Nella Prova di velocità, nella gara dei 120 FPS e nella gara dei video di Togli c'è una barra su tutto il lavoro, da 1 a 100%, con scritto quanto manca e a che ora finisce. Se aspetta la scheda o l'Archivio sicuro scrive «in pausa»."
+      ],
+      [
+        "avviso",
+        "Nella revisione del miglioramento ti avvisa se la foto migliorata perde la luce HDR dell'iPhone, la profondità dell'effetto ritratto o i colori a 10 bit dell'originale. L'originale si tiene comunque."
       ]
     ],
     "tecnico": [
+      "Revisione: <code>fedelta.cosa_perde</code> confronta l'intestazione di originale e migliorata (pillow-heif: <code>aux</code> con la mappa HDR di Apple o ISO 21496-1, <code>depth_images</code>, <code>bit_depth</code>) e salva le cose perse nel campo <code>fedelta</code>; la pagina le mostra in un avviso che non sconsiglia.",
       "Barra di avanzamento (<code>officina/web/avanzamento.py</code>): ogni lavoro divide il tutto in fasi con un peso; il tempo che manca si misura solo dentro la fase di adesso, dopo 60 s di riscaldo (così i casi già fatti che ripassano veloci alla ripresa non falsano la stima), su una finestra di 20 minuti; il tempo in pausa non conta e la barra resta fra 1 e 99% fino alla fine.",
       "GIMM-VFI: il <code>turtle</code> finto e le classi come in Python vecchio restano anche mentre si costruisce la rete (<code>col_codice_di_gimm</code>), perché FlowFormer carica <code>convnext</code> solo lì. Il collaudo «Motori veri su Windows» ora scarica GIMM-VFI e LDF-VFI e li fa girare davvero su tre quadri piccoli (<code>--miglioria</code>).",
       "Tolti <code>PeCore</code>, <code>pe_visione.py</code>, le sue revisioni e impronte fissate, la conversione dei pesi e la voce in <code>modelli_in_casa.OBBLIGATORI</code> (regola 574, che supera la 420).",

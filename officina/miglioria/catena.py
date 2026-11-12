@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Callable, Iterable, Iterator
 
 from officina.errori import ErroreOfficina
-from officina.miglioria import (centoventi, date, fluido, metadati, mezzi, misura, motori,
-                                pezzi, veloce, video)
+from officina.miglioria import (centoventi, date, fluido, heif_scatole, metadati, mezzi,
+                                misura, motori, pezzi, veloce, video)
 from officina.sicuro.dall_archivio import DallArchivio
 
 GIA_GRANDE = "gia_grande"
@@ -208,6 +208,7 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
 
     metadati.salva(grande, aperta.metadati, uscita,
                    metadati.formato_di(originale), aperta.alfa)
+    heif_scatole.rimetti(originale, uscita)
     _date(originale, uscita, lavoro)
     _passo(al_passo, passi, passi)
     return {"larghezza": nuova_larghezza, "altezza": nuova_altezza,

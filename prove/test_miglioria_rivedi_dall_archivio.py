@@ -531,3 +531,20 @@ def test_gli_altri_no_al_si_restano_come_prima(pronta):
     assert risposta.json() == {
         "messaggio": "L'originale «mare.jpg» non è più dov'era: lo scambio non parte. "
                      "Nessun file è stato toccato."}
+
+
+def test_la_revisione_dice_cosa_perde_la_migliorata(pronta):
+    import json
+
+    from officina.miglioria import fedelta
+
+    riga = _da_rivedere(pronta)
+    pronta.casa.metti(FOTO, pronta.dati[FOTO])
+    with pronta.archivio.scrittura() as connessione:
+        connessione.execute("UPDATE migliorie SET fedelta = ? WHERE id = ?", (
+            json.dumps({"fatto": True, "motivi": [], "perde": [fedelta.MAPPA_HDR]}),
+            riga["id"]))
+    pagina = _cliente().get("/miglioramento/rivedi").text
+    assert 'id="fedelta-perde"' in pagina
+    assert "luce HDR" in pagina
+    assert 'id="fedelta-sconsigliata"' not in pagina

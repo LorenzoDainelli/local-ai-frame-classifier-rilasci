@@ -48,6 +48,15 @@
     </div>
     {% endif %}
 
+    {% if scelta.fedelta.perde %}
+    <div class="avviso" role="status" id="fedelta-perde">
+        <span>
+            {% for cosa in scelta.fedelta.perde %}{{ cosa }} {% endfor %}
+            L'originale con tutto dentro si tiene comunque, anche se approvi.
+        </span>
+    </div>
+    {% endif %}
+
     {% if scelta.archivio %}
     {{ archivio_della_revisione(scelta.archivio) }}
     {% elif not scelta.ci_sono %}

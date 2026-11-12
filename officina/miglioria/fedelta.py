@@ -22,6 +22,20 @@ PEZZI_CAMBIATI = "pezzi_cambiati"
 VOLTO_CAMBIATO = "volto_cambiato"
 VOLTI_DIVERSI = "volti_diversi"
 
+MAPPA_HDR = "mappa_hdr"
+PROFONDITA = "profondita"
+BIT = "bit"
+MAPPE_HDR = ("urn:com:apple:photo:2020:aux:hdrgainmap", "urn:iso:std:iso:ts:21496:-1")
+
+PERSE = {
+    MAPPA_HDR: "La migliorata non ha la luce HDR dell'originale: sugli schermi HDR "
+               "dell'iPhone e del Mac le luci brillano meno.",
+    PROFONDITA: "La migliorata non ha la mappa di profondità dell'originale (effetto "
+                "ritratto).",
+    BIT: "L'originale ha più di 8 bit per colore, la migliorata 8: nelle sfumature "
+         "possono vedersi delle strisce.",
+}
+
 PAROLE = {
     CAMBIATA: "L'immagine nel suo insieme è diversa dall'originale.",
     PEZZI_CAMBIATI: "In alcuni punti sono comparsi o spariti dei dettagli.",
@@ -96,12 +110,38 @@ def _coppia(genere: str, originale: Path, migliorata: Path, lato: int | None):
             lettura.copia_di_lavoro(migliorata, lato))
 
 
+def _cosa_ha(percorso) -> set[str]:
+    immagine = lettura.intestazione(percorso)
+    try:
+        info = immagine.info
+        cose = set()
+        if any(tipo in MAPPE_HDR for tipo in (info.get("aux") or {})):
+            cose.add(MAPPA_HDR)
+        if info.get("depth_images"):
+            cose.add(PROFONDITA)
+        if (info.get("bit_depth") or 8) > 8:
+            cose.add(BIT)
+        return cose
+    finally:
+        immagine.close()
+
+
+def cosa_perde(originale, migliorata) -> list[str]:
+    try:
+        perse = _cosa_ha(originale) - _cosa_ha(migliorata)
+    except Exception as errore:
+        registro.avviso("miglioria.perse_non_guardate", motivo=registro.tipo_di(errore))
+        return []
+    return [cosa for cosa in PERSE if cosa in perse]
+
+
 def controlla(genere: str, originale: Path, migliorata: Path,
               rilevatore=None) -> dict:
+    perde = cosa_perde(originale, migliorata) if genere != "video" else []
     try:
         prima, dopo = _coppia(genere, originale, migliorata, LATO_PER_I_VOLTI)
         if prima is None or dopo is None:
-            return {"fatto": False}
+            return {"fatto": False, "perde": perde}
         media, forti = quanto_cambia(prima, dopo)
         volti = None
         if rilevatore is not None:
@@ -112,11 +152,11 @@ def controlla(genere: str, originale: Path, migliorata: Path,
                                 motivo=registro.tipo_di(errore))
         motivi = giudica(media, forti, volti)
         return {"fatto": True, "media": media, "forti": forti, "volti": volti,
-                "motivi": motivi}
+                "motivi": motivi, "perde": perde}
     except Exception as errore:                          # noqa: BLE001
         registro.avviso("miglioria.fedelta_non_misurata",
                         motivo=registro.tipo_di(errore))
-        return {"fatto": False}
+        return {"fatto": False, "perde": perde}
 
 
 def in_parole(testo: str | None) -> dict:
@@ -129,4 +169,5 @@ def in_parole(testo: str | None) -> dict:
         "misurata": bool(esito.get("fatto")),
         "sconsigliata": bool(motivi),
         "motivi": [PAROLE[m] for m in motivi if m in PAROLE],
+        "perde": [PERSE[m] for m in esito.get("perde") or [] if m in PERSE],
     }
