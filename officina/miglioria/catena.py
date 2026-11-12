@@ -227,7 +227,8 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
 
     sedici = None
     if alta is not None:
-        sedici = profonda.Profonda(alta, aperta.profonda.bit, aperta.profonda.colore)
+        sedici = profonda.Profonda(alta, aperta.profonda.bit, aperta.profonda.colore,
+                                   aperta.profonda.scatole)
     metadati.salva(grande, aperta.metadati, uscita,
                    metadati.formato_di(originale), aperta.alfa, sedici)
     heif_scatole.rimetti(originale, uscita)

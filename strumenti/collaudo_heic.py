@@ -68,7 +68,7 @@ def giudica(riga: dict) -> list[str]:
     voluta = "mappa_iso" if riga["variante"] == "iso" else "mappa_hdr"
     if not occhi[voluta]["prima"]:
         guasti.append(f"l'originale fatto dal Mac non ha la {voluta}")
-    elif occhi["luce_prima"] <= 1.05:
+    elif voluta == "mappa_iso" and occhi["luce_prima"] <= 1.05:
         guasti.append("macOS non vede l'HDR nemmeno nell'originale")
     elif occhi["luce_dopo"] < 0.9 * occhi["luce_prima"]:
         guasti.append("macOS la mostra meno luminosa di prima")
@@ -91,11 +91,11 @@ def main() -> int:
             nome = f"{presa['file'].stem}-{variante}"
             originale = cartella / f"{nome}.heic"
             migliorata = cartella / f"{nome}-migliorata.heic"
-            subprocess.run([str(argomenti.programma), "fai", str(presa["file"]),
-                            str(originale), variante], check=True)
             riga = {"foto": presa["file"].name, "sha256": presa["sha256"],
                     "variante": variante, "difficile": variante in DIFFICILI}
             try:
+                subprocess.run([str(argomenti.programma), "fai", str(presa["file"]),
+                                str(originale), variante], check=True)
                 riga.update(migliora(originale, migliorata))
                 occhi = subprocess.run([str(argomenti.programma), "guarda", str(originale),
                                         str(migliorata)], check=True, capture_output=True,

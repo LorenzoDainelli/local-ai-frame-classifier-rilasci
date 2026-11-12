@@ -38,11 +38,11 @@ jobs:
           python-version: "3.13"
       - name: Le librerie
         run: |
-          grep -E "^(pillow|pillow-heif|numpy)==" requirements.txt | cut -d" " -f1 > heic-librerie.txt
+          grep -E "^(pillow|pillow-heif|numpy|imagecodecs|tifffile)==" requirements.txt | cut -d" " -f1 > heic-librerie.txt
           cat heic-librerie.txt
           echo "pypng==0.20220715.0" >> heic-librerie.txt
           python -m pip install -r heic-librerie.txt
-          python -c "import numpy, pillow_heif; print(pillow_heif.__version__)"
+          python -c "import numpy, pillow_heif, imagecodecs, tifffile; print(pillow_heif.__version__, imagecodecs.__version__)"
       - name: Il programma che guarda come macOS
         run: |
           sw_vers
@@ -74,5 +74,47 @@ jobs:
           path: |
             heic-collaudo.json
             heic-profonda.json
+          if-no-files-found: ignore
+          retention-days: 1
+
+  altri:
+    name: PNG e TIFF a 16 bit, AVIF a 10 bit visti da macOS (${{ matrix.formato }})
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        formato: [png, tif, avif]
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Le librerie
+        run: |
+          grep -E "^(pillow|pillow-heif|numpy|imagecodecs|tifffile)==" requirements.txt | cut -d" " -f1 > altri-librerie.txt
+          echo "pypng==0.20220715.0" >> altri-librerie.txt
+          cat altri-librerie.txt
+          python -m pip install -r altri-librerie.txt
+      - name: Il programma che guarda come macOS
+        run: swiftc -O strumenti/collaudo_heic.swift -o "$RUNNER_TEMP/collaudo_heic"
+      - name: Le foto a 16 bit già scaricate
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/profonda/testimages
+          key: testimages-16bit-600-v1
+      - name: La profondità
+        run: python strumenti/collaudo_profonda.py --formato ${{ matrix.formato }} --cartella "$RUNNER_TEMP/profonda" --programma "$RUNNER_TEMP/collaudo_heic" --uscita profonda-${{ matrix.formato }}.json
+      - name: Cosa ha detto
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: profonda-${{ matrix.formato }}
+          path: profonda-${{ matrix.formato }}.json
           if-no-files-found: ignore
           retention-days: 1

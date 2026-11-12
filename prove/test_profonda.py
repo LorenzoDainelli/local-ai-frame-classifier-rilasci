@@ -96,6 +96,26 @@ def test_unire_tiene_gli_8_bit_del_motore_e_aggiunge_i_fini():
     assert _livelli(unita) > 3 * _livelli(np.asarray(nuova))
 
 
+def test_unire_non_aggiunge_rumore_se_il_motore_arrotonda_diverso():
+    pixel = profonda._pieni(_sfumata(120, 60) << 6, 10)
+    base = profonda.ingrandisci(pixel, 240, 120).astype(np.float64)
+    caso = np.random.default_rng(3)
+    otto = np.clip(np.floor(base / profonda.PASSO + caso.uniform(0, 1, base.shape)), 0, 255)
+    nuova = Image.fromarray(otto.astype(np.uint8))
+    unita = profonda.unisci(pixel, nuova)
+    assert (profonda.a_otto(unita) == otto).all()
+    scarto16 = np.sqrt(((unita - base) ** 2).mean())
+    scarto8 = np.sqrt(((otto * profonda.PASSO - base) ** 2).mean())
+    assert scarto16 < 0.6 * scarto8
+
+
+def test_unire_segue_il_motore_che_cambia_tanto():
+    pixel = profonda._pieni(_sfumata(100, 40) << 6, 10)
+    nuova = Image.fromarray(np.full((80, 200, 3), 200, np.uint8))
+    unita = profonda.unisci(pixel, nuova)
+    assert (np.abs(unita.astype(int) - 200 * profonda.PASSO) <= profonda.MEZZO_PASSO).all()
+
+
 def test_si_salva_a_10_bit_con_profilo_data_e_icc(tmp_path):
     icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
     sorgente = _heic(tmp_path / "a.heic", _sfumata(90, 60), icc=icc)
@@ -175,3 +195,106 @@ def test_la_foto_a_8_bit_resta_come_prima(tmp_path):
     uscita = tmp_path / "b.heic"
     catena.foto(_lavoro(sorgente, uscita, motori.FINTO))
     assert _sedici(uscita)[0].info["bit_depth"] == 8
+
+
+imagecodecs = pytest.importorskip("imagecodecs")
+
+
+def _exif() -> bytes:
+    exif = Image.Exif()
+    exif[0x010F] = "Prova"
+    exif[0x0132] = "2020:01:02 03:04:05"
+    exif[305] = "Lightroom"
+    exif.get_ifd(0x8825)[1] = "N"
+    exif.get_ifd(0x8825)[2] = (45.0, 30.0, 0.0)
+    return exif.tobytes()
+
+
+ICC = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+
+
+def _icc() -> bytes:
+    return ICC
+
+
+def _sedici_pieni(larga: int, alta: int) -> np.ndarray:
+    return profonda._scala(_sfumata(larga, alta), 10)
+
+
+def _png16(percorso: Path, pixel: np.ndarray) -> Path:
+    gamma = profonda._pezzo_png(b"gAMA", (45455).to_bytes(4, "big"))
+    with open(percorso, "wb") as uscita:
+        profonda.salva_png(pixel, uscita, _exif(), b"<x:xmpmeta/>", _icc(),
+                           {"Autore": "io"}, [gamma])
+    return percorso
+
+
+def _tiff16(percorso: Path, pixel: np.ndarray) -> Path:
+    with open(percorso, "wb") as uscita:
+        profonda.salva_tiff(pixel, uscita, metadati.exif_per_tiff(_exif()),
+                            b"<x:xmpmeta/>", _icc())
+    return percorso
+
+
+def _avif10(percorso: Path, pixel: np.ndarray) -> Path:
+    colore = {"color_primaries": 12, "transfer_characteristics": 13,
+              "matrix_coefficients": 6, "full_range_flag": 1}
+    with open(percorso, "wb") as uscita:
+        profonda.salva_avif(pixel, colore, uscita, _exif(), b"<x:xmpmeta/>", _icc(), 100)
+    return percorso
+
+
+FATTI = {"png": (_png16, 16), "tif": (_tiff16, 16), "avif": (_avif10, 10)}
+
+
+@pytest.mark.parametrize("estensione", sorted(FATTI))
+def test_png_tiff_e_avif_si_aprono_ad_alta_profondita(tmp_path, estensione):
+    fai, bit = FATTI[estensione]
+    sorgente = fai(tmp_path / f"a.{estensione}", _sedici_pieni(160, 90))
+    aperta = metadati.apri(sorgente, profonda=True)
+    assert aperta.profonda is not None
+    assert aperta.profonda.bit == bit
+    assert profonda.bit_del_file(sorgente) == bit
+    assert aperta.metadati.icc == _icc()
+    assert aperta.metadati.exif
+    if estensione != "tif":
+        assert aperta.metadati.xmp == b"<x:xmpmeta/>"
+
+
+@pytest.mark.parametrize("estensione", sorted(FATTI))
+def test_png_tiff_e_avif_restano_ad_alta_profondita(tmp_path, monkeypatch, estensione):
+    monkeypatch.setitem(motori.FOTO, motori.LUCIDFLUX, f"{QUI}:OttoBit")
+    fai, bit = FATTI[estensione]
+    sorgente = fai(tmp_path / f"a.{estensione}", _sedici_pieni(320, 180))
+    uscita = tmp_path / f"b.{estensione}"
+    catena.foto(_lavoro(sorgente, uscita, motori.LUCIDFLUX))
+    assert profonda.bit_del_file(uscita) == bit
+    riletta = metadati.apri(uscita, profonda=True)
+    assert riletta.profonda is not None
+    otto = np.asarray(riletta.immagine)
+    assert _livelli(riletta.profonda.pixel) > 3 * _livelli(otto)
+    assert riletta.metadati.icc == _icc()
+    exif = Image.open(uscita).getexif()
+    assert exif.get(0x010F) == "Prova"
+    assert exif.get(305) == "Lightroom"
+    assert exif.get_ifd(0x8825).get(2) == (45.0, 30.0, 0.0)
+    assert fedelta.cosa_perde(sorgente, uscita) == []
+    if estensione == "avif":
+        assert profonda.colore_avif(uscita.read_bytes())[1]["color_primaries"] == 12
+    if estensione == "png":
+        assert b"gAMA" in uscita.read_bytes()
+        assert Image.open(uscita).info.get("Autore") == "io"
+
+
+def test_png_a_8_bit_resta_come_prima(tmp_path):
+    sorgente = tmp_path / "a.png"
+    Image.new("RGB", (64, 32), (9, 8, 7)).save(sorgente)
+    assert metadati.apri(sorgente, profonda=True).profonda is None
+    assert profonda.bit_del_file(sorgente) == 8
+
+
+def test_png_che_non_torna_si_lavora_a_8(tmp_path, monkeypatch):
+    sorgente = _png16(tmp_path / "a.png", _sedici_pieni(64, 32))
+    monkeypatch.setattr(profonda, "GIRI", {})
+    monkeypatch.setattr(profonda, "_torna", lambda *_: False)
+    assert metadati.apri(sorgente, profonda=True).profonda is None

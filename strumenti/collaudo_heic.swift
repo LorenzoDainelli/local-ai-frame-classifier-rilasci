@@ -74,11 +74,16 @@ func scriviCI(_ sdr: CIImage, _ verso: URL, _ opzioni: [CIImageRepresentationOpt
 
 func scriviISO(_ hdr: CIImage, _ verso: URL) {
     let spazio = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!
-    guard let immagine = contesto.createCGImage(hdr, from: hdr.extent, format: .RGBAh,
-                                                colorSpace: spazio),
-          let destino = CGImageDestinationCreateWithURL(
-              verso as CFURL, UTType.heic.identifier as CFString, 1, nil) else {
-        muori("iso")
+    let fatta = contesto.createCGImage(hdr, from: hdr.extent, format: .RGBAh,
+                                       colorSpace: spazio)
+        ?? contesto.createCGImage(hdr, from: hdr.extent, format: .RGBAf,
+                                  colorSpace: spazio)
+    guard let immagine = fatta else {
+        muori("iso: niente immagine HDR da \(hdr.extent)")
+    }
+    guard let destino = CGImageDestinationCreateWithURL(
+        verso as CFURL, "public.heic" as CFString, 1, nil) else {
+        muori("iso: niente destinazione per \(verso.path)")
     }
     let opzioni: [CFString: Any] = [
         kCGImageDestinationEncodeRequest: kCGImageDestinationEncodeToISOGainmap]

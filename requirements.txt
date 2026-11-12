@@ -11,6 +11,8 @@ uvicorn==0.52.4           # motore che fa girare il server
 jinja2==3.1.6             # pagine HTML scritte a mano
 pillow==13.0.0            # lettura immagini, miniature, AVIF (regola 327)
 pillow-heif==1.5.0        # lettura HEIC senza conversioni (regola 51)
+imagecodecs==2026.3.6     # PNG e TIFF a 16 bit, AVIF a 10 bit nel miglioramento
+tifffile==2026.3.3        # scrive i TIFF a 16 bit con i dati della foto
 python-multipart==0.0.32  # legge i moduli delle pagine (note, date, scelte)
 numpy==2.4.6              # i conti sulle impronte e sul classificatore
 cryptography==50.0.2      # forziere e Archivio sicuro: AES-256-GCM (regole 331, 340, 508)

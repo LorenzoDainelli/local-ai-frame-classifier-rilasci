@@ -2,18 +2,21 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
+import struct
 import subprocess
 import sys
 import tarfile
 import urllib.request
+import zlib
 from pathlib import Path
 
 import numpy as np
 import pillow_heif
 import png
-from PIL import Image
+from PIL import Image, ImageCms
 
 from officina.miglioria import catena, fedelta, motori, profonda
 
@@ -26,6 +29,8 @@ DATA = "2021:07:08 09:10:11"
 PRIMARIE = 12
 TRASFERIMENTO = 13
 LATO_LISCIO = 32
+FORMATI = {"heic": 10, "png": 16, "tif": 16, "avif": 10}
+LATITUDINE = (43.0, 46.0, 12.0)
 LISCIO = 0.004
 
 
@@ -84,26 +89,115 @@ def variante(pixel: np.ndarray, nome: str, seme: int) -> np.ndarray:
     return profonda.a_sedici(valori)
 
 
-def scrivi(pixel: np.ndarray, verso: Path, qualita: int) -> None:
+def _exif(gps: bool) -> Image.Exif:
+    exif = Image.Exif()
+    exif[0x010F] = "Collaudo"
+    exif.get_ifd(0x8769)[0x9003] = DATA
+    if gps:
+        exif.get_ifd(0x8825).update({1: "N", 2: LATITUDINE})
+    return exif
+
+
+def _icc() -> bytes:
+    profilo = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB"))
+    return profilo.tobytes()
+
+
+ICC = _icc()
+
+
+def _pezzo_png(tipo: bytes, corpo: bytes) -> bytes:
+    return (struct.pack(">I", len(corpo)) + tipo + corpo
+            + struct.pack(">I", zlib.crc32(tipo + corpo) & 0xFFFFFFFF))
+
+
+def _scrivi_heic(pixel: np.ndarray, verso: Path, qualita: int) -> None:
     dieci = (pixel.astype(np.uint64) * 1023 + 32767) // 65535
     alta, larga = pixel.shape[:2]
     heif = pillow_heif.from_bytes(mode="RGB;16", size=(larga, alta),
                                   data=(dieci << 6).astype(np.uint16).tobytes())
-    exif = Image.Exif()
-    exif[0x010F] = "Collaudo"
-    exif.get_ifd(0x8769)[0x9003] = DATA
-    heif.save(verso, quality=qualita, exif=exif.tobytes(), color_primaries=PRIMARIE,
-              transfer_characteristics=TRASFERIMENTO, matrix_coefficients=6,
-              full_range_flag=1, save_nclx_profile=True)
+    heif.save(verso, quality=qualita, exif=_exif(False).tobytes(),
+              color_primaries=PRIMARIE, transfer_characteristics=TRASFERIMENTO,
+              matrix_coefficients=6, full_range_flag=1, save_nclx_profile=True)
+
+
+def _scrivi_png(pixel: np.ndarray, verso: Path, _qualita: int) -> None:
+    import imagecodecs
+
+    dati = imagecodecs.png_encode(np.ascontiguousarray(pixel), level=6)
+    fine = 8 + 12 + struct.unpack(">I", dati[8:12])[0]
+    aggiunte = (_pezzo_png(b"iCCP", b"Collaudo\0\0" + zlib.compress(ICC))
+                + _pezzo_png(b"eXIf", _exif(True).tobytes()[6:]))
+    verso.write_bytes(dati[:fine] + aggiunte + dati[fine:])
+
+
+def _scrivi_tif(pixel: np.ndarray, verso: Path, _qualita: int) -> None:
+    import tifffile
+
+    exif = _exif(True)
+    uscita = io.BytesIO()
+    tifffile.imwrite(uscita, np.ascontiguousarray(pixel), photometric="rgb",
+                     compression="zlib", iccprofile=ICC, metadata=None,
+                     byteorder="<", bigtiff=False,
+                     extratags=[(271, "s", 0, "Collaudo", True),
+                                (306, "s", 0, DATA, True)])
+    verso.write_bytes(profonda._con_gps(uscita.getvalue(), exif.get_ifd(0x8825)))
+
+
+def _scrivi_avif(pixel: np.ndarray, verso: Path, qualita: int) -> None:
+    import imagecodecs
+
+    dieci = ((pixel.astype(np.uint64) * 1023 + 32767) // 65535).astype(np.uint16)
+    dati = imagecodecs.avif_encode(np.ascontiguousarray(dieci), level=qualita,
+                                   bitspersample=10, primaries=PRIMARIE,
+                                   transfer=TRASFERIMENTO, matrix=6)
+    verso.write_bytes(profonda._con_dati(dati, _exif(True).tobytes(), None, None))
+
+
+SCRITTORI = {"heic": _scrivi_heic, "png": _scrivi_png, "tif": _scrivi_tif,
+             "avif": _scrivi_avif}
+
+
+def scrivi(pixel: np.ndarray, verso: Path, qualita: int) -> None:
+    SCRITTORI[verso.suffix[1:]](pixel, verso, qualita)
     os.utime(verso, (1_600_000_000, 1_600_000_000))
 
 
-def leggi(percorso: Path):
-    letta = pillow_heif.open_heif(percorso, convert_hdr_to_8bit=False)
-    pixel = np.asarray(letta)
+def _otto_a_sedici(pixel: np.ndarray) -> np.ndarray:
+    return pixel.astype(np.uint16) * profonda.PASSO
+
+
+def leggi(percorso: Path) -> tuple[int, np.ndarray, dict]:
+    formato = percorso.suffix[1:]
+    if formato == "heic":
+        letta = pillow_heif.open_heif(percorso, convert_hdr_to_8bit=False)
+        pixel = np.asarray(letta)
+        colore = letta.info.get("nclx_profile") or {}
+        if pixel.dtype == np.uint8:
+            return 8, _otto_a_sedici(pixel), colore
+        bit = int(letta.info["bit_depth"])
+        return bit, profonda._pieni(pixel, bit), colore
+    if formato == "avif":
+        import imagecodecs
+
+        dati = percorso.read_bytes()
+        bit, colore = profonda.colore_avif(dati)
+        pixel = imagecodecs.avif_decode(dati)
+        if pixel.dtype == np.uint8:
+            return 8, _otto_a_sedici(pixel), colore
+        return bit, profonda._scala(pixel, bit), colore
+    if formato == "png":
+        import imagecodecs
+
+        pixel = imagecodecs.png_decode(percorso.read_bytes())
+    else:
+        import tifffile
+
+        pixel = tifffile.imread(percorso)
+    pixel = pixel[..., :3]
     if pixel.dtype == np.uint8:
-        return letta, pixel.astype(np.uint16) * profonda.PASSO
-    return letta, profonda._pieni(pixel, int(letta.info["bit_depth"]))
+        return 8, _otto_a_sedici(pixel), {}
+    return 16, pixel, {}
 
 
 def lisci(riferimento: np.ndarray) -> np.ndarray:
@@ -127,7 +221,8 @@ def scarto(pixel: np.ndarray, riferimento: np.ndarray, dove: np.ndarray) -> floa
 
 
 def una(originale: Path, cartella: Path, motore: str, a_otto: bool) -> dict:
-    uscita = cartella / f"{originale.stem}-{motore}-{'8' if a_otto else '16'}.heic"
+    quanti = "8" if a_otto else "16"
+    uscita = cartella / f"{originale.stem}-{motore}-{quanti}{originale.suffix}"
     vero = profonda.leggi
     if a_otto:
         profonda.leggi = lambda *_a, **_k: None
@@ -137,11 +232,14 @@ def una(originale: Path, cartella: Path, motore: str, a_otto: bool) -> dict:
                      "misura": "fhd"})
     finally:
         profonda.leggi = vero
-    letta, pixel = leggi(uscita)
-    exif = Image.open(uscita).getexif()
-    return {"file": uscita, "bit": int(letta.info["bit_depth"]), "pixel": pixel,
-            "nclx": letta.info.get("nclx_profile") or {},
-            "data": exif.get_ifd(0x8769).get(0x9003), "fatta_da": exif.get(0x010F),
+    bit, pixel, colore = leggi(uscita)
+    with Image.open(uscita) as aperta:
+        exif = aperta.getexif()
+        icc = aperta.info.get("icc_profile")
+        gps = exif.get_ifd(0x8825).get(2)
+        data = exif.get_ifd(0x8769).get(0x9003) or exif.get(306)
+    return {"file": uscita, "bit": bit, "pixel": pixel, "nclx": colore, "icc": icc,
+            "gps": gps, "data": data, "fatta_da": exif.get(0x010F),
             "ora_file": int(uscita.stat().st_mtime),
             "perde": fedelta.cosa_perde(originale, uscita),
             "sedici_vere": motore == motori.FINTO}
@@ -156,18 +254,24 @@ def come_la_vede_il_mac(programma: Path | None, percorso: Path) -> dict | None:
 
 
 def giudica(otto: dict, alta: dict, liscio8: float | None, liscio16: float | None,
-            tutto8: float, tutto16: float) -> list[str]:
+            tutto8: float, tutto16: float, formato: str = "heic") -> list[str]:
     guasti = []
+    voluti = FORMATI[formato]
     mac = alta.get("mac")
-    if mac is not None and mac.get("bit") != 10:
+    if mac is not None and mac.get("bit") != voluti:
         guasti.append(f"macOS la vede a {mac.get('bit')} bit")
-    if alta["bit"] != 10:
+    if alta["bit"] != voluti:
         guasti.append(f"salvata a {alta['bit']} bit")
-    if alta["nclx"].get("color_primaries") != PRIMARIE or \
-            alta["nclx"].get("transfer_characteristics") != TRASFERIMENTO:
-        guasti.append("profilo colore cambiato")
+    if formato in ("heic", "avif"):
+        if alta["nclx"].get("color_primaries") != PRIMARIE or \
+                alta["nclx"].get("transfer_characteristics") != TRASFERIMENTO:
+            guasti.append("profilo colore cambiato")
+    elif alta["icc"] != ICC:
+        guasti.append("profilo ICC cambiato")
     if alta["data"] != DATA or alta["fatta_da"] != "Collaudo":
         guasti.append("EXIF perso")
+    if formato != "heic" and tuple(float(v) for v in alta["gps"] or ()) != LATITUDINE:
+        guasti.append("posizione GPS persa")
     if alta["ora_file"] != 1_600_000_000:
         guasti.append("data del file persa")
     if alta["perde"]:
@@ -204,6 +308,7 @@ def main() -> int:
     parser.add_argument("--cartella", type=Path, required=True)
     parser.add_argument("--uscita", type=Path, required=True)
     parser.add_argument("--programma", type=Path)
+    parser.add_argument("--formato", choices=sorted(FORMATI), default="heic")
     argomenti = parser.parse_args()
     cartella = argomenti.cartella
     motori.FOTO[motori.LUCIDFLUX] = f"{__name__}:OttoBit"
@@ -213,9 +318,9 @@ def main() -> int:
         pixel = sedici(presa["dati"])
         for nome in VARIANTI:
             fatta = variante(pixel, nome, numero)
-            originale = cartella / f"{Path(presa['nome']).stem}-{nome}.heic"
+            originale = cartella / f"{Path(presa['nome']).stem}-{nome}.{argomenti.formato}"
             scrivi(fatta, originale, 40 if nome == "compressa" else 95)
-            _letta, vera = leggi(originale)
+            _bit, vera, _colore = leggi(originale)
             for motore in (motori.FINTO, motori.LUCIDFLUX):
                 riga = {"foto": presa["nome"], "sha256": presa["sha256"],
                         "variante": nome, "difficile": nome in DIFFICILI,
@@ -237,14 +342,16 @@ def main() -> int:
                                 parte_liscia=round(float(dove.mean()), 3),
                                 scarto_liscio_8=liscio8, scarto_liscio_16=liscio16,
                                 scarto_8=tutto8, scarto_16=tutto16)
-                    riga["guasti"] = giudica(otto, alta, liscio8, liscio16, tutto8, tutto16)
+                    riga["guasti"] = giudica(otto, alta, liscio8, liscio16, tutto8, tutto16,
+                                             argomenti.formato)
                 except Exception as errore:
                     riga["guasti"] = [f"{type(errore).__name__}: {errore}"]
                 righe.append(riga)
                 print(json.dumps({k: v for k, v in riga.items() if k != "sha256"},
                                  ensure_ascii=False), flush=True)
     difficili = [r for r in righe if r["difficile"]]
-    conti = {"tutte": len(righe), "giuste": sum(not r["guasti"] for r in righe),
+    conti = {"formato": argomenti.formato, "tutte": len(righe),
+             "giuste": sum(not r["guasti"] for r in righe),
              "difficili": len(difficili),
              "difficili_giuste": sum(not r["guasti"] for r in difficili),
              "archivio_sha256": prese["archivio_sha256"], "medie": medie(righe)}

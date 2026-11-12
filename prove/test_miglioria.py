@@ -455,6 +455,24 @@ def test_i_formati_foto_tengono_data_e_orientamento(tmp_path):
         assert data == "2015:01:02 03:04:05", suffisso
 
 
+def test_i_formati_foto_a_8_bit_tengono_la_posizione(tmp_path):
+    pytest.importorskip("pillow_heif")
+    from officina.miglioria import metadati
+
+    exif = Image.Exif()
+    exif.get_ifd(0x8825).update({1: "N", 2: (43.0, 46.0, 12.0)})
+    for suffisso in (".jpg", ".heic", ".png", ".webp", ".tif"):
+        sorgente = tmp_path / f"g{suffisso}"
+        Image.new("RGB", (80, 60), (1, 2, 3)).save(
+            sorgente, metadati.formato_di(sorgente), exif=exif.tobytes())
+        aperta = metadati.apri(sorgente)
+        uscita = tmp_path / f"h{suffisso}"
+        metadati.salva(aperta.immagine.resize((160, 120)), aperta.metadati, uscita,
+                       metadati.formato_di(sorgente), aperta.alfa)
+        posizione = Image.open(uscita).getexif().get_ifd(0x8825)
+        assert tuple(float(v) for v in posizione.get(2, ())) == (43.0, 46.0, 12.0), suffisso
+
+
 def test_la_trasparenza_resta(tmp_path):
     from officina.miglioria import metadati
 

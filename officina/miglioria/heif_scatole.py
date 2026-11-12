@@ -3,13 +3,18 @@ from __future__ import annotations
 import io
 import os
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 AUSILIARIA = b"auxl"
 DESCRIVE = b"cdsc"
 DERIVATA = b"dimg"
+GRUPPI = b"grpl"
+ALTERNATIVE = b"altr"
+MAPPA_ISO = b"tmap"
+TRASFORMA = (b"irot", b"imir", b"clap")
 HEIF = (".heic", ".heif")
+AVIF = (".avif",)
 TOLLERANZA = 0.02
 TRASPARENZE = ("urn:mpeg:hevc:2015:auxid:1", "urn:mpeg:mpegB:cicp:systems:auxiliary:alpha")
 
@@ -36,6 +41,7 @@ class Voce:
     tipo: bytes
     resto: bytes
     protezione: int = 0
+    bandiere: int = 0
 
 
 @dataclass
@@ -128,7 +134,8 @@ def _iinf(corpo: bytes) -> dict[int, Voce]:
         q = 4
         numero, q = _numero(infe, q, 2 if v == 2 else 4)
         protezione, q = _numero(infe, q, 2)
-        voci[numero] = Voce(numero, infe[q:q + 4], infe[q + 4:], protezione)
+        voci[numero] = Voce(numero, infe[q:q + 4], infe[q + 4:], protezione,
+                            int.from_bytes(infe[1:4], "big"))
     if len(voci) != quante:
         raise ScatolaStrana("voci contate male")
     return voci
@@ -287,7 +294,7 @@ def scrivi(heif: Heif, voci: dict[int, Voce], contenuti: dict[int, tuple[int, by
     larghi = max(voci) > 0xFFFF
     largo = 4 if larghi else 2
     infe = b"".join(
-        _piena(b"infe", 3 if larghi else 2, 0,
+        _piena(b"infe", 3 if larghi else 2, v.bandiere,
                v.numero.to_bytes(largo, "big") + v.protezione.to_bytes(2, "big")
                + v.tipo + v.resto)
         for v in sorted(voci.values(), key=lambda v: v.numero))
@@ -349,16 +356,7 @@ def scrivi(heif: Heif, voci: dict[int, Voce], contenuti: dict[int, tuple[int, by
     return ftyp + meta + dopo + mdat
 
 
-def con_le_ausiliarie(migliorata: bytes, originale: bytes) -> tuple[bytes, list[str]]:
-    nuova = leggi(migliorata)
-    vecchia = leggi(originale)
-    gia = {tipo_ausiliario(nuova, n) for n in ausiliarie(nuova)}
-    scelte = [n for n in ausiliarie(vecchia)
-              if tipo_ausiliario(vecchia, n) not in gia
-              and tipo_ausiliario(vecchia, n) not in TRASPARENZE]
-    if not scelte:
-        return migliorata, []
-    famiglia = _famiglia(vecchia, scelte)
+def _trapianta(nuova: Heif, vecchia: Heif, famiglia: list[int]):
     prossimo = max(nuova.voci) + 1
     nuovi = {vecchio: prossimo + i for i, vecchio in enumerate(sorted(famiglia))}
     voci = dict(nuova.voci)
@@ -369,7 +367,7 @@ def con_le_ausiliarie(migliorata: bytes, originale: bytes) -> tuple[bytes, list[
     per_indice: dict[int, int] = {}
     for vecchio in sorted(famiglia):
         voce = vecchia.voci[vecchio]
-        voci[nuovi[vecchio]] = Voce(nuovi[vecchio], voce.tipo, voce.resto, voce.protezione)
+        voci[nuovi[vecchio]] = replace(voce, numero=nuovi[vecchio])
         if vecchio in vecchia.dove:
             contenuti[nuovi[vecchio]] = (vecchia.dove[vecchio].metodo,
                                          contenuto(vecchia, vecchio))
@@ -388,11 +386,131 @@ def con_le_ausiliarie(migliorata: bytes, originale: bytes) -> tuple[bytes, list[
             if vecchia.primaria in verso:
                 rimandi.append((tipo, nuovi[da], [nuova.primaria]))
             continue
+        if tipo == DERIVATA and vecchia.voci[da].tipo == MAPPA_ISO:
+            mappa = {**nuovi, vecchia.primaria: nuova.primaria}
+            if all(v in mappa for v in verso):
+                rimandi.append((tipo, nuovi[da], [mappa[v] for v in verso]))
+            continue
         tenuti = [nuovi[v] for v in verso if v in nuovi]
         if tenuti:
             rimandi.append((tipo, nuovi[da], tenuti))
+    return nuovi, voci, contenuti, rimandi, proprieta, legami
+
+
+def con_le_ausiliarie(migliorata: bytes, originale: bytes) -> tuple[bytes, list[str]]:
+    nuova = leggi(migliorata)
+    vecchia = leggi(originale)
+    gia = {tipo_ausiliario(nuova, n) for n in ausiliarie(nuova)}
+    scelte = [n for n in ausiliarie(vecchia)
+              if tipo_ausiliario(vecchia, n) not in gia
+              and tipo_ausiliario(vecchia, n) not in TRASPARENZE]
+    if not scelte:
+        return migliorata, []
+    _, *pezzi = _trapianta(nuova, vecchia, _famiglia(vecchia, scelte))
     tipi = [tipo_ausiliario(vecchia, n) for n in scelte]
-    return scrivi(nuova, voci, contenuti, rimandi, proprieta, legami), tipi
+    return scrivi(nuova, *pezzi), tipi
+
+
+def mappe_iso(heif: Heif) -> list[tuple[int, int]]:
+    return [(da, verso[1]) for tipo, da, verso in heif.rimandi
+            if tipo == DERIVATA and da in heif.voci and heif.voci[da].tipo == MAPPA_ISO
+            and len(verso) == 2 and verso[0] == heif.primaria and verso[1] in heif.voci]
+
+
+def _proprieta_di(heif: Heif, numero: int, tipi: tuple[bytes, ...]) -> list[bytes]:
+    return [heif.proprieta[indice - 1] for _, indice in heif.legami.get(numero, [])
+            if indice and heif.proprieta[indice - 1][4:8] in tipi]
+
+
+def _misura(heif: Heif, numero: int) -> tuple[int, int] | None:
+    for scatola in _proprieta_di(heif, numero, (b"ispe",)):
+        if len(scatola) >= 20:
+            return struct.unpack(">II", scatola[12:20])
+    return None
+
+
+def _gruppi(altre: list[Scatola], gruppo: bytes) -> list[Scatola]:
+    tenute, messo = [], False
+    for scatola in altre:
+        if scatola.tipo == GRUPPI and not messo:
+            scatola = Scatola(GRUPPI, scatola.corpo + gruppo)
+            messo = True
+        tenute.append(scatola)
+    return tenute if messo else [*tenute, Scatola(GRUPPI, gruppo)]
+
+
+def _numeri_dei_gruppi(heif: Heif) -> list[int]:
+    numeri = []
+    for scatola in heif.altre:
+        if scatola.tipo != GRUPPI:
+            continue
+        for _, da, _ in _scatole(scatola.corpo, 0, len(scatola.corpo)):
+            numeri.append(int.from_bytes(scatola.corpo[da + 4:da + 8], "big"))
+    return numeri
+
+
+def con_la_mappa_iso(migliorata: bytes, originale: bytes) -> bytes | None:
+    nuova = leggi(migliorata)
+    vecchia = leggi(originale)
+    if mappe_iso(nuova):
+        return None
+    trovate = mappe_iso(vecchia)
+    if len(trovate) != 1:
+        return None
+    mappa, guadagno = trovate[0]
+    misura, grande = _misura(nuova, nuova.primaria), _misura(vecchia, guadagno)
+    if misura is None or grande is None:
+        raise ScatolaStrana("misure mancanti")
+    forma = misura[0] / misura[1]
+    if abs(grande[0] / grande[1] - forma) > TOLLERANZA * forma:
+        raise ScatolaStrana("mappa di forma diversa")
+    if _proprieta_di(vecchia, vecchia.primaria, TRASFORMA) \
+            != _proprieta_di(nuova, nuova.primaria, TRASFORMA):
+        raise ScatolaStrana("girata in modo diverso")
+    if _proprieta_di(vecchia, mappa, TRASFORMA) \
+            != _proprieta_di(vecchia, vecchia.primaria, TRASFORMA):
+        raise ScatolaStrana("mappa girata in modo diverso")
+    nuovi, voci, contenuti, rimandi, proprieta, legami = _trapianta(
+        nuova, vecchia, _famiglia(vecchia, [mappa]))
+    uniti = [u for u in legami[nuovi[mappa]]
+             if not u[1] or proprieta[u[1] - 1][4:8] != b"ispe"]
+    ispe = [u for u in nuova.legami[nuova.primaria]
+            if u[1] and nuova.proprieta[u[1] - 1][4:8] == b"ispe"]
+    legami[nuovi[mappa]] = ispe + uniti
+    gruppo = max([*voci, *_numeri_dei_gruppi(nuova)]) + 1
+    altr = _piena(ALTERNATIVE, 0, 0, struct.pack(">III", gruppo, 2, nuovi[mappa])
+                  + nuova.primaria.to_bytes(4, "big"))
+    marche = [nuova.ftyp[i:i + 4] for i in range(8, len(nuova.ftyp), 4)]
+    ftyp = nuova.ftyp if MAPPA_ISO in marche else nuova.ftyp + MAPPA_ISO
+    pronta = replace(nuova, ftyp=ftyp, altre=_gruppi(nuova.altre, altr))
+    return scrivi(pronta, voci, contenuti, rimandi, proprieta, legami)
+
+
+def controlla_iso(prima: bytes, dopo: bytes, originale: bytes) -> bool:
+    senza, con, vecchia = leggi(prima), leggi(dopo), leggi(originale)
+    if con.primaria != senza.primaria:
+        return False
+    for numero, voce in senza.voci.items():
+        if con.voci.get(numero) != voce:
+            return False
+        if contenuto(con, numero) != contenuto(senza, numero):
+            return False
+        tutte = [con.proprieta[i - 1] for _, i in con.legami.get(numero, []) if i]
+        if tutte != [senza.proprieta[i - 1] for _, i in senza.legami.get(numero, []) if i]:
+            return False
+    nuove, vecchie = mappe_iso(con), mappe_iso(vecchia)
+    if len(nuove) != 1 or len(vecchie) != 1:
+        return False
+    qui = sorted(_famiglia(con, [nuove[0][0]]))
+    la = sorted(_famiglia(vecchia, [vecchie[0][0]]))
+    if len(qui) != len(la):
+        return False
+    for nuovo, vecchio in zip(qui, la, strict=True):
+        if contenuto(con, nuovo) != contenuto(vecchia, vecchio):
+            return False
+        if con.voci[nuovo].tipo != vecchia.voci[vecchio].tipo:
+            return False
+    return _misura(con, nuove[0][0]) == _misura(con, con.primaria)
 
 
 def _byte_di(percorso) -> bytes:
@@ -450,32 +568,76 @@ def controlla(prima: bytes, dopo: bytes, originale: bytes) -> bool:
     return True
 
 
+def _scrivi_sopra(uscita: Path, dati: bytes) -> None:
+    nuova = Path(uscita).with_name(Path(uscita).name + ".aux")
+    with open(nuova, "wb") as file:
+        file.write(dati)
+        file.flush()
+        os.fsync(file.fileno())
+    os.replace(nuova, uscita)
+
+
+def _con_le_ausiliarie_controllate(prima: bytes, vecchia: bytes) -> tuple[bytes, list[str]]:
+    from officina import registro
+
+    try:
+        dopo, tipi = con_le_ausiliarie(prima, vecchia)
+        if tipi and not controlla(prima, dopo, vecchia):
+            registro.avviso("miglioria.ausiliarie_non_uguali")
+            return prima, []
+    except Exception as errore:
+        registro.avviso("miglioria.ausiliarie_non_copiate", motivo=registro.tipo_di(errore))
+        return prima, []
+    if tipi:
+        registro.evento("miglioria.ausiliarie_copiate", quante=len(tipi))
+    return dopo, tipi
+
+
+def _con_la_mappa_iso_controllata(prima: bytes, vecchia: bytes) -> bytes | None:
+    from officina import registro
+
+    try:
+        dopo = con_la_mappa_iso(prima, vecchia)
+        if dopo is None:
+            return None
+        if not controlla_iso(prima, dopo, vecchia):
+            registro.avviso("miglioria.mappa_iso_non_uguale")
+            return None
+    except Exception as errore:
+        registro.avviso("miglioria.mappa_iso_non_copiata", motivo=registro.tipo_di(errore))
+        return None
+    registro.evento("miglioria.mappa_iso_copiata")
+    return dopo
+
+
 def rimetti(originale, uscita: Path) -> list[str]:
     from officina import registro
 
-    if Path(str(getattr(originale, "nome", originale))).suffix.casefold() not in HEIF:
+    suffisso = Path(str(getattr(originale, "nome", originale))).suffix.casefold()
+    if suffisso not in HEIF + AVIF:
         return []
     try:
         prima = Path(uscita).read_bytes()
         vecchia = _byte_di(originale)
-        dopo, tipi = con_le_ausiliarie(prima, vecchia)
-        if not tipi:
-            return []
-        if not controlla(prima, dopo, vecchia):
-            registro.avviso("miglioria.ausiliarie_non_uguali")
-            return []
-        nuova = Path(uscita).with_name(Path(uscita).name + ".aux")
-        with open(nuova, "wb") as file:
-            file.write(dopo)
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(nuova, uscita)
     except Exception as errore:
         registro.avviso("miglioria.ausiliarie_non_copiate", motivo=registro.tipo_di(errore))
         return []
-    registro.evento("miglioria.ausiliarie_copiate", quante=len(tipi))
+    dopo, tipi = prima, []
+    if suffisso in HEIF:
+        dopo, tipi = _con_le_ausiliarie_controllate(prima, vecchia)
+    iso = _con_la_mappa_iso_controllata(dopo, vecchia)
+    if iso is not None:
+        dopo, tipi = iso, [*tipi, MAPPA_ISO.decode()]
+    if dopo is prima:
+        return []
+    try:
+        _scrivi_sopra(uscita, dopo)
+    except Exception as errore:
+        registro.avviso("miglioria.ausiliarie_non_copiate", motivo=registro.tipo_di(errore))
+        return []
     return tipi
 
 
-__all__ = ["Heif", "ScatolaStrana", "ausiliarie", "con_le_ausiliarie", "contenuto",
-           "leggi", "rimetti", "scrivi", "tipo_ausiliario"]
+__all__ = ["Heif", "ScatolaStrana", "ausiliarie", "con_la_mappa_iso", "con_le_ausiliarie",
+           "contenuto", "controlla_iso", "leggi", "mappe_iso", "rimetti", "scrivi",
+           "tipo_ausiliario"]

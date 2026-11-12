@@ -8,6 +8,7 @@ from PIL import Image, ImageChops, ImageFilter
 from officina import registro
 from officina.descrittori import vettori
 from officina.immagini import fotogrammi, lettura
+from officina.miglioria import profonda
 
 LATO_DEL_CONFRONTO = 96
 SFOCATURA = 1.2
@@ -119,7 +120,7 @@ def _cosa_ha(percorso) -> set[str]:
             cose.add(MAPPA_HDR)
         if info.get("depth_images"):
             cose.add(PROFONDITA)
-        if (info.get("bit_depth") or 8) > 8:
+        if (info.get("bit_depth") or profonda.bit_del_file(percorso)) > 8:
             cose.add(BIT)
         return cose
     finally:

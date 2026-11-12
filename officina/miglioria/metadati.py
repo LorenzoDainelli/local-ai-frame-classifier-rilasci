@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 
+from officina import registro
 from officina.immagini import lettura
 from officina.miglioria import profonda as profonda_
 from officina.sicuro.dall_archivio import DallArchivio
@@ -21,9 +22,11 @@ QUALITA_JPEG = 95
 QUALITA_HEIF = 95
 QUALITA_WEBP = 95
 QUALITA_AVIF = 92
+A_PIU_BIT = ("HEIF", "AVIF", "PNG", "TIFF")
 
 ORIENTAMENTO = 0x0112
 SOTTO_EXIF = 0x8769
+GPS = 0x8825
 LARGHEZZA_EXIF = 0xA002
 ALTEZZA_EXIF = 0xA003
 DATA_DELLO_SCATTO = 0x9003
@@ -149,12 +152,37 @@ def exif_per_tiff(exif: bytes) -> bytes:
     return dati.tobytes()
 
 
+def _con_posizione(exif: bytes | None) -> bool:
+    if not exif:
+        return False
+    dati = Image.Exif()
+    dati.load(exif)
+    return GPS in dati
+
+
 def xmp_raddrizzato(xmp: bytes | None) -> bytes | None:
     if not xmp:
         return None
     for trova, metti in ORIENTAMENTO_XMP:
         xmp = trova.sub(metti, xmp)
     return xmp
+
+
+def _salva_a_piu_bit(profonda: profonda_.Profonda, formato: str, uscita, exif, xmp, icc,
+                     metadati: Metadati) -> None:
+    pixel = profonda.pixel
+    if formato == "HEIF":
+        profonda_.salva(pixel, profonda.colore, uscita, exif, xmp, icc, QUALITA_HEIF)
+    elif formato == "AVIF":
+        profonda_.salva_avif(pixel, profonda.colore, uscita, exif, xmp, icc, QUALITA_AVIF)
+    elif formato == "PNG":
+        profonda_.salva_png(pixel, uscita, exif, xmp, icc, metadati.testi_png,
+                            profonda.scatole)
+    else:
+        saltate = profonda_.salva_tiff(pixel, uscita, exif and exif_per_tiff(exif), xmp,
+                                       icc)
+        if saltate:
+            registro.avviso("miglioria.tiff_etichette_saltate", quante=saltate)
 
 
 def salva(immagine: Image.Image, metadati: Metadati, verso: Path, formato: str,
@@ -165,12 +193,11 @@ def salva(immagine: Image.Image, metadati: Metadati, verso: Path, formato: str,
     xmp = xmp_raddrizzato(metadati.xmp)
     icc = metadati.icc
 
-    if (profonda is not None and alfa is None and formato == "HEIF"
+    if (profonda is not None and alfa is None and formato in A_PIU_BIT
             and profonda.pixel.shape[1::-1] == (larghezza, altezza)):
         verso.parent.mkdir(parents=True, exist_ok=True)
         with open(verso, "wb") as uscita:
-            profonda_.salva(profonda.pixel, profonda.colore, uscita, exif, xmp, icc,
-                            QUALITA_HEIF)
+            _salva_a_piu_bit(profonda, formato, uscita, exif, xmp, icc, metadati)
         return
 
     if alfa is not None and formato in ("PNG", "WEBP", "TIFF", "AVIF", "HEIF"):
@@ -217,9 +244,9 @@ def salva(immagine: Image.Image, metadati: Metadati, verso: Path, formato: str,
         if exif:
             opzioni["exif"] = exif
     elif formato == "TIFF":
-        opzioni["compression"] = "tiff_adobe_deflate"
         if exif:
             opzioni["exif"] = exif_per_tiff(exif)
+        opzioni["compression"] = "raw" if _con_posizione(exif) else "tiff_adobe_deflate"
         if xmp:
             opzioni["tiffinfo"] = {XMP_TIFF: xmp}
     elif formato == "BMP":

@@ -168,10 +168,29 @@
       [
         "foto",
         "Le foto HEIC a 10 bit dell'iPhone restano a 10 bit anche dopo il miglioramento: niente più scalini nei cieli e nelle sfumature. Colori, data, dati di scatto, luce HDR e profondità del ritratto restano uguali"
+      ],
+      [
+        "foto",
+        "Anche le foto PNG e TIFF a 16 bit e le AVIF a 10 bit restano ad alta profondità dopo il miglioramento, con colori, data, dati di scatto e posizione. Se il file viene più grande va bene: non si perde niente"
+      ],
+      [
+        "foto",
+        "La luce HDR salvata nel modo nuovo (ISO 21496-1, quello degli iPhone recenti e di Android) resta nella foto migliorata, nelle HEIC e nelle AVIF"
+      ],
+      [
+        "foto",
+        "Con i motori a 8 bit le sfumature ad alta profondità vengono più pulite di prima, senza puntini"
+      ],
+      [
+        "spunta",
+        "Un TIFF con la posizione GPS non si riusciva a salvare dopo il miglioramento: ora si salva e la posizione resta"
       ]
     ],
     "tecnico": [
       "HEIC a più di 8 bit (<code>officina/miglioria/profonda.py</code>): si apre a 16 bit con pillow-heif (<code>convert_hdr_to_8bit=False</code>), si controlla che a 8 bit torni uguale alla foto dritta (anche girata secondo l'EXIF), SeedVR2 lavora a 16 bit (ingresso <code>float16</code>, uscita <code>uint16</code>) e si salva a 10 bit con lo stesso <code>nclx</code> o ICC. Con i motori a 8 bit si tengono gli 8 bit del motore e si aggiungono i bit fini dell'ingrandimento a 16 bit (<code>unisci</code>). Se qualcosa non torna, si lavora a 8 bit come prima e si scrive nel registro.",
+      "PNG e TIFF a 16 bit, AVIF a 10 bit (<code>officina/miglioria/profonda.py</code>, imagecodecs e tifffile): si aprono a 16 bit, si salvano con ICC, EXIF, XMP, testi PNG e pezzi dei colori (<code>cHRM</code>, <code>gAMA</code>, <code>cICP</code>…); nel TIFF il GPS si scrive come sotto-IFD a mano; nell'AVIF si tiene il <code>nclx</code> e si aggiungono le voci Exif e XMP.",
+      "Mappa HDR ISO 21496-1 (<code>heif_scatole.con_la_mappa_iso</code>): si copiano la voce <code>tmap</code>, la mappa di guadagno, i rimandi <code>dimg</code>, il gruppo <code>altr</code> e la marca <code>tmap</code>; la <code>ispe</code> prende la misura nuova. Non si copia (e si scrive nel registro) se la foto o la mappa sono girate in modo diverso o la mappa ha un'altra forma. Le voci nascoste restano nascoste.",
+      "<code>unisci</code>: dentro il gradino a 8 bit scelto dal motore si tiene la media locale (due medie 7×7) della differenza fra motore e ingrandimento a 16 bit, così non entra rumore quando il motore arrotonda in modo diverso.",
       "Revisione: <code>fedelta.cosa_perde</code> confronta l'intestazione di originale e migliorata (pillow-heif: <code>aux</code> con la mappa HDR di Apple o ISO 21496-1, <code>depth_images</code>, <code>bit_depth</code>) e salva le cose perse nel campo <code>fedelta</code>; la pagina le mostra in un avviso che non sconsiglia.",
       "Barra di avanzamento (<code>officina/web/avanzamento.py</code>): ogni lavoro divide il tutto in fasi con un peso; il tempo che manca si misura solo dentro la fase di adesso, dopo 60 s di riscaldo (così i casi già fatti che ripassano veloci alla ripresa non falsano la stima), su una finestra di 20 minuti; il tempo in pausa non conta e la barra resta fra 1 e 99% fino alla fine.",
       "GIMM-VFI: il <code>turtle</code> finto e le classi come in Python vecchio restano anche mentre si costruisce la rete (<code>col_codice_di_gimm</code>), perché FlowFormer carica <code>convnext</code> solo lì. Il collaudo «Motori veri su Windows» ora scarica GIMM-VFI e LDF-VFI e li fa girare davvero su tre quadri piccoli (<code>--miglioria</code>).",
