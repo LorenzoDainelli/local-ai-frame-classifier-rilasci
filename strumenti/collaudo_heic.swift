@@ -50,6 +50,50 @@ func variante(_ foto: CIImage, _ nome: String) -> CIImage {
     }
 }
 
+func mappa(_ url: URL) -> String? {
+    guard let fonte = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+    if CGImageSourceCopyAuxiliaryDataInfoAtIndex(
+        fonte, 0, kCGImageAuxiliaryDataTypeISOGainMap) != nil {
+        return "iso"
+    }
+    if CGImageSourceCopyAuxiliaryDataInfoAtIndex(
+        fonte, 0, kCGImageAuxiliaryDataTypeHDRGainMap) != nil {
+        return "apple"
+    }
+    return nil
+}
+
+func scriviCI(_ sdr: CIImage, _ verso: URL, _ opzioni: [CIImageRepresentationOption: Any]) {
+    do {
+        try contesto.writeHEIFRepresentation(of: sdr, to: verso, format: .RGBA8,
+                                             colorSpace: p3, options: opzioni)
+    } catch {
+        muori("heif: \(error)")
+    }
+}
+
+func scriviISO(_ hdr: CIImage, _ verso: URL) {
+    let spazio = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!
+    guard let immagine = contesto.createCGImage(hdr, from: hdr.extent, format: .RGBAh,
+                                                colorSpace: spazio),
+          let destino = CGImageDestinationCreateWithURL(
+              verso as CFURL, UTType.heic.identifier as CFString, 1, nil) else {
+        muori("iso")
+    }
+    let opzioni: [CFString: Any] = [
+        kCGImageDestinationEncodeRequest: kCGImageDestinationEncodeToISOGainmap]
+    CGImageDestinationAddImage(destino, immagine, opzioni as CFDictionary)
+    if !CGImageDestinationFinalize(destino) {
+        muori("iso non scritta")
+    }
+}
+
+func luce(_ url: URL) -> Double {
+    guard let piatta = CIImage(contentsOf: url) else { return -1 }
+    let senza = massimoDi(piatta)
+    return senza > 0 ? massimo(url) / senza : -1
+}
+
 func scrivi(_ sorgente: URL, _ uscita: URL, _ nome: String) {
     guard let base = CIImage(contentsOf: sorgente) else { muori("non apro \(sorgente)") }
     let sdr = variante(base, nome)
@@ -61,18 +105,28 @@ func scrivi(_ sorgente: URL, _ uscita: URL, _ nome: String) {
         "inputColor1": CIColor(red: 0.9, green: 0.9, blue: 0.9),
     ])!.outputImage!.cropped(to: sdr.extent)
         .transformed(by: CGAffineTransform(scaleX: 0.25, y: 0.25))
+    if nome == "iso" {
+        scriviISO(hdr, uscita)
+        FileHandle.standardError.write("mappa \(nome): \(mappa(uscita) ?? "nessuna")\n"
+            .data(using: .utf8)!)
+        return
+    }
     var opzioni: [CIImageRepresentationOption: Any] = [.hdrImage: hdr]
     if nome != "senza_profondita" {
         opzioni[.disparityImage] = profondita
     }
     let piatta = uscita.deletingPathExtension().appendingPathExtension("piatta.heic")
-    do {
-        try contesto.writeHEIFRepresentation(of: sdr, to: nome == "girata" ? piatta : uscita,
-                                             format: .RGBA8, colorSpace: p3,
-                                             options: opzioni)
-    } catch {
-        muori("heif: \(error)")
+    let verso = nome == "girata" ? piatta : uscita
+    scriviCI(sdr, verso, opzioni)
+    var modo = "hdrImage"
+    if mappa(verso) == nil {
+        opzioni.removeValue(forKey: .hdrImage)
+        opzioni[.hdrGainMapImage] = sdr.applyingFilter("CIPhotoEffectNoir")
+        scriviCI(sdr, verso, opzioni)
+        modo = "hdrGainMapImage"
     }
+    FileHandle.standardError.write("mappa \(nome): \(mappa(verso) ?? "nessuna") (\(modo))\n"
+        .data(using: .utf8)!)
     if nome == "girata" {
         gira(piatta, uscita)
     }
@@ -120,6 +174,10 @@ func massimo(_ url: URL) -> Double {
     guard let foto = CIImage(contentsOf: url, options: [.expandToHDR: true]) else {
         return -1
     }
+    return massimoDi(foto)
+}
+
+func massimoDi(_ foto: CIImage) -> Double {
     let area = foto.applyingFilter("CIAreaMaximum", parameters: [
         kCIInputExtentKey: CIVector(cgRect: foto.extent)])
     var punto = [Float](repeating: 0, count: 4)
@@ -146,7 +204,8 @@ func guarda(_ originale: URL, _ migliorata: URL) -> [String: Any] {
     }
     var esito: [String: Any] = ["prima": misure(prima), "dopo": misure(dopo),
                                 "massimo_prima": massimo(originale),
-                                "massimo_dopo": massimo(migliorata)]
+                                "massimo_dopo": massimo(migliorata),
+                                "luce_prima": luce(originale), "luce_dopo": luce(migliorata)]
     for (nome, tipo) in tipi {
         let vecchia = ausiliaria(prima, tipo)
         let nuova = ausiliaria(dopo, tipo)

@@ -14,7 +14,8 @@ from officina.miglioria import fedelta, heif_scatole, metadati
 
 KODAK = "https://r0k.us/graphics/kodak/kodak/kodim{:02d}.png"
 FOTO = (3, 5, 13, 15, 20, 23)
-VARIANTI = ("normale", "buio", "rumore", "compresso", "girata", "senza_profondita")
+VARIANTI = ("normale", "buio", "rumore", "compresso", "girata", "senza_profondita", "iso")
+SENZA_PROFONDITA = ("senza_profondita", "iso")
 DIFFICILI = ("buio", "rumore", "compresso", "girata")
 LATO = 2
 PROFONDE = ("disparita", "profondita")
@@ -40,8 +41,12 @@ def migliora(originale: Path, uscita: Path) -> dict:
     grande = aperta.immagine.resize((larga * LATO, alta * LATO), Image.Resampling.LANCZOS)
     metadati.salva(grande, aperta.metadati, uscita, "HEIF", aperta.alfa)
     tipi = heif_scatole.rimetti(originale, uscita)
+    dentro = heif_scatole.leggi(originale.read_bytes())
+    scatole = {"voci": sorted({v.tipo.decode("latin-1") for v in dentro.voci.values()}),
+               "rimandi": sorted({r[0].decode("latin-1") for r in dentro.rimandi}),
+               "altre": sorted({s.tipo.decode("latin-1") for s in dentro.altre})}
     return {"copiate": tipi, "perde": fedelta.cosa_perde(originale, uscita),
-            "misura": [larga, alta]}
+            "misura": [larga, alta], "scatole": scatole}
 
 
 def giudica(riga: dict) -> list[str]:
@@ -60,13 +65,14 @@ def giudica(riga: dict) -> list[str]:
             guasti.append(f"{nome} cambiata")
         if stato["prima"] and stato["dopo"] and not stato.get("meta_uguali"):
             guasti.append(f"{nome}: descrizione cambiata")
-    if not occhi["mappa_hdr"]["prima"] and not occhi["mappa_iso"]["prima"]:
-        guasti.append("l'originale fatto dal Mac non ha la mappa HDR")
-    elif riga["variante"] != "buio" and occhi["massimo_prima"] <= 1.05:
+    voluta = "mappa_iso" if riga["variante"] == "iso" else "mappa_hdr"
+    if not occhi[voluta]["prima"]:
+        guasti.append(f"l'originale fatto dal Mac non ha la {voluta}")
+    elif occhi["luce_prima"] <= 1.05:
         guasti.append("macOS non vede l'HDR nemmeno nell'originale")
-    elif occhi["massimo_dopo"] < 0.9 * occhi["massimo_prima"]:
+    elif occhi["luce_dopo"] < 0.9 * occhi["luce_prima"]:
         guasti.append("macOS la mostra meno luminosa di prima")
-    if riga["variante"] != "senza_profondita" and not occhi["disparita"]["prima"]:
+    if riga["variante"] not in SENZA_PROFONDITA and not occhi["disparita"]["prima"]:
         guasti.append("l'originale fatto dal Mac non ha la profondità")
     return guasti
 
@@ -101,7 +107,7 @@ def main() -> int:
             righe.append(riga)
             occhi = riga.get("mac") or {}
             print(nome, riga["guasti"] or "ok", riga.get("copiate"),
-                  occhi.get("massimo_prima"), occhi.get("massimo_dopo"),
+                  occhi.get("luce_prima"), occhi.get("luce_dopo"), riga.get("scatole"),
                   {k: occhi[k] for k in ("mappa_hdr", "mappa_iso", "disparita")
                    if k in occhi},
                   flush=True)
