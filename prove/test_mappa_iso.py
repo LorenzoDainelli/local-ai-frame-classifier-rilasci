@@ -37,7 +37,8 @@ def _ispe(larga: int, alta: int) -> bytes:
     return hs._piena(b"ispe", 0, 0, struct.pack(">II", larga, alta))
 
 
-def _con_iso(base: bytes, mappa: bytes, girata: bytes | None = None) -> bytes:
+def _con_iso(base: bytes, mappa: bytes, girata: bytes | None = None,
+             ferma: bool = False) -> bytes:
     a, m = hs.leggi(base), hs.leggi(mappa)
     guadagno, iso = max(a.voci) + 1, max(a.voci) + 2
     voci = dict(a.voci)
@@ -59,6 +60,10 @@ def _con_iso(base: bytes, mappa: bytes, girata: bytes | None = None) -> bytes:
     legami[iso] = [(False, len(proprieta))]
     proprieta.append(hs._scatola(b"colr", b"nclx" + bytes([0, 12, 0, 16, 0, 1, 0x80])))
     legami[iso].append((False, len(proprieta)))
+    if ferma:
+        proprieta.append(hs._scatola(b"irot", b"\0"))
+        for numero in (a.primaria, guadagno, iso):
+            legami[numero].append((True, len(proprieta)))
     if girata is not None:
         proprieta.append(girata)
         legami[a.primaria].append((True, len(proprieta)))
@@ -129,6 +134,20 @@ def test_girata_in_modo_diverso_non_si_copia_e_il_file_resta(tmp_path):
     uscita.write_bytes(migliorata)
     assert hs.rimetti(originale, uscita) == []
     assert uscita.read_bytes() == migliorata
+
+
+def test_la_rotazione_a_zero_gradi_del_mac_non_ferma_la_mappa_iso(tmp_path):
+    originale, uscita = tmp_path / "a.heic", tmp_path / "b.heic"
+    originale.write_bytes(_originale(ferma=True))
+    migliorata = _heic((800, 600), 3)
+    uscita.write_bytes(migliorata)
+    assert hs.rimetti(originale, uscita) == ["tmap"]
+    dopo = uscita.read_bytes()
+    letta = hs.leggi(dopo)
+    [(iso, guadagno)] = hs.mappe_iso(letta)
+    assert hs._proprieta_di(letta, iso, (b"irot",)) == [hs._scatola(b"irot", b"\0")]
+    assert np.array_equal(np.asarray(Image.open(io.BytesIO(dopo))),
+                          np.asarray(Image.open(io.BytesIO(migliorata))))
 
 
 def test_mappa_di_forma_diversa_non_si_copia():

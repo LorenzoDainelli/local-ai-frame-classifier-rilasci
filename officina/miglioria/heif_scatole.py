@@ -422,6 +422,11 @@ def _proprieta_di(heif: Heif, numero: int, tipi: tuple[bytes, ...]) -> list[byte
             if indice and heif.proprieta[indice - 1][4:8] in tipi]
 
 
+def _girate(heif: Heif, numero: int) -> list[bytes]:
+    return [s for s in _proprieta_di(heif, numero, TRASFORMA)
+            if s[4:8] != b"irot" or len(s) < 9 or s[8] & 3]
+
+
 def _misura(heif: Heif, numero: int) -> tuple[int, int] | None:
     for scatola in _proprieta_di(heif, numero, (b"ispe",)):
         if len(scatola) >= 20:
@@ -464,11 +469,9 @@ def con_la_mappa_iso(migliorata: bytes, originale: bytes) -> bytes | None:
     forma = misura[0] / misura[1]
     if abs(grande[0] / grande[1] - forma) > TOLLERANZA * forma:
         raise ScatolaStrana("mappa di forma diversa")
-    if _proprieta_di(vecchia, vecchia.primaria, TRASFORMA) \
-            != _proprieta_di(nuova, nuova.primaria, TRASFORMA):
+    if _girate(vecchia, vecchia.primaria) != _girate(nuova, nuova.primaria):
         raise ScatolaStrana("girata in modo diverso")
-    if _proprieta_di(vecchia, mappa, TRASFORMA) \
-            != _proprieta_di(vecchia, vecchia.primaria, TRASFORMA):
+    if _girate(vecchia, mappa) != _girate(vecchia, vecchia.primaria):
         raise ScatolaStrana("mappa girata in modo diverso")
     nuovi, voci, contenuti, rimandi, proprieta, legami = _trapianta(
         nuova, vecchia, _famiglia(vecchia, [mappa]))
