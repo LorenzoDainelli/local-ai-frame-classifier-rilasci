@@ -11,6 +11,10 @@
     "semplice": [
       [
         "impronta",
+        "Se a qualche scatto manca l'impronta, nella carta delle impronte c'è «Perché mancano?»: il programma riprova ad aprirli uno per uno e ti dice cosa succede, se gli altri lavori li hanno fatti e se sono doppioni. C'è anche un testo da copiare"
+      ],
+      [
+        "impronta",
         "PE-Core faceva lo stesso lavoro di SigLIP 2: guardano le foto allo stesso modo. Adesso le impronte le fanno solo DINOv3 e C-RADIOv4-H, e ogni foto si calcola più in fretta"
       ],
       [
@@ -187,6 +191,7 @@
       ]
     ],
     "tecnico": [
+      "«Perché mancano?» (<code>officina/impronte/perche.py</code>, <code>/intelligenza/perche-mancano</code>): elenca gli scatti senza impronta, riprova ad aprirli come fa la passata e scrive <code>impronte.perche_manca</code>. La passata ora scrive nel registro <code>impronte.scatto_saltato</code> (col motivo) e <code>impronte.scatto_senza_ritagli</code>, che prima non lasciavano traccia.",
       "HEIC a più di 8 bit (<code>officina/miglioria/profonda.py</code>): si apre a 16 bit con pillow-heif (<code>convert_hdr_to_8bit=False</code>), si controlla che a 8 bit torni uguale alla foto dritta (anche girata secondo l'EXIF), SeedVR2 lavora a 16 bit (ingresso <code>float16</code>, uscita <code>uint16</code>) e si salva a 10 bit con lo stesso <code>nclx</code> o ICC. Con i motori a 8 bit si tengono gli 8 bit del motore e si aggiungono i bit fini dell'ingrandimento a 16 bit (<code>unisci</code>). Se qualcosa non torna, si lavora a 8 bit come prima e si scrive nel registro.",
       "PNG e TIFF a 16 bit, AVIF a 10 bit (<code>officina/miglioria/profonda.py</code>, imagecodecs e tifffile): si aprono a 16 bit, si salvano con ICC, EXIF, XMP, testi PNG e pezzi dei colori (<code>cHRM</code>, <code>gAMA</code>, <code>cICP</code>…); nel TIFF il GPS si scrive come sotto-IFD a mano; nell'AVIF si tiene il <code>nclx</code> e si aggiungono le voci Exif e XMP.",
       "Mappa HDR ISO 21496-1 (<code>heif_scatole.con_la_mappa_iso</code>): si copiano la voce <code>tmap</code>, la mappa di guadagno, i rimandi <code>dimg</code>, il gruppo <code>altr</code> e la marca <code>tmap</code>; la <code>ispe</code> prende la misura nuova. Non si copia (e si scrive nel registro) se la foto o la mappa sono girate in modo diverso o la mappa ha un'altra forma. Le voci nascoste restano nascoste.",

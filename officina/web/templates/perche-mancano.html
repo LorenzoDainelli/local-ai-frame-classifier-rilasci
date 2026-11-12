@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Perché mancano — Local AI Frame Classifier{% endblock %}
+
+{% set ESITI = {"si_apre": "Adesso si apre", "senza_ritagli": "Si apre, ma non ne esce niente da guardare",
+                "saltato": "Non si riesce ad aprire", "rotto": "Il programma si rompe aprendolo"} %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina ia">
+    <header class="ia-testa">
+        <h1 class="titolo-pagina">Perché mancano le impronte</h1>
+        <p class="sottotitolo">{{ cosa.in_tutto|numero }} {{ 'scatto non ha' if cosa.in_tutto == 1 else 'scatti non hanno' }} l'impronta. Il programma ha appena riprovato ad aprirli uno per uno: qui sotto c'è cosa è successo.</p>
+        <p><a class="tasto-comando piccolo" href="/intelligenza">{{ icona('su', 14) }} Torna all'intelligenza artificiale</a></p>
+    </header>
+
+    {% if not cosa.scatti %}
+    <p>Non manca nessuna impronta.</p>
+    {% else %}
+    <section class="carta">
+        <h2>Da incollare a Claude</h2>
+        <p class="piccolo tenue">Solo per questa volta dentro ci sono anche il nome del file e la data dello scatto. Non ci sono cartelle, luoghi, persone né nodi.</p>
+        <pre class="ia-dettaglio" id="testo-perche">{{ cosa.testo }}</pre>
+        <div><button class="tasto-comando principale" type="button" id="copia-perche">Copia per Claude</button></div>
+    </section>
+
+    <section class="carta">
+        <h2>Gli scatti</h2>
+        {% if cosa.in_tutto > cosa.scatti|length %}<p class="piccolo tenue">Qui ci sono i primi {{ cosa.scatti|length }}.</p>{% endif %}
+        <ul class="dc-file">
+            {% for v in cosa.scatti %}
+            <li>
+                <span class="dc-nome-e-dove"><span class="nome-di-file">{{ v.nome or 'senza nome' }}</span>
+                <span class="dc-perche">{{ ESITI.get(v.prova.esito, v.prova.esito) }}{% if v.prova.codice %} ({{ v.prova.codice }}){% endif %}{% if v.da_parte %} · messo da parte ({{ v.da_parte }}){% endif %}{% if v.doppione.e %} · doppione di {{ v.doppione.con }}{% endif %}{% if v.prova.luce is defined %} · luce {{ v.prova.luce }} su 255{% endif %}</span>
+                <span class="dc-perche">Volti: {{ v.lavori.volti }} · Corpi: {{ v.lavori.corpi }} · Scritte: {{ v.lavori.scritte }}</span></span>
+                <a class="tasto-comando nudo piccolo" href="/scatto/{{ v.scatto }}">Guardalo</a>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    <script type="module">
+    (function () {
+        const tasto = document.getElementById("copia-perche");
+        const testo = document.getElementById("testo-perche");
+        if (!tasto || !testo) return;
+        tasto.addEventListener("click", async function () {
+            try {
+                await navigator.clipboard.writeText(testo.textContent);
+                tasto.textContent = "Copiato";
+            } catch (errore) {
+                const scelta = window.getSelection();
+                const pezzo = document.createRange();
+                pezzo.selectNodeContents(testo);
+                scelta.removeAllRanges();
+                scelta.addRange(pezzo);
+                tasto.textContent = "Selezionato: Ctrl+C";
+            }
+            setTimeout(function () { tasto.textContent = "Copia per Claude"; }, 2500);
+        });
+    })();
+    </script>
+    {% endif %}
+</div>
+</main>
+</div>
+{% endblock %}

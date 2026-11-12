@@ -320,7 +320,15 @@ class Passata:
                 self.avanzamento.motivi_saltati.get(motivo, 0) + 1
             if len(self.avanzamento.scatti_saltati) < QUANTI_SALTATI_SI_RICORDANO:
                 self.avanzamento.scatti_saltati.append((scatto_id, motivo))
+            registro.avviso("impronte.scatto_saltato", scatto=scatto_id,
+                            motivo=registro.Parola(motivo))
         self._segna_che_non_si_aprono(pronto.non_si_aprono)
+        con_ritagli = {lavoro.scatto_id for lavoro in lavori}
+        detti = {scatto_id for scatto_id, _ in pronto.saltati}
+        for riga in righe:
+            if riga["id"] not in con_ritagli and riga["id"] not in detti:
+                registro.avviso("impronte.scatto_senza_ritagli", scatto=riga["id"],
+                                genere=registro.Parola(riga["genere"]))
 
         if not lavori:
             self._non_ripescarli([riga["id"] for riga in righe])

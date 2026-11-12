@@ -467,6 +467,16 @@ def come_va_la_fila_ia() -> dict:
     }
 
 
+@strada.get("/intelligenza/perche-mancano", response_class=HTMLResponse)
+def pagina_perche_mancano(richiesta: Request):
+    from officina.impronte import perche
+
+    return base.pagine.TemplateResponse(richiesta, "perche-mancano.html", {
+        **base.comune(richiesta, "intelligenza"),
+        "cosa": perche.guarda(accesso.aperto()),
+    })
+
+
 @strada.get("/intelligenza", response_class=HTMLResponse)
 def pagina_intelligenza(richiesta: Request):
     from officina import parole as parole_mod

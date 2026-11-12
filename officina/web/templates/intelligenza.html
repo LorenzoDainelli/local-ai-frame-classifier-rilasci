@@ -99,6 +99,7 @@
                 <span class="bollino">Mai {{ L.fatti }}</span>
                 {% else %}
                 <span class="bollino attenzione">Mancano {{ manca_scatti|numero }} {{ 'scatto' if manca_scatti == 1 else 'scatti' }}</span>
+                {% if k == "impronte" and not corre %}<a class="tasto-comando nudo piccolo" href="/intelligenza/perche-mancano">Perché mancano?</a>{% endif %}
                 {% endif %}
             </div>
             {% endif %}
