@@ -442,7 +442,7 @@ def controlla(prima: bytes, dopo: bytes, originale: bytes) -> bool:
         nuovi = avute.get(tipo, [])
         if len(nuovi) != len(quadri):
             return False
-        for vecchio, nuovo in zip(quadri, nuovi):
+        for vecchio, nuovo in zip(quadri, nuovi, strict=True):
             if not numpy.array_equal(vecchio, nuovo):
                 return False
             if not _stessa_forma(nuovo, larghezza, altezza):

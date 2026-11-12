@@ -8,6 +8,7 @@ from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 
 from officina.immagini import lettura
+from officina.miglioria import profonda as profonda_
 from officina.sicuro.dall_archivio import DallArchivio
 
 FORMATI = {
@@ -60,6 +61,7 @@ class FotoAperta:
     immagine: Image.Image
     alfa: Image.Image | None
     metadati: Metadati
+    profonda: profonda_.Profonda | None = None
 
 
 def formato_di(percorso) -> str:
@@ -101,9 +103,10 @@ def leggi_i_metadati(immagine: Image.Image) -> Metadati:
                     testi_png=testi)
 
 
-def apri(percorso: Path) -> FotoAperta:
+def apri(percorso: Path, profonda: bool = False) -> FotoAperta:
     grezza = lettura.apri(percorso)
     metadati = leggi_i_metadati(grezza)
+    orientamento = grezza.getexif().get(ORIENTAMENTO, 1)
     dritta = ImageOps.exif_transpose(grezza)
     alfa = None
     if dritta.mode in ("RGBA", "LA", "PA") or (
@@ -113,7 +116,10 @@ def apri(percorso: Path) -> FotoAperta:
         dritta = con_alfa.convert("RGB")
     elif dritta.mode != "RGB":
         dritta = dritta.convert("RGB")
-    return FotoAperta(immagine=dritta, alfa=alfa, metadati=metadati)
+    alta = None
+    if profonda and alfa is None:
+        alta = profonda_.leggi(percorso, dritta, orientamento)
+    return FotoAperta(immagine=dritta, alfa=alfa, metadati=metadati, profonda=alta)
 
 
 def exif_raddrizzato(exif: bytes | None, larghezza: int, altezza: int) -> bytes | None:
@@ -152,11 +158,20 @@ def xmp_raddrizzato(xmp: bytes | None) -> bytes | None:
 
 
 def salva(immagine: Image.Image, metadati: Metadati, verso: Path, formato: str,
-          alfa: Image.Image | None = None) -> None:
+          alfa: Image.Image | None = None,
+          profonda: profonda_.Profonda | None = None) -> None:
     larghezza, altezza = immagine.size
     exif = exif_raddrizzato(metadati.exif, larghezza, altezza)
     xmp = xmp_raddrizzato(metadati.xmp)
     icc = metadati.icc
+
+    if (profonda is not None and alfa is None and formato == "HEIF"
+            and profonda.pixel.shape[1::-1] == (larghezza, altezza)):
+        verso.parent.mkdir(parents=True, exist_ok=True)
+        with open(verso, "wb") as uscita:
+            profonda_.salva(profonda.pixel, profonda.colore, uscita, exif, xmp, icc,
+                            QUALITA_HEIF)
+        return
 
     if alfa is not None and formato in ("PNG", "WEBP", "TIFF", "AVIF", "HEIF"):
         alfa = alfa.resize(immagine.size, Image.Resampling.LANCZOS)

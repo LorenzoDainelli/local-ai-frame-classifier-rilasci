@@ -204,6 +204,7 @@ class SeedVR2:
     def _una_volta(self, quadri, larghezza: int, altezza: int):
         import time
 
+        import numpy as np
         import torch
 
         s = self._carica()
@@ -217,7 +218,11 @@ class SeedVR2:
         self._blocchi.ribilancia(seedvr2_blocchi.ram_libera())
         esecutore = self._prepara()
         partito = self._misura(torch, tempi, "prepara", partito)
-        tensore = torch.from_numpy(quadri).to(torch.float16).div_(255.0)
+        profondi = quadri.dtype == np.uint16
+        if profondi:
+            tensore = torch.from_numpy(quadri.astype(np.float32) / 65535.0).to(torch.float16)
+        else:
+            tensore = torch.from_numpy(quadri).to(torch.float16).div_(255.0)
         tensore, _info = utili.compute_generation_info(
             ctx=self._ctx, images=tensore, resolution=corto, max_resolution=lungo,
             batch_size=MUCCHIO, uniform_batch_size=False, seed=SEME,
@@ -254,7 +259,11 @@ class SeedVR2:
         self._blocchi.girato = True
         self.tempi.append(tempi)
         uscita = ctx["final_video"].detach().to("cpu", torch.float32)
-        uscita = uscita[..., :3].clamp_(0, 1).mul_(255).round_().to(torch.uint8).numpy()
+        if profondi:
+            uscita = uscita[..., :3].clamp_(0, 1).mul_(65535).round_().to(torch.int32)
+            uscita = uscita.numpy().astype(np.uint16)
+        else:
+            uscita = uscita[..., :3].clamp_(0, 1).mul_(255).round_().to(torch.uint8).numpy()
         self._ctx = ctx
         return uscita
 
@@ -265,6 +274,14 @@ class SeedVR2:
         grande = self._ingrandisci(quadro, larghezza, altezza)[0]
         return Image.fromarray(grande).resize((larghezza, altezza), Image.Resampling.LANCZOS) \
             if grande.shape[1::-1] != (larghezza, altezza) else Image.fromarray(grande)
+
+    def foto_profonda(self, pixel, larghezza: int, altezza: int):
+        from officina.miglioria import profonda
+
+        grande = self._ingrandisci(pixel[None], larghezza, altezza)[0]
+        if grande.shape[1::-1] == (larghezza, altezza):
+            return grande
+        return profonda.a_sedici(profonda.ingrandisci(grande, larghezza, altezza))
 
     def video(self, quadri: Iterable, larghezza: int, altezza: int, salta: int = 0,
               al_pezzo=None) -> Iterator:

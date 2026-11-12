@@ -162,7 +162,21 @@ func guarda(_ originale: URL, _ migliorata: URL) -> [String: Any] {
     return esito
 }
 
-guard argomenti.count >= 4 else { muori("uso: fai|guarda A B [variante]") }
+func bit(_ url: URL) -> [String: Any] {
+    guard let fonte = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let dentro = CGImageSourceCopyPropertiesAtIndex(fonte, 0, nil) as? [String: Any]
+    else { return ["errore": "non si apre"] }
+    return ["bit": dentro[kCGImagePropertyDepth as String] as? Int ?? 0,
+            "profilo": dentro[kCGImagePropertyProfileName as String] as? String ?? ""]
+}
+
+if argomenti.count == 3 && argomenti[1] == "bit" {
+    let dati = try! JSONSerialization.data(
+        withJSONObject: bit(URL(fileURLWithPath: argomenti[2])), options: [.sortedKeys])
+    FileHandle.standardOutput.write(dati)
+    exit(0)
+}
+guard argomenti.count >= 4 else { muori("uso: fai|guarda A B [variante] | bit A") }
 let primo = URL(fileURLWithPath: argomenti[2])
 let secondo = URL(fileURLWithPath: argomenti[3])
 switch argomenti[1] {

@@ -8,7 +8,7 @@ from typing import Callable, Iterable, Iterator
 
 from officina.errori import ErroreOfficina
 from officina.miglioria import (centoventi, date, fluido, heif_scatole, metadati, mezzi,
-                                misura, motori, pezzi, veloce, video)
+                                misura, motori, pezzi, profonda, veloce, video)
 from officina.sicuro.dall_archivio import DallArchivio
 
 GIA_GRANDE = "gia_grande"
@@ -90,12 +90,18 @@ def _passaggi(nome: str, larghezza: int, altezza: int, quale: str) -> list:
 
 
 def _un_passaggio(lavoro: dict, nome: str, immagine, larghezza: int, altezza: int,
-                  freno, misura_del_motore: dict, acceso=None):
+                  freno, misura_del_motore: dict, acceso=None, alta=None):
     motore = acceso or motori.apri(motori.FOTO, nome, **lavoro.get("opzioni", {}))
+    sedici = None
     try:
         precarica(motore, lavoro)
         partito = time.monotonic()
-        grande = motore.foto(immagine, larghezza, altezza)
+        a_sedici = getattr(motore, "foto_profonda", None) if alta is not None else None
+        if a_sedici is not None:
+            sedici = a_sedici(alta, larghezza, altezza)
+            grande = profonda.immagine(sedici)
+        else:
+            grande = motore.foto(immagine, larghezza, altezza)
         durata = time.monotonic() - partito
         dove = misura_del_motore if not misura_del_motore else {}
         dove["secondi"] = round(durata, 1)
@@ -113,7 +119,11 @@ def _un_passaggio(lavoro: dict, nome: str, immagine, larghezza: int, altezza: in
         from PIL import Image
 
         grande = grande.resize((larghezza, altezza), Image.Resampling.LANCZOS)
-    return grande, usato
+    if alta is None:
+        return grande, usato
+    if sedici is None or sedici.shape[1::-1] != (larghezza, altezza):
+        sedici = profonda.unisci(alta, grande)
+    return grande, usato, sedici
 
 
 def _timbro_del_mezzo(originale: Path, prima: tuple[int, int], passaggio) -> dict:
@@ -166,7 +176,7 @@ def solo_lucidflux(lavoro: dict, acceso, cartella: Path, miglioria_id: int,
 def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
     originale = _originale(lavoro)
     uscita = Path(lavoro["uscita"])
-    aperta = metadati.apri(originale)
+    aperta = metadati.apri(originale, profonda=True)
     larghezza, altezza = aperta.immagine.size
     quale = tetto(lavoro)
     if misura.e_gia_grande(larghezza, altezza, quale):
@@ -179,10 +189,17 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
     usati = []
     misura_del_motore = {}
     grande = aperta.immagine
+    alta = aperta.profonda.pixel if aperta.profonda is not None else None
     dal_mezzo = _dal_mezzo(lavoro, originale, (larghezza, altezza), passaggi)
     for numero, (nome, (fino_larghezza, fino_altezza)) in enumerate(passaggi, 1):
         if numero == 1 and dal_mezzo is not None:
             grande, usato, misura_del_motore = dal_mezzo
+            if alta is not None:
+                alta = profonda.unisci(alta, grande)
+        elif alta is not None:
+            grande, usato, alta = _un_passaggio(lavoro, nome, grande, fino_larghezza,
+                                                fino_altezza, freno, misura_del_motore,
+                                                alta=alta)
         else:
             grande, usato = _un_passaggio(lavoro, nome, grande, fino_larghezza,
                                           fino_altezza, freno, misura_del_motore)
@@ -199,6 +216,8 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
         try:
             partito = time.monotonic()
             grande = motore_volti.sistema(grande, lavoro.get("persone", []))
+            if alta is not None:
+                alta = profonda.unisci(alta, grande)
             usati.append({"nome": motore_volti.nome,
                           "versione": motore_volti.versione})
             _riposa(freno, time.monotonic() - partito)
@@ -206,8 +225,11 @@ def foto(lavoro: dict, al_passo=None, freno=None) -> dict:
             motore_volti.spegni()
     _passo(al_passo, passi - 1, passi)
 
+    sedici = None
+    if alta is not None:
+        sedici = profonda.Profonda(alta, aperta.profonda.bit, aperta.profonda.colore)
     metadati.salva(grande, aperta.metadati, uscita,
-                   metadati.formato_di(originale), aperta.alfa)
+                   metadati.formato_di(originale), aperta.alfa, sedici)
     heif_scatole.rimetti(originale, uscita)
     _date(originale, uscita, lavoro)
     _passo(al_passo, passi, passi)

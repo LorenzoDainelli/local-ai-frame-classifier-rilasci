@@ -46,6 +46,11 @@ class Finto:
     def foto(self, immagine: Image.Image, larghezza: int, altezza: int) -> Image.Image:
         return immagine.resize((larghezza, altezza), Image.Resampling.LANCZOS)
 
+    def foto_profonda(self, pixel, larghezza: int, altezza: int):
+        from officina.miglioria import profonda
+
+        return profonda.a_sedici(profonda.ingrandisci(pixel, larghezza, altezza))
+
     def video(self, quadri: Iterable, larghezza: int, altezza: int, salta: int = 0,
               al_pezzo=None) -> Iterator:
         import numpy as np
