@@ -55,6 +55,7 @@ def test_la_pagina_e_lo_stato_senza_niente(cliente):
 
 
 def test_il_voto_e_cieco_e_il_vero_arriva_dopo(cliente):
+    pytest.importorskip("av")
     risultati = strade._gara.risultati
     _clip_pronte(risultati)
     assert cliente.get("/api/gara-120").json()["fase"] == gara120.VOTO

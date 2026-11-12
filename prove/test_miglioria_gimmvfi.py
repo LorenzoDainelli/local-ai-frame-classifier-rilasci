@@ -580,8 +580,10 @@ def test_l_errore_della_scheda_si_dice_senza_nomi(guasto, detto):
     assert torcia.errore_della_scheda(guasto) == detto
 
 
-def test_la_stanza_della_gara_dice_che_e_caduta_la_scheda(tmp_path):
-    from officina.miglioria import gara120_stanza
+def test_la_stanza_della_gara_dice_che_e_caduta_la_scheda(tmp_path, monkeypatch):
+    from officina.miglioria import gara120_stanza, rete
+
+    monkeypatch.setattr(rete, "chiudi", lambda: None)
 
     def motori(lavoro):
         raise AcceleratorError("CUDA error: unspecified launch failure\naltro")
