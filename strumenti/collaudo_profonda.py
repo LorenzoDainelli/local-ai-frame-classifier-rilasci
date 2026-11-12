@@ -180,6 +180,21 @@ def giudica(otto: dict, alta: dict, liscio8: float | None, liscio16: float | Non
     return guasti
 
 
+def medie(righe: list[dict]) -> dict:
+    uscita = {}
+    for motore in sorted({r["motore"] for r in righe}):
+        for difficile in (False, True):
+            sue = [r for r in righe if r["motore"] == motore and r["difficile"] == difficile
+                   and r.get("scarto_liscio_8") is not None]
+            if not sue:
+                continue
+            chiave = f"{motore} · {'difficili' if difficile else 'facili'}"
+            uscita[chiave] = {
+                campo: round(sum(r[campo] for r in sue) / len(sue), 4)
+                for campo in ("scarto_liscio_8", "scarto_liscio_16")}
+    return uscita
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cartella", type=Path, required=True)
@@ -228,7 +243,7 @@ def main() -> int:
     conti = {"tutte": len(righe), "giuste": sum(not r["guasti"] for r in righe),
              "difficili": len(difficili),
              "difficili_giuste": sum(not r["guasti"] for r in difficili),
-             "archivio_sha256": prese["archivio_sha256"]}
+             "archivio_sha256": prese["archivio_sha256"], "medie": medie(righe)}
     argomenti.uscita.write_text(json.dumps({"conti": conti, "righe": righe}, indent=1,
                                            ensure_ascii=False, default=str),
                                 encoding="utf-8")
