@@ -52,7 +52,7 @@ def giudica(riga: dict) -> list[str]:
     prima, dopo = occhi["prima"], occhi["dopo"]
     if prima["larghezza"] * dopo["altezza"] != prima["altezza"] * dopo["larghezza"]:
         guasti.append("girata male")
-    for nome in ("mappa_hdr", *PROFONDE):
+    for nome in ("mappa_hdr", "mappa_iso", *PROFONDE):
         stato = occhi[nome]
         if stato["prima"] and not stato["dopo"]:
             guasti.append(f"{nome} persa")
