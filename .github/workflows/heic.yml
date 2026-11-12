@@ -80,7 +80,7 @@ jobs:
   altri:
     name: PNG e TIFF a 16 bit, AVIF a 10 bit visti da macOS (${{ matrix.formato }})
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: ${{ matrix.formato == 'avif' && 340 || 60 }}
     strategy:
       fail-fast: false
       matrix:

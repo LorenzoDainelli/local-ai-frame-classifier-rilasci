@@ -149,7 +149,7 @@ def _scrivi_avif(pixel: np.ndarray, verso: Path, qualita: int) -> None:
 
     dieci = ((pixel.astype(np.uint64) * 1023 + 32767) // 65535).astype(np.uint16)
     dati = imagecodecs.avif_encode(np.ascontiguousarray(dieci), level=qualita,
-                                   bitspersample=10, primaries=PRIMARIE,
+                                   bitspersample=10, primaries=PRIMARIE, speed=6,
                                    transfer=TRASFERIMENTO, matrix=6)
     verso.write_bytes(profonda._con_dati(dati, _exif(True).tobytes(), None, None))
 
