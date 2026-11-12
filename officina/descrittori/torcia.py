@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gc
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -113,6 +114,7 @@ def libera() -> None:
 SEGNI_DI_MEMORIA_FINITA = ("out of memory", "cublas_status_alloc_failed",
                            "can't allocate memory", "failed to allocate memory")
 FINITE_DI_FILA = 5
+SOLO_PAROLE_DELLA_SCHEDA = re.compile(r"CUDA error: [A-Za-z0-9 _,.'()-]{1,90}")
 MEMORIA_FINITA = ("La scheda video ha finito la memoria e il lavoro si è fermato. "
                   "Gli scatti che restano non sono segnati come rotti: riprova quando "
                   "la scheda è libera, per esempio dopo il miglioramento.")
@@ -126,6 +128,16 @@ def memoria_finita(guasto: BaseException | None) -> bool:
         return True
     testo = str(guasto).lower()
     return any(segno in testo for segno in SEGNI_DI_MEMORIA_FINITA)
+
+
+def errore_della_scheda(guasto: BaseException | None) -> str:
+    if guasto is None or memoria_finita(guasto):
+        return ""
+    prima = (str(guasto).strip().splitlines() or [""])[0]
+    if type(guasto).__name__ != "AcceleratorError" and not prima.startswith("CUDA error"):
+        return ""
+    detto = SOLO_PAROLE_DELLA_SCHEDA.match(prima)
+    return detto.group(0) if detto else "CUDA error"
 
 
 def senza_memoria(guasto: BaseException):

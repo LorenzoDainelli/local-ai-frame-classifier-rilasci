@@ -54,11 +54,20 @@ def _salva_l_aspetto(connessione, corpo_id: int, corpo) -> None:
 
 def salva(connessione, scatto_id: int, file_id: int | None, trovati,
           modello: str, versione: str) -> int:
-    connessione.execute(
-        "DELETE FROM aspetti WHERE corpo_id IN "
-        "(SELECT id FROM corpi WHERE scatto_id = ? AND modello = ?)", (scatto_id, modello))
-    connessione.execute(
-        "DELETE FROM corpi WHERE scatto_id = ? AND modello = ?", (scatto_id, modello))
+    if connessione.execute(
+            "SELECT 1 FROM corpi_guardati WHERE scatto_id = ? AND modello = ? "
+            "AND versione = ? AND da_riguardare = 1",
+            (scatto_id, modello, versione)).fetchone():
+        gia_visti = {riga[0] for riga in connessione.execute(
+            "SELECT DISTINCT fotogramma FROM corpi WHERE scatto_id = ? AND modello = ? "
+            "AND versione = ?", (scatto_id, modello, versione))}
+        trovati = [(n, c) for n, c in trovati if n not in gia_visti]
+    else:
+        connessione.execute(
+            "DELETE FROM aspetti WHERE corpo_id IN "
+            "(SELECT id FROM corpi WHERE scatto_id = ? AND modello = ?)", (scatto_id, modello))
+        connessione.execute(
+            "DELETE FROM corpi WHERE scatto_id = ? AND modello = ?", (scatto_id, modello))
     connessione.execute(
         "DELETE FROM corpi_guardati WHERE scatto_id = ? AND modello = ?", (scatto_id, modello))
     for fotogramma, corpo in trovati:
@@ -76,7 +85,9 @@ def salva(connessione, scatto_id: int, file_id: int | None, trovati,
     connessione.execute(
         "INSERT OR REPLACE INTO corpi_guardati "
         "(scatto_id, modello, versione, quanti, guardato_il) VALUES (?,?,?,?,?)",
-        (scatto_id, modello, versione, len(trovati), adesso()))
+        (scatto_id, modello, versione, connessione.execute(
+            "SELECT count(*) FROM corpi WHERE scatto_id = ? AND modello = ?",
+            (scatto_id, modello)).fetchone()[0], adesso()))
     ricollega(connessione, scatto_id)
     return len(trovati)
 

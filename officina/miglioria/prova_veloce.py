@@ -372,7 +372,8 @@ class ProvaVeloce:
     def _nella_stanza(self, clip: list[dict], scelti: dict, foto: list[dict] | None = None,
                       tetto: str | None = None, volti: list[dict] | None = None,
                       quali_volti: list[str] | None = None) -> dict:
-        from officina.miglioria.lavoro import a_parole, percorsi_della_stanza
+        from officina.miglioria.lavoro import (RAM_POCA, _byte, a_parole, in_giga,
+                                               percorsi_della_stanza)
 
         self._prendi_la_scheda()
         try:
@@ -390,6 +391,14 @@ class ProvaVeloce:
                 lavoro["volti"] = volti
                 lavoro["quali_volti"] = quali_volti
             esito = self._lancia(lavoro, self.lavoro.a_che_punto_a_pezzi)
+            if esito.get("guasto") == RAM_POCA and not self._fermati.is_set():
+                registro.avviso("prova_veloce.ram_col_disco",
+                                serve_gb=in_giga(_byte(esito.get("serve"))),
+                                libera_gb=in_giga(_byte(esito.get("libera"))))
+                self.lavoro.di("la RAM libera non basta per tenere tutto SeedVR2: riparto "
+                               "con una parte dei pesi sul disco, ci vuole di più")
+                lavoro["lavoro"]["opzioni"]["disco"] = True
+                esito = self._lancia(lavoro, self.lavoro.a_che_punto_a_pezzi)
         finally:
             self._processo = None
             self.turno.lascia(self.lavoro)

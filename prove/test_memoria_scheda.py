@@ -102,9 +102,9 @@ def test_uno_scatto_troppo_pesante_per_i_volti_si_segna_dopo(archivio_pieno):
 
     passata = Passata(archivio_pieno, rilevatore=VoltiSenzaMemoria(finite_su={1}), intensita=100)
     fatto = passata.esegui()
-    assert fatto.fatti == fatto.totale - 1
+    assert fatto.fatti == fatto.totale - 1 - fatto.motivi.get("aspetta_le_impronte", 0)
     assert _troppo_pesanti(archivio_pieno) == 1
-    assert passata.quanti_mancano() == 0
+    assert passata.quanti_mancano() == fatto.motivi.get("aspetta_le_impronte", 0)
 
 
 def test_se_la_memoria_finisce_sull_ultimo_scatto_dei_volti_resta_da_fare(archivio_pieno):
@@ -155,9 +155,9 @@ def test_uno_scatto_troppo_pesante_per_i_corpi_si_segna_dopo(archivio_pieno):
 
     passata = Passata(archivio_pieno, rilevatore=_corpi_finti()(finite_su={1}), intensita=100)
     fatto = passata.esegui()
-    assert fatto.fatti == fatto.totale - 1
+    assert fatto.fatti == fatto.totale - 1 - fatto.motivi.get("aspetta_le_impronte", 0)
     assert _troppo_pesanti(archivio_pieno) == 1
-    assert passata.quanti_mancano() == 0
+    assert passata.quanti_mancano() == fatto.motivi.get("aspetta_le_impronte", 0)
 
 
 def test_nella_passata_a_turni_la_memoria_finita_non_segna_niente(archivio_pieno):

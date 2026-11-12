@@ -61,6 +61,7 @@ class Scritta:
 class Sguardo:
     descrizione: str = ""
     scritte: list[Scritta] = field(default_factory=list)
+    capita: bool = True
 
 
 def serve_la_scheda() -> ServeLaScheda:
@@ -285,7 +286,7 @@ def leggi_la_risposta(grezzo: str) -> Sguardo:
     descrizione = _pulisci(descrizione)
     if descrizione.casefold().rstrip(".") in NIENTE:
         descrizione = ""
-    return Sguardo(descrizione=descrizione, scritte=fuori)
+    return Sguardo(descrizione=descrizione, scritte=fuori, capita=dove is not None)
 
 
 def _dopo_i_due_punti(riga: str) -> str:

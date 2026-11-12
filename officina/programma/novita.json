@@ -10,6 +10,26 @@
     ],
     "semplice": [
       [
+        "fulmine",
+        "Prova di velocità: se la RAM libera non basta per SeedVR2 non si ferma più con «servono 19 GB». Riparte da sola con una parte dei pesi sul disco: ci mette di più ma il risultato è lo stesso"
+      ],
+      [
+        "video",
+        "Gara dei 120 FPS: non si ferma più con «difetto imprevisto» quando passa da un video piccolo a uno grande. Se la scheda video dà un errore, adesso te lo dice in chiaro e la gara riparte da dove era"
+      ],
+      [
+        "volto",
+        "Volti e corpi riguardano da soli tutti i video: prima, se arrivavano prima delle impronte, guardavano solo la prima immagine. Aggiungono quello che manca e non toccano le persone e le scelte che hai già fatto"
+      ],
+      [
+        "riprova",
+        "Se a un video mancano le impronte, volti e corpi lo aspettano invece di segnarlo «fatto». Un video che non dà immagini non risulta più «fatto» in silenzio"
+      ],
+      [
+        "avviso",
+        "Volti, corpi e scritte scrivono nel registro ogni errore imprevisto. Se il lettore delle scritte risponde in modo strano, lo scatto non risulta «letto» e si riprova al giro dopo"
+      ],
+      [
         "impronta",
         "Se a qualche scatto manca l'impronta, nella carta delle impronte c'è «Perché mancano?»: il programma riprova ad aprirli uno per uno e ti dice cosa succede, se gli altri lavori li hanno fatti e se sono doppioni. C'è anche un testo da copiare"
       ],
@@ -191,6 +211,10 @@
       ]
     ],
     "tecnico": [
+      "Prova di velocità: su <code>ram_poca</code> la stanza riparte una volta con <code>disco: true</code> nelle opzioni (foto e video); <code>ram_poca_anche_col_disco</code> resta un messaggio.",
+      "Gara 120: <code>GimmVFI.coppia</code> teneva la riduzione del primo video per tutti i casi; ora la ricalcola quando cambia la misura. Un errore CUDA non di memoria esce come <code>scheda_caduta</code> con la prima riga del messaggio (<code>torcia.errore_della_scheda</code>).",
+      "Lavori IA (#100, passo A): <code>file_media.quello_da_guardare</code> è l'unica regola per scegliere il file; volti e corpi rimandano con <code>aspetta_le_impronte</code>; <code>video_senza_immagini</code> segnala; registro <code>volti.scatto_rotto</code>, <code>corpi.scatto_rotto</code>, <code>parole.scatto_rotto</code>, <code>parole.lettura_fallita</code>, <code>parole.risposta_strana</code>; <code>Sguardo.capita</code>.",
+      "Migrazione 76: <code>da_riguardare</code> su <code>volti_guardati</code> e <code>corpi_guardati</code>, a 1 per i video. Il nuovo giro aggiunge solo i fotogrammi senza righe.",
       "«Perché mancano?» (<code>officina/impronte/perche.py</code>, <code>/intelligenza/perche-mancano</code>): elenca gli scatti senza impronta, riprova ad aprirli come fa la passata e scrive <code>impronte.perche_manca</code>. La passata ora scrive nel registro <code>impronte.scatto_saltato</code> (col motivo) e <code>impronte.scatto_senza_ritagli</code>, che prima non lasciavano traccia.",
       "HEIC a più di 8 bit (<code>officina/miglioria/profonda.py</code>): si apre a 16 bit con pillow-heif (<code>convert_hdr_to_8bit=False</code>), si controlla che a 8 bit torni uguale alla foto dritta (anche girata secondo l'EXIF), SeedVR2 lavora a 16 bit (ingresso <code>float16</code>, uscita <code>uint16</code>) e si salva a 10 bit con lo stesso <code>nclx</code> o ICC. Con i motori a 8 bit si tengono gli 8 bit del motore e si aggiungono i bit fini dell'ingrandimento a 16 bit (<code>unisci</code>). Se qualcosa non torna, si lavora a 8 bit come prima e si scrive nel registro.",
       "PNG e TIFF a 16 bit, AVIF a 10 bit (<code>officina/miglioria/profonda.py</code>, imagecodecs e tifffile): si aprono a 16 bit, si salvano con ICC, EXIF, XMP, testi PNG e pezzi dei colori (<code>cHRM</code>, <code>gAMA</code>, <code>cICP</code>…); nel TIFF il GPS si scrive come sotto-IFD a mano; nell'AVIF si tiene il <code>nclx</code> e si aggiungono le voci Exif e XMP.",

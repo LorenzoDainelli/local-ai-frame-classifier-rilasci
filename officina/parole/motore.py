@@ -175,25 +175,40 @@ class Passata:
             self._salta(scatto_id, errore.codice)
             self._metti_da_parte(scatto_id, errore.codice, errore.file_id)
             return False
-        except Exception:
+        except Exception as guasto:
+            registro.avviso("parole.scatto_rotto", scatto=scatto_id,
+                            **registro.dove_si_e_rotto(guasto))
             self._salta(scatto_id, "errore_imprevisto")
             return False
 
         sguardi = []
+        strane = 0
         for numero, immagine in immagini:
             if self.fermata:
                 return False
             try:
-                sguardi.append((numero, _guarda(lettore, immagine)))
+                sguardo = _guarda(lettore, immagine)
             except ErroreOfficina:
                 raise
-            except Exception:
+            except Exception as guasto:
                 self._guasti_di_fila += 1
                 if self.avanzamento.letti == 0 and self._guasti_di_fila >= GUASTI_PRIMA_DI_FERMARSI:
                     raise
+                registro.avviso("parole.lettura_fallita", scatto=scatto_id,
+                                **registro.dove_si_e_rotto(guasto))
                 self._salta(scatto_id, "lettura_fallita")
                 return False
+            if getattr(sguardo, "capita", True):
+                sguardi.append((numero, sguardo))
+            else:
+                strane += 1
         self._guasti_di_fila = 0
+        if strane:
+            registro.avviso("parole.risposta_strana", scatto=scatto_id,
+                            strane=strane, su=len(immagini))
+        if strane and not sguardi:
+            self._salta(scatto_id, "risposta_strana")
+            return False
 
         with self.archivio.scrittura() as connessione:
             magazzino.dimentica_le_vecchie(connessione, scatto_id)
@@ -226,14 +241,9 @@ class Passata:
     def _immagini_di(self, scatto_id: int):
         with self.archivio.lettura() as connessione:
             file_righe = file_media.di_scatto(connessione, scatto_id)
-            principale = next(
-                (r for r in file_righe
-                 if r["ruolo"] == "principale" and r["genere"] == "immagine"),
-                None)
-            video = None
-            if principale is None:
-                video = next((r for r in file_righe if r["genere"] == "video"), None)
-                principale = video
+            principale = file_media.quello_da_guardare(file_righe)
+            video = (principale if principale is not None
+                     and principale["genere"] != "immagine" else None)
             if principale is None:
                 raise FileNonLeggibile("Nessuna immagine da leggere.",
                                        codice="senza_file")

@@ -59,6 +59,8 @@ MESSAGGI = {
     "solo_foto": "questo modello migliora solo le foto",
     "lavoro_illeggibile": "difetto del programma nel preparare il lavoro",
     "rotto": "difetto imprevisto: il dettaglio tecnico è nel registro",
+    "scheda_caduta": ("la scheda video ha dato un errore e il lavoro si è fermato. "
+                      "Riavvia il programma e riprova: riparte da dove era"),
     "pezzi_rotti": "un pezzo già migliorato non si legge più: si rifà da capo",
     "torch_troppo_vecchio": ("il motore delle reti neurali è troppo vecchio per aprire "
                              "i pesi in sicurezza: aggiorna i motori"),

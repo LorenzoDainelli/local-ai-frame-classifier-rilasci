@@ -260,8 +260,10 @@ class GimmVFI:
 
     def coppia(self, prima, dopo, volte: int) -> list:
         alto, largo = prima.shape[:2]
-        if self.ridotto is None:
+        misura = (largo, alto)
+        if self.ridotto is None or getattr(self, "_misura", misura) != misura:
             self.ridotto = riduzione(largo, alto)
+        self._misura = misura
         tempi = istanti(volte)
         while True:
             try:

@@ -437,14 +437,7 @@ class Passata:
             self.avanzamento.ms_per_scatto = sum(recenti) / len(recenti)
 
 
-def _il_file_da_guardare(file_righe) -> object | None:
-    for riga in file_righe:
-        if riga["ruolo"] == "principale":
-            return riga
-    for riga in file_righe:
-        if riga["genere"] == "immagine":
-            return riga
-    return file_righe[0] if file_righe else None
+_il_file_da_guardare = file_media.quello_da_guardare
 
 
 class Coda:

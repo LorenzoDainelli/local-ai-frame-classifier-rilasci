@@ -86,10 +86,16 @@ def un_lavoro(lavoro: dict, manda, motori=_motori) -> int:
         if torcia.memoria_finita(errore):
             codice = ("memoria_finita" if "can't allocate memory" in str(errore).lower()
                       else "memoria_scheda_finita")
+        passi = diario.passi_del_guasto(errore)
+        della_scheda = torcia.errore_della_scheda(errore)
+        if della_scheda:
+            codice = "scheda_caduta"
+            passi = f"Scheda video: {della_scheda}\n{passi}"
+            diario.errore("gara120.scheda_caduta", motivo=diario.Parola(della_scheda))
         dove = diario.dove_si_e_rotto(errore)
         manda({**{chiave: str(valore) for chiave, valore in dove.items()},
                "tipo": str(dove.get("guasto", "")), "guasto": codice,
-               "passi": diario.passi_del_guasto(errore)})
+               "passi": passi})
         return 1
     manda({"fatto": esito})
     return 0

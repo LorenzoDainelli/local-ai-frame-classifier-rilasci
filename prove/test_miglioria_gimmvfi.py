@@ -529,3 +529,71 @@ def test_la_spinta_come_il_codice_originale():
     assert float(uscita.sum()) == pytest.approx(2.0)
     flusso[0, 0, 1, 1] = float("nan")
     assert float(gimm_spinta.spingi(entrata, flusso).abs().sum()) == 0.0
+
+
+def test_ogni_video_ha_la_riduzione_della_sua_misura(monkeypatch):
+    motore, chiamate = _motore_finto(monkeypatch)
+    for largo, alto in ((1280, 720), (4096, 2160), (1280, 720)):
+        quadri = [np.zeros((alto, largo, 3), np.uint8) for _ in range(2)]
+        list(motore.video(iter(quadri), 2))
+    assert [c[3] for c in chiamate] == [1.0, gimmvfi.ULTIMA, 1.0]
+
+
+def test_dentro_lo_stesso_video_la_riduzione_abbassata_resta(monkeypatch):
+    motore = gimmvfi.GimmVFI.__new__(gimmvfi.GimmVFI)
+    motore._rete = None
+    motore.ridotto = None
+    motore.tempi = []
+    monkeypatch.setattr(motore, "_svuota", lambda: None)
+    provati = []
+
+    def in_mezzo(prima, dopo, tempi, ridotto):
+        provati.append(ridotto)
+        if ridotto > 0.5:
+            raise RuntimeError("CUDA out of memory")
+        return [prima]
+
+    monkeypatch.setattr(motore, "_in_mezzo", in_mezzo)
+    quadri = [np.zeros((8, 8, 3), np.uint8) for _ in range(3)]
+    list(motore.video(iter(quadri), 2))
+    assert provati == [1.0, 0.5, 0.5]
+
+
+class AcceleratorError(RuntimeError):
+    pass
+
+
+@pytest.mark.parametrize(("guasto", "detto"), [
+    (AcceleratorError("CUDA error: unspecified launch failure\nCUDA kernel errors "
+                      "might be asynchronously reported"),
+     "CUDA error: unspecified launch failure"),
+    (RuntimeError("CUDA error: device-side assert triggered\nC:\\Users\\tizio\\x"),
+     "CUDA error: device-side assert triggered"),
+    (AcceleratorError("C:\\Users\\tizio\\foto.jpg si è rotto"), "CUDA error"),
+    (AcceleratorError("CUDA error: out of memory"), ""),
+    (RuntimeError("si è rotto"), ""),
+    (None, ""),
+])
+def test_l_errore_della_scheda_si_dice_senza_nomi(guasto, detto):
+    from officina.descrittori import torcia
+
+    assert torcia.errore_della_scheda(guasto) == detto
+
+
+def test_la_stanza_della_gara_dice_che_e_caduta_la_scheda(tmp_path):
+    from officina.miglioria import gara120_stanza
+
+    def motori(lavoro):
+        raise AcceleratorError("CUDA error: unspecified launch failure\naltro")
+
+    detti = []
+    esito = gara120_stanza.un_lavoro(
+        {"azione": gara120_stanza.CORSA, "dati": str(tmp_path), "risultati": str(tmp_path)},
+        detti.append, motori=motori)
+    assert esito == 1
+    assert detti[-1]["guasto"] == "scheda_caduta"
+    assert detti[-1]["passi"].startswith(
+        "Scheda video: CUDA error: unspecified launch failure\nGuasto: AcceleratorError")
+    from officina.miglioria.lavoro import a_parole
+
+    assert "scheda video" in a_parole("scheda_caduta")

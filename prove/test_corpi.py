@@ -249,7 +249,13 @@ def test_la_passata_guarda_tutti_gli_scatti_una_volta(archivio_pieno):
     assert fatto.fatti + fatto.saltati == totale
     assert fatto.corpi == fatto.fatti
     assert finto.spento
-    assert Passata(archivio_pieno, rilevatore=RilevatoreFinto(), intensita=100).quanti_mancano() == 0
+    dopo = Passata(archivio_pieno, rilevatore=RilevatoreFinto(), intensita=100)
+    assert dopo.quanti_mancano() == fatto.motivi.get("aspetta_le_impronte", 0)
+    with archivio_pieno.lettura() as connessione:
+        video = connessione.execute(
+            "SELECT count(*) FROM scatti WHERE genere = 'video' "
+            "AND fuori_archivio = 0").fetchone()[0]
+    assert dopo.quanti_mancano() == video
 
 
 class RipuntatoreFinto(RilevatoreFinto):

@@ -28,6 +28,16 @@ def di_scatto(connessione: sqlite3.Connection, scatto_id: int) -> list[sqlite3.R
     )
 
 
+def quello_da_guardare(righe):
+    for riga in righe:
+        if riga["ruolo"] == "principale":
+            return riga
+    for riga in righe:
+        if riga["genere"] == "immagine":
+            return riga
+    return righe[0] if righe else None
+
+
 def crea(connessione: sqlite3.Connection, impronta: str, dimensione: int,
          genere: str, dati) -> int:
     latitudine, longitudine = coordinate_valide(dati.latitudine, dati.longitudine)

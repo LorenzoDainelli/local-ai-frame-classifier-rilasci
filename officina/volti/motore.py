@@ -103,6 +103,8 @@ class Passata:
                     if torcia.memoria_finita(guasto):
                         memoria.finita(scatto_id, guasto)
                     else:
+                        registro.avviso("volti.scatto_rotto", scatto=scatto_id,
+                                        **registro.dove_si_e_rotto(guasto))
                         self._segnala(scatto_id, ErroreOfficina(
                             "Questo scatto non si è lasciato guardare."))
                 if al_passo:
@@ -117,7 +119,7 @@ class Passata:
     def _guarda_uno(self, scatto_id: int) -> None:
         with self.archivio.lettura() as connessione:
             righe = file_media.di_scatto(connessione, scatto_id)
-            principale = next((f for f in righe if f["ruolo"] == "principale"), None)
+            principale = file_media.quello_da_guardare(righe)
             if principale is None:
                 raise ErroreOfficina("Questo scatto non ha un file principale.")
             percorso = file_media.da_guardare(connessione, principale["id"])
@@ -129,8 +131,12 @@ class Passata:
 
         if percorso is None:
             raise ErroreOfficina("Il file non si trova sul disco.")
+        if principale["genere"] != "immagine" and not fotogrammi:
+            raise DaRifare("Aspetto le impronte di questo video.",
+                           codice="aspetta_le_impronte")
 
         trovati: list[tuple[int, object]] = []
+        persi = 0
         with dall_archivio.attento(percorso):
             if principale["genere"] == "immagine":
                 immagine = lettura.copia_di_lavoro(percorso, LATO_DI_LAVORO)
@@ -138,18 +144,33 @@ class Passata:
             else:
                 from officina.immagini import fotogrammi as estrattore
 
-                for numero, istante in (fotogrammi or [(0, None)]):
+                for numero, istante in fotogrammi:
                     quadro = estrattore.uno(percorso, numero, istante, LATO_DI_LAVORO)
                     if quadro is None:
+                        persi += 1
                         continue
                     trovati.extend((numero, faccia)
                                    for faccia in self.rilevatore.guarda(quadro))
+                if persi == len(fotogrammi):
+                    raise ErroreOfficina("Il video non ha dato nessun fotogramma.",
+                                         codice="video_senza_immagini")
+                if persi:
+                    registro.avviso("volti.fotogrammi_persi", scatto=scatto_id,
+                                    persi=persi, su=len(fotogrammi))
 
         with self.archivio.scrittura() as connessione:
-            connessione.execute(
-                "DELETE FROM volti WHERE scatto_id = ? AND modello = ? "
-                "AND versione = ? AND deciso_da = 'sistema'",
-                (scatto_id, self._modello(), self._versione()))
+            chi = (scatto_id, self._modello(), self._versione())
+            gia_visti: set[int] = set()
+            if uno(connessione, "SELECT 1 FROM volti_guardati WHERE scatto_id = ? "
+                   "AND modello = ? AND versione = ? AND da_riguardare = 1", *chi):
+                gia_visti = {riga["fotogramma"] for riga in tutti(
+                    connessione, "SELECT DISTINCT fotogramma FROM volti "
+                    "WHERE scatto_id = ? AND modello = ? AND versione = ?", *chi)}
+                trovati = [(n, f) for n, f in trovati if n not in gia_visti]
+            else:
+                connessione.execute(
+                    "DELETE FROM volti WHERE scatto_id = ? AND modello = ? "
+                    "AND versione = ? AND deciso_da = 'sistema'", chi)
             for numero, faccia in trovati:
                 connessione.execute(
                     """
@@ -167,7 +188,9 @@ class Passata:
             connessione.execute(
                 "INSERT OR REPLACE INTO volti_guardati "
                 "(scatto_id, modello, versione, quanti, guardato_il) VALUES (?,?,?,?,?)",
-                (scatto_id, self._modello(), self._versione(), len(trovati), adesso()))
+                (*chi, uno(connessione, "SELECT count(*) AS q FROM volti "
+                           "WHERE scatto_id = ? AND modello = ? AND versione = ?",
+                           *chi)["q"], adesso()))
             from officina.modello import corpi as corpi_mod
 
             corpi_mod.ricollega(connessione, scatto_id)
@@ -206,7 +229,8 @@ def _domanda_da_fare(cosa: str, piu: str = "") -> str:
         WHERE s.fuori_archivio = 0{piu}
           AND NOT EXISTS (
               SELECT 1 FROM volti_guardati g
-              WHERE g.scatto_id = s.id AND g.modello = ? AND g.versione = ?)
+              WHERE g.scatto_id = s.id AND g.modello = ? AND g.versione = ?
+                AND g.da_riguardare = 0)
           {segnalazioni.clausola(segnalazioni.VOLTI_NON_LETTI)}
           {segnalazioni.clausola(segnalazioni.NON_SI_APRE)}
         ORDER BY s.id

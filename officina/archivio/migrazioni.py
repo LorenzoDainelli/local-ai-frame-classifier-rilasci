@@ -1620,6 +1620,24 @@ def _versione_75(connessione: sqlite3.Connection) -> None:
         "INSERT OR REPLACE INTO stato (chiave, valore, aggiornato_il) "
         "VALUES ('seguiti_sam3_tolti', ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
         (str(quanti),))
+def _versione_76(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "ALTER TABLE volti_guardati ADD COLUMN da_riguardare INTEGER NOT NULL DEFAULT 0")
+    connessione.execute(
+        "ALTER TABLE corpi_guardati ADD COLUMN da_riguardare INTEGER NOT NULL DEFAULT 0")
+    quanti = connessione.execute(
+        "UPDATE volti_guardati SET da_riguardare = 1 WHERE scatto_id IN "
+        "(SELECT id FROM scatti WHERE genere = 'video')").rowcount
+    quanti += connessione.execute(
+        "UPDATE corpi_guardati SET da_riguardare = 1 WHERE scatto_id IN "
+        "(SELECT id FROM scatti WHERE genere = 'video')").rowcount
+    if quanti:
+        connessione.execute(
+            "INSERT OR REPLACE INTO stato (chiave, valore, aggiornato_il) "
+            "VALUES ('video_da_riguardare', ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
+            (str(quanti),))
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1756,6 +1774,8 @@ MIGRAZIONI: list[Migrazione] = [
     Migrazione(74, "i secondi di ogni modello nelle gare, accanto ad A e B", _versione_74),
     Migrazione(75, "i seguiti si rifanno con SAM 3.1: via il calcolato, restano le scelte",
                _versione_75),
+    Migrazione(76, "volti e corpi riguardano tutti i video: forse ne avevano visto "
+               "solo il primo fotogramma", _versione_76),
 ]
 
 

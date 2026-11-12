@@ -82,7 +82,8 @@ class Passata:
             guardati = None if piu else uno(
                 connessione,
                 "SELECT count(*) AS q FROM corpi_guardati g JOIN scatti s ON s.id = g.scatto_id "
-                "WHERE s.fuori_archivio = 0 AND g.modello = ? AND g.versione = ?",
+                "WHERE s.fuori_archivio = 0 AND g.modello = ? AND g.versione = ? "
+                "AND g.da_riguardare = 0",
                 rilevatore_mod.NOME, self._versione())
         self.avanzamento.gia_fatti = guardati["q"] if guardati else 0
         if quanti:
@@ -215,6 +216,8 @@ class Passata:
                 if torcia.memoria_finita(guasto):
                     self._memoria.finita(scatto_id, guasto)
                 else:
+                    registro.avviso("corpi.scatto_rotto", scatto=scatto_id,
+                                    **registro.dove_si_e_rotto(guasto))
                     self._segnala(scatto_id, ErroreOfficina(
                         "Questo scatto non si è lasciato guardare."))
                 continue
@@ -232,7 +235,7 @@ class Passata:
     def _leggi(self, scatto_id: int):
         with self.archivio.lettura() as connessione:
             righe = file_media.di_scatto(connessione, scatto_id)
-            principale = next((f for f in righe if f["ruolo"] == "principale"), None)
+            principale = file_media.quello_da_guardare(righe)
             if principale is None:
                 raise ErroreOfficina("Questo scatto non ha un file principale.")
             percorso = file_media.da_guardare(connessione, principale["id"])
@@ -244,6 +247,9 @@ class Passata:
 
         if percorso is None:
             raise ErroreOfficina("Il file non si trova sul disco.")
+        if principale["genere"] != "immagine" and not fotogrammi:
+            raise DaRifare("Aspetto le impronte di questo video.",
+                           codice="aspetta_le_impronte")
 
         def quadri():
             with dall_archivio.attento(percorso):
@@ -253,10 +259,18 @@ class Passata:
                     return
                 from officina.immagini import fotogrammi as estrattore
 
-                for numero, istante in (fotogrammi or [(0, None)]):
+                dati = 0
+                for numero, istante in fotogrammi:
                     intera = estrattore.uno(percorso, numero, istante)
                     if intera is not None:
+                        dati += 1
                         yield numero, _di_lavoro(intera), intera
+                if not dati:
+                    raise ErroreOfficina("Il video non ha dato nessun fotogramma.",
+                                         codice="video_senza_immagini")
+                if dati < len(fotogrammi):
+                    registro.avviso("corpi.fotogrammi_persi", scatto=scatto_id,
+                                    persi=len(fotogrammi) - dati, su=len(fotogrammi))
 
         return principale["id"], quadri()
 
@@ -280,6 +294,9 @@ class Passata:
                 self._memoria.finita(scatto_id, guasto)
                 continue
             if guasto is not None:
+                if not isinstance(guasto, ErroreOfficina):
+                    registro.avviso("corpi.scatto_rotto", scatto=scatto_id,
+                                    **registro.dove_si_e_rotto(guasto))
                 self._segnala(scatto_id, guasto if isinstance(guasto, ErroreOfficina)
                               else ErroreOfficina("Questo scatto non si è lasciato guardare."))
                 continue
@@ -349,7 +366,8 @@ def _domanda_da_fare(cosa: str, piu: str = "") -> str:
         WHERE s.fuori_archivio = 0{piu}
           AND NOT EXISTS (
               SELECT 1 FROM corpi_guardati g
-              WHERE g.scatto_id = s.id AND g.modello = ? AND g.versione = ?)
+              WHERE g.scatto_id = s.id AND g.modello = ? AND g.versione = ?
+                AND g.da_riguardare = 0)
           {segnalazioni.clausola(segnalazioni.CORPI_NON_LETTI)}
           {segnalazioni.clausola(segnalazioni.NON_SI_APRE)}
         ORDER BY s.id

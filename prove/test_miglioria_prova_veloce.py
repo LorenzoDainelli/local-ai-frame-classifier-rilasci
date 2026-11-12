@@ -462,3 +462,54 @@ def test_se_dietro_cambia_un_bit_resta_spento_solo_lui(tmp_path, piccolo, fluido
     assert not dati["passata"]
     assert "lavori_dietro" not in dati["idee"] and "scrittura" in dati["idee"]
     assert dati["dietro"][0]["stabile"] and not dati["dietro"][0]["uguale"]
+
+
+def test_con_poca_ram_la_prova_riparte_col_disco(tmp_path, monkeypatch):
+    giri = []
+
+    def lancia(lavoro, al_passo):
+        giri.append(dict(lavoro["lavoro"]["opzioni"]))
+        if len(giri) == 1:
+            return {"guasto": "ram_poca", "serve": 19 * 2**30, "libera": 16 * 2**30}
+        return {"fatto": {"passata": False, "clip": []}}
+
+    prova, _ = _prova(tmp_path, monkeypatch, lancia=lancia)
+    prova._gira()
+    assert len(giri) == 2
+    assert "disco" not in giri[0]
+    assert giri[1]["disco"] is True
+    assert prova.turno.chi is None
+
+
+def test_se_non_basta_nemmeno_il_disco_la_prova_lo_dice(tmp_path, monkeypatch):
+    giri = []
+
+    def lancia(lavoro, al_passo):
+        giri.append(dict(lavoro["lavoro"]["opzioni"]))
+        if len(giri) == 1:
+            return {"guasto": "ram_poca"}
+        return {"guasto": "ram_poca_anche_col_disco",
+                "spiegazione": "Per SeedVR2 servono almeno 5 GB di RAM libera e ce ne sono 2."}
+
+    prova, _ = _prova(tmp_path, monkeypatch, lancia=lancia)
+    with pytest.raises(Exception) as errore:
+        prova._corri()
+    assert len(giri) == 2
+    assert "5 GB" in str(errore.value)
+    assert prova.turno.chi is None
+
+
+def test_il_disco_arriva_anche_al_lavoro_delle_foto(tmp_path, monkeypatch):
+    visti = []
+
+    def lancia(lavoro, al_passo):
+        visti.append(lavoro)
+        if len(visti) == 1:
+            return {"guasto": "ram_poca"}
+        return {"fatto": {"passata": False, "clip": []}}
+
+    prova, _ = _prova(tmp_path, monkeypatch, lancia=lancia)
+    prova._gira()
+    foto = visti[-1].get("lavoro_foto")
+    if foto is not None:
+        assert foto["opzioni"]["disco"] is True

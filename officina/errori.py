@@ -61,6 +61,10 @@ PERCHE_SALTATO = {
     "video_senza_immagini": "il video si apre ma dentro non c'è nessuna immagine",
     "video_non_apribile": "il video non si è aperto",
     "lettura_fallita": "il file non si è lasciato leggere",
+    "aspetta_le_impronte": ("aspetto le impronte di questo video: i fotogrammi da "
+                            "guardare li scelgono loro"),
+    "risposta_strana": ("il modello ha risposto fuori dallo schema: lo riprovo al "
+                        "prossimo giro"),
     "permesso_negato": "il permesso di aprire il file è stato negato dal sistema",
     "vuoto": ("il file è di zero byte: forse un segnaposto di iCloud o "
               "OneDrive, con il contenuto ancora nella nuvola"),
