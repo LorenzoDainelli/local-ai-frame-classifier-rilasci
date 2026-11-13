@@ -15,7 +15,7 @@ DEPOSITO = "CUHK-CSE/wider_face"
 REVISIONE = "db171f1b7fedf4d3453e81297ff02f9915356d19"
 FOTO_ZIP = "data/WIDER_val.zip"
 FOTO_SHA256 = "f9efbd09f28c5d2d884be8c0eaef3967158c866a593fc36ab0413e4b2a58a17a"
-RILEVATORE = ("public-data/insightface", "models/buffalo_l/det_10g.onnx", "dataset")
+RILEVATORE = "det_10g.onnx"
 OGNI = 3
 OGNI_ROVINATE = 12
 STESSO_VOLTO = 0.4
@@ -189,7 +189,8 @@ def main() -> int:
 
     from officina.immagini import lettura
     from officina.volti import insight
-    from officina.volti.scaricamento import SHA256_RILEVATORE
+    from officina.volti.rilevatore import FILE_RILEVATORE
+    from officina.volti.scaricamento import DA_DOVE, SHA256_RILEVATORE, revisione_di
 
     argomenti = argparse.ArgumentParser()
     argomenti.add_argument("--cartella", required=True)
@@ -210,9 +211,27 @@ def main() -> int:
     if sha(archivio) != FOTO_SHA256:
         print("le foto di WIDER FACE non sono quelle previste", flush=True)
         return 1
-    deposito, file, genere = RILEVATORE
-    pesi = Path(hf_hub_download(deposito, file, repo_type=genere))
-    if sha(pesi) != SHA256_RILEVATORE:
+    pesi = None
+    fonte = DA_DOVE[FILE_RILEVATORE]
+    for deposito in (fonte.repo, *fonte.riserve):
+        for genere in ("model", "dataset"):
+            try:
+                dentro = HfApi().list_repo_files(
+                    deposito, repo_type=genere, revision=revisione_di(deposito) or None)
+                adatti = [n for n in dentro if n.endswith("buffalo_l/" + RILEVATORE)]
+                adatti = adatti or [n for n in dentro if n.endswith(RILEVATORE)]
+                pesi = Path(hf_hub_download(deposito, adatti[0], repo_type=genere,
+                                            revision=revisione_di(deposito) or None))
+            except Exception as guasto:
+                print("FONTE", deposito, genere, "NO", type(guasto).__name__, flush=True)
+                continue
+            print("FONTE", deposito, genere, adatti[0], sha(pesi), flush=True)
+            if sha(pesi) == SHA256_RILEVATORE:
+                break
+            pesi = None
+        if pesi is not None:
+            break
+    if pesi is None:
         print("il rilevatore non è quello del programma", flush=True)
         return 1
 
