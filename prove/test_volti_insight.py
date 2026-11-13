@@ -141,7 +141,9 @@ def test_il_rilevatore_si_chiede_alla_raccolta_di_dati_non_ai_modelli():
     from officina.volti import scaricamento
 
     fonte = scaricamento.DA_DOVE[insight.FILE_RILEVATORE]
-    assert fonte.genere == "dataset"
+    assert fonte.genere == "model"
+    assert scaricamento.revisione_di(fonte.repo)
+    assert "public-data/insightface" in fonte.riserve
     assert fonte.nome_sul_sito.endswith("det_10g.onnx")
 
 

@@ -14,8 +14,8 @@ from prove import impronte_vuote
 
 senza_impronte_vere = impronte_vuote.senza_impronte_vere
 
-DATASET = "public-data/insightface"
-RILEVATORE = "models/buffalo_l/det_10g.onnx"
+DATASET = "menglaoda/_insightface"
+RILEVATORE = "det_10g.onnx"
 RICONOSCITORE_REPO = "Evn9172/cvlface_adaface_ir101_webface12m_onnx"
 SOSIA = "qualcuno/cvlface_adaface_ir101_webface12m_onnx"
 
@@ -65,7 +65,7 @@ class Sito:
 @pytest.fixture
 def sito(tmp_path, monkeypatch):
     nuovo = Sito(tmp_path, {
-        DATASET: ("dataset", [RILEVATORE]),
+        DATASET: ("model", [RILEVATORE]),
         RICONOSCITORE_REPO: ("model", ["adaface_ir101.onnx"]),
         SOSIA: ("model", ["adaface_ir101.onnx"])})
     monkeypatch.setitem(sys.modules, "huggingface_hub", nuovo.modulo())

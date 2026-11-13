@@ -62,10 +62,10 @@ def _con_la_revisione(repo: str) -> dict[str, str]:
 
 DA_DOVE: dict[str, Fonte] = {
     rilevatore_mod.FILE_RILEVATORE: Fonte(
-        "public-data/insightface", "models/buffalo_l/det_10g.onnx",
-        provata=True, sha256=SHA256_RILEVATORE, byte=16_923_827, genere="dataset",
+        "menglaoda/_insightface", "det_10g.onnx",
+        provata=True, sha256=SHA256_RILEVATORE, byte=16_923_827,
         licenza="InsightFace — uso non commerciale, regola 177",
-        riserve=("menglaoda/_insightface", "deepinsight/insightface")),
+        riserve=("deepinsight/insightface", "public-data/insightface")),
     rilevatore_mod.FILE_RICONOSCITORE: Fonte(
         "Evn9172/cvlface_adaface_ir101_webface12m_onnx", "adaface_ir101.onnx",
         provata=True, sha256=SHA256_RICONOSCITORE, byte=249_000_000,
