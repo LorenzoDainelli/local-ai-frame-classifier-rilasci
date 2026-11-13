@@ -19,6 +19,8 @@ class Separatore:
         self._testo = None
         self._dispositivo = "cpu"
         self._tipo = None
+        self._parole: dict[str, dict] = {}
+        self.una_volta_sola = True
 
     def accendi(self) -> None:
         if self._modello is not None:
@@ -52,6 +54,7 @@ class Separatore:
         self._modello = None
         self._preparatore = None
         self._testo = None
+        self._parole = {}
         torcia.libera()
 
     def trova(self, immagine) -> list[tuple[tuple[float, float, float, float], float, object]]:
@@ -75,6 +78,54 @@ class Separatore:
             presence_logits=(None if getattr(uscita, "presence_logits", None) is None
                              else uscita.presence_logits.float()))
         return leggibile, (alta, larga)
+
+    def _la_parola(self, parola: str) -> dict:
+        if parola not in self._parole:
+            testo = self._preparatore(text=parola, return_tensors="pt")
+            self._parole[parola] = {
+                chiave: testo[chiave].to(self._dispositivo)
+                for chiave in ("input_ids", "attention_mask") if chiave in testo}
+        return self._parole[parola]
+
+    def cerca(self, immagine, parole, sicurezza_minima: float | None = None) -> dict:
+        import torch
+
+        self.accendi()
+        intera = immagine.convert("RGB")
+        larga, alta = intera.size
+        ingresso = self._preparatore(images=intera, return_tensors="pt")
+        pixel = ingresso["pixel_values"].to(self._dispositivo, dtype=self._tipo)
+        vista = None
+        fuori = {}
+        with torch.inference_mode():
+            if self.una_volta_sola:
+                try:
+                    vista = self._modello.get_vision_features(pixel_values=pixel)
+                except (AttributeError, TypeError):
+                    self.una_volta_sola = False
+            for parola in parole:
+                testo = self._la_parola(parola)
+                uscita = None
+                if vista is not None:
+                    try:
+                        uscita = self._modello(vision_embeds=vista, **testo)
+                    except TypeError:
+                        self.una_volta_sola = False
+                        vista = None
+                if uscita is None:
+                    uscita = self._modello(pixel_values=pixel, **testo)
+                leggibile = SimpleNamespace(
+                    pred_logits=uscita.pred_logits.float(),
+                    pred_boxes=uscita.pred_boxes.float(),
+                    pred_masks=uscita.pred_masks.float(),
+                    presence_logits=(
+                        None if getattr(uscita, "presence_logits", None) is None
+                        else uscita.presence_logits.float()))
+                fuori[parola] = [
+                    ((x / larga, y / alta, (x2 - x) / larga, (y2 - y) / alta), sicurezza)
+                    for (x, y, x2, y2), sicurezza, _maschera in self.scegli(
+                        leggibile, (alta, larga), sicurezza_minima)]
+        return fuori
 
     def scegli(self, uscita, misura, sicurezza_minima: float | None = None,
                soglia_maschera: float = SOGLIA_MASCHERA):

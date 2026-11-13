@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -20,6 +21,7 @@ from officina.web.strade import base, comune, misura, persone
 
 strada = APIRouter()
 solo_qui = [Depends(base.solo_da_questo_computer)]
+_una_prova_alla_volta = threading.Lock()
 
 @strada.post("/parole/leggi")
 def leggi_le_scritte():
@@ -163,6 +165,8 @@ def _guarda_i_corpi(passata) -> None:
     if not passata.fermata:
         _guarda_gli_aiuti_delle_persone(passata)
     if not passata.fermata:
+        _cerca_le_parti(passata)
+    if not passata.fermata:
         cerca_chi_e(passata.archivio, comune.lavoro_corpi, fermato=lambda: passata.fermata)
     if not passata.fermata:
         _fai_le_stanze(passata)
@@ -254,6 +258,38 @@ def _rifai_i_punti(passata) -> None:
     rifatti = passata.rifai_i_punti(al_passo=al_passo)
     if rifatti:
         comune.lavoro_corpi.di(f"punti del corpo rifatti per {rifatti} persone")
+
+
+def _cerca_le_parti(passata_corpi) -> None:
+    from officina.corpi import parti
+    from officina.parole.motore import Avanzamento as Misuratore
+
+    if parti.cosa_manca(passata_corpi.archivio.dove.modelli):
+        return
+    passata = parti.Passata(passata_corpi.archivio, fermato=lambda: passata_corpi.fermata)
+    if not passata.quanti_mancano():
+        return
+    partito = time.monotonic()
+
+    def al_passo(avanzamento) -> None:
+        fatti = avanzamento.fatti + avanzamento.saltati
+        misura = Misuratore(totale=avanzamento.totale)
+        misura.letti = fatti
+        if fatti >= 3:
+            misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / fatti
+        comune.lavoro_corpi.numeri = {
+            "fatti": fatti,
+            "totale": avanzamento.totale,
+            "corpi": avanzamento.parti,
+            "quanto_manca": misura.quanto_manca(),
+        }
+
+    try:
+        passata.esegui(al_passo=al_passo)
+    except ErroreOfficina as errore:
+        comune.lavoro_corpi.di(errore.messaggio.split("\n")[0])
+        return
+    comune.lavoro_corpi.di(passata.avanzamento.a_parole())
 
 
 def _fai_le_figure(passata_corpi) -> None:
@@ -399,6 +435,14 @@ def quanti_mancano_ia(archivio) -> dict:
         except Exception:
             pass
         try:
+            from officina.corpi import parti as parti_del_corpo
+            from officina.modello import parti as elenco_delle_parti
+
+            if not parti_del_corpo.cosa_manca(archivio.dove.modelli):
+                corpi_mancano += elenco_delle_parti.quanti_mancano(connessione)
+        except Exception:
+            pass
+        try:
             from officina.stanza import costruzione
 
             if costruzione.ci_sono(archivio.dove.modelli):
@@ -500,6 +544,76 @@ def apri_la_cartella_dello_scatto(scatto_id: int):
     except OSError:
         raise ErroreOfficina("Esplora risorse non si è aperto.") from None
     return RedirectResponse("/intelligenza/perche-mancano", status_code=303)
+
+
+@strada.get("/intelligenza/parti", response_class=HTMLResponse)
+def pagina_delle_parti(richiesta: Request):
+    from officina.corpi import parti as lavoro
+    from officina.modello import parti
+
+    archivio = accesso.aperto()
+    with archivio.lettura() as connessione:
+        elenco = parti.elenco(connessione)
+        mancano = parti.quanti_mancano(connessione) if elenco else 0
+        con_persone = uno(connessione,
+                          "SELECT count(DISTINCT scatto_id) AS q FROM corpi")["q"]
+    return base.pagine.TemplateResponse(richiesta, "parti-del-corpo.html", {
+        **base.comune(richiesta, "intelligenza"),
+        "elenco": elenco, "mancano": mancano, "con_persone": con_persone,
+        "manca_il_modello": lavoro.cosa_manca(archivio.dove.modelli),
+        "al_massimo": parti.QUANTE_AL_MASSIMO,
+        "al_lavoro": comune.lavoro_ia.sta_lavorando or comune.lavoro_corpi.sta_lavorando,
+    })
+
+
+@strada.post("/intelligenza/parti")
+def aggiungi_una_parte(nome: str = Form(""), parola: str = Form("")):
+    from officina.modello import parti
+
+    with accesso.aperto().scrittura() as connessione:
+        parti.aggiungi(connessione, nome, parola)
+    registro.evento("parti.aggiunta")
+    return RedirectResponse("/intelligenza/parti", status_code=303)
+
+
+@strada.post("/intelligenza/parti/prova")
+def prova_una_parola(parola: str = Form("")):
+    from officina.corpi import parti as lavoro
+
+    archivio = accesso.aperto()
+    manca = lavoro.cosa_manca(archivio.dove.modelli)
+    if manca:
+        raise ErroreOfficina(manca)
+    if comune.lavoro_ia.sta_lavorando or comune.lavoro_corpi.sta_lavorando:
+        raise ErroreOfficina("L'intelligenza artificiale sta lavorando: la prova si può "
+                             "fare quando ha finito o quando la fermi.")
+    if not _una_prova_alla_volta.acquire(blocking=False):
+        raise ErroreOfficina("Sto già facendo una prova: aspetta che finisca.")
+    try:
+        foto = lavoro.prova(archivio, parola)
+    finally:
+        _una_prova_alla_volta.release()
+    return JSONResponse({"foto": foto})
+
+
+@strada.post("/intelligenza/parti/{parte_id}")
+def cambia_una_parte(parte_id: int, nome: str = Form(""), parola: str = Form("")):
+    from officina.modello import parti
+
+    with accesso.aperto().scrittura() as connessione:
+        parti.cambia(connessione, parte_id, nome, parola)
+    registro.evento("parti.cambiata")
+    return RedirectResponse("/intelligenza/parti", status_code=303)
+
+
+@strada.post("/intelligenza/parti/{parte_id}/togli")
+def togli_una_parte(parte_id: int):
+    from officina.modello import parti
+
+    with accesso.aperto().scrittura() as connessione:
+        parti.togli(connessione, parte_id)
+    registro.evento("parti.tolta")
+    return RedirectResponse("/intelligenza/parti", status_code=303)
 
 
 @strada.get("/intelligenza", response_class=HTMLResponse)

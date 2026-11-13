@@ -24,13 +24,12 @@ MINUSCOLO = 0.015
 PICCOLO = 0.03
 GRANDE = 0.10
 PROVE = (
-    ("oggi 640", 640, 0.03),
-    ("960", 960, 0.03),
-    ("1280", 1280, 0.03),
-    ("1280 piccoli", 1280, 0.015),
-    ("1920 piccoli", 1920, 0.015),
+    ("prima 640", (640,), 0.03),
+    ("1280 piccoli", (1280,), 0.015),
+    ("due passate", (640, 1280), 0.015),
+    ("tre passate", (640, 1280, 1920), 0.015),
 )
-PROVE_ROVINATE = ("oggi 640", "1280 piccoli")
+PROVE_ROVINATE = ("prima 640", "due passate")
 ROVINE = ("buio", "rumore", "compresso", "sfocato", "mosso")
 GRUPPI = ("facili", "medi", "piccoli", "sfocati", "coperti", "di lato", "luce",
           "difficili", "molto difficili", "tutti")
@@ -268,10 +267,10 @@ def main() -> int:
                     continue
                 veri.append(((volto["x"] / larga, volto["y"] / alta, volto["l"] / larga,
                               volto["a"] / alta), gruppi_di(volto, larga, alta)))
-            for prova, lato, minimo in PROVE:
-                insight.LATO_DEL_QUADRATO = lato
+            for prova, lati, minimo in PROVE:
+                insight.LATI_DEL_QUADRATO = lati
                 insight.LATO_MINIMO = minimo
-                immagine = lettura.copia_di_lavoro(lavoro, max(1280, lato))
+                immagine = lettura.copia_di_lavoro(lavoro, max(1280, *lati))
                 da = time.monotonic()
                 facce = rilevatore.guarda(immagine)
                 pulite[prova]["secondi"] += time.monotonic() - da

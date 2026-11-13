@@ -19,7 +19,7 @@ def chiave(filtro: Filtro) -> tuple:
         filtro.senza_etichetta, filtro.senza_data, filtro.solo_schermate,
         filtro.escludi_schermate, filtro.fuori_archivio, filtro.col_cuore,
         filtro.evidenziati, filtro.senza_evidenziati,
-        tuple(filtro.persone), filtro.luogo, filtro.importazione,
+        tuple(filtro.persone), tuple(filtro.parti), filtro.luogo, filtro.importazione,
         filtro.simili_a, filtro.simili_larghi, filtro.parole,
     )
 

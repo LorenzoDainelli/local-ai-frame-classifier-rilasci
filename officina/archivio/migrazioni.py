@@ -1638,6 +1638,65 @@ def _versione_76(connessione: sqlite3.Connection) -> None:
             (str(quanti),))
 
 
+def _versione_78(connessione: sqlite3.Connection) -> None:
+    quanti = connessione.execute(
+        "UPDATE volti_guardati SET da_riguardare = 2 WHERE da_riguardare = 0").rowcount
+    if quanti:
+        connessione.execute(
+            "INSERT OR REPLACE INTO stato (chiave, valore, aggiornato_il) "
+            "VALUES ('volti_piccoli_da_cercare', ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
+            (str(quanti),))
+
+
+def _versione_77(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE parti_del_corpo (
+            id          INTEGER PRIMARY KEY,
+            nome        TEXT NOT NULL,
+            parola      TEXT NOT NULL,
+            creata_il   TEXT NOT NULL,
+            cambiata_il TEXT NOT NULL
+        )
+        """
+    )
+    connessione.execute(
+        """
+        CREATE TABLE parti_trovate (
+            id          INTEGER PRIMARY KEY,
+            parte_id    INTEGER NOT NULL REFERENCES parti_del_corpo(id) ON DELETE CASCADE,
+            scatto_id   INTEGER NOT NULL REFERENCES scatti(id) ON DELETE CASCADE,
+            file_id     INTEGER REFERENCES file_media(id) ON DELETE SET NULL,
+            fotogramma  INTEGER NOT NULL DEFAULT 0,
+            corpo_id    INTEGER REFERENCES corpi(id) ON DELETE SET NULL,
+            riquadro    TEXT NOT NULL,
+            sicurezza   REAL NOT NULL,
+            copertura   REAL NOT NULL DEFAULT 0,
+            trovata_il  TEXT NOT NULL
+        )
+        """
+    )
+    connessione.execute(
+        "CREATE INDEX parti_trovate_per_scatto ON parti_trovate(scatto_id, parte_id)")
+    connessione.execute(
+        "CREATE INDEX parti_trovate_per_parte ON parti_trovate(parte_id, sicurezza)")
+    connessione.execute("CREATE INDEX parti_trovate_per_corpo ON parti_trovate(corpo_id)")
+    connessione.execute(
+        """
+        CREATE TABLE parti_guardate (
+            scatto_id   INTEGER NOT NULL REFERENCES scatti(id) ON DELETE CASCADE,
+            parte_id    INTEGER NOT NULL REFERENCES parti_del_corpo(id) ON DELETE CASCADE,
+            modello     TEXT NOT NULL,
+            versione    TEXT NOT NULL,
+            quante      INTEGER NOT NULL DEFAULT 0,
+            guardata_il TEXT NOT NULL,
+            PRIMARY KEY (scatto_id, parte_id)
+        )
+        """
+    )
+    connessione.execute("CREATE INDEX parti_guardate_per_parte ON parti_guardate(parte_id)")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1776,6 +1835,10 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_75),
     Migrazione(76, "volti e corpi riguardano tutti i video: forse ne avevano visto "
                "solo il primo fotogramma", _versione_76),
+    Migrazione(77, "le parti del corpo che scrivi tu, cercate nelle foto e date alla "
+               "persona giusta", _versione_77),
+    Migrazione(78, "i volti si cercano anche piccoli e lontani: le foto già guardate "
+               "si riguardano, e quelli già trovati restano", _versione_78),
 ]
 
 

@@ -6,7 +6,7 @@ import sqlite3
 from urllib.parse import urlencode
 
 from officina.archivio.database import uno
-from officina.modello import mappa, nodi, persone, posti, scatti
+from officina.modello import mappa, nodi, parti, persone, posti, scatti
 from officina.modello.scatti import Filtro
 
 
@@ -99,6 +99,7 @@ def filtro_da_parametri(parametri) -> Filtro:
         col_cuore=acceso("cuore"),
         evidenziati=acceso("stella"),
         persone=numeri("persona"),
+        parti=numeri("parte"),
         luogo=_intero(parametri.get("luogo")),
         importazione=_intero(parametri.get("importazione")),
         gruppo=_intero(parametri.get("gruppo")),
@@ -143,6 +144,8 @@ def parametri_da_filtro(filtro: Filtro) -> dict:
         parametri["stella"] = "1"
     if filtro.persone:
         parametri["persona"] = ",".join(str(x) for x in filtro.persone)
+    if filtro.parti:
+        parametri["parte"] = ",".join(str(x) for x in filtro.parti)
     if filtro.luogo:
         parametri["luogo"] = str(filtro.luogo)
     if filtro.importazione:
@@ -221,6 +224,12 @@ def pillole_attive(connessione: sqlite3.Connection, filtro: Filtro) -> list[dict
         riga = persone.per_id(connessione, persona_id)
         aggiungi(riga["nome"] if riga and riga["nome"] else "persona senza nome",
                  nuovo)
+
+    for parte_id in filtro.parti:
+        nuovo = filtro.copia_con()
+        nuovo.parti = [x for x in filtro.parti if x != parte_id]
+        parte = parti.una(connessione, parte_id)
+        aggiungi("con " + parte["nome"].lower() if parte else "una parte tolta", nuovo)
 
     if filtro.importazione:
         riga = uno(connessione, "SELECT nome FROM importazioni WHERE id = ?",

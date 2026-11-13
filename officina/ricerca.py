@@ -9,7 +9,7 @@ from officina import istruzioni
 from officina.archivio.database import tutti
 from officina.descrittori import vettori
 from officina import lingua
-from officina.modello import impronte as magazzino, nodi, persone, scatti
+from officina.modello import impronte as magazzino, nodi, parti, persone, scatti
 
 SOGLIA = 0.055
 
@@ -155,6 +155,8 @@ def _cosa_riconosco(connessione: sqlite3.Connection,
         if voce["nome"]:
             candidati.append((voce["nome"].casefold(),
                               Capito("persona", voce["nome"], voce["id"])))
+    for voce in parti.elenco(connessione):
+        candidati.append((voce["nome"].casefold(), Capito("parte", voce["nome"], voce["id"])))
     candidati.sort(key=lambda coppia: -len(coppia[0]))
 
     for nome, capito in candidati:
@@ -182,6 +184,9 @@ def _dalle_tue_etichette(connessione: sqlite3.Connection, capiti: list[Capito],
             qualcosa = True
         elif capito.genere == "persona":
             filtro.persone.append(capito.numero)
+            qualcosa = True
+        elif capito.genere == "parte":
+            filtro.parti.append(capito.numero)
             qualcosa = True
         elif capito.genere == "quando" and capito.testo.isdecimal():
             filtro.dal = f"{capito.testo}-01-01"

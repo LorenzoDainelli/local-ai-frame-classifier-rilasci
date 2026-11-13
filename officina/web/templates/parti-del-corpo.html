@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Parti del corpo — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina ia">
+    <header class="ia-testa">
+        <h1 class="titolo-pagina">Parti del corpo</h1>
+        <p class="sottotitolo">Scrivi tu le parti da cercare. Il programma le cerca nelle foto e nei video e le dà alla persona giusta.</p>
+        <p><a class="tasto-comando piccolo" href="/intelligenza">{{ icona('su', 14) }} Torna all'intelligenza artificiale</a></p>
+    </header>
+
+    <section class="carta">
+        <h2>Come funziona</h2>
+        <p class="piccolo tenue">Il nome è in italiano ed è quello che vedi tu. La parola è in inglese ed è quella che capisce il modello.</p>
+        <p class="piccolo tenue">L'elenco resta su questo computer. Non va mai su internet e non lo legge nessuno.</p>
+        <p class="piccolo tenue">Quello che trova è solo un suggerimento: le etichette le metti sempre tu.</p>
+        {% if manca_il_modello %}<p class="piccolo">{{ manca_il_modello }}</p>{% endif %}
+    </section>
+
+    <section class="carta">
+        <h2>Il tuo elenco</h2>
+        {% if not elenco %}
+        <p class="piccolo tenue">L'elenco è vuoto. Aggiungi la prima parte qui sotto.</p>
+        {% else %}
+        <p class="piccolo tenue">{{ elenco|length }} su {{ al_massimo }}. Foto e video con persone: {{ con_persone|numero }}. Ancora da guardare: {{ mancano|numero }}.</p>
+        <ul class="dc-file">
+            {% for parte in elenco %}
+            <li>
+                <form method="post" action="/intelligenza/parti/{{ parte.id }}" class="pc-riga">
+                    <input class="campo" name="nome" value="{{ parte.nome }}" maxlength="40" autocomplete="off" aria-label="Nome in italiano" required>
+                    <input class="campo" name="parola" value="{{ parte.parola }}" maxlength="60" autocomplete="off" aria-label="Parola in inglese" required data-parola>
+                    <button class="tasto-comando piccolo" type="submit">Salva</button>
+                    <button class="tasto-comando nudo piccolo" type="button" data-prova>Prova</button>
+                </form>
+                {% if parte.scatti %}<a class="tasto-comando nudo piccolo" href="/?parte={{ parte.id }}">Guarda le {{ parte.scatti|numero }} foto</a>
+                {% else %}<span class="piccolo tenue">Ancora nessuna foto</span>{% endif %}
+                <form method="post" action="/intelligenza/parti/{{ parte.id }}/togli">
+                    <button class="tasto-comando nudo piccolo" type="submit">Togli</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        <p class="piccolo tenue">Se cambi la parola in inglese, quella parte viene cercata di nuovo in tutte le foto.</p>
+        {% endif %}
+    </section>
+
+    <section class="carta">
+        <h2>Aggiungi una parte</h2>
+        <form method="post" action="/intelligenza/parti" class="pc-riga">
+            <input class="campo" name="nome" maxlength="40" autocomplete="off" placeholder="Nome in italiano: mani" required>
+            <input class="campo" name="parola" maxlength="60" autocomplete="off" placeholder="Parola in inglese: hand" required data-parola>
+            <button class="tasto-comando principale" type="submit">Aggiungi</button>
+            <button class="tasto-comando piccolo" type="button" data-prova>Prova prima</button>
+        </form>
+        <p class="piccolo tenue">«Prova» cerca la parola in poche tue foto con persone e ti fa vedere dove la trova. Non salva niente.</p>
+    </section>
+
+    <section class="carta" id="pc-prova" hidden>
+        <h2 id="pc-titolo">La prova</h2>
+        <p class="piccolo tenue" id="pc-detto"></p>
+        <div class="pc-foto" id="pc-foto"></div>
+    </section>
+
+    <style>
+    .pc-riga { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .pc-riga .campo { min-width: 0; flex: 1 1 180px; }
+    .pc-foto { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+    .pc-quadro { position: relative; line-height: 0; }
+    .pc-quadro img { width: 100%; height: auto; border-radius: 6px; }
+    .pc-segno { position: absolute; border: 2px solid var(--accento, #e0a030); border-radius: 3px;
+                box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); pointer-events: none; }
+    </style>
+    <script type="module">
+    (function () {
+        const carta = document.getElementById("pc-prova");
+        const titolo = document.getElementById("pc-titolo");
+        const detto = document.getElementById("pc-detto");
+        const foto = document.getElementById("pc-foto");
+        const al_lavoro = {{ 'true' if al_lavoro else 'false' }};
+
+        function mostra(voci, parola) {
+            foto.replaceChildren();
+            let trovate = 0;
+            for (const voce of voci) {
+                const quadro = document.createElement("div");
+                quadro.className = "pc-quadro";
+                const immagine = document.createElement("img");
+                immagine.src = "/miniatura/" + voce.file_id;
+                immagine.alt = "";
+                quadro.appendChild(immagine);
+                for (const una of voce.trovate) {
+                    trovate += 1;
+                    const segno = document.createElement("span");
+                    segno.className = "pc-segno";
+                    segno.style.left = (una.riquadro[0] * 100) + "%";
+                    segno.style.top = (una.riquadro[1] * 100) + "%";
+                    segno.style.width = (una.riquadro[2] * 100) + "%";
+                    segno.style.height = (una.riquadro[3] * 100) + "%";
+                    segno.title = Math.round(una.sicurezza * 100) + " su 100";
+                    quadro.appendChild(segno);
+                }
+                foto.appendChild(quadro);
+            }
+            if (!voci.length) detto.textContent = "Non ci sono ancora foto con persone trovate: prima fai cercare i corpi.";
+            else if (!trovate) detto.textContent = "In queste " + voci.length + " foto «" + parola + "» non è stata trovata. Prova un'altra parola.";
+            else detto.textContent = "Trovata " + trovate + " volte in " + voci.length + " foto. I riquadri sono dove l'ha vista.";
+        }
+
+        for (const tasto of document.querySelectorAll("[data-prova]")) {
+            tasto.addEventListener("click", async function () {
+                const campo = tasto.closest("form").querySelector("[data-parola]");
+                const parola = campo.value.trim();
+                if (!parola) { campo.focus(); return; }
+                carta.hidden = false;
+                titolo.textContent = "La prova di «" + parola + "»";
+                foto.replaceChildren();
+                if (al_lavoro) {
+                    detto.textContent = "L'intelligenza artificiale sta lavorando: la prova si può fare quando ha finito.";
+                    return;
+                }
+                detto.textContent = "Sto cercando. Può volerci qualche minuto.";
+                tasto.disabled = true;
+                try {
+                    const dati = new FormData();
+                    dati.append("parola", parola);
+                    const risposta = await fetch("/intelligenza/parti/prova", {
+                        method: "POST", body: dati, headers: {"Accept": "application/json"}});
+                    const esito = await risposta.json();
+                    if (!risposta.ok) detto.textContent = esito.messaggio || "La prova non è riuscita.";
+                    else mostra(esito.foto, parola);
+                } catch (errore) {
+                    detto.textContent = "La prova non è riuscita.";
+                } finally {
+                    tasto.disabled = false;
+                }
+                carta.scrollIntoView({behavior: "smooth", block: "nearest"});
+            });
+        }
+    })();
+    </script>
+</div>
+</main>
+</div>
+{% endblock %}

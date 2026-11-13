@@ -13,7 +13,7 @@ FILE_VECCHI = ("rilevatore.onnx", "riconoscitore.onnx")
 
 SICUREZZA_MINIMA = 0.60
 
-LATO_MINIMO = 0.03
+LATO_MINIMO = 0.015
 
 
 @dataclass

@@ -160,13 +160,11 @@ class Passata:
 
         with self.archivio.scrittura() as connessione:
             chi = (scatto_id, self._modello(), self._versione())
-            gia_visti: set[int] = set()
             if uno(connessione, "SELECT 1 FROM volti_guardati WHERE scatto_id = ? "
-                   "AND modello = ? AND versione = ? AND da_riguardare = 1", *chi):
-                gia_visti = {riga["fotogramma"] for riga in tutti(
-                    connessione, "SELECT DISTINCT fotogramma FROM volti "
-                    "WHERE scatto_id = ? AND modello = ? AND versione = ?", *chi)}
-                trovati = [(n, f) for n, f in trovati if n not in gia_visti]
+                   "AND modello = ? AND versione = ? AND da_riguardare != 0", *chi):
+                trovati = solo_i_nuovi(trovati, tutti(
+                    connessione, "SELECT fotogramma, riquadro FROM volti "
+                    "WHERE scatto_id = ? AND modello = ? AND versione = ?", *chi))
             else:
                 connessione.execute(
                     "DELETE FROM volti WHERE scatto_id = ? AND modello = ? "
@@ -221,6 +219,22 @@ def _quanta_prudenza(archivio: Archivio) -> float:
     quale = str(archivio.impostazione("volti_prudenza") or "equilibrato")
     return {"prudente": 0.75, "equilibrato": 0.60, "generoso": 0.45}.get(
         quale, rilevatore_mod.SICUREZZA_MINIMA)
+
+
+def solo_i_nuovi(trovati, gia_salvati) -> list:
+    from officina.volti.insight import SOVRAPPOSIZIONE_MASSIMA, _quanto_si_sovrappongono
+
+    def angoli(riquadro):
+        x, y, larga, alta = riquadro
+        return (x, y, x + larga, y + alta)
+
+    vecchi: dict[int, list] = {}
+    for riga in gia_salvati:
+        vecchi.setdefault(riga["fotogramma"], []).append(
+            angoli(json.loads(riga["riquadro"])))
+    return [(numero, faccia) for numero, faccia in trovati
+            if all(_quanto_si_sovrappongono(angoli(faccia.riquadro), vecchio)
+                   <= SOVRAPPOSIZIONE_MASSIMA for vecchio in vecchi.get(numero, ()))]
 
 
 def _domanda_da_fare(cosa: str, piu: str = "") -> str:

@@ -21,6 +21,7 @@ SOGLIA_DEL_MODELLO = 0.20
 LATO_FACCIA = 112
 
 LATO_DEL_QUADRATO = 640
+LATI_DEL_QUADRATO = (640, 1280)
 
 __all__ = ["FILE_RICONOSCITORE", "FILE_RILEVATORE", "NOME", "VERSIONE",
            "ci_sono_i_modelli", "dove_stanno", "si_puo_usare"]
@@ -81,9 +82,15 @@ class Rilevatore:
         if larghezza < 16 or altezza < 16:
             return []
 
-        piccola, scala = _rimpicciolita(intera)
-        proposte = self._proposte(piccola)
+        proposte = []
+        for lato in LATI_DEL_QUADRATO:
+            piccola, scala = _rimpicciolita(intera, lato)
+            proposte.extend(
+                ([valore / scala for valore in riquadro],
+                 [(x / scala, y / scala) for x, y in punti], sicurezza)
+                for riquadro, punti, sicurezza in self._proposte(piccola))
         self.conteggio.proposte += len(proposte)
+        proposte.sort(key=lambda voce: -voce[2])
         tenute = _togli_i_doppioni(proposte, SOVRAPPOSIZIONE_MASSIMA)
 
         facce = []
@@ -91,8 +98,6 @@ class Rilevatore:
             if sicurezza < self.sicurezza_minima:
                 self.conteggio.poco_sicure += 1
                 continue
-            riquadro = [valore / scala for valore in riquadro]
-            punti = [(x / scala, y / scala) for x, y in punti]
 
             larga = (riquadro[2] - riquadro[0]) / larghezza
             alta = (riquadro[3] - riquadro[1]) / altezza
@@ -223,16 +228,17 @@ def _in_rgb(immagine):
         numpy.asarray(immagine.convert("RGB"), dtype=numpy.uint8))
 
 
-def _rimpicciolita(quadro) -> tuple[object, float]:
+def _rimpicciolita(quadro, lato: int | None = None) -> tuple[object, float]:
     from PIL import Image
     from officina.descrittori import vettori
 
     numpy = vettori.numpy_o_spiega()
     altezza, larghezza = quadro.shape[:2]
-    scala = LATO_DEL_QUADRATO / max(altezza, larghezza)
+    lato = lato or LATO_DEL_QUADRATO
+    scala = lato / max(altezza, larghezza)
     nuova = (max(1, round(larghezza * scala)), max(1, round(altezza * scala)))
     piccola = _in_rgb(Image.fromarray(quadro).resize(nuova, Image.BILINEAR))
-    quadrato = numpy.zeros((LATO_DEL_QUADRATO, LATO_DEL_QUADRATO, 3), dtype=numpy.uint8)
+    quadrato = numpy.zeros((lato, lato, 3), dtype=numpy.uint8)
     quadrato[:nuova[1], :nuova[0]] = piccola
     return quadrato, scala
 

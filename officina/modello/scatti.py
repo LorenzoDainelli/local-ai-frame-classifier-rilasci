@@ -39,6 +39,7 @@ class Filtro:
     evidenziati: bool = False
     senza_evidenziati: bool = False
     persone: list[int] = field(default_factory=list)
+    parti: list[int] = field(default_factory=list)
     luogo: int | None = None
     importazione: int | None = None
     gruppo: int | None = None
@@ -58,13 +59,14 @@ class Filtro:
             self.solo_schermate, self.escludi_schermate, self.fuori_archivio,
             self.col_cuore, self.evidenziati,
             self.persone, self.luogo, self.simili_a, self.importazione, self.parole,
-            self.gruppo, self.zona,
+            self.gruppo, self.zona, self.parti,
         ])
 
     def copia_con(self, **cambi) -> "Filtro":
         nuovo = replace(self, nodi_e=list(self.nodi_e), nodi_o=list(self.nodi_o),
                         nodi_meno=list(self.nodi_meno),
                         persone=list(self.persone),
+                        parti=list(self.parti),
                         simili_ids=(None if self.simili_ids is None
                                     else list(self.simili_ids)))
         for chiave, valore in cambi.items():
@@ -155,6 +157,11 @@ def _condizioni(connessione: sqlite3.Connection, filtro: Filtro) -> tuple[str, l
             "AND v.persona_id = ?) OR EXISTS (SELECT 1 FROM persone_negli_scatti p "
             "WHERE p.scatto_id = s.id AND p.persona_id = ?))")
         parametri.extend([persona_id, persona_id])
+
+    for parte_id in filtro.parti:
+        pezzi.append("EXISTS (SELECT 1 FROM parti_trovate pt "
+                     "WHERE pt.scatto_id = s.id AND pt.parte_id = ?)")
+        parametri.append(parte_id)
 
     if filtro.luogo:
         pezzi.append(

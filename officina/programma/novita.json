@@ -10,6 +10,14 @@
     ],
     "semplice": [
       [
+        "volto",
+        "I volti piccoli e lontani ora si trovano: il programma guarda ogni foto a due misure. Le foto già guardate si riguardano da sole e ci vuole circa 5 volte il tempo. I volti già trovati e i nomi che hai dato restano come sono"
+      ],
+      [
+        "persona",
+        "Parti del corpo: in Intelligenza artificiale scrivi tu le parti da cercare (nome in italiano, parola in inglese). «Prova» ti fa vedere cosa trova prima di tenerla. Poi le cerchi scrivendo il nome. L'elenco resta sul tuo PC"
+      ],
+      [
         "scudo",
         "Se il programma si chiude di colpo (va via la luce), alla riapertura controlla da solo l'archivio dei dati e toglie i suoi file rimasti a metà. Poi ti dice se è tutto a posto. Le tue foto non le tocca mai"
       ],
