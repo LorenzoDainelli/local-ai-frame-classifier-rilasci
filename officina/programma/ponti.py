@@ -111,6 +111,9 @@ class PontePrincipale:
     def aggiorna_adesso(self) -> dict:
         return self._programma.fai(self._programma.aggiorna_adesso)
 
+    def cerca_aggiornamenti(self) -> dict:
+        return self._programma.fai(self._programma.cerca_gli_aggiornamenti_adesso)
+
     def rifiuta_aggiornamento(self) -> dict:
         return self._programma.fai(self._programma.rifiuta_aggiornamento)
 

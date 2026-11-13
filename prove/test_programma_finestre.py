@@ -618,3 +618,37 @@ def test_le_finestre_nuove_si_aprono_al_centro_dello_schermo(casa):
     programma, finto = _programma()
     finestrina = programma.crea_la_finestrina()
     assert finestrina.opzioni["screen"] == "schermo principale"
+
+
+def test_cerca_adesso_trova_l_aggiornamento_senza_aspettare(casa, monkeypatch):
+    rilascio = aggiornamenti.Rilascio("9.0.0", "https://x",
+                                      "local-ai-frame-classifier-9.0.0.exe",
+                                      3, "a" * 64, "", "")
+    cercati = []
+    monkeypatch.setattr(aggiornamenti, "cerca", lambda: (cercati.append(1), rilascio)[1])
+    programma, _ = _programma()
+    programma.canale = aggiornamenti.FINALE
+    stato = ponti.PontePrincipale(programma).cerca_aggiornamenti()
+    assert "errore" not in stato
+    for filo in threading.enumerate():
+        if filo.name == "cerca-aggiornamenti":
+            filo.join(timeout=30)
+    dopo = programma.come_va_l_aggiornamento()
+    assert cercati == [1] and dopo["cerco"] is False and dopo["cercato_alle"]
+    assert dopo["fase"] == "da_chiedere" and dopo["trovato"]["versione"] == "9.0.0"
+
+
+def test_cerca_adesso_due_volte_non_cerca_insieme(casa, monkeypatch):
+    programma, _ = _programma()
+    programma.canale = aggiornamenti.FINALE
+    fermo = threading.Event()
+    cercati = []
+    monkeypatch.setattr(aggiornamenti, "cerca",
+                        lambda: (cercati.append(1), fermo.wait(10), None)[2])
+    programma.cerca_gli_aggiornamenti_adesso()
+    assert programma.cerca_gli_aggiornamenti_adesso()["cerco"] is True
+    fermo.set()
+    for filo in threading.enumerate():
+        if filo.name == "cerca-aggiornamenti":
+            filo.join(timeout=30)
+    assert cercati == [1]

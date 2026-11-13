@@ -14,6 +14,10 @@
         "Stampa veloce, dal Miglioramento: trascini foto a parte (anche mentre lavora), SeedVR2 le porta a 4096 sul lato lungo, anche con i volti ritoccati. Le guardi affiancate, scegli e scarichi uno zip di JPEG per la stampa."
       ],
       [
+        "riprova",
+        "Impostazioni › Il programma: accanto agli aggiornamenti c'è la rotella «Cerca adesso», che cerca subito una versione nuova senza aspettare i 5 minuti. Funziona anche dal portatile collegato."
+      ],
+      [
         "volto",
         "I volti piccoli e lontani ora si trovano: il programma guarda ogni foto a due misure. Per le foto già guardate accendi «Cerca i volti piccoli nelle foto già viste» nelle Impostazioni. I volti e i nomi di prima restano"
       ],
@@ -231,6 +235,8 @@
       ]
     ],
     "tecnico": [
+      "Stampa veloce: nel confronto zoom e spostamento si calcolano sulla misura d'arrivo, e ogni versione si scala di <code>arrivo / larghezza vera</code>; prima l'originale piccolo e le versioni a 4096 si vedevano di misure diverse.",
+      "<code>cerca_gli_aggiornamenti_adesso</code> fa una ricerca in un filo a parte (<code>cerca</code> e <code>cercato_alle</code> nello stato); la stessa serratura del giro ogni 5 minuti evita due ricerche insieme; azione <code>cerca_aggiornamenti</code> anche dal portatile.",
       "Chiusura di colpo: <code>aperto.segno</code> (pid e ora di accensione) messo all'apertura e tolto alla chiusura; se resta, <code>chiusura.controlla</code> fa <code>integrity_check</code> e <code>foreign_key_check</code>, toglie i <code>.tmp</code> nelle cartelle del programma e scrive l'esito per la striscia.",
       "«Perché mancano?»: <code>perche.cartella_di</code> e <code>POST /intelligenza/perche-mancano/{id}/apri</code> (solo da questo computer); dal testo da copiare tolti nome e data.",
       "Prova di velocità: su <code>ram_poca</code> la stanza riparte una volta con <code>disco: true</code> nelle opzioni (foto e video); <code>ram_poca_anche_col_disco</code> resta un messaggio.",

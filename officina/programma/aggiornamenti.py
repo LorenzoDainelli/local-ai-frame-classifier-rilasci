@@ -360,8 +360,10 @@ def dimentica_lo_scaricato() -> None:
 
 
 def comando_dell_installatore(file: Path, riapri: bool = True) -> list[str]:
+    registro_di_installazione = Path(file).parent / "ultima-installazione.log"
     return [str(file), "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
-            "/CLOSEAPPLICATIONS", f"/RIAPRI={1 if riapri else 0}"]
+            "/CLOSEAPPLICATIONS", f"/RIAPRI={1 if riapri else 0}",
+            f"/LOG={registro_di_installazione}"]
 
 
 def installa(file: Path, lancia: Callable[..., object] | None = None,
@@ -397,7 +399,8 @@ def pulisci_gli_scaricati() -> int:
     da_tenere = Path(scritto["file"]).name if isinstance(scritto, dict) and scritto.get("file") else None
     tolti = 0
     for file in cartella.iterdir():
-        if file.is_file() and file.name != da_tenere and file.suffix != ".parziale":
+        if (file.is_file() and file.name != da_tenere
+                and file.suffix not in (".parziale", ".log")):
             try:
                 file.unlink()
                 tolti += 1

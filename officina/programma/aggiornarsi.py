@@ -21,7 +21,31 @@ class Aggiornarsi:
             while time.monotonic() < fine and not self._sta_chiudendo and not self._spento:
                 time.sleep(1)
 
+    _cercando = threading.Lock()
+
     def _guarda_una_volta(self) -> None:
+        with self._cercando:
+            self._guarda_adesso()
+
+    def cerca_gli_aggiornamenti_adesso(self) -> dict:
+        if self.canale == aggiornamenti.SVILUPPO:
+            raise ErroreOfficina("Questa copia non cerca aggiornamenti.",
+                                 codice="aggiornamento_sviluppo")
+        if self._cercando.acquire(blocking=False):
+            self.aggiornamento_stato["cerco"] = True
+
+            def cerca() -> None:
+                try:
+                    self._guarda_adesso()
+                finally:
+                    self.aggiornamento_stato["cerco"] = False
+                    self.aggiornamento_stato["cercato_alle"] = time.strftime("%H:%M")
+                    self._cercando.release()
+
+            threading.Thread(target=cerca, name="cerca-aggiornamenti", daemon=True).start()
+        return self.come_va_l_aggiornamento()
+
+    def _guarda_adesso(self) -> None:
         if self.aggiornamento_stato["fase"] in ("scarico", "installo"):
             return
         try:

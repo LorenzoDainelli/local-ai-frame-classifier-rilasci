@@ -225,8 +225,28 @@ def test_pagina_nel_browser(archivio, monkeypatch, tmp_path):
         pagina.locator("#st-elenco img").nth(1).wait_for(state="attached", timeout=10000)
         assert pagina.locator("#st-forma").is_visible()
         assert "1" in pagina.locator("#st-forma").inner_text()
+        stampa_vera = strada.la_stampa(archivio)
+        prima = stampa_vera.come_va()["foto"][0]
+        fatta = stampa_vera.file_di(prima, "seedvr2")
+        fatta.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", tuple(prima["arrivo"]), (0, 90, 200)).save(fatta)
+        stampa_vera._segna_le_fatte()
+        pagina.reload(wait_until="load")
+        pagina.locator("#st-elenco img").first.wait_for(state="attached", timeout=10000)
         pagina.locator("#st-elenco img").first.click()
         assert pagina.locator("#st-guarda").is_visible()
+        pagina.locator(".st-vetro img").nth(1).wait_for(state="attached", timeout=10000)
+        pagina.wait_for_timeout(800)
+        larghe = [round(img.bounding_box()["width"])
+                  for img in pagina.locator(".st-vetro img").all()]
+        assert len(larghe) == 2 and abs(larghe[0] - larghe[1]) <= 1, larghe
+        vetro = pagina.locator(".st-vetro").first.bounding_box()
+        pagina.mouse.move(vetro["x"] + 40, vetro["y"] + 40)
+        pagina.mouse.wheel(0, -300)
+        pagina.wait_for_timeout(300)
+        dopo = [img.bounding_box() for img in pagina.locator(".st-vetro img").all()]
+        assert abs(dopo[0]["width"] - dopo[1]["width"]) <= 1
+        assert dopo[0]["width"] > larghe[0]
         pagina.click("#st-nessuna")
         pagina.wait_for_timeout(300)
         pagina.click("#st-chiudi")

@@ -2,7 +2,7 @@ import { chiediSeSi } from "/statici/js/finestrina.js";
 
 const DAL_FISSO = new Set(["stato_del_programma", "come_vanno_i_motori", "prepara_i_motori",
     "salva_la_chiave", "togli_la_chiave", "aggiornamento", "aggiorna_adesso",
-    "rifiuta_aggiornamento", "apri_l_archivio_sicuro"]);
+    "rifiuta_aggiornamento", "apri_l_archivio_sicuro", "cerca_aggiornamenti"]);
 const locale = () => window.pywebview && window.pywebview.api;
 let fisso = null;
 
@@ -194,6 +194,32 @@ function mostraLaStriscia(a) {
     striscia.querySelector('[data-aggiornamento="rifiuta"]').textContent = beta ? "Dopo" : "Rifiuta";
     const lavora = ["scarico", "installo"].includes(a.fase);
     striscia.querySelectorAll("button").forEach((b) => { b.hidden = lavora; });
+}
+
+async function cercaAdesso() {
+    const rotella = tasto("cerca");
+    rotella.disabled = true;
+    rotella.classList.add("gira");
+    scrivi("aggiornamento", "Cerco adesso…");
+    try {
+        let a = await api().cerca_aggiornamenti();
+        if (a && a.errore) { scrivi("aggiornamento", a.errore); return; }
+        const fine = Date.now() + 120000;
+        while (a && a.cerco && Date.now() < fine) {
+            await new Promise((pronto) => setTimeout(pronto, 1000));
+            a = await api().aggiornamento();
+        }
+        await riempi();
+        mostraLaStriscia(a);
+        if (a && !a.trovato && !a.in_sospeso && a.fase !== "guasto") {
+            scrivi("aggiornamento", `Cercato alle ${a.cercato_alle || "adesso"}: nessun aggiornamento.`);
+        }
+    } catch (guasto) {
+        scrivi("aggiornamento", "Il programma non risponde adesso: riprova tra poco.");
+    } finally {
+        rotella.disabled = false;
+        rotella.classList.remove("gira");
+    }
 }
 
 async function aggiorna() {
@@ -405,6 +431,7 @@ function collega() {
         primaVolta();
     });
     tasto("aggiorna").addEventListener("click", aggiorna);
+    tasto("cerca").addEventListener("click", cercaAdesso);
     tasto("motori").addEventListener("click", async () => {
         const m = await api().prepara_i_motori();
         if (m && m.errore) { scrivi("motori", m.errore); return; }

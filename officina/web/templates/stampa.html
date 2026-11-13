@@ -191,20 +191,30 @@ async function aggiorna() {
     try { stato = await chiedi("/api/stampa"); disegna(); } catch (e) { $("st-adesso").textContent = e.message; }
 }
 
+function misuraComune() {
+    const uno = stato.foto.find((f) => f.id === aperta);
+    if (!uno) return null;
+    return uno.arrivo ? { w: uno.arrivo[0], h: uno.arrivo[1] } : { w: uno.larghezza, h: uno.altezza };
+}
+
 function applica() {
+    const comune = misuraComune();
     for (const img of document.querySelectorAll(".st-vetro img")) {
-        img.style.transform = `translate(${vista.x}px, ${vista.y}px) scale(${vista.scala})`;
+        if (!img.naturalWidth || !comune) { img.style.visibility = "hidden"; continue; }
+        const scala = vista.scala * comune.w / img.naturalWidth;
+        img.style.transform = `translate(${vista.x}px, ${vista.y}px) scale(${scala})`;
+        img.style.visibility = "";
     }
 }
 
 function adatta() {
     const vetro = document.querySelector(".st-vetro");
-    const img = vetro && vetro.querySelector("img");
-    if (!img || !img.naturalWidth) return;
+    const comune = misuraComune();
+    if (!vetro || !comune) return;
     const r = vetro.getBoundingClientRect();
-    vista.scala = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
-    vista.x = (r.width - img.naturalWidth * vista.scala) / 2;
-    vista.y = (r.height - img.naturalHeight * vista.scala) / 2;
+    vista.scala = Math.min(r.width / comune.w, r.height / comune.h);
+    vista.x = (r.width - comune.w * vista.scala) / 2;
+    vista.y = (r.height - comune.h * vista.scala) / 2;
     applica();
 }
 

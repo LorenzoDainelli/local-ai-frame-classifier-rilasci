@@ -129,6 +129,10 @@ label.pillola.piena:hover, summary.pillola.piena:hover { background: color-mix(i
 .tasto-comando.principale:hover, .tasto-comando.accento:hover { filter: brightness(1.06); background: var(--accento); }
 .tasto-comando.accento { background: var(--accento); border-color: transparent; color: var(--su-accento); }
 .tasto-comando.piccolo { height: 28px; padding: 0 var(--s3); font-size: var(--testo-minore); }
+.tasto-comando.rotella span { display: inline-block; }
+.tasto-comando.rotella.gira span { animation: rotella-gira 1s linear infinite; }
+@keyframes rotella-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tasto-comando.rotella.gira span { animation: none; } }
 
 .tasto-comando.nudo {
     background: transparent;
