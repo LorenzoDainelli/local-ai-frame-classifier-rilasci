@@ -1,0 +1,46 @@
+name: Collaudo dei corpi difficili
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/collaudo_corpi_difficili.py"
+      - ".github/workflows/collaudo-corpi-difficili.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collaudo-corpi-difficili-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  corpi:
+    name: SAM 3 e RTMW su COCO, foto ${{ matrix.come }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        come: [pulita, buio, rumore, compresso, sfocato, mosso]
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Le librerie
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install -r requirements.txt transformers==5.18.0 safetensors==0.8.0 \
+            huggingface-hub==1.33.0 onnxruntime==1.24.1 opencv-python-headless==4.14.0.94 pycocotools \
+            av==16.1.0
+      - name: Il collaudo
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python strumenti/collaudo_corpi_difficili.py --cartella "$RUNNER_TEMP/corpi" --quante 40 --come "${{ matrix.come }}"
