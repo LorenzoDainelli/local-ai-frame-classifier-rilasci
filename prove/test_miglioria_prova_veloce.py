@@ -470,12 +470,19 @@ def test_con_poca_ram_la_prova_riparte_col_disco(tmp_path, monkeypatch):
     def lancia(lavoro, al_passo):
         giri.append(dict(lavoro["lavoro"]["opzioni"]))
         if len(giri) == 1:
-            return {"guasto": "ram_poca", "serve": 19 * 2**30, "libera": 16 * 2**30}
+            return {"guasto": "ram_poca", "serve": 19 * 2**30, "libera": 16 * 2**30,
+                    "ram_totale": 32 * 2**30, "ram_in_uso": 16 * 2**30,
+                    "ram_della_stanza": 9 * 2**30}
         return {"fatto": {"passata": False, "clip": []}}
 
     prova, _ = _prova(tmp_path, monkeypatch, lancia=lancia)
+    detti = []
+    vero = prova.lavoro.di
+    prova.lavoro.di = lambda riga: detti.append(riga) or vero(riga)
     prova._gira()
     assert len(giri) == 2
+    assert any("32,0 GB in tutto, 16,0 GB in uso (di cui 9,0 GB la stanza" in riga
+               and "16,0 GB libera, ne servono 19,0 GB" in riga for riga in detti)
     assert "disco" not in giri[0]
     assert giri[1]["disco"] is True
     assert prova.turno.chi is None
@@ -513,3 +520,13 @@ def test_il_disco_arriva_anche_al_lavoro_delle_foto(tmp_path, monkeypatch):
     foto = visti[-1].get("lavoro_foto")
     if foto is not None:
         assert foto["opzioni"]["disco"] is True
+
+
+def test_la_ram_poca_porta_le_misure_del_momento():
+    pytest.importorskip("psutil")
+    from officina.miglioria.seedvr2_blocchi import RamPoca
+
+    dati = RamPoca(19 * 2**30, 16 * 2**30).dati()
+    assert dati["serve"] == 19 * 2**30 and dati["libera"] == 16 * 2**30
+    assert dati["ram_totale"] > dati["ram_della_stanza"] > 0
+    assert 0 < dati["ram_in_uso"] < dati["ram_totale"]

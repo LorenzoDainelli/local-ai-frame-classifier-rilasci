@@ -10,6 +10,14 @@
     ],
     "semplice": [
       [
+        "scudo",
+        "Se il programma si chiude di colpo (va via la luce), alla riapertura controlla da solo l'archivio dei dati e toglie i suoi file rimasti a metà. Poi ti dice se è tutto a posto. Le tue foto non le tocca mai"
+      ],
+      [
+        "cartella",
+        "«Perché mancano?» ora dice da quale cartella è stato preso ogni file che non si apre, con il tasto «Apri la cartella»: così puoi ricopiare i video rotti. La cartella si vede solo sullo schermo, non nel testo da copiare"
+      ],
+      [
         "fulmine",
         "Prova di velocità: se la RAM libera non basta per SeedVR2 non si ferma più con «servono 19 GB». Riparte da sola con una parte dei pesi sul disco: ci mette di più ma il risultato è lo stesso"
       ],
@@ -211,6 +219,8 @@
       ]
     ],
     "tecnico": [
+      "Chiusura di colpo: <code>aperto.segno</code> (pid e ora di accensione) messo all'apertura e tolto alla chiusura; se resta, <code>chiusura.controlla</code> fa <code>integrity_check</code> e <code>foreign_key_check</code>, toglie i <code>.tmp</code> nelle cartelle del programma e scrive l'esito per la striscia.",
+      "«Perché mancano?»: <code>perche.cartella_di</code> e <code>POST /intelligenza/perche-mancano/{id}/apri</code> (solo da questo computer); dal testo da copiare tolti nome e data.",
       "Prova di velocità: su <code>ram_poca</code> la stanza riparte una volta con <code>disco: true</code> nelle opzioni (foto e video); <code>ram_poca_anche_col_disco</code> resta un messaggio.",
       "Gara 120: <code>GimmVFI.coppia</code> teneva la riduzione del primo video per tutti i casi; ora la ricalcola quando cambia la misura. Un errore CUDA non di memoria esce come <code>scheda_caduta</code> con la prima riga del messaggio (<code>torcia.errore_della_scheda</code>).",
       "Lavori IA (#100, passo A): <code>file_media.quello_da_guardare</code> è l'unica regola per scegliere il file; volti e corpi rimandano con <code>aspetta_le_impronte</code>; <code>video_senza_immagini</code> segnala; registro <code>volti.scatto_rotto</code>, <code>corpi.scatto_rotto</code>, <code>parole.scatto_rotto</code>, <code>parole.lettura_fallita</code>, <code>parole.risposta_strana</code>; <code>Sguardo.capita</code>.",

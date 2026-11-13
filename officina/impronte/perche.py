@@ -53,11 +53,16 @@ def _doppione(connessione, file_id: int | None) -> dict:
     return {"e": True, "con": max(riga["quanti"] - 1, 0), "deciso": bool(riga["deciso"])}
 
 
+def cartella_di(percorso: str) -> str | None:
+    taglio = max(percorso.rfind("\\"), percorso.rfind("/"))
+    return percorso[:taglio] if taglio > 0 else None
+
+
 def _uno(connessione, scatto_id: int, mancano: list[str], nel_gruppo: str) -> dict:
     scatto = uno(connessione, "SELECT * FROM scatti WHERE id = ?", scatto_id)
     principale = _il_file_da_guardare(file_media.di_scatto(connessione, scatto_id))
     file_id = principale["id"] if principale else None
-    nome = uno(connessione, "SELECT nome, presente FROM percorsi WHERE file_id = ? "
+    nome = uno(connessione, "SELECT nome, percorso, presente FROM percorsi WHERE file_id = ? "
                "ORDER BY presente DESC, id LIMIT 1", file_id) if file_id else None
     da_parte = uno(connessione, "SELECT dettaglio FROM segnalazioni WHERE tipo = ? "
                    "AND scatto_id = ? AND risolta = 0", segnalazioni.NON_SI_APRE, scatto_id)
@@ -75,6 +80,7 @@ def _uno(connessione, scatto_id: int, mancano: list[str], nel_gruppo: str) -> di
         "genere": scatto["genere"],
         "data": scatto["data_locale"],
         "nome": nome["nome"] if nome else None,
+        "cartella": cartella_di(nome["percorso"]) if nome else None,
         "sul_disco": bool(nome and nome["presente"]),
         "formato": principale["formato"] if principale else None,
         "misura": ((principale["larghezza"], principale["altezza"]) if principale else None),
@@ -141,8 +147,7 @@ def _riga(voce: dict) -> str:
     lavori = " ".join(f"{c}={v}" for c, v in voce["lavori"].items())
     return (f"scatto {voce['scatto']} | {voce['genere']} {voce['formato'] or '?'} "
             f"{misura} {_peso(voce['peso'])} durata_ms={voce['durata_ms'] or 0}"
-            f" | nome={voce['nome'] or '?'} data={voce['data'] or '?'}"
-            f" sul_disco={'si' if voce['sul_disco'] else 'no'}"
+            f" | sul_disco={'si' if voce['sul_disco'] else 'no'}"
             f" | mancano={','.join(voce['mancano'])} impronte_in_tutto={voce['vecchie']}"
             f" | da_parte={voce['da_parte'] or 'no'}"
             f" nel_gruppo={'si' if voce['nel_gruppo'] else 'no'}"

@@ -122,6 +122,16 @@ def copie_esistenti() -> list[dict]:
             for c in magazzino_copie.elenco(archivio.dove)[:6]]
 
 
+@strada.post("/dopo-la-chiusura/visto")
+def dopo_la_chiusura_visto(richiesta: Request):
+    from officina.archivio import chiusura
+
+    archivio = accesso.aperto()
+    if not archivio.di_prova:
+        chiusura.visto(archivio.dove)
+    return RedirectResponse(richiesta.headers.get("referer") or "/", status_code=303)
+
+
 @strada.post("/impostazioni/albero/ripristina")
 def ripristina_fotografia(numero: int = Form(...)):
     with accesso.aperto().scrittura() as connessione:

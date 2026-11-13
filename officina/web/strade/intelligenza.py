@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from officina import registro
@@ -19,6 +19,7 @@ from officina.web import in_disparte, lavori, sosta
 from officina.web.strade import base, comune, misura, persone
 
 strada = APIRouter()
+solo_qui = [Depends(base.solo_da_questo_computer)]
 
 @strada.post("/parole/leggi")
 def leggi_le_scritte():
@@ -475,6 +476,30 @@ def pagina_perche_mancano(richiesta: Request):
         **base.comune(richiesta, "intelligenza"),
         "cosa": perche.guarda(accesso.aperto()),
     })
+
+
+@strada.post("/intelligenza/perche-mancano/{scatto_id}/apri", dependencies=solo_qui)
+def apri_la_cartella_dello_scatto(scatto_id: int):
+    from officina.importazione import pagina
+    from officina.impronte import perche
+    from officina.modello import file_media
+
+    with accesso.aperto().lettura() as connessione:
+        principale = file_media.quello_da_guardare(
+            file_media.di_scatto(connessione, scatto_id))
+        riga = uno(connessione, "SELECT percorso FROM percorsi WHERE file_id = ? "
+                   "ORDER BY presente DESC, id LIMIT 1",
+                   principale["id"]) if principale else None
+    cartella = perche.cartella_di(riga["percorso"]) if riga else None
+    if cartella is None:
+        raise ErroreOfficina("Di questo scatto non conosco la cartella.")
+    if pagina.perche_staccata(cartella):
+        raise ErroreOfficina("Non trovo la cartella: forse il disco non è attaccato.")
+    try:
+        pagina.apri_in_esplora(cartella)
+    except OSError:
+        raise ErroreOfficina("Esplora risorse non si è aperto.") from None
+    return RedirectResponse("/intelligenza/perche-mancano", status_code=303)
 
 
 @strada.get("/intelligenza", response_class=HTMLResponse)

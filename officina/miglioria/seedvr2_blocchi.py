@@ -18,9 +18,10 @@ class RamPoca(ErroreOfficina):
                          f"libera e ce ne sono {libera // GIGA}.")
         self.serve = int(serve)
         self.libera = int(libera)
+        self.misure = misure_della_ram()
 
     def dati(self) -> dict:
-        return {"serve": self.serve, "libera": self.libera}
+        return {"serve": self.serve, "libera": self.libera, **self.misure}
 
 
 class DiscoNonBasta(RamPoca):
@@ -33,6 +34,18 @@ def ram_libera() -> int | None:
     except ImportError:
         return None
     return int(psutil.virtual_memory().available)
+
+
+def misure_della_ram() -> dict:
+    try:
+        import psutil
+
+        tutta = psutil.virtual_memory()
+        stanza = psutil.Process().memory_info()
+    except Exception:
+        return {}
+    return {"ram_totale": int(tutta.total), "ram_in_uso": int(tutta.total - tutta.available),
+            "ram_della_stanza": int(stanza.rss)}
 
 
 def in_giga(quanti: int) -> float:

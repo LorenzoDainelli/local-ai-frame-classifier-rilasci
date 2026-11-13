@@ -98,6 +98,15 @@ def _byte(valore) -> int:
     return max(int(valore), 0)
 
 
+def ram_a_parole(esito: dict) -> str:
+    def giga(chiave: str) -> str:
+        return f"{in_giga(_byte(esito.get(chiave))):.1f}".replace(".", ",") + " GB"
+
+    return (f"RAM al momento del controllo: {giga('ram_totale')} in tutto, "
+            f"{giga('ram_in_uso')} in uso (di cui {giga('ram_della_stanza')} la stanza "
+            f"di SeedVR2), {giga('libera')} libera, ne servono {giga('serve')}")
+
+
 def in_giga(quanti: int) -> float:
     return round(quanti / GIGA, 1)
 
@@ -845,6 +854,7 @@ class Miglioratore:
                                "aspetto": False}}
         self.lavoro.di(f"«{originale.name}»: {a_parole(codice)}. Aspetto che si liberi"
                        + ("" if anche else ", o che tu scelga di usare il disco"))
+        self.lavoro.di(ram_a_parole(esito))
         self._aspetta_la_ram(serve, anche)
         self.adesso = {}
 

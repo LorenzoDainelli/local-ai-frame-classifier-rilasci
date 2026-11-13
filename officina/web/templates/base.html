@@ -68,6 +68,7 @@
             </span>
         </div>
 
+        {% if dopo_la_chiusura %}{% include "_dopo_la_chiusura.html" %}{% endif %}
         {% if giro_passo %}{% include "_giro.html" %}{% endif %}
         {% if travaso %}{% include "_travaso.html" %}{% endif %}
 

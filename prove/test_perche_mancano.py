@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from officina import registro
@@ -71,7 +72,8 @@ def test_dice_chi_manca_e_cosa_succede_riaprendolo(archivio_misurabile):
     assert len(righe) == 4 and righe[0].startswith("Impronte: 3 scatti")
     assert f"scatto {secondo} |" in cosa["testo"]
     assert "da_parte=immagine_rovinata" in cosa["testo"]
-    assert f"nome={voci[primo]['nome']}" in cosa["testo"] and voci[primo]["nome"]
+    assert voci[primo]["nome"] and voci[primo]["nome"] not in cosa["testo"]
+    assert "nome=" not in cosa["testo"] and "data=" not in cosa["testo"]
 
 
 def test_dice_se_gli_altri_lavori_lo_hanno_fatto(archivio_misurabile):
@@ -149,3 +151,60 @@ def test_uno_scatto_senza_ritagli_lascia_una_riga_nel_registro(archivio_misurabi
         fatto = connessione.execute(
             "SELECT count(*) FROM impronte WHERE scatto_id = ?", (secondo,)).fetchone()[0]
     assert fatto > 0
+
+
+def test_la_cartella_si_vede_sullo_schermo_ma_non_nel_testo(archivio_misurabile):
+    from officina.impronte import perche
+
+    [scatto] = _foto(archivio_misurabile, 1)
+    _togli_le_impronte(archivio_misurabile, [scatto])
+    cosa = perche.guarda(archivio_misurabile)
+    cartella = cosa["scatti"][0]["cartella"]
+    assert cartella and cartella not in cosa["testo"]
+    pagina = _cliente().get("/intelligenza/perche-mancano").text
+    assert "Preso da:" in pagina
+    assert f'action="/intelligenza/perche-mancano/{scatto}/apri"' in pagina
+    dentro = pagina.split('id="testo-perche">')[1].split("</pre>")[0]
+    assert "Preso da" not in dentro and "cartella" not in dentro
+
+
+def test_apri_la_cartella_apre_quella_del_file(archivio_misurabile, monkeypatch):
+    from officina.importazione import pagina
+    from officina.impronte import perche
+
+    [scatto] = _foto(archivio_misurabile, 1)
+    _togli_le_impronte(archivio_misurabile, [scatto])
+    cartella = perche.guarda(archivio_misurabile)["scatti"][0]["cartella"]
+    aperte = []
+    monkeypatch.setattr(pagina, "apri_in_esplora", aperte.append)
+    risposta = _cliente().post(f"/intelligenza/perche-mancano/{scatto}/apri",
+                               follow_redirects=False)
+    assert risposta.status_code == 303
+    assert aperte == [cartella]
+
+
+def test_apri_la_cartella_solo_da_questo_computer(archivio_misurabile, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from officina.importazione import pagina
+    from officina.web.server import app
+
+    [scatto] = _foto(archivio_misurabile, 1)
+    _togli_le_impronte(archivio_misurabile, [scatto])
+    aperte = []
+    monkeypatch.setattr(pagina, "apri_in_esplora", aperte.append)
+    lontano = TestClient(app, client=("192.168.1.50", 51000))
+    risposta = lontano.post(f"/intelligenza/perche-mancano/{scatto}/apri",
+                            follow_redirects=False)
+    assert risposta.status_code != 303 and not aperte
+
+
+@pytest.mark.parametrize("percorso, cartella", [
+    ("C:\\Foto\\2024\\a.MOV", "C:\\Foto\\2024"),
+    ("/casa/foto/a.MOV", "/casa/foto"),
+    ("a.MOV", None),
+])
+def test_la_cartella_di_un_percorso(percorso, cartella):
+    from officina.impronte import perche
+
+    assert perche.cartella_di(percorso) == cartella

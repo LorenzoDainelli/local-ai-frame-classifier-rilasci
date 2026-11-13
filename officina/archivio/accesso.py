@@ -93,6 +93,8 @@ class Archivio:
 
         nuovo = not self.dove.database.exists()
         self._connessione = database.connetti(self.dove.database)
+        if not self.di_prova:
+            self._dopo_una_chiusura_di_colpo(nuovo)
 
         if not nuovo and migrazioni.da_applicare(self._connessione):
             copie.fai_copia(self._connessione, self.dove, "prima_aggiornamento")
@@ -110,6 +112,16 @@ class Archivio:
 
         registro.evento("archivio.aperto", nuovo=nuovo)
         return self
+
+    def _dopo_una_chiusura_di_colpo(self, nuovo: bool) -> None:
+        from officina.archivio import chiusura
+
+        try:
+            if not nuovo and chiusura.era_aperto(self.dove):
+                chiusura.controlla(self._connessione, self.dove)
+            chiusura.segna_aperto(self.dove)
+        except Exception:
+            registro.errore("chiusura.controllo_fallito")
 
     def chiudi(self, con_copia: bool = True) -> None:
         from officina.archivio import riserva
@@ -138,6 +150,13 @@ class Archivio:
             with self._lucchetto:
                 self._connessione.close()
                 self._connessione = None
+            if not self.di_prova:
+                from officina.archivio import chiusura
+
+                try:
+                    chiusura.segna_chiuso(self.dove)
+                except OSError:
+                    registro.errore("chiusura.segno_non_tolto")
             registro.evento("archivio.chiuso")
             self._rimetti_nel_forziere()
 

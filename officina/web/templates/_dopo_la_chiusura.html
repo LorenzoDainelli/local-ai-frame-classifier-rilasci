@@ -1,0 +1,14 @@
+{% set c = dopo_la_chiusura %}
+{% if c.archivio == "sano" %}
+<div class="avviso" id="dopo-la-chiusura">
+    <span>L'ultima volta il programma si è chiuso di colpo. Ho controllato l'archivio dei dati: è tutto a posto.{% if c.provvisori %} Ho tolto {{ c.provvisori|numero }} file a metà del programma.{% endif %}</span>
+    <form method="post" action="/dopo-la-chiusura/visto" style="margin-left:auto">
+        <button class="tasto-comando nudo" type="submit">Ho capito</button>
+    </form>
+</div>
+{% else %}
+<div class="avviso forte" id="dopo-la-chiusura">
+    <span>Dopo la chiusura di colpo l'archivio dei dati risulta rovinato. Non lavorarci.</span>
+    <a class="tasto-comando principale" href="/impostazioni#c5" style="margin-left:auto">Rimetti una copia buona</a>
+</div>
+{% endif %}

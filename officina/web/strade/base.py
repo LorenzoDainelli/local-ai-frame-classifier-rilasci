@@ -14,7 +14,7 @@ from markupsafe import Markup
 
 from officina import forziere, registro
 from officina.errori import ErroreOfficina
-from officina.archivio import accesso, memoria
+from officina.archivio import accesso, chiusura, memoria
 from officina.archivio.database import ora_a_parole, uno
 from officina.doppioni import decisioni as doppioni_decisioni
 from officina.modello import etichette, scatti, segnalazioni
@@ -91,6 +91,7 @@ def comune(richiesta: Request, qui: str = "") -> dict:
         "novita_apri": apri_le_novita,
         "impostazioni": archivio.tutte_le_impostazioni(),
         "archivio_nome": archivio.dove.nome,
+        "dopo_la_chiusura": None if archivio.di_prova else chiusura.da_dire(archivio.dove),
         "totale_scatti": quanti_scatti,
         "barra": barra_di_navigazione(qui, quanti_scatti, conti_barra),
         "voce_attiva": _DOVE_STA.get(qui, ""),

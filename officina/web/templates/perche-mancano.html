@@ -20,20 +20,27 @@
     {% else %}
     <section class="carta">
         <h2>Da incollare a Claude</h2>
-        <p class="piccolo tenue">Solo per questa volta dentro ci sono anche il nome del file e la data dello scatto. Non ci sono cartelle, luoghi, persone né nodi.</p>
+        <p class="piccolo tenue">Dentro non ci sono nomi di file, date, cartelle, luoghi, persone né nodi.</p>
         <pre class="ia-dettaglio" id="testo-perche">{{ cosa.testo }}</pre>
         <div><button class="tasto-comando principale" type="button" id="copia-perche">Copia per Claude</button></div>
     </section>
 
     <section class="carta">
         <h2>Gli scatti</h2>
+        <p class="piccolo tenue">Se un file è rotto, ricopialo nella sua cartella e poi rifai «Aggiungi foto» su quella cartella.</p>
         {% if cosa.in_tutto > cosa.scatti|length %}<p class="piccolo tenue">Qui ci sono i primi {{ cosa.scatti|length }}.</p>{% endif %}
         <ul class="dc-file">
             {% for v in cosa.scatti %}
             <li>
                 <span class="dc-nome-e-dove"><span class="nome-di-file">{{ v.nome or 'senza nome' }}</span>
                 <span class="dc-perche">{{ ESITI.get(v.prova.esito, v.prova.esito) }}{% if v.prova.codice %} ({{ v.prova.codice }}){% endif %}{% if v.da_parte %} · messo da parte ({{ v.da_parte }}){% endif %}{% if v.doppione.e %} · doppione di {{ v.doppione.con }}{% endif %}{% if v.prova.luce is defined %} · luce {{ v.prova.luce }} su 255{% endif %}</span>
+                {% if v.cartella %}<span class="dc-perche">Preso da: <span class="nome-di-file">{{ v.cartella }}</span></span>{% endif %}
                 <span class="dc-perche">Volti: {{ v.lavori.volti }} · Corpi: {{ v.lavori.corpi }} · Scritte: {{ v.lavori.scritte }}</span></span>
+                {% if v.cartella and da_questo_computer %}
+                <form method="post" action="/intelligenza/perche-mancano/{{ v.scatto }}/apri" data-senza-ricarica>
+                    <button class="tasto-comando nudo piccolo" type="submit">{{ icona('fuori', 14) }} Apri la cartella</button>
+                </form>
+                {% endif %}
                 <a class="tasto-comando nudo piccolo" href="/scatto/{{ v.scatto }}">Guardalo</a>
             </li>
             {% endfor %}

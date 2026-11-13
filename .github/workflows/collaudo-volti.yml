@@ -1,0 +1,41 @@
+name: Collaudo dei volti difficili
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/collaudo_volti_difficili.py"
+      - ".github/workflows/collaudo-volti.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collaudo-volti-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  volti:
+    name: WIDER FACE, facili e difficili, a più misure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Le librerie
+        run: |
+          grep -iE "^(pillow|pillow-heif|numpy|onnxruntime|opencv-python-headless|huggingface-hub)==" requirements*.txt | cut -d: -f2 | cut -d" " -f1 | sort -u > volti-librerie.txt
+          cat volti-librerie.txt
+          python -m pip install -r volti-librerie.txt
+      - name: Il collaudo
+        run: python strumenti/collaudo_volti_difficili.py --cartella "$RUNNER_TEMP/volti" --uscita collaudo-volti.json
+      - if: always()
+        run: cat collaudo-volti.json
