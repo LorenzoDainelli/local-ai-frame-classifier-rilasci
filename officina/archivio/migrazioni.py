@@ -1638,6 +1638,12 @@ def _versione_76(connessione: sqlite3.Connection) -> None:
             (str(quanti),))
 
 
+def _versione_79(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "ALTER TABLE parti_del_corpo ADD COLUMN nodo_id INTEGER "
+        "REFERENCES nodi(id) ON DELETE SET NULL")
+
+
 def _versione_78(connessione: sqlite3.Connection) -> None:
     quanti = connessione.execute(
         "UPDATE volti_guardati SET da_riguardare = 2 WHERE da_riguardare = 0").rowcount
@@ -1839,6 +1845,8 @@ MIGRAZIONI: list[Migrazione] = [
                "persona giusta", _versione_77),
     Migrazione(78, "i volti si cercano anche piccoli e lontani: le foto già guardate "
                "si riguardano, e quelli già trovati restano", _versione_78),
+    Migrazione(79, "per ogni parte del corpo scegli tu quale nodo proporre",
+               _versione_79),
 ]
 
 

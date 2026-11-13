@@ -16,6 +16,7 @@
         <h2>Come funziona</h2>
         <p class="piccolo tenue">Il nome è in italiano ed è quello che vedi tu. La parola è in inglese ed è quella che capisce il modello.</p>
         <p class="piccolo tenue">L'elenco resta su questo computer. Non va mai su internet e non lo legge nessuno.</p>
+        <p class="piccolo tenue">Per ogni parte scegli tu il nodo da proporre mentre etichetti. Senza nodo vedi solo la zona.</p>
         <p class="piccolo tenue">Quello che trova è solo un suggerimento: le etichette le metti sempre tu.</p>
         {% if manca_il_modello %}<p class="piccolo">{{ manca_il_modello }}</p>{% endif %}
     </section>
@@ -32,6 +33,10 @@
                 <form method="post" action="/intelligenza/parti/{{ parte.id }}" class="pc-riga">
                     <input class="campo" name="nome" value="{{ parte.nome }}" maxlength="40" autocomplete="off" aria-label="Nome in italiano" required>
                     <input class="campo" name="parola" value="{{ parte.parola }}" maxlength="60" autocomplete="off" aria-label="Parola in inglese" required data-parola>
+                    <select class="campo" name="nodo" aria-label="Nodo da proporre">
+                        <option value="">Nessun nodo: mostra solo la zona</option>
+                        {% for nodo in nodi %}<option value="{{ nodo.id }}"{% if nodo.id == parte.nodo_id %} selected{% endif %}>{{ nodo.percorso }}</option>{% endfor %}
+                    </select>
                     <button class="tasto-comando piccolo" type="submit">Salva</button>
                     <button class="tasto-comando nudo piccolo" type="button" data-prova>Prova</button>
                 </form>
@@ -52,6 +57,10 @@
         <form method="post" action="/intelligenza/parti" class="pc-riga">
             <input class="campo" name="nome" maxlength="40" autocomplete="off" placeholder="Nome in italiano: mani" required>
             <input class="campo" name="parola" maxlength="60" autocomplete="off" placeholder="Parola in inglese: hand" required data-parola>
+            <select class="campo" name="nodo" aria-label="Nodo da proporre">
+                <option value="">Nessun nodo: mostra solo la zona</option>
+                {% for nodo in nodi %}<option value="{{ nodo.id }}">{{ nodo.percorso }}</option>{% endfor %}
+            </select>
             <button class="tasto-comando principale" type="submit">Aggiungi</button>
             <button class="tasto-comando piccolo" type="button" data-prova>Prova prima</button>
         </form>

@@ -7,7 +7,7 @@ from pathlib import PureWindowsPath
 from officina.corpi import chi_e
 from officina.modello import posti
 from officina.modello import etichette as magazzino
-from officina.modello import file_media, indizi_persone, nodi, nomi, scatti
+from officina.modello import file_media, indizi_persone, nodi, nomi, parti, scatti
 from officina.archivio.database import tutti
 from officina.ritocco import elenco as elenco_ritocchi
 
@@ -91,6 +91,7 @@ def stato_dello_scatto(connessione: sqlite3.Connection, bottega, scatto_id: int,
         "confermate": confermate,
         "proposte": elenco_proposte,
         "persone": _chi_c_e(connessione, scatto_id),
+        "parti": parti.consigli(connessione, scatto_id),
         "luoghi": posti.di_scatto(connessione, scatto_id),
         "proposta_luogo": (None if posti.di_scatto(connessione, scatto_id)
                            else posti.proposta(connessione, scatto_id, bottega)),

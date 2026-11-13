@@ -11,6 +11,7 @@ from officina.archivio import accesso
 from officina.archivio.database import uno
 from officina.errori import ErroreOfficina
 from officina.modello import impronte as magazzino_impronte
+from officina.modello import nodi as nodi_mod
 from officina.volti import motore as volti_motore
 from officina.volti import rilevatore as volti_rilevatore
 from officina.corpi import motore as corpi_motore
@@ -557,9 +558,14 @@ def pagina_delle_parti(richiesta: Request):
         mancano = parti.quanti_mancano(connessione) if elenco else 0
         con_persone = uno(connessione,
                           "SELECT count(DISTINCT scatto_id) AS q FROM corpi")["q"]
+        nodi_da_scegliere = sorted(
+            ({"id": riga["id"], "percorso": nodi_mod.percorso(connessione, riga["id"])}
+             for riga in nodi_mod.elenco(connessione)),
+            key=lambda voce: voce["percorso"].casefold())
     return base.pagine.TemplateResponse(richiesta, "parti-del-corpo.html", {
         **base.comune(richiesta, "intelligenza"),
         "elenco": elenco, "mancano": mancano, "con_persone": con_persone,
+        "nodi": nodi_da_scegliere,
         "manca_il_modello": lavoro.cosa_manca(archivio.dove.modelli),
         "al_massimo": parti.QUANTE_AL_MASSIMO,
         "al_lavoro": comune.lavoro_ia.sta_lavorando or comune.lavoro_corpi.sta_lavorando,
@@ -567,11 +573,13 @@ def pagina_delle_parti(richiesta: Request):
 
 
 @strada.post("/intelligenza/parti")
-def aggiungi_una_parte(nome: str = Form(""), parola: str = Form("")):
+def aggiungi_una_parte(nome: str = Form(""), parola: str = Form(""),
+                       nodo: str = Form("")):
     from officina.modello import parti
 
     with accesso.aperto().scrittura() as connessione:
-        parti.aggiungi(connessione, nome, parola)
+        nuova = parti.aggiungi(connessione, nome, parola)
+        parti.scegli_il_nodo(connessione, nuova, int(nodo) if nodo.isdecimal() else None)
     registro.evento("parti.aggiunta")
     return RedirectResponse("/intelligenza/parti", status_code=303)
 
@@ -597,11 +605,14 @@ def prova_una_parola(parola: str = Form("")):
 
 
 @strada.post("/intelligenza/parti/{parte_id}")
-def cambia_una_parte(parte_id: int, nome: str = Form(""), parola: str = Form("")):
+def cambia_una_parte(parte_id: int, nome: str = Form(""), parola: str = Form(""),
+                     nodo: str = Form("")):
     from officina.modello import parti
 
     with accesso.aperto().scrittura() as connessione:
         parti.cambia(connessione, parte_id, nome, parola)
+        parti.scegli_il_nodo(connessione, parte_id,
+                             int(nodo) if nodo.isdecimal() else None)
     registro.evento("parti.cambiata")
     return RedirectResponse("/intelligenza/parti", status_code=303)
 

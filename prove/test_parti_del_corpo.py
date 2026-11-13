@@ -354,3 +354,28 @@ def test_la_ricerca_capisce_il_nome_di_una_parte(archivio):
         capiti = [capito for _pezzo, capito in ricerca._cosa_riconosco(
             connessione, "foto con mani")]
     assert [(c.genere, c.numero) for c in capiti] == [("parte", mano)]
+
+
+def test_il_nodo_lo_sceglie_chi_usa_il_programma(archivio):
+    from officina.modello import nodi
+
+    with archivio.scrittura() as connessione:
+        scatto_id = _scatto(connessione)
+        nodo = nodi.crea(connessione, "Un nodo", None)
+        mano = parti.aggiungi(connessione, "Mani", "hand")
+        piede = parti.aggiungi(connessione, "Piedi", "foot")
+        parti.scegli_il_nodo(connessione, mano, nodo)
+        for parte in (mano, piede):
+            parti.salva(connessione, scatto_id, None, parte,
+                        [(0, (0.1, 0.1, 0.2, 0.2), 0.9), (0, (0.6, 0.6, 0.2, 0.2), 0.7)],
+                        "sam3", "1")
+        consigli = parti.consigli(connessione, scatto_id)
+        with pytest.raises(parti.ParteSbagliata):
+            parti.scegli_il_nodo(connessione, piede, 999999)
+        parti.scegli_il_nodo(connessione, mano, None)
+        senza = parti.consigli(connessione, scatto_id)
+    assert [(c["nome"], c["nodo_id"], len(c["zone"])) for c in consigli] == [
+        ("Mani", nodo, 2), ("Piedi", None, 2)]
+    assert consigli[0]["nodo_nome"] == "Un nodo"
+    assert consigli[0]["zone"][0]["riquadro"] == [0.1, 0.1, 0.2, 0.2]
+    assert [c["nodo_id"] for c in senza] == [None, None]

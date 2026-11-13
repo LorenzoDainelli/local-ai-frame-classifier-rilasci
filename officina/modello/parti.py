@@ -44,7 +44,7 @@ def controlla(nome: str, parola: str) -> tuple[str, str]:
 def elenco(connessione) -> list[dict]:
     return [dict(riga) for riga in tutti(
         connessione,
-        "SELECT p.id, p.nome, p.parola, p.creata_il, p.cambiata_il, "
+        "SELECT p.id, p.nome, p.parola, p.nodo_id, p.creata_il, p.cambiata_il, "
         "(SELECT count(*) FROM parti_trovate t WHERE t.parte_id = p.id) AS trovate, "
         "(SELECT count(DISTINCT t.scatto_id) FROM parti_trovate t "
         "WHERE t.parte_id = p.id) AS scatti, "
@@ -53,7 +53,8 @@ def elenco(connessione) -> list[dict]:
 
 
 def una(connessione, parte_id: int) -> dict | None:
-    riga = uno(connessione, "SELECT id, nome, parola FROM parti_del_corpo WHERE id = ?",
+    riga = uno(connessione,
+               "SELECT id, nome, parola, nodo_id FROM parti_del_corpo WHERE id = ?",
                parte_id)
     return dict(riga) if riga else None
 
@@ -94,6 +95,33 @@ def cambia(connessione, parte_id: int, nome: str, parola: str) -> bool:
         return False
     dimentica(connessione, parte_id)
     return True
+
+
+def scegli_il_nodo(connessione, parte_id: int, nodo_id: int | None) -> None:
+    if nodo_id is not None and not uno(
+            connessione, "SELECT 1 FROM nodi WHERE id = ? AND stato = 'attivo'", nodo_id):
+        raise ParteSbagliata("Questo nodo non c'è più.")
+    connessione.execute(
+        "UPDATE parti_del_corpo SET nodo_id = ? WHERE id = ?", (nodo_id, parte_id))
+
+
+def consigli(connessione, scatto_id: int) -> list[dict]:
+    fuori: dict[int, dict] = {}
+    for riga in tutti(
+            connessione,
+            "SELECT t.parte_id, p.nome, t.fotogramma, t.riquadro, t.sicurezza, "
+            "n.id AS nodo_id, n.nome AS nodo_nome FROM parti_trovate t "
+            "JOIN parti_del_corpo p ON p.id = t.parte_id "
+            "LEFT JOIN nodi n ON n.id = p.nodo_id AND n.stato = 'attivo' "
+            "WHERE t.scatto_id = ? ORDER BY p.nome COLLATE NOCASE, t.sicurezza DESC",
+            scatto_id):
+        voce = fuori.setdefault(riga["parte_id"], {
+            "parte_id": riga["parte_id"], "nome": riga["nome"],
+            "nodo_id": riga["nodo_id"], "nodo_nome": riga["nodo_nome"], "zone": []})
+        voce["zone"].append({"fotogramma": riga["fotogramma"],
+                             "riquadro": json.loads(riga["riquadro"]),
+                             "sicurezza": riga["sicurezza"]})
+    return list(fuori.values())
 
 
 def dimentica(connessione, parte_id: int) -> None:

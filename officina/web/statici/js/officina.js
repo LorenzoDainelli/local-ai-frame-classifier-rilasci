@@ -441,17 +441,56 @@ function testoTipo(id, voce) {
         : scampa(voce.nome);
 }
 
+function partiTrovate() {
+    const viste = new Set(mie(0));
+    const proposti = new Set(proposte(0).map((voce) => voce.nodo_id));
+    return ((st.pezzo && st.pezzo.parti) || []).map((parte, indice) => {
+        const quante = parte.zone.length > 1 ? ` ×${parte.zone.length}` : "";
+        const dove = `<span class="via">· ${scampa(parte.nome.toLowerCase())}${quante}</span>`;
+        if (parte.nodo_id && !viste.has(parte.nodo_id) && !proposti.has(parte.nodo_id)) {
+            return `<button type="button" class="et-pillola et-ia" data-pia="${parte.nodo_id}" data-di="0" data-zone="${indice}" title="Parte trovata nella foto: clic per mettere l'etichetta">${scampa(parte.nodo_nome)} ${dove}</button>`;
+        }
+        return `<span class="et-pillola et-zona" data-zone="${indice}" title="Parte trovata nella foto: passa sopra per vedere dove">${scampa(parte.nome.toLowerCase())}${quante}</span>`;
+    }).join("");
+}
+
+function mostraZone(indice) {
+    const quadro = $("quadro");
+    const media = $("media");
+    if (!quadro || !media) return;
+    quadro.querySelector(".et-zone")?.remove();
+    const parte = indice === null ? null : ((st.pezzo && st.pezzo.parti) || [])[indice];
+    if (!parte) return;
+    const strato = document.createElement("div");
+    strato.className = "et-volti et-zone";
+    Object.assign(strato.style, {
+        left: `${media.offsetLeft}px`, top: `${media.offsetTop}px`,
+        width: `${media.offsetWidth}px`, height: `${media.offsetHeight}px`,
+    });
+    parte.zone.filter((zona) => media.tagName === "IMG" ? true : zona.fotogramma === st.fotogramma).forEach((zona) => {
+        const [x, y, w, h] = zona.riquadro || [];
+        if ([x, y, w, h].some((v) => typeof v !== "number")) return;
+        const riquadro = document.createElement("div");
+        riquadro.className = "et-volto et-zona-segno";
+        Object.assign(riquadro.style, { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${h * 100}%` });
+        riquadro.innerHTML = `<span>${scampa(parte.nome.toLowerCase())}</span>`;
+        strato.appendChild(riquadro);
+    });
+    quadro.appendChild(strato);
+}
+
 function elencoPillole() {
     const confermate = st.pezzo ? st.pezzo.confermate || [] : [];
     const voceDi = (id) => confermate.find((voce) => voce.nodo_id === id);
     return mie(0).map((id) => `<button type="button" class="et-pillola et-mio" data-pmio="${id}" data-di="0" title="Clic per togliere">${testoTipo(id, voceDi(id))}</button>`).join("") +
-        proposte(0).map((voce) => `<button type="button" class="et-pillola et-ia" data-pia="${voce.nodo_id}" data-di="0" title="Proposta dell'IA: clic per confermare">${testoTipo(voce.nodo_id, voce)}</button>`).join("");
+        proposte(0).map((voce) => `<button type="button" class="et-pillola et-ia" data-pia="${voce.nodo_id}" data-di="0" title="Proposta dell'IA: clic per confermare">${testoTipo(voce.nodo_id, voce)}</button>`).join("") +
+        partiTrovate();
 }
 
 function disegnaPillole() {
     const dove = $("pillole");
     if (!st.pezzo) { dove.innerHTML = ""; return; }
-    if (!mie(0).length && !proposte(0).length) {
+    if (!mie(0).length && !proposte(0).length && !(st.pezzo.parti || []).length) {
         dove.innerHTML = `<span class="vuote">${scampa(st.pezzo.senza_proposte || "Nessuna etichetta. Clicca un nodo nell'albero.")}</span>`;
     } else {
         dove.innerHTML = elencoPillole();
@@ -1400,6 +1439,9 @@ document.addEventListener("mouseover", (evento) => {
     const sopraCorpo = evento.target.closest("[data-sopra-corpo]");
     if (sopraCorpo) mostraConfronto(Number(sopraCorpo.dataset.sopraCorpo), sopraCorpo.closest(".et-pillole") ? sopraCorpo : null);
     else if (document.querySelector(".et-fumetto, .et-sagoma.acceso")) nascondiConfronto();
+    const zona = evento.target.closest("[data-zone]");
+    if (zona) mostraZone(Number(zona.dataset.zone));
+    else if (document.querySelector(".et-zone")) mostraZone(null);
     const voce = evento.target.closest("[data-pia]");
     const sulNodo = evento.target.closest(".et-nodo[data-nodo]");
     if (voce) mostraPerche(proposta(Number(voce.dataset.pia)));
