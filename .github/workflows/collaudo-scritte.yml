@@ -1,0 +1,58 @@
+name: Collaudo delle scritte difficili
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/collaudo_scritte_difficili.py"
+      - ".github/workflows/collaudo-scritte.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collaudo-scritte-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scritte:
+    name: TextOCR pulite e rovinate, pezzo ${{ matrix.parte }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [0, 1, 2, 3, 4, 5, 6, 7]
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+      HF_HOME: /mnt/grande/hf
+      HF_HUB_OFFLINE: "0"
+      TRANSFORMERS_OFFLINE: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Spazio in più
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          sudo mkdir -p /mnt/grande && sudo chown "$USER" /mnt/grande
+          libero_mnt=$(df --output=avail -BG /mnt | tail -1 | tr -dc 0-9)
+          libero_radice=$(df --output=avail -BG / | tail -1 | tr -dc 0-9)
+          if [ "$libero_mnt" -lt 45 ] && [ "$libero_radice" -gt "$libero_mnt" ]; then
+            sudo rmdir /mnt/grande && sudo mkdir -p /grande && sudo chown "$USER" /grande
+            sudo ln -s /grande /mnt/grande
+          fi
+          df -h / /mnt; free -g; nproc
+      - name: Le librerie
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install transformers accelerate bitsandbytes huggingface_hub safetensors sentencepiece protobuf pillow numpy opencv-python-headless
+      - name: Il collaudo
+        run: python strumenti/collaudo_scritte_difficili.py --cartella "$RUNNER_TEMP/scritte" --parte "${{ matrix.parte }}" --parti 8 --minuti 320
