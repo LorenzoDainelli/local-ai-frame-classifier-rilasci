@@ -8,7 +8,7 @@ from typing import Callable
 from officina.importazione import gruppi
 from officina import registro
 from officina.archivio.accesso import Archivio
-from officina.archivio.database import adesso, tutti, uno
+from officina.archivio.database import adesso, leggi_impostazione, tutti, uno
 from officina.descrittori import torcia, vettori
 from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile
 from officina.immagini import lettura
@@ -57,12 +57,13 @@ class Passata:
 
     def quanti_mancano(self) -> int:
         with self.archivio.lettura() as connessione:
-            riga = uno(connessione, self._domanda_da_fare("count(*) AS q", gruppi.clausola(connessione, "intelligenza")),
-                       self._modello(), self._versione())
+            riga = uno(connessione, self._domanda_da_fare(
+                "count(*) AS q", gruppi.clausola(connessione, "intelligenza"),
+                con_i_piccoli(connessione)), self._modello(), self._versione())
         return riga["q"] if riga else 0
 
-    def _domanda_da_fare(self, cosa: str, piu: str = "") -> str:
-        return _domanda_da_fare(cosa, piu)
+    def _domanda_da_fare(self, cosa: str, piu: str = "", piccoli: bool = False) -> str:
+        return _domanda_da_fare(cosa, piu, piccoli)
 
     def _modello(self) -> str:
         return rilevatore_mod.NOME
@@ -76,7 +77,9 @@ class Passata:
         freno = torcia.Freno(self.intensita, fermato=lambda: self.fermata)
         with self.archivio.lettura() as connessione:
             da_fare = [riga["id"] for riga in tutti(
-                connessione, self._domanda_da_fare("s.id", gruppi.clausola(connessione, "intelligenza")),
+                connessione, self._domanda_da_fare(
+                    "s.id", gruppi.clausola(connessione, "intelligenza"),
+                    con_i_piccoli(connessione)),
                 self._modello(), self._versione())]
         if quanti:
             da_fare = da_fare[:quanti]
@@ -237,14 +240,22 @@ def solo_i_nuovi(trovati, gia_salvati) -> list:
                    <= SOVRAPPOSIZIONE_MASSIMA for vecchio in vecchi.get(numero, ()))]
 
 
-def _domanda_da_fare(cosa: str, piu: str = "") -> str:
+PICCOLI = "volti_piccoli"
+
+
+def con_i_piccoli(connessione) -> bool:
+    return leggi_impostazione(connessione, PICCOLI, False) is True
+
+
+def _domanda_da_fare(cosa: str, piu: str = "", piccoli: bool = False) -> str:
+    fatti = "= 0" if piccoli else "IN (0, 2)"
     return f"""
         SELECT {cosa} FROM scatti s
         WHERE s.fuori_archivio = 0{piu}
           AND NOT EXISTS (
               SELECT 1 FROM volti_guardati g
               WHERE g.scatto_id = s.id AND g.modello = ? AND g.versione = ?
-                AND g.da_riguardare = 0)
+                AND g.da_riguardare {fatti})
           {segnalazioni.clausola(segnalazioni.VOLTI_NON_LETTI)}
           {segnalazioni.clausola(segnalazioni.NON_SI_APRE)}
         ORDER BY s.id
@@ -254,6 +265,8 @@ def _domanda_da_fare(cosa: str, piu: str = "") -> str:
 def quanti_mancano_senza_aprire(connessione) -> int:
     from officina.volti.insight import VERSIONE
 
-    riga = uno(connessione, _domanda_da_fare("count(*) AS q", gruppi.clausola(connessione, "intelligenza")),
+    riga = uno(connessione, _domanda_da_fare("count(*) AS q",
+                                             gruppi.clausola(connessione, "intelligenza"),
+                                             con_i_piccoli(connessione)),
                rilevatore_mod.NOME, VERSIONE)
     return riga["q"] if riga else 0

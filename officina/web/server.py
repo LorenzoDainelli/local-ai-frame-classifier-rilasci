@@ -24,7 +24,7 @@ from officina.web.strade import (albero, aspetto, base, benvenuto, copia_esterna
                                  luoghi, miglioramento, misura, modelli, persone, ritocco,
                                  ritocco_pagina, ritocco_video, scatto, schermo,
                                  senza_data, sincronia, sistemare, stato, telefono, tempo,
-                                 gara120, prova_veloce)
+                                 gara120, prova_veloce, stampa)
 
 app = FastAPI(title="Local AI Frame Classifier", version=VERSIONE, openapi_url=None,
               docs_url=None, redoc_url=None)
@@ -423,7 +423,7 @@ ZONE = (importazione, galleria, scatto, etichetta, sistemare, doppioni, albero, 
         luoghi, stato, lavoro, aspetto, misura, schermo, impostazioni, modelli,
         intelligenza, generale, senza_data, telefono, miglioramento, sincronia, benvenuto, in3d,
         tempo, copia_esterna, ritocco, ritocco_video, ritocco_pagina, gara120,
-        prova_veloce)
+        prova_veloce, stampa)
 
 app.include_router(entrate)
 for zona in ZONE:

@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Stampa veloce — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina st-pagina">
+    <header>
+        <h1 class="titolo-pagina">Stampa veloce</h1>
+        <p class="sottotitolo">Foto a parte, fuori dalla galleria: SeedVR2 le porta a {{ lato }} sul lato lungo, poi una versione anche con i volti ritoccati. Scegli e scarica.</p>
+        <p><a class="tasto-comando piccolo" href="/miglioramento">{{ icona('su', 14) }} Torna al miglioramento</a></p>
+    </header>
+
+    <section class="st-carica" id="st-carica">
+        <p>Trascina qui le foto, oppure</p>
+        <label class="tasto-comando">Scegli le foto<input type="file" id="st-file" accept="image/*,.heic,.heif" multiple hidden></label>
+        <p class="st-nota" id="st-caricamento"></p>
+    </section>
+
+    <p class="st-forma" id="st-forma" hidden></p>
+    <section class="st-comandi">
+        <button class="tasto-comando primario" id="st-avvia" type="button">Avvia</button>
+        <button class="tasto-comando" id="st-ferma" type="button">Ferma</button>
+        <a class="tasto-comando" id="st-scarica" href="/api/stampa/scarica">Scarica le approvate (<span id="st-approvate">0</span>)</a>
+        <button class="tasto-comando" id="st-svuota" type="button">Svuota</button>
+    </section>
+    <p class="st-nota" id="st-adesso"></p>
+    <div class="st-barra"><div id="st-barra-dentro"></div></div>
+
+    <section id="st-elenco" class="st-elenco"></section>
+
+    <section id="st-guarda" class="st-guarda" hidden>
+        <div class="st-guarda-testa">
+            <button class="tasto-comando piccolo" id="st-prima" type="button">‹ Prima</button>
+            <strong id="st-nome"></strong>
+            <button class="tasto-comando piccolo" id="st-dopo" type="button">Dopo ›</button>
+            <span class="st-nota">Rotella: zoom insieme · trascina: sposti insieme · doppio clic: 100%</span>
+            <button class="tasto-comando piccolo" id="st-chiudi" type="button">Chiudi</button>
+        </div>
+        <div class="st-pannelli" id="st-pannelli"></div>
+        <div class="st-guarda-piede">
+            <button class="tasto-comando piccolo" id="st-nessuna" type="button">Nessuna in stampa</button>
+        </div>
+    </section>
+</div>
+</main>
+</div>
+
+<style>
+.st-pagina { display: flex; flex-direction: column; gap: 14px; }
+.st-carica { border: 2px dashed var(--bordo, #888); border-radius: 10px; padding: 18px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.st-carica.sopra { background: color-mix(in srgb, var(--accento, #4a8) 15%, transparent); }
+.st-comandi { display: flex; gap: 10px; flex-wrap: wrap; }
+.st-nota { opacity: .75; font-size: .92em; }
+.st-barra { height: 6px; border-radius: 3px; background: color-mix(in srgb, currentColor 12%, transparent); overflow: hidden; }
+.st-barra > div { height: 100%; width: 0; background: var(--accento, #4a8); transition: width .4s; }
+.st-elenco { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.st-tessera { border: 1px solid color-mix(in srgb, currentColor 18%, transparent); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.st-tessera img { width: 100%; aspect-ratio: 3 / 2; object-fit: contain; background: #111; border-radius: 4px; cursor: pointer; }
+.st-tessera .st-riga { display: flex; justify-content: space-between; gap: 6px; align-items: center; font-size: .88em; }
+.st-avviso { color: #d08a00; }
+.st-forma { padding: 10px 14px; border-radius: 8px; font-weight: 600; }
+.st-forma.male { background: color-mix(in srgb, #d08a00 22%, transparent); }
+.st-forma.bene { background: color-mix(in srgb, #2f9d5a 20%, transparent); }
+.st-ok { color: #2f9d5a; font-weight: 600; }
+.st-guarda { position: fixed; inset: 0; z-index: 50; background: #0d0d0f; color: #eee; display: flex; flex-direction: column; padding: 10px; gap: 8px; }
+.st-guarda-testa, .st-guarda-piede { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.st-pannelli { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; min-height: 0; }
+.st-pannello { display: flex; flex-direction: column; gap: 6px; min-height: 0; min-width: 0; }
+.st-vetro { flex: 1; overflow: hidden; position: relative; background: #000; border-radius: 6px; cursor: grab; border: 3px solid transparent; }
+.st-pannello.scelta .st-vetro { border-color: #2f9d5a; }
+.st-vetro img { position: absolute; left: 0; top: 0; transform-origin: 0 0; user-select: none; -webkit-user-drag: none; max-width: none; }
+.st-pannello button { align-self: center; }
+</style>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+let stato = { foto: [] };
+let aperta = null;
+const vista = { scala: 0, x: 0, y: 0 };
+const NOMI = { originali: "Originale", seedvr2: "SeedVR2", volti: "SeedVR2 + volti ritoccati" };
+
+async function chiedi(indirizzo, opzioni = {}) {
+    const risposta = await fetch(indirizzo, opzioni);
+    let dati = {};
+    try { dati = await risposta.json(); } catch (e) { dati = {}; }
+    if (!risposta.ok) { throw new Error(dati.messaggio || "Qualcosa non va."); }
+    return dati;
+}
+
+async function carica(file) {
+    const elenco = [...file];
+    let fatte = 0;
+    const sbagliate = [];
+    for (const uno of elenco) {
+        $("st-caricamento").textContent = `Carico ${fatte + 1} di ${elenco.length}: ${uno.name}`;
+        const modulo = new FormData();
+        modulo.append("foto", uno, uno.name);
+        try {
+            const dati = await chiedi("/api/stampa/aggiungi", { method: "POST", body: modulo });
+            sbagliate.push(...dati.sbagliate);
+        } catch (e) { sbagliate.push(`${uno.name}: ${e.message}`); }
+        fatte += 1;
+    }
+    $("st-caricamento").textContent = `${fatte} caricate.` + (sbagliate.length ? " Non aperte: " + sbagliate.join(" · ") : "");
+    await aggiorna();
+}
+
+function versioni(uno) {
+    return ["originali", ...uno.fatte];
+}
+
+function riga(uno) {
+    const div = document.createElement("div");
+    div.className = "st-tessera";
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.src = `/api/stampa/${uno.id}/originali.jpg`;
+    img.alt = uno.nome;
+    img.addEventListener("click", () => apri(uno.id));
+    div.append(img);
+    const nome = document.createElement("div");
+    nome.className = "st-riga";
+    nome.textContent = uno.nome;
+    div.append(nome);
+    const info = document.createElement("div");
+    info.className = "st-riga";
+    const misura = document.createElement("span");
+    misura.textContent = `${uno.larghezza}×${uno.altezza}` + (uno.arrivo ? ` → ${uno.arrivo[0]}×${uno.arrivo[1]}` : "");
+    info.append(misura);
+    div.append(info);
+    const avvisi = document.createElement("div");
+    avvisi.className = "st-riga";
+    const testo = [];
+    if (!uno.arrivo) testo.push("già sopra il 4K: saltata");
+    if (!uno.due_terzi) testo.push("non è 2:3");
+    const segno = document.createElement("span");
+    segno.className = "st-avviso";
+    segno.textContent = testo.join(" · ");
+    avvisi.append(segno);
+    const scelta = document.createElement("span");
+    scelta.className = "st-ok";
+    scelta.textContent = uno.scelta ? `✓ ${NOMI[uno.scelta]}` : `${uno.fatte.length + 1} versioni`;
+    avvisi.append(scelta);
+    div.append(avvisi);
+    const togli = document.createElement("button");
+    togli.className = "tasto-comando piccolo";
+    togli.type = "button";
+    togli.textContent = "Togli";
+    togli.addEventListener("click", async () => {
+        try { await chiedi(`/api/stampa/${uno.id}/togli`, { method: "POST" }); await aggiorna(); }
+        catch (e) { alert(e.message); }
+    });
+    div.append(togli);
+    return div;
+}
+
+function disegna() {
+    const elenco = $("st-elenco");
+    elenco.replaceChildren(...stato.foto.map(riga));
+    $("st-approvate").textContent = stato.approvate || 0;
+    const storte = stato.foto.filter((f) => !f.due_terzi);
+    const forma = $("st-forma");
+    forma.hidden = stato.foto.length === 0;
+    forma.className = "st-forma " + (storte.length ? "male" : "bene");
+    forma.textContent = storte.length
+        ? `Attenzione: ${storte.length} foto non sono 2:3 né 3:2 — ${storte.map((f) => `${f.nome} (${f.larghezza}×${f.altezza})`).join(", ")}`
+        : `Tutte le ${stato.foto.length} foto sono 2:3 o 3:2.`;
+    const righe = stato.righe || [];
+    const ultima = righe.length ? righe[righe.length - 1] : "";
+    $("st-adesso").textContent = (stato.sta_lavorando ? "Al lavoro. " : "") + (typeof ultima === "string" ? ultima : (ultima.testo || ""));
+    const quanto = stato.sta_lavorando ? (stato.tutto || 0) : 0;
+    $("st-barra-dentro").style.width = `${quanto}%`;
+    if (stato.sta_lavorando && stato.tutto) {
+        const manca = stato.manca ? ` · manca circa ${Math.max(1, Math.round(stato.manca / 60))} min` : "";
+        $("st-adesso").textContent += ` (${stato.tutto}%${manca})`;
+    }
+    if (stato.guasto) $("st-adesso").textContent = `Fermato: ${stato.guasto}`;
+    $("st-avvia").disabled = !!stato.sta_lavorando;
+    $("st-ferma").disabled = !stato.sta_lavorando;
+    if (aperta !== null) {
+        const uno = stato.foto.find((f) => f.id === aperta);
+        if (uno && versioni(uno).length !== $("st-pannelli").children.length) apri(aperta, true);
+        else if (uno) segnaLaScelta(uno);
+    }
+}
+
+async function aggiorna() {
+    try { stato = await chiedi("/api/stampa"); disegna(); } catch (e) { $("st-adesso").textContent = e.message; }
+}
+
+function applica() {
+    for (const img of document.querySelectorAll(".st-vetro img")) {
+        img.style.transform = `translate(${vista.x}px, ${vista.y}px) scale(${vista.scala})`;
+    }
+}
+
+function adatta() {
+    const vetro = document.querySelector(".st-vetro");
+    const img = vetro && vetro.querySelector("img");
+    if (!img || !img.naturalWidth) return;
+    const r = vetro.getBoundingClientRect();
+    vista.scala = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
+    vista.x = (r.width - img.naturalWidth * vista.scala) / 2;
+    vista.y = (r.height - img.naturalHeight * vista.scala) / 2;
+    applica();
+}
+
+function zoomA(px, py, nuova) {
+    const vecchia = vista.scala;
+    vista.x = px - (px - vista.x) * nuova / vecchia;
+    vista.y = py - (py - vista.y) * nuova / vecchia;
+    vista.scala = nuova;
+    applica();
+}
+
+function segnaLaScelta(uno) {
+    for (const p of document.querySelectorAll(".st-pannello")) {
+        p.classList.toggle("scelta", p.dataset.quale === uno.scelta);
+    }
+}
+
+async function scegli(quale) {
+    try { await chiedi(`/api/stampa/${aperta}/scegli`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quale }) }); await aggiorna(); }
+    catch (e) { alert(e.message); }
+}
+
+function apri(id, tieniLaVista = false) {
+    const uno = stato.foto.find((f) => f.id === id);
+    if (!uno) return;
+    aperta = id;
+    $("st-guarda").hidden = false;
+    $("st-nome").textContent = `${uno.nome} — ${stato.foto.indexOf(uno) + 1} di ${stato.foto.length}`;
+    const pannelli = versioni(uno).map((quale) => {
+        const p = document.createElement("div");
+        p.className = "st-pannello";
+        p.dataset.quale = quale;
+        const titolo = document.createElement("strong");
+        titolo.textContent = NOMI[quale];
+        const vetro = document.createElement("div");
+        vetro.className = "st-vetro";
+        const img = document.createElement("img");
+        img.src = `/api/stampa/${uno.id}/${quale}.jpg`;
+        img.draggable = false;
+        img.addEventListener("load", () => {
+            const primo = document.querySelector(".st-vetro img");
+            if (img === primo && !tieniLaVista) adatta(); else applica();
+        });
+        vetro.append(img);
+        const tasto = document.createElement("button");
+        tasto.className = "tasto-comando piccolo";
+        tasto.type = "button";
+        tasto.textContent = "Questa in stampa";
+        tasto.addEventListener("click", () => scegli(quale));
+        p.append(titolo, vetro, tasto);
+        return p;
+    });
+    $("st-pannelli").replaceChildren(...pannelli);
+    segnaLaScelta(uno);
+}
+
+let trascino = null;
+$("st-pannelli").addEventListener("wheel", (e) => {
+    const vetro = e.target.closest(".st-vetro");
+    if (!vetro) return;
+    e.preventDefault();
+    const r = vetro.getBoundingClientRect();
+    const nuova = Math.min(8, Math.max(0.02, vista.scala * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
+    zoomA(e.clientX - r.left, e.clientY - r.top, nuova);
+}, { passive: false });
+$("st-pannelli").addEventListener("pointerdown", (e) => {
+    if (!e.target.closest(".st-vetro")) return;
+    trascino = { x: e.clientX, y: e.clientY };
+    e.target.setPointerCapture?.(e.pointerId);
+});
+window.addEventListener("pointermove", (e) => {
+    if (!trascino) return;
+    vista.x += e.clientX - trascino.x;
+    vista.y += e.clientY - trascino.y;
+    trascino = { x: e.clientX, y: e.clientY };
+    applica();
+});
+window.addEventListener("pointerup", () => { trascino = null; });
+$("st-pannelli").addEventListener("dblclick", (e) => {
+    const vetro = e.target.closest(".st-vetro");
+    if (!vetro) return;
+    const r = vetro.getBoundingClientRect();
+    if (vista.scala >= 0.99) adatta(); else zoomA(e.clientX - r.left, e.clientY - r.top, 1);
+});
+function sposta(passo) {
+    const i = stato.foto.findIndex((f) => f.id === aperta);
+    const prossima = stato.foto[i + passo];
+    if (prossima) apri(prossima.id, true);
+}
+$("st-prima").addEventListener("click", () => sposta(-1));
+$("st-dopo").addEventListener("click", () => sposta(1));
+$("st-chiudi").addEventListener("click", () => { aperta = null; $("st-guarda").hidden = true; });
+$("st-nessuna").addEventListener("click", () => scegli(null));
+document.addEventListener("keydown", (e) => {
+    if ($("st-guarda").hidden) return;
+    if (e.key === "ArrowLeft") sposta(-1);
+    if (e.key === "ArrowRight") sposta(1);
+    if (e.key === "Escape") $("st-chiudi").click();
+    const n = Number(e.key);
+    const pannelli = document.querySelectorAll(".st-pannello");
+    if (n >= 1 && n <= pannelli.length) scegli(pannelli[n - 1].dataset.quale);
+});
+
+const zona = $("st-carica");
+zona.addEventListener("dragover", (e) => { e.preventDefault(); zona.classList.add("sopra"); });
+zona.addEventListener("dragleave", () => zona.classList.remove("sopra"));
+zona.addEventListener("drop", (e) => { e.preventDefault(); zona.classList.remove("sopra"); carica(e.dataTransfer.files); });
+$("st-file").addEventListener("change", (e) => carica(e.target.files));
+$("st-avvia").addEventListener("click", async () => {
+    try { stato = await chiedi("/api/stampa/avvia", { method: "POST" }); disegna(); } catch (e) { alert(e.message); }
+});
+$("st-ferma").addEventListener("click", async () => { stato = await chiedi("/api/stampa/ferma", { method: "POST" }); disegna(); });
+$("st-svuota").addEventListener("click", async () => {
+    if (!confirm("Cancello tutte le foto della stampa veloce?")) return;
+    try { stato = await chiedi("/api/stampa/svuota", { method: "POST" }); disegna(); } catch (e) { alert(e.message); }
+});
+$("st-scarica").addEventListener("click", (e) => {
+    if (!stato.approvate) { e.preventDefault(); alert("Prima scegli almeno una foto."); }
+});
+window.addEventListener("resize", () => { if (aperta !== null) adatta(); });
+aggiorna();
+setInterval(aggiorna, 4000);
+</script>
+{% endblock %}

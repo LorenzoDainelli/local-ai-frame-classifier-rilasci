@@ -10,8 +10,12 @@
     ],
     "semplice": [
       [
+        "migliora",
+        "Stampa veloce, dal Miglioramento: trascini foto a parte, SeedVR2 le porta a 4096 sul lato lungo, anche con i volti ritoccati. Le guardi affiancate, scegli e scarichi uno zip di JPEG per la stampa"
+      ],
+      [
         "volto",
-        "I volti piccoli e lontani ora si trovano: il programma guarda ogni foto a due misure. Le foto già guardate si riguardano da sole e ci vuole circa 5 volte il tempo. I volti già trovati e i nomi che hai dato restano come sono"
+        "I volti piccoli e lontani ora si trovano: il programma guarda ogni foto a due misure. Per le foto già guardate accendi «Cerca i volti piccoli nelle foto già viste» nelle Impostazioni. I volti e i nomi di prima restano"
       ],
       [
         "persona",

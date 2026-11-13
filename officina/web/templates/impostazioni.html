@@ -270,6 +270,15 @@
                            ("generoso", "generoso")]) }}
                 {% endcall %}
 
+                {% call riga("Cerca i volti piccoli nelle foto già viste", "volti_piccoli",
+                             False,
+                    "Le foto nuove si guardano già a due misure. Acceso, il programma
+                     riguarda anche tutte le foto già viste per trovare i volti piccoli e
+                     lontani: i volti, le persone e i nomi di prima restano. Ci vuole
+                     molto tempo di scheda.") %}
+                {{ interruttore("volti_piccoli", impostazioni.volti_piccoli) }}
+                {% endcall %}
+
                 {% call riga("I volti nel miglioramento", "miglioria_volti", False,
                     "Quando migliora una foto, il programma sistema anche i
                      volti, a parte. <b>Da soli</b>: FaceMe per chi ha un nome,

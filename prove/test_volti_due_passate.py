@@ -48,3 +48,12 @@ def test_la_migrazione_fa_riguardare_le_foto_gia_viste(archivio):
         quanti = connessione.execute(
             "SELECT valore FROM stato WHERE chiave = 'volti_piccoli_da_cercare'").fetchone()
     assert stati == [2, 1] and tuple(quanti) == ("1",)
+
+
+def test_le_gia_viste_si_riguardano_solo_con_i_piccoli_accesi():
+    from officina.volti import motore
+
+    spento = motore._domanda_da_fare("s.id")
+    acceso = motore._domanda_da_fare("s.id", piccoli=True)
+    assert "g.da_riguardare IN (0, 2)" in spento
+    assert "g.da_riguardare = 0" in acceso

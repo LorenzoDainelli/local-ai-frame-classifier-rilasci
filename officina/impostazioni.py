@@ -131,6 +131,7 @@ PREDEFINITE: dict[str, object] = {
     "griglia_come_si_somma": "massimo",
 
     "volti_prudenza": "equilibrato",
+    "volti_piccoli": False,
 
     "miglioria_volti": "da_soli",
     "miglioria_misura": "4k",
