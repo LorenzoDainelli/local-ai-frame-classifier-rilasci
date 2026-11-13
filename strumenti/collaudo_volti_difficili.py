@@ -234,6 +234,7 @@ def main() -> int:
     scelte = sorted(foto)[::OGNI]
     if scelti.quante:
         scelte = scelte[:scelti.quante]
+    print("FOTO_SCELTE", len(scelte), flush=True)
     inizio = time.monotonic()
     with zipfile.ZipFile(archivio) as z:
         voci = {n.split("images/", 1)[-1]: n for n in z.namelist() if n.endswith(".jpg")}
