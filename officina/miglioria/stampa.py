@@ -360,6 +360,14 @@ class Stampa:
     _finito = True
 
     def _corri(self, sosta) -> None:
+        giri, prima = 0, None
+        while True:
+            fatte = self._un_giro(sosta, giri, prima)
+            if fatte is None:
+                return
+            giri, prima = giri + 1, fatte
+
+    def _un_giro(self, sosta, giri: int, prima) -> frozenset | None:
         stato = self._stato()
         volti = self._motore_dei_volti()
         da_fare = []
@@ -376,11 +384,19 @@ class Stampa:
                             "volti": str(self.file_di(uno, VOLTI)),
                             "larghezza": uno["arrivo"][0], "altezza": uno["arrivo"][1]})
         if not da_fare:
-            self.lavoro.di("niente da fare: sono già tutte pronte")
-            return
-        self.lavoro.di("metto in pausa gli altri lavori dell'IA")
-        sosta.subito()
-        self._prendi_la_scheda()
+            if not giri:
+                self.lavoro.di("niente da fare: sono già tutte pronte")
+            return None
+        quali = frozenset(uno["id"] for uno in da_fare)
+        if prima is not None and quali <= prima:
+            self.lavoro.di(f"{len(quali)} foto non sono venute: le lascio come sono")
+            return None
+        if giri:
+            self.lavoro.di(f"arrivate altre {len(da_fare)} foto mentre lavorava: le faccio")
+        else:
+            self.lavoro.di("metto in pausa gli altri lavori dell'IA")
+            sosta.subito()
+            self._prendi_la_scheda()
         from officina.miglioria.lavoro import RAM_POCA, a_parole, percorsi_della_stanza
 
         lavoro = {"foto": da_fare, "volti": volti,
@@ -407,6 +423,7 @@ class Stampa:
                                  codice=str(esito["guasto"]))
         minuti = (time.monotonic() - partito) / 60
         self.lavoro.di(f"finito in {minuti:.0f} minuti: ora scegli e scarica")
+        return quali
 
     def _segna_le_fatte(self) -> None:
         with self._serratura:

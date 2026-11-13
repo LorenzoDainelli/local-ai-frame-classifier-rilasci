@@ -13,7 +13,7 @@
     </header>
 
     <section class="st-carica" id="st-carica">
-        <p>Trascina qui le foto, oppure</p>
+        <p>Trascina qui le foto, anche mentre lavora (le nuove si fanno subito dopo), oppure</p>
         <label class="tasto-comando">Scegli le foto<input type="file" id="st-file" accept="image/*,.heic,.heif" multiple hidden></label>
         <p class="st-nota" id="st-caricamento"></p>
     </section>
@@ -66,6 +66,7 @@
 .st-ok { color: #2f9d5a; font-weight: 600; }
 .st-guarda { position: fixed; inset: 0; z-index: 50; background: #0d0d0f; color: #eee; display: flex; flex-direction: column; padding: 10px; gap: 8px; }
 .st-guarda-testa, .st-guarda-piede { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.st-guarda[hidden], .st-forma[hidden] { display: none; }
 .st-pannelli { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; min-height: 0; }
 .st-pannello { display: flex; flex-direction: column; gap: 6px; min-height: 0; min-width: 0; }
 .st-vetro { flex: 1; overflow: hidden; position: relative; background: #000; border-radius: 6px; cursor: grab; border: 3px solid transparent; }
@@ -222,6 +223,7 @@ function segnaLaScelta(uno) {
 }
 
 async function scegli(quale) {
+    if (aperta === null) return;
     try { await chiedi(`/api/stampa/${aperta}/scegli`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quale }) }); await aggiorna(); }
     catch (e) { alert(e.message); }
 }
@@ -308,9 +310,13 @@ document.addEventListener("keydown", (e) => {
 });
 
 const zona = $("st-carica");
-zona.addEventListener("dragover", (e) => { e.preventDefault(); zona.classList.add("sopra"); });
-zona.addEventListener("dragleave", () => zona.classList.remove("sopra"));
-zona.addEventListener("drop", (e) => { e.preventDefault(); zona.classList.remove("sopra"); carica(e.dataTransfer.files); });
+window.addEventListener("dragover", (e) => { e.preventDefault(); zona.classList.add("sopra"); });
+window.addEventListener("dragleave", (e) => { if (!e.relatedTarget) zona.classList.remove("sopra"); });
+window.addEventListener("drop", (e) => {
+    e.preventDefault();
+    zona.classList.remove("sopra");
+    if (e.dataTransfer && e.dataTransfer.files.length) carica(e.dataTransfer.files);
+});
 $("st-file").addEventListener("change", (e) => carica(e.target.files));
 $("st-avvia").addEventListener("click", async () => {
     try { stato = await chiedi("/api/stampa/avvia", { method: "POST" }); disegna(); } catch (e) { alert(e.message); }

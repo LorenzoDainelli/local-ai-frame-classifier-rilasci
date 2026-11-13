@@ -159,3 +159,111 @@ def test_pagina_e_caricamento(archivio, monkeypatch):
     assert cliente.get("/api/stampa/scarica").status_code == 409
     assert cliente.post("/api/stampa/svuota").status_code == 200
     strada.la_stampa(archivio).ferma()
+
+
+def test_pagina_nel_browser(archivio, monkeypatch, tmp_path):
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from officina.web.server import app
+    from officina.web.strade import stampa as strada
+
+    monkeypatch.setattr(strada, "_stampa", None)
+    cliente = TestClient(app, client=("127.0.0.1", 51000))
+    errori = []
+    arrivate = []
+
+    def passa(rotta):
+        richiesta = rotta.request
+        if "aggiungi" in richiesta.url:
+            arrivate.append(richiesta.method)
+            rotta.fulfill(status=200, content_type="application/json",
+                          body='{"aggiunte": 0, "sbagliate": []}')
+            return
+        risposta = cliente.request(richiesta.method,
+                                   richiesta.url.replace("http://prova", ""),
+                                   content=richiesta.post_data_buffer,
+                                   headers={k: v.replace("http://prova", "http://testserver")
+                                            for k, v in richiesta.headers.items()
+                                            if k != "host"})
+        rotta.fulfill(status=risposta.status_code, body=risposta.content,
+                      headers={k: v for k, v in risposta.headers.items()
+                               if k.lower() not in ("content-length",
+                                                    "content-encoding")})
+
+    with sync_api.sync_playwright() as p:
+        pronto = Path("/opt/pw-browsers/chromium")
+        try:
+            browser = p.chromium.launch(
+                executable_path=str(pronto) if pronto.exists() else None)
+        except sync_api.Error as guasto:
+            pytest.skip(f"niente browser: {guasto}")
+        pagina = browser.new_page(viewport={"width": 1440, "height": 900})
+        pagina.on("pageerror", lambda e: errori.append(str(e)))
+        pagina.route("http://prova/**", passa)
+        pagina.goto("http://prova/stampa", wait_until="load")
+        pagina.wait_for_timeout(300)
+        assert not pagina.locator("#st-guarda").is_visible()
+        assert not pagina.locator("#st-forma").is_visible()
+        assert pagina.locator("#st-carica").is_visible()
+        pagina.evaluate("""() => {
+            const dati = new DataTransfer();
+            dati.items.add(new File(["x"], "c.jpg", { type: "image/jpeg" }));
+            const sopra = new DragEvent("dragover",
+                { dataTransfer: dati, cancelable: true });
+            window.dispatchEvent(sopra);
+            const giu = new DragEvent("drop", { dataTransfer: dati, cancelable: true });
+            window.dispatchEvent(giu);
+            return [sopra.defaultPrevented, giu.defaultPrevented];
+        }""") == [True, True] or pytest.fail("il trascinamento non e preso")
+        pagina.wait_for_timeout(500)
+        assert arrivate == ["POST"]
+        for nome, misura in (("a.jpg", (300, 200)), ("b.jpg", (400, 300))):
+            cliente.post("/api/stampa/aggiungi",
+                         files=[("foto", (nome, _jpeg(*misura).getvalue(), "image/jpeg"))])
+        pagina.reload(wait_until="load")
+        pagina.locator("#st-elenco img").nth(1).wait_for(state="attached", timeout=10000)
+        assert pagina.locator("#st-forma").is_visible()
+        assert "1" in pagina.locator("#st-forma").inner_text()
+        pagina.locator("#st-elenco img").first.click()
+        assert pagina.locator("#st-guarda").is_visible()
+        pagina.click("#st-nessuna")
+        pagina.wait_for_timeout(300)
+        pagina.click("#st-chiudi")
+        assert not pagina.locator("#st-guarda").is_visible()
+        browser.close()
+    strada.la_stampa(archivio).ferma()
+    assert errori == []
+
+
+def test_foto_aggiunte_mentre_lavora(tmp_path, monkeypatch):
+    fatta, sosta = _stampa(tmp_path, monkeypatch)
+    prima = fatta.aggiungi("a.jpg", _jpeg(300, 200))
+    giri = []
+    vero = fatta._lancia
+
+    def lancia(lavoro, al_passo):
+        giri.append([uno["id"] for uno in lavoro["foto"]])
+        if len(giri) == 1:
+            fatta.aggiungi("b.jpg", _jpeg(200, 300))
+        return vero(lavoro, al_passo)
+
+    fatta._lancia = lancia
+    fatta._gira()
+    assert len(giri) == 2 and giri[0] == [prima["id"]] and len(giri[1]) == 1
+    assert all(uno["fatte"] == ["seedvr2", "volti"] for uno in fatta.come_va()["foto"])
+
+
+def test_foto_che_non_viene_non_gira_per_sempre(tmp_path, monkeypatch):
+    fatta, sosta = _stampa(tmp_path, monkeypatch)
+    fatta.aggiungi("a.jpg", _jpeg(300, 200))
+    giri = []
+
+    def lancia(lavoro, al_passo):
+        giri.append(1)
+        return {"fatto": 0}
+
+    fatta._lancia = lancia
+    fatta._gira()
+    assert len(giri) == 1
+    assert fatta.come_va()["foto"][0]["fatte"] == []
