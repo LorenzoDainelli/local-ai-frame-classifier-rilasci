@@ -5,6 +5,7 @@ on:
     branches: [prove]
     paths:
       - "strumenti/cerca_ritratti.py"
+      - "strumenti/impronte_hf.py"
       - ".github/workflows/cerca-ritratti.yml"
   workflow_dispatch:
 
@@ -35,6 +36,9 @@ jobs:
           grep -iE "^(pillow|pillow-heif|numpy|onnxruntime|opencv-python-headless|huggingface-hub)==" requirements*.txt | cut -d: -f2 | cut -d" " -f1 | sort -u > volti-librerie.txt
           cat volti-librerie.txt
           python -m pip install -r volti-librerie.txt
+      - name: Impronte dei pesi della gara
+        continue-on-error: true
+        run: python strumenti/impronte_hf.py numz/SeedVR2_comfyUI 7b vae
       - name: Il collaudo
         run: python strumenti/cerca_ritratti.py --cartella "$RUNNER_TEMP/ritratti" --uscita ritratti.json
       - if: always()

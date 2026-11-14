@@ -19,7 +19,9 @@ CHI = "officina-collaudo/1.0 (collaudo di ingrandimento dei ritratti)"
 CATEGORIE = ("Quality images of people", "Featured pictures of people",
              "Quality images of portraits", "Featured portraits",
              "Valued images of people")
-PROFONDITA = 2
+PROFONDITA = 1
+PAUSA = 2.0
+SALTA = (" by user", " by country", " by occupation", " by year")
 LICENZE = ("cc0", "cc by", "cc-by", "public domain", "pd")
 LATO_CORTO = 2800
 LATO_LUNGO = 4000
@@ -34,12 +36,13 @@ MASSIMO_DA_GUARDARE = 900
 
 def chiedi(**parametri) -> dict:
     parametri = {"format": "json", "formatversion": "2", "maxlag": "5", **parametri}
-    indirizzo = API + "?" + urllib.parse.urlencode(parametri)
-    for prova in range(8):
-        time.sleep(1.0)
+    corpo = urllib.parse.urlencode(parametri).encode()
+    for prova in range(12):
+        time.sleep(PAUSA)
         try:
-            richiesta = urllib.request.Request(indirizzo, headers={
-                "User-Agent": CHI, "Accept-Encoding": "identity"})
+            richiesta = urllib.request.Request(API, data=corpo, headers={
+                "User-Agent": CHI, "Accept-Encoding": "identity",
+                "Content-Type": "application/x-www-form-urlencoded"})
             with urllib.request.urlopen(richiesta, timeout=60) as risposta:
                 dati = json.loads(risposta.read())
             if (dati.get("error") or {}).get("code") == "maxlag":
@@ -49,8 +52,8 @@ def chiedi(**parametri) -> dict:
             attesa = guasto.headers.get("Retry-After") or ""
             corpo = guasto.read()[:200].decode("utf-8", "replace").replace("\n", " ")
             print("API riprovo", prova, guasto.code, attesa, corpo, flush=True)
-            pausa = int(attesa) if attesa.isdigit() else 15 * (prova + 1)
-            time.sleep(min(pausa, 120))
+            pausa = int(attesa) + 5 if attesa.isdigit() else 15 * (prova + 1)
+            time.sleep(min(pausa, 180))
         except Exception as guasto:
             print("API riprovo", prova, type(guasto).__name__, guasto, flush=True)
             time.sleep(15 * (prova + 1))
@@ -85,7 +88,8 @@ def tutti_i_file() -> list[str]:
             file += nuovi
             if livello < PROFONDITA:
                 coda += [(s.split(":", 1)[1], livello + 1)
-                         for s in membri(categoria, "subcat")]
+                         for s in membri(categoria, "subcat")
+                         if not any(parola in s for parola in SALTA)]
     return sorted(set(file))
 
 
@@ -117,11 +121,17 @@ def adatta(voce: dict) -> bool:
 
 
 def scarica(indirizzo: str) -> bytes:
-    for prova in range(4):
+    for prova in range(6):
+        time.sleep(PAUSA)
         try:
             richiesta = urllib.request.Request(indirizzo, headers={"User-Agent": CHI})
             with urllib.request.urlopen(richiesta, timeout=180) as risposta:
                 return risposta.read()
+        except urllib.error.HTTPError as guasto:
+            attesa = guasto.headers.get("Retry-After") or ""
+            print("FILE riprovo", prova, guasto.code, attesa, flush=True)
+            pausa = int(attesa) + 5 if attesa.isdigit() else 15 * (prova + 1)
+            time.sleep(min(pausa, 180))
         except Exception as guasto:
             print("FILE riprovo", prova, type(guasto).__name__, flush=True)
             time.sleep(10 * (prova + 1))
