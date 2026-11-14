@@ -8,12 +8,16 @@ on:
       - "strumenti/impronte_hf.py"
       - ".github/workflows/cerca-ritratti.yml"
   workflow_dispatch:
+    inputs:
+      cosa:
+        description: "ritratti oppure soglie"
+        default: "ritratti"
 
 permissions:
   contents: read
 
 concurrency:
-  group: cerca-ritratti-${{ github.ref }}
+  group: cerca-ritratti-${{ github.ref }}${{ inputs.cosa == 'soglie' && '-soglie' || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -36,12 +40,19 @@ jobs:
           grep -iE "^(pillow|pillow-heif|numpy|onnxruntime|opencv-python-headless|huggingface-hub)==" requirements*.txt | cut -d: -f2 | cut -d" " -f1 | sort -u > volti-librerie.txt
           cat volti-librerie.txt
           python -m pip install -r volti-librerie.txt
+      - name: Le soglie dei volti
+        if: inputs.cosa == 'soglie'
+        run: |
+          python strumenti/collaudo_volti_soglie.py --cartella "$RUNNER_TEMP/volti" --uscita collaudo-volti-soglie.json
+          python -c "import json; d=json.load(open('collaudo-volti-soglie.json')); print(json.dumps({'oggi': d['oggi'], 'foto': d['foto'], 'migliori': [{k: r[k] for k in ('regola', 'media difficili', 'media falsi', 'dettagli')} for r in d['migliori'][:8]]}, ensure_ascii=False))"
       - name: Impronte dei pesi della gara
+        if: inputs.cosa != 'soglie'
         continue-on-error: true
         run: python strumenti/impronte_hf.py numz/SeedVR2_comfyUI 7b vae
       - name: Il collaudo
+        if: inputs.cosa != 'soglie'
         run: python strumenti/cerca_ritratti.py --cartella "$RUNNER_TEMP/ritratti" --uscita ritratti.json
-      - if: always()
+      - if: always() && inputs.cosa != 'soglie'
         run: cat ritratti.json
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
