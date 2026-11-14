@@ -226,7 +226,8 @@ def test_prima_dell_ultimo_passo_la_scheda_resta_solo_all_immagine(monkeypatch):
 
     codice = inspect.getsource(lucidflux.LucidFlux.foto)
     assert codice.index("denoise_lucidflux(") < codice.index("_libera_la_scheda(")
-    assert codice.index("_libera_la_scheda(") < codice.index(".decode(")
+    assert codice.index("_libera_la_scheda(") < codice.index("lucidflux_strisce.decodifica(")
+    assert ".decode(" not in codice
 
 
 class _Dato:

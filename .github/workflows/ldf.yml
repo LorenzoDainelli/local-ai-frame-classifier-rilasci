@@ -12,17 +12,55 @@ on:
       - "officina/miglioria/terzi/ldfvfi.json"
       - ".github/workflows/ldf.yml"
   workflow_dispatch:
+    inputs:
+      parte:
+        description: "ldf: LDF-VFI con i pesi veri; strisce: ultimo passo di LucidFlux a strisce"
+        type: choice
+        options: [ldf, strisce]
+        default: ldf
 
 permissions:
   contents: read
 
 concurrency:
-  group: ldf-${{ github.ref }}
+  group: ldf-${{ github.ref }}-${{ github.event.inputs.parte || 'ldf' }}
   cancel-in-progress: true
 
 jobs:
+  strisce:
+    name: LucidFlux a strisce contro intero
+    if: github.event.inputs.parte == 'strisce'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Le librerie
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          grep -E "^einops==" requirements-miglioria.txt | cut -d" " -f1 > strisce-librerie.txt
+          python -m pip install -r strisce-librerie.txt
+      - name: Il collaudo
+        run: python strumenti/collaudo_strisce_lucidflux.py --cartella "$RUNNER_TEMP/codice" --uscita strisce-collaudo.json
+      - name: Cosa ha detto
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: strisce-collaudo
+          path: strisce-collaudo.json
+          if-no-files-found: ignore
+          retention-days: 1
+
   ldf:
     name: LDF-VFI con i pesi veri
+    if: github.event.inputs.parte != 'strisce'
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     env:

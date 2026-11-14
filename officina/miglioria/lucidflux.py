@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image
 
 from officina.errori import ErroreOfficina
-from officina.miglioria import lucidflux_pesi, motori, scaricamento
+from officina.miglioria import lucidflux_pesi, lucidflux_strisce, motori, scaricamento
 from officina.miglioria.precarico import Precarico
 
 NOME = "lucidflux"
@@ -397,7 +397,8 @@ class LucidFlux:
             self._libera_la_scheda(p)
             latente = s["sampling"].unpack(fatto.float(), lavoro_a, lavoro_l)
             decodificata = self._a_turno(p["ae"], dispositivo,
-                                         lambda: p["ae"].decode(latente))
+                                         lambda: lucidflux_strisce.decodifica(
+                                             p["ae"], latente))
 
         uscita = rearrange(decodificata.clamp(-1, 1)[-1], "c h w -> h w c")
         alta = s["align_color"].wavelet_reconstruction(
