@@ -76,7 +76,13 @@ def _prova(navigatore, indirizzo, scatto, posto, sano, sbagliato, errori):
     assert salva.is_disabled()
     riga.locator("[data-pm-scegli]").set_input_files(str(sbagliato))
     sync_api.expect(riga.locator("[data-pm-esito]")).to_contain_text("non coincidono")
-    assert salva.is_disabled()
+    for larga in (1440, 1280, 1024):
+        pagina.set_viewport_size({"width": larga, "height": 900})
+        fuori = pagina.evaluate("""() => [...document.querySelectorAll('main *')]
+            .filter(e => e.getBoundingClientRect().right > innerWidth + 1)
+            .map(e => e.tagName + '.' + e.className)""")
+        assert fuori == [], (larga, fuori)
+        assert riga.locator("[data-pm-esito]").is_visible()
     riga.locator("[data-pm-scegli]").set_input_files(str(sano))
     sync_api.expect(riga.locator("[data-pm-esito]")).to_contain_text("hai ragione")
     sync_api.expect(salva).to_be_enabled()

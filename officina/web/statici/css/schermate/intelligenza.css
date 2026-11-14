@@ -38,3 +38,9 @@
 .ia-modelli li .numeri { text-align: right; }
 .ia-modelli li.ora .barretta > span { box-shadow: 0 0 8px var(--accento); }
 .ia-modelli li.fatto .barretta > span { background: var(--bene, var(--accento)); }
+.pm-giusto { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+.pm-giusto [data-pm-esito] { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+.pm-salva { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; }
+.pm-salva p { margin: 0; flex: 1 1 320px; min-width: 0; }
+.pm-carta { display: grid; gap: 10px; padding: 16px 20px; }
+.pm-carta > h2, .pm-carta > p { margin: 0; }

@@ -18,14 +18,14 @@
     {% if not cosa.scatti %}
     <p>Non manca nessuna impronta.</p>
     {% else %}
-    <section class="carta">
+    <section class="carta pm-carta">
         <h2>Da incollare a Claude</h2>
         <p class="piccolo tenue">Dentro non ci sono nomi di file, date, cartelle, luoghi, persone né nodi.</p>
         <pre class="ia-dettaglio" id="testo-perche">{{ cosa.testo }}</pre>
         <div><button class="tasto-comando principale" type="button" id="copia-perche">Copia per Claude</button></div>
     </section>
 
-    <section class="carta">
+    <section class="carta pm-carta">
         <h2>Gli scatti</h2>
         <p class="piccolo tenue">Se un file è rotto e hai la sua copia intera, premi «Scegli il file giusto»: il programma lo controlla subito. Quando hai caricato quelli che vuoi, premi «Salva» in fondo.</p>
         {% if cosa.in_tutto > cosa.scatti|length %}<p class="piccolo tenue">Qui ci sono i primi {{ cosa.scatti|length }}.</p>{% endif %}
