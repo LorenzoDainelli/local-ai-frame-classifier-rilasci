@@ -296,16 +296,30 @@
                            ("nessuno", "nessuno")]) }}
                 {% endcall %}
 
-                {% call riga("Misura di arrivo del miglioramento", "miglioria_misura", False,
-                    "Quanto diventano grandi foto e video migliorati. <b>4K</b>
-                     (3840 × 2160 pixel) dà il dettaglio più alto, ma ci mette
-                     più tempo e i file occupano circa quattro volte lo spazio
-                     dell'FHD. <b>2K</b> (2560 × 1440) sta in mezzo. <b>FHD</b>
-                     (1920 × 1080) è la misura di prima. Si migliorano solo i
-                     file più piccoli della misura scelta. Con LucidFlux la foto
-                     arriva fino a 2K e poi SeedVR2 la porta a 4K. Se abbassi la
-                     misura, quelli già fatti restano come sono.") %}
+                {% call riga("Foto fino a", "miglioria_misura", False,
+                    "Quanto diventano grandi le foto migliorate, anche la foto
+                     delle Live Photo. <b>4K</b> (3840 × 2160 pixel) dà il
+                     dettaglio più alto, ma ci mette più tempo e i file occupano
+                     circa quattro volte lo spazio dell'FHD. <b>2K</b>
+                     (2560 × 1440) sta in mezzo. <b>FHD</b> (1920 × 1080) è la
+                     misura di prima. La forma della foto resta la stessa: conta
+                     il numero di pixel. Si migliorano solo le foto più piccole
+                     della misura scelta. Con LucidFlux la foto arriva fino a 2K e
+                     poi SeedVR2 la porta alla misura scelta. Se abbassi la
+                     misura, quelle già fatte restano come sono.") %}
                 {{ scelte("miglioria_misura", impostazioni.miglioria_misura,
+                          [("4k", "4K"),
+                           ("2k", "2K"),
+                           ("fhd", "FHD")]) }}
+                {% endcall %}
+
+                {% call riga("Video fino a", "miglioria_misura_video", False,
+                    "Quanto diventano grandi i video migliorati, anche il video
+                     delle Live Photo. Un video più piccolo si fa prima: 2K
+                     richiede circa metà del calcolo del 4K. Si migliorano solo i
+                     video più piccoli della misura scelta. Se abbassi la misura,
+                     quelli già fatti restano come sono.") %}
+                {{ scelte("miglioria_misura_video", impostazioni.miglioria_misura_video,
                           [("4k", "4K"),
                            ("2k", "2K"),
                            ("fhd", "FHD")]) }}
@@ -357,6 +371,16 @@
                     </div>
                     <div class="in-fila">
                         <a class="tasto-comando" href="/gara-120">Apri la gara</a>
+                    </div>
+                </div>
+
+                <div class="riga" data-gara-pelle>
+                    <div class="lato">
+                        <div class="nome">La gara della pelle</div>
+                        <p class="ds">Cinque modi di ingrandire i volti, con quattro finiture, su 61 ritratti pubblici di Wikimedia Commons, poi il tuo voto alla cieca: <b>le tue foto non entrano mai</b>. Occupa circa 17 GB (i pesi di SeedVR2 sharp e i ritratti).</p>
+                    </div>
+                    <div class="in-fila">
+                        <a class="tasto-comando" href="/gara-pelle">Apri la gara</a>
                     </div>
                 </div>
 

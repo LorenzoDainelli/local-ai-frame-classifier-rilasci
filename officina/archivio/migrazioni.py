@@ -1638,6 +1638,13 @@ def _versione_76(connessione: sqlite3.Connection) -> None:
             (str(quanti),))
 
 
+def _versione_80(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "INSERT OR IGNORE INTO impostazioni (chiave, valore, cambiata_il) "
+        "SELECT 'miglioria_misura_video', valore, cambiata_il FROM impostazioni "
+        "WHERE chiave = 'miglioria_misura'")
+
+
 def _versione_79(connessione: sqlite3.Connection) -> None:
     connessione.execute(
         "ALTER TABLE parti_del_corpo ADD COLUMN nodo_id INTEGER "
@@ -1847,6 +1854,8 @@ MIGRAZIONI: list[Migrazione] = [
                "si riguardano, e quelli già trovati restano", _versione_78),
     Migrazione(79, "per ogni parte del corpo scegli tu quale nodo proporre",
                _versione_79),
+    Migrazione(80, "la misura di arrivo dei video si sceglie a parte, uguale a prima",
+               _versione_80),
 ]
 
 

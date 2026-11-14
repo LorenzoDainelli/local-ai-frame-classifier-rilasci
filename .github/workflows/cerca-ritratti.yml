@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       cosa:
-        description: "ritratti oppure soglie"
+        description: "ritratti, altre oppure soglie"
         default: "ritratti"
 
 permissions:
@@ -51,7 +51,7 @@ jobs:
         run: python strumenti/impronte_hf.py numz/SeedVR2_comfyUI 7b vae
       - name: Il collaudo
         if: inputs.cosa != 'soglie'
-        run: python strumenti/cerca_ritratti.py --cartella "$RUNNER_TEMP/ritratti" --uscita ritratti.json
+        run: python strumenti/cerca_ritratti.py --cartella "$RUNNER_TEMP/ritratti" --uscita ritratti.json ${{ inputs.cosa == 'altre' && '--altre' || '' }}
       - if: always() && inputs.cosa != 'soglie'
         run: cat ritratti.json
       - if: always()

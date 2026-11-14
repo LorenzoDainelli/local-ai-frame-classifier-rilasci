@@ -256,7 +256,8 @@ def saltate(connessione: sqlite3.Connection) -> list[str]:
     return [str(voce) for voce in lista] if isinstance(lista, list) else []
 
 
-def _fatta_in_piccolo(riga, tetto: str) -> bool:
+def _fatta_in_piccolo(riga, tetto) -> bool:
+    tetto = misura.di_genere(tetto, riga["genere"] if "genere" in riga.keys() else None)
     if riga["stato"] == coda.FALLITA:
         return (riga["guasto"] == catena.GIA_GRANDE and bool(riga["larghezza_prima"])
                 and bool(riga["altezza_prima"])
@@ -268,12 +269,14 @@ def _fatta_in_piccolo(riga, tetto: str) -> bool:
 
 
 def da_rifare_in_grande(connessione: sqlite3.Connection, dal: str,
-                        tetto: str) -> list[sqlite3.Row]:
-    if misura.pixel_del_tetto(tetto) <= misura.PIXEL_FHD:
+                        tetto) -> list[sqlite3.Row]:
+    if misura.pixel_del_tetto(misura.piu_grande(tetto)) <= misura.PIXEL_FHD:
         return []
     righe = tutti(connessione,
-                  "SELECT * FROM migliorie WHERE stato IN (?,?,?,?) "
-                  "AND finita_il IS NOT NULL AND finita_il < ? ORDER BY id",
+                  "SELECT m.*, f.genere FROM migliorie AS m "
+                  "LEFT JOIN file_media AS f ON f.id = m.file_id "
+                  "WHERE m.stato IN (?,?,?,?) "
+                  "AND m.finita_il IS NOT NULL AND m.finita_il < ? ORDER BY m.id",
                   *DA_GUARDARE, dal)
     return [riga for riga in righe if _fatta_in_piccolo(riga, tetto)]
 
@@ -287,7 +290,7 @@ def ci_sono_in_grande(connessione: sqlite3.Connection) -> bool:
     dal = _dal_in_grande(connessione)
     if dal is None:
         return False
-    tetto = misura.letto(connessione)
+    tetto = misura.letti(connessione)
     return any(perche_resta(connessione, riga) is None
                for riga in da_rifare_in_grande(connessione, dal, tetto))
 
@@ -308,7 +311,7 @@ def _in_grande(archivio, prima_volta: bool) -> Esito | None:
             registro.evento("miglioria.in_grande_comincia")
         elif prima_volta or not ci_sono_in_grande(connessione):
             return None
-        tetto = misura.letto(connessione)
+        tetto = misura.letti(connessione)
         righe = da_rifare_in_grande(connessione, dal, tetto)
     esito = _rifai(archivio, righe)
     with archivio.scrittura() as connessione:
@@ -317,7 +320,7 @@ def _in_grande(archivio, prima_volta: bool) -> Esito | None:
         scrivi_impostazione(connessione, FATTE_IN_GRANDE, {
             "rimesse": int(fatte.get("rimesse") or 0) + esito.rimesse,
             "byte": int(fatte.get("byte") or 0) + esito.byte,
-            "misura": misura.nome(tetto)})
+            "misura": misura.nomi(tetto)})
         scrivi_impostazione(connessione, SALTATE_IN_GRANDE, esito.saltate)
     if esito.rimesse or esito.saltate:
         registro.evento("miglioria.rifatte_in_grande", rimesse=esito.rimesse,

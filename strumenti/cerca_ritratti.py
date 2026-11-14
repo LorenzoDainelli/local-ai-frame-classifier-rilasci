@@ -19,6 +19,11 @@ CHI = "officina-collaudo/1.0 (collaudo di ingrandimento dei ritratti)"
 CATEGORIE = ("Quality images of people", "Featured pictures of people",
              "Quality images of portraits", "Featured portraits",
              "Valued images of people")
+ALTRE_CATEGORIE = ("Quality images of women", "Quality images of men",
+                   "Featured pictures of women", "Featured pictures of men",
+                   "Headshots", "Close-up photographs of faces",
+                   "Portrait photographs", "Valued images of portraits",
+                   "Quality images of children", "Quality images of elderly people")
 PROFONDITA = 1
 PAUSA = 2.0
 SALTA = (" by user", " by country", " by occupation", " by year")
@@ -76,10 +81,10 @@ def membri(categoria: str, tipo: str) -> list[str]:
         seguito = {"cmcontinue": dati["continue"]["cmcontinue"]}
 
 
-def tutti_i_file() -> list[str]:
+def tutti_i_file(categorie=CATEGORIE) -> list[str]:
     visti: set[str] = set()
     file: list[str] = []
-    for radice in CATEGORIE:
+    for radice in categorie:
         coda = [(radice, 0)]
         while coda:
             categoria, livello = coda.pop(0)
@@ -195,6 +200,12 @@ def guarda(voce: dict, dati: bytes, rilevatore, intera_vera: bool = True) -> dic
             "rumore_volto": round(rumore(ritaglio), 2), "colore": round(colore, 1)}
 
 
+def chi_e(autore: str) -> str:
+    import re
+
+    return " ".join(re.sub(r"<[^>]+>", " ", autore).split()).lower()[:24]
+
+
 def main() -> int:
     import onnxruntime
 
@@ -205,6 +216,7 @@ def main() -> int:
     argomenti.add_argument("--uscita", required=True)
     argomenti.add_argument("--cartella", required=True)
     argomenti.add_argument("--minuti", type=float, default=MINUTI)
+    argomenti.add_argument("--altre", action="store_true")
     scelti = argomenti.parse_args()
     partito = time.monotonic()
     casa = Path(scelti.cartella)
@@ -218,7 +230,17 @@ def main() -> int:
     rilevatore._riconosce = object()
     rilevatore._impronta_di = lambda dritta, numpy: None
 
-    titoli = tutti_i_file()
+    gia_presi: set[str] = set()
+    per_autore: dict = {}
+    if scelti.altre:
+        from officina.miglioria import pelle_fonti
+
+        gia_presi = {r.titolo for r in pelle_fonti.RITRATTI}
+        for ritratto in pelle_fonti.RITRATTI:
+            chi = chi_e(ritratto.autore)
+            per_autore[chi] = per_autore.get(chi, 0) + 1
+    titoli = tutti_i_file(ALTRE_CATEGORIE if scelti.altre else CATEGORIE)
+    titoli = [t for t in titoli if t not in gia_presi]
     print("FILE_TROVATI", len(titoli), flush=True)
     voci = [v for v in informazioni(titoli) if adatta(v)]
     print("FILE_ADATTI", len(voci), flush=True)
@@ -243,9 +265,9 @@ def main() -> int:
         if buoni else 0
     puliti = [b for b in buoni if b["rumore_volto"] <= soglia_rumore]
     puliti.sort(key=lambda b: -b["nitidezza_volto"])
-    scelti_ritratti, per_autore = [], {}
+    scelti_ritratti = []
     for voce in puliti:
-        chi = voce["autore"]
+        chi = chi_e(voce["autore"])
         if per_autore.get(chi, 0) >= PER_AUTORE:
             continue
         if (time.monotonic() - partito) / 60 > scelti.minuti:

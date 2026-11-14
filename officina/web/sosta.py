@@ -21,16 +21,18 @@ MIGLIORAMENTO = "miglioramento"
 RITOCCO = "ritocco"
 GARA = "gara_video"
 GARA120 = "gara_120"
+GARA_PELLE = "gara_pelle"
 PROVA_VELOCE = "prova_veloce"
 IMPORTAZIONE = "importazione"
 ORDINE = (IA, IMPRONTE, VOLTI, SCRITTE, CHI_E, FACCE, DOPPIONI, QUALITA, MIGLIORAMENTO,
-          RITOCCO, GARA, GARA120, PROVA_VELOCE, IMPORTAZIONE)
+          RITOCCO, GARA, GARA120, GARA_PELLE, PROVA_VELOCE, IMPORTAZIONE)
 NOMI = {IA: "l'intelligenza artificiale", IMPRONTE: "il calcolo delle impronte",
         VOLTI: "la ricerca dei volti", SCRITTE: "la lettura delle scritte",
         CHI_E: "la ricerca di chi è senza volto", FACCE: "lo studio delle facce insegnate",
         DOPPIONI: "la ricerca dei doppioni", QUALITA: "il controllo degli scatti",
         MIGLIORAMENTO: "il miglioramento", RITOCCO: "la coda del ritocco",
         GARA: "la gara dei video", GARA120: "la gara dei 120 FPS",
+        GARA_PELLE: "la gara della pelle",
         PROVA_VELOCE: "la prova di velocità",
         IMPORTAZIONE: "l'importazione rimasta a metà"}
 
@@ -146,6 +148,27 @@ class _Gara120:
         gara120.parti_la_gara(archivio)
 
 
+class _GaraPelle:
+
+    def acceso(self) -> bool:
+        from officina.web.strade import gara_pelle
+
+        return gara_pelle.gara_in_corso()
+
+    def memoria(self) -> dict:
+        return {}
+
+    def ferma(self) -> None:
+        from officina.web.strade import gara_pelle
+
+        gara_pelle.ferma_la_gara(2.0)
+
+    def riparti(self, archivio, memoria: dict) -> None:
+        from officina.web.strade import gara_pelle
+
+        gara_pelle.parti_la_gara(archivio)
+
+
 class _ProvaVeloce:
 
     def acceso(self) -> bool:
@@ -244,7 +267,7 @@ def _di_serie() -> dict:
         QUALITA: _DaSolo("officina.web.strade.miglioramento", "lavoro_qualita",
                          "ferma_il_controllo", "controlla_la_qualita_in"),
         MIGLIORAMENTO: _Miglioramento(), RITOCCO: _Ritocco(), GARA: _Gara(),
-        GARA120: _Gara120(), PROVA_VELOCE: _ProvaVeloce(),
+        GARA120: _Gara120(), GARA_PELLE: _GaraPelle(), PROVA_VELOCE: _ProvaVeloce(),
         IMPORTAZIONE: _Importazione()}
 
 

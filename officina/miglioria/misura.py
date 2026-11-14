@@ -7,6 +7,9 @@ LARGHEZZA_FHD = 1920
 ALTEZZA_FHD = 1080
 PIXEL_FHD = LARGHEZZA_FHD * ALTEZZA_FHD
 CHIAVE = "miglioria_misura"
+CHIAVE_VIDEO = "miglioria_misura_video"
+IMMAGINE = "immagine"
+VIDEO = "video"
 FHD = "fhd"
 DUE_K = "2k"
 QUATTRO_K = "4k"
@@ -29,10 +32,44 @@ def nome(tetto: str | None = None) -> str:
     return NOMI[tetto_vero(tetto)]
 
 
-def letto(connessione: sqlite3.Connection) -> str:
+def chiave_di(genere: str | None = None) -> str:
+    return CHIAVE_VIDEO if genere == VIDEO else CHIAVE
+
+
+def letto(connessione: sqlite3.Connection, genere: str | None = None) -> str:
     from officina.archivio.database import leggi_impostazione
 
-    return tetto_vero(leggi_impostazione(connessione, CHIAVE, PREDEFINITO))
+    return tetto_vero(leggi_impostazione(connessione, chiave_di(genere), PREDEFINITO))
+
+
+def letti(connessione: sqlite3.Connection) -> dict[str, str]:
+    return {IMMAGINE: letto(connessione), VIDEO: letto(connessione, VIDEO)}
+
+
+def dall_archivio(archivio, genere: str | None = None) -> str:
+    return tetto_vero(archivio.impostazione(chiave_di(genere)))
+
+
+def di_genere(tetto, genere: str | None) -> str:
+    if isinstance(tetto, dict):
+        return tetto_vero(tetto.get(VIDEO if genere == VIDEO else IMMAGINE))
+    return tetto_vero(tetto)
+
+
+def piu_grande(tetto) -> str:
+    if isinstance(tetto, dict):
+        return max((tetto_vero(voce) for voce in tetto.values()),
+                   key=pixel_del_tetto, default=PREDEFINITO)
+    return tetto_vero(tetto)
+
+
+def nomi(tetto) -> str:
+    if not isinstance(tetto, dict):
+        return nome(tetto)
+    foto, video = di_genere(tetto, IMMAGINE), di_genere(tetto, VIDEO)
+    if foto == video:
+        return nome(foto)
+    return f"foto {nome(foto)}, video {nome(video)}"
 
 
 def pixel(larghezza: int, altezza: int) -> int:

@@ -200,7 +200,7 @@ def uno_scatto(richiesta: Request, scatto_id: int):
             miglioria is None and scatto["larghezza"] and scatto["altezza"]
             and (not miglioria_misura.e_gia_grande(
                 scatto["larghezza"], scatto["altezza"],
-                archivio.impostazione(miglioria_misura.CHIAVE))
+                miglioria_misura.dall_archivio(archivio, scatto["genere"]))
                  or _solo_a_120(archivio, scatto, principale))),
     })
 

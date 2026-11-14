@@ -239,7 +239,7 @@ class ProvaVeloce:
     def _tetto(self) -> str:
         from officina.miglioria import misura
 
-        return misura.tetto_vero(self.archivio.impostazione(misura.CHIAVE))
+        return misura.dall_archivio(self.archivio)
 
     def _piano_foto(self, foto: list[dict], misura: str) -> None:
         piano = {"foto": [dict(uno) for uno in foto],

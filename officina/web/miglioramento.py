@@ -128,12 +128,13 @@ def misura_a_parole(larghezza, altezza) -> str:
     return f"{int(larghezza)} × {int(altezza)}"
 
 
-def _dopo(riga: sqlite3.Row, tetto: str | None = None) -> tuple[int, int] | None:
+def _dopo(riga: sqlite3.Row, tetto: str | dict | None = None) -> tuple[int, int] | None:
     if riga["larghezza_dopo"] and riga["altezza_dopo"]:
         return int(riga["larghezza_dopo"]), int(riga["altezza_dopo"])
     if riga["larghezza_prima"] and riga["altezza_prima"]:
         return misura.di_arrivo(riga["larghezza_prima"], riga["altezza_prima"],
-                                pari=riga["genere"] == "video", tetto=tetto)
+                                pari=riga["genere"] == "video",
+                                tetto=misura.di_genere(tetto, riga["genere"]))
     return None
 
 
@@ -154,7 +155,7 @@ def motori_a_parole(testo: str | None) -> str:
     return " · ".join(parte for parte in (detto, fluido) if parte)
 
 
-def a_parole(riga: sqlite3.Row, tetto: str | None = None) -> dict:
+def a_parole(riga: sqlite3.Row, tetto: str | dict | None = None) -> dict:
     from officina.miglioria import lavoro
 
     dopo = _dopo(riga, tetto)
@@ -174,7 +175,7 @@ def a_parole(riga: sqlite3.Row, tetto: str | None = None) -> dict:
 
 
 def righe(connessione: sqlite3.Connection, stato: str, quante: int) -> list[dict]:
-    tetto = misura.letto(connessione)
+    tetto = misura.letti(connessione)
     return [a_parole(riga, tetto) for riga in tutti(
         connessione, UNA_RIGA + "WHERE m.stato = ? ORDER BY m.id LIMIT ?",
         stato, quante)]
@@ -479,7 +480,7 @@ def da_votare(archivio) -> dict | None:
     dopo = (misura_a_parole(riga["larghezza_dopo"], riga["altezza_dopo"])
             or misura_a_parole(*misura.di_arrivo(
                 riga["larghezza_prima"] or 1, riga["altezza_prima"] or 1,
-                tetto=archivio.impostazione(misura.CHIAVE))))
+                tetto=misura.dall_archivio(archivio))))
     return {
         "id": riga["miglioria_id"],
         "scatto_id": riga["scatto_id"],

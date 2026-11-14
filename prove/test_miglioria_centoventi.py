@@ -348,6 +348,7 @@ def test_in_coda_il_video_gia_grande_entra_solo_per_i_120(importato, fps120, fps
     from prove.test_miglioria import _scatto_di
 
     importato.imposta("miglioria_misura", "fhd")
+    importato.imposta("miglioria_misura_video", "fhd")
     with importato.scrittura() as connessione:
         connessione.execute("UPDATE file_media SET larghezza = 1920, altezza = 1080, fps = ? "
                             "WHERE genere = 'video'", (fps,))

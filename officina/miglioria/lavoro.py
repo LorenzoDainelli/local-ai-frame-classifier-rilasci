@@ -518,7 +518,7 @@ class Miglioratore:
         if len(righe) > 1:
             self._guarda_il_120()
         stima_di = ordine.stimatore(
-            connessione, _versione_di_seedvr2(), tetto=self._tetto(),
+            connessione, _versione_di_seedvr2(), tetto=self._tetti(),
             intensita=int(self.archivio.impostazione("intensita_scheda") or 100))
 
         def stima(riga):
@@ -718,7 +718,7 @@ class Miglioratore:
         genere = file["genere"]
         if genere == "video":
             self._guarda_il_120()
-        tetto = self._tetto()
+        tetto = self._tetto(genere)
         serve = int(letto.stat().st_size * quanto_puo_crescere(tetto)) + MARGINE_DI_SPAZIO
         if genere == "video":
             serve += spazio_dei_pezzi(letto, tetto)
@@ -914,7 +914,7 @@ class Miglioratore:
             "motori": scelti,
             "persone": chi,
             "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
-            "misura": self._tetto(),
+            "misura": self._tetto(genere),
             **({"fps120": self._fps120()} if genere == "video" and self._fps120() else {}),
             **({"veloce": accese} if (accese := self._veloce()) else {}),
             "percorsi": percorsi_della_stanza(),
@@ -936,10 +936,15 @@ class Miglioratore:
 
         self._motore_120 = centoventi.motore_da_usare(self.archivio)
 
-    def _tetto(self) -> str:
+    def _tetto(self, genere: str | None = None) -> str:
         from officina.miglioria import misura
 
-        return misura.tetto_vero(self.archivio.impostazione(misura.CHIAVE))
+        return misura.dall_archivio(self.archivio, genere)
+
+    def _tetti(self) -> dict[str, str]:
+        from officina.miglioria import misura
+
+        return {misura.IMMAGINE: self._tetto(), misura.VIDEO: self._tetto(misura.VIDEO)}
 
     def _prevedi(self, partito: float, file, lavoro: dict, in_sfida: bool) -> None:
         dati = previsione.fattori(

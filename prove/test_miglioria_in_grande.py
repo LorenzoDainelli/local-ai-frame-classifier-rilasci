@@ -116,6 +116,7 @@ def test_ritoccate_e_in_sfida_restano_e_si_elencano(importato, come, perche):
 
 def test_in_fhd_non_si_rifa_niente(importato):
     importato.imposta("miglioria_misura", "fhd")
+    importato.imposta("miglioria_misura_video", "fhd")
     riga = _di_prima(importato, _rifiutata(importato, NUOVA))
     assert _arriva_la_beta(importato).rimesse == 0
     assert _di(importato, riga["id"])["stato"] == coda.RIFIUTATA

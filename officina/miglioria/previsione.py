@@ -34,7 +34,7 @@ _imparato: dict = {}
 
 def fattori(file, *, volti: int = 0, dall_archivio: bool = False, sfida: bool = False,
             disco: bool = False, a_freddo: bool = False, intensita: int = 100,
-            tetto: str | None = None, lucidflux: bool = False,
+            tetto: str | dict | None = None, lucidflux: bool = False,
             fluido: str | None = None) -> dict:
     larghezza, altezza = int(file["larghezza"] or 0), int(file["altezza"] or 0)
     fuori: dict = {"genere": file["genere"], "formato": str(file["formato"] or "").lower(),
@@ -46,7 +46,8 @@ def fattori(file, *, volti: int = 0, dall_archivio: bool = False, sfida: bool = 
                    "durata": None, "fotogrammi": None, "fluidi": 0, "fluido": ""}
     if larghezza > 0 and altezza > 0:
         fuori["megapixel"] = larghezza * altezza / 1e6
-        nuova_larghezza, nuova_altezza = misura.di_arrivo(larghezza, altezza, tetto=tetto)
+        nuova_larghezza, nuova_altezza = misura.di_arrivo(
+            larghezza, altezza, tetto=misura.di_genere(tetto, file["genere"]))
         fuori["arrivo"] = nuova_larghezza * nuova_altezza / 1e6
     durata = int(file["durata_ms"] or 0) / 1000
     if file["genere"] == "video" and durata > 0:
@@ -321,7 +322,7 @@ def quanto_manca(connessione: sqlite3.Connection, versione: str, *, ora: float,
                  intensita: int = 100, lucidflux: bool = False,
                  fluido: str | None = None) -> dict | None:
     righe = _in_coda(connessione)
-    tetto = misura.letto(connessione)
+    tetto = misura.letti(connessione)
     if not righe:
         return None
     lavoro = lavoro or {}
