@@ -39,3 +39,9 @@ jobs:
         run: python strumenti/cerca_ritratti.py --cartella "$RUNNER_TEMP/ritratti" --uscita ritratti.json
       - if: always()
         run: cat ritratti.json
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ritratti
+          path: ritratti.json
+          if-no-files-found: ignore

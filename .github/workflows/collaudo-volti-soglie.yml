@@ -39,3 +39,9 @@ jobs:
         run: python strumenti/collaudo_volti_soglie.py --cartella "$RUNNER_TEMP/volti" --uscita collaudo-volti-soglie.json
       - if: always()
         run: cat collaudo-volti-soglie.json
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: collaudo-volti-soglie
+          path: collaudo-volti-soglie.json
+          if-no-files-found: ignore
