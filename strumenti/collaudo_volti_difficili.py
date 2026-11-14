@@ -181,23 +181,12 @@ def stampa(titolo: str, tabella: dict[str, dict]) -> None:
               + f" | falsi ogni 100 foto {falsi:.1f} | {tempo:.2f} s a foto", flush=True)
 
 
-def prendi_tutto(casa: Path):
+def prendi_il_rilevatore() -> Path | None:
     from huggingface_hub import HfApi, hf_hub_download
 
     from officina.volti.rilevatore import FILE_RILEVATORE
     from officina.volti.scaricamento import DA_DOVE, SHA256_RILEVATORE, revisione_di
 
-    nomi = [f.rfilename for f in HfApi().repo_info(
-        DEPOSITO, repo_type="dataset", revision=REVISIONE).siblings]
-    parti = [n for n in nomi if n.endswith("wider_face_split.zip")][0]
-    etichette = Path(hf_hub_download(DEPOSITO, parti, repo_type="dataset",
-                                     revision=REVISIONE))
-    print("ETICHETTE", parti, sha(etichette), flush=True)
-    archivio = Path(hf_hub_download(DEPOSITO, FOTO_ZIP, repo_type="dataset",
-                                    revision=REVISIONE))
-    if sha(archivio) != FOTO_SHA256:
-        print("le foto di WIDER FACE non sono quelle previste", flush=True)
-        return None, None, None
     pesi = None
     fonte = DA_DOVE[FILE_RILEVATORE]
     for deposito in (fonte.repo, *fonte.riserve):
@@ -220,6 +209,26 @@ def prendi_tutto(casa: Path):
             break
     if pesi is None:
         print("il rilevatore non è quello del programma", flush=True)
+        return None
+    return pesi
+
+
+def prendi_tutto(casa: Path):
+    from huggingface_hub import HfApi, hf_hub_download
+
+    nomi = [f.rfilename for f in HfApi().repo_info(
+        DEPOSITO, repo_type="dataset", revision=REVISIONE).siblings]
+    parti = [n for n in nomi if n.endswith("wider_face_split.zip")][0]
+    etichette = Path(hf_hub_download(DEPOSITO, parti, repo_type="dataset",
+                                     revision=REVISIONE))
+    print("ETICHETTE", parti, sha(etichette), flush=True)
+    archivio = Path(hf_hub_download(DEPOSITO, FOTO_ZIP, repo_type="dataset",
+                                    revision=REVISIONE))
+    if sha(archivio) != FOTO_SHA256:
+        print("le foto di WIDER FACE non sono quelle previste", flush=True)
+        return None, None, None
+    pesi = prendi_il_rilevatore()
+    if pesi is None:
         return None, None, None
 
     with zipfile.ZipFile(etichette) as z:

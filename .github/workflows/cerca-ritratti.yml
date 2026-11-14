@@ -1,0 +1,41 @@
+name: Cerca i ritratti per la gara pelle vera
+
+on:
+  push:
+    branches: [prove]
+    paths:
+      - "strumenti/cerca_ritratti.py"
+      - ".github/workflows/cerca-ritratti.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cerca-ritratti-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  volti:
+    name: Ritratti di qualità da Wikimedia Commons
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Le librerie
+        run: |
+          grep -iE "^(pillow|pillow-heif|numpy|onnxruntime|opencv-python-headless|huggingface-hub)==" requirements*.txt | cut -d: -f2 | cut -d" " -f1 | sort -u > volti-librerie.txt
+          cat volti-librerie.txt
+          python -m pip install -r volti-librerie.txt
+      - name: Il collaudo
+        run: python strumenti/cerca_ritratti.py --cartella "$RUNNER_TEMP/ritratti" --uscita ritratti.json
+      - if: always()
+        run: cat ritratti.json
