@@ -63,15 +63,48 @@ def prendi_i_pesi(cartella: Path) -> dict:
     return fuori
 
 
+FABBRICHE = ("arange", "zeros", "ones", "empty", "full", "tensor", "as_tensor", "linspace",
+             "rand", "randn", "randint", "eye", "zeros_like", "ones_like", "empty_like",
+             "full_like", "randn_like", "rand_like")
+
+
+def _senza_scheda(valore):
+    if isinstance(valore, str) and valore.startswith("cuda"):
+        return "cpu"
+    if getattr(valore, "type", None) == "cuda":
+        return "cpu"
+    return valore
+
+
 def _sul_processore(torch) -> None:
-    vero = torch.zeros
+    for nome in FABBRICHE:
+        vera = getattr(torch, nome)
 
-    def zeri(*parti, **scelte):
-        if str(scelte.get("device", "")).startswith("cuda"):
-            scelte["device"] = "cpu"
-        return vero(*parti, **scelte)
+        def fabbrica(*parti, _vera=vera, **scelte):
+            if "device" in scelte:
+                scelte["device"] = _senza_scheda(scelte["device"])
+            return _vera(*parti, **scelte)
 
-    torch.zeros = zeri
+        setattr(torch, nome, fabbrica)
+    sposta = torch.Tensor.to
+
+    def verso(tensore, *parti, **scelte):
+        parti = tuple(_senza_scheda(p) for p in parti)
+        if "device" in scelte:
+            scelte["device"] = _senza_scheda(scelte["device"])
+        return sposta(tensore, *parti, **scelte)
+
+    torch.Tensor.to = verso
+    sposta_modulo = torch.nn.Module.to
+
+    def modulo_verso(modulo, *parti, **scelte):
+        parti = tuple(_senza_scheda(p) for p in parti)
+        if "device" in scelte:
+            scelte["device"] = _senza_scheda(scelte["device"])
+        return sposta_modulo(modulo, *parti, **scelte)
+
+    torch.nn.Module.to = modulo_verso
+    torch.nn.Module.cuda = lambda modulo, *parti, **scelte: modulo
     torch.Tensor.cuda = lambda tensore, *parti, **scelte: tensore
     torch.Tensor.pin_memory = lambda tensore, *parti, **scelte: tensore
 
