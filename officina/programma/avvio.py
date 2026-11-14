@@ -29,6 +29,25 @@ ATTESA_DELLA_FINESTRA_VUOTA = 5.0
 GB = 2 ** 30
 
 
+def cartella_dei_download() -> Path:
+    if sys.platform == "win32":
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders",
+            ) as chiave:
+                letta = Path(winreg.QueryValueEx(
+                    chiave, "{374DE290-123F-4565-9164-39C4925E467B}")[0])
+            if letta.is_dir():
+                return letta
+        except OSError:
+            pass
+    scaricati = Path.home() / "Downloads"
+    return scaricati if scaricati.is_dir() else Path.home()
+
+
 def permetti_gli_scaricamenti(webview) -> None:
     impostazioni = getattr(webview, "settings", None)
     if isinstance(impostazioni, dict):
@@ -128,6 +147,9 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         self._lucchetto_sicuro = threading.Lock()
         self.sicuro = None
         self.ponte = None
+        from officina.programma.salvataggi import Salvataggi
+
+        self.salvataggi = Salvataggi(self.scegli_dove_salvare)
         from officina import modelli_in_casa
         from officina.web import lavori
 
@@ -936,6 +958,19 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         cartella_iniziale = da_dove if da_dove and os.path.isdir(da_dove) else str(Path.home())
         scelta = finestra.create_file_dialog(self.webview.FileDialog.FOLDER,
                                              directory=cartella_iniziale)
+        if not scelta:
+            return None
+        return scelta[0] if isinstance(scelta, (list, tuple)) else str(scelta)
+
+    def scegli_dove_salvare(self, nome: str) -> str | None:
+        finestra = self.principale
+        if finestra is None:
+            return None
+        scaricati = cartella_dei_download()
+        scelta = finestra.create_file_dialog(
+            self.webview.FileDialog.SAVE, directory=str(scaricati), save_filename=nome,
+            file_types=(f"{Path(nome).suffix.lstrip('.').upper() or 'File'} "
+                        f"(*{Path(nome).suffix or '.*'})",))
         if not scelta:
             return None
         return scelta[0] if isinstance(scelta, (list, tuple)) else str(scelta)

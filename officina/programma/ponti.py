@@ -117,6 +117,22 @@ class PontePrincipale:
     def rifiuta_aggiornamento(self) -> dict:
         return self._programma.fai(self._programma.rifiuta_aggiornamento)
 
+    def salva_apri(self, nome: str) -> dict:
+        return self._programma.fai(lambda: self._programma.salvataggi.apri(nome),
+                                   solo_lettura=True)
+
+    def salva_pezzo(self, chi: str, testo: str) -> dict:
+        return self._programma.fai(lambda: self._programma.salvataggi.pezzo(chi, testo),
+                                   solo_lettura=True)
+
+    def salva_fine(self, chi: str, quanti: int) -> dict:
+        return self._programma.fai(lambda: self._programma.salvataggi.chiudi(chi, quanti),
+                                   solo_lettura=True)
+
+    def salva_lascia(self, chi: str) -> dict:
+        return self._programma.fai(lambda: self._programma.salvataggi.lascia(chi),
+                                   solo_lettura=True)
+
     def stato_del_programma(self) -> dict:
         return self._programma.fai(self._programma.stato_del_programma, solo_lettura=True)
 

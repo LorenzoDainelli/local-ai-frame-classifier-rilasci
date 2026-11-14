@@ -338,17 +338,66 @@ $("st-svuota").addEventListener("click", async () => {
     if (!confirm("Cancello tutte le foto della stampa veloce?")) return;
     try { stato = await chiedi("/api/stampa/svuota", { method: "POST" }); disegna(); } catch (e) { alert(e.message); }
 });
-$("st-scarica").addEventListener("click", (e) => {
+const PEZZO_ZIP = 4 * 1024 * 1024;
+let salvo_lo_zip = false;
+function scrivi_zip(testo) { $("st-zip").textContent = testo; $("st-zip").hidden = false; }
+function nel_programma() {
+    const api = window.pywebview && window.pywebview.api;
+    return Boolean(api && api.salva_apri && api.salva_pezzo && api.salva_fine);
+}
+function in_base64(pezzo) {
+    return new Promise((bene, male) => {
+        const lettore = new FileReader();
+        lettore.onload = () => bene(String(lettore.result).split(",", 2)[1] || "");
+        lettore.onerror = () => male(new Error("Non riesco a leggere lo zip."));
+        lettore.readAsDataURL(pezzo);
+    });
+}
+function mega(byte) { return (byte / 1048576).toLocaleString("it-IT", { maximumFractionDigits: 1 }); }
+async function salva_lo_zip(quante) {
+    const api = window.pywebview.api;
+    scrivi_zip(dove_va_lo_zip(quante, true));
+    const risposta = await fetch("/api/stampa/scarica", { cache: "no-store" });
+    if (!risposta.ok) {
+        let detto = "Lo zip non si è preparato.";
+        try { detto = (await risposta.json()).messaggio || detto; } catch (_) {}
+        throw new Error(detto);
+    }
+    const zip = await risposta.blob();
+    scrivi_zip(`Lo zip è pronto (${mega(zip.size)} MB): scegli dove salvarlo nella finestra «Salva con nome».`);
+    const aperto = await api.salva_apri("foto-da-stampare.zip");
+    if (aperto.errore) throw new Error(aperto.errore);
+    if (aperto.annullato) { scrivi_zip("Non l'ho salvato: hai chiuso la finestra «Salva con nome»."); return; }
+    try {
+        for (let da = 0; da < zip.size; da += PEZZO_ZIP) {
+            const scritto = await api.salva_pezzo(aperto.chi, await in_base64(zip.slice(da, da + PEZZO_ZIP)));
+            if (scritto.errore) throw new Error(scritto.errore);
+            scrivi_zip(`Salvo lo zip… ${Math.floor(100 * Math.min(zip.size, da + PEZZO_ZIP) / zip.size)}%`);
+        }
+        const finito = await api.salva_fine(aperto.chi, zip.size);
+        if (finito.errore) throw new Error(finito.errore);
+        scrivi_zip(`Fatto: ${quante === 1 ? "1 foto salvata" : quante + " foto salvate"} in ${finito.dove} (${mega(zip.size)} MB). Ho controllato che lo zip si apra bene.`);
+    } catch (guasto) {
+        try { await api.salva_lascia(aperto.chi); } catch (_) {}
+        throw guasto;
+    }
+}
+$("st-scarica").addEventListener("click", async (e) => {
     if (!stato.approvate) { e.preventDefault(); alert("Prima scegli almeno una foto."); return; }
-    $("st-zip").textContent = dove_va_lo_zip(stato.approvate, Boolean(window.pywebview));
-    $("st-zip").hidden = false;
+    if (!nel_programma()) { scrivi_zip(dove_va_lo_zip(stato.approvate, false)); return; }
+    e.preventDefault();
+    if (salvo_lo_zip) return;
+    salvo_lo_zip = true;
+    try { await salva_lo_zip(stato.approvate); }
+    catch (guasto) { scrivi_zip(`Lo zip non è stato salvato: ${guasto.message}`); }
+    finally { salvo_lo_zip = false; }
 });
 function dove_va_lo_zip(quante, nel_programma) {
     const foto = quante === 1 ? "1 foto" : `${quante} foto`;
     const dove = nel_programma
-        ? "Si apre la finestra «Salva con nome», che parte dalla cartella Download di questo computer: scegli tu dove metterlo."
+        ? "Quando è pronto si apre la finestra «Salva con nome», che parte dalla cartella Download di questo computer: scegli tu dove metterlo."
         : "Il browser lo mette nella cartella Download di questo computer.";
-    return `Preparo foto-da-stampare.zip con ${foto}: ci può volere qualche secondo. ${dove} Se usi il portatile collegato, il file va sul portatile, non sul fisso.`;
+    return `Preparo foto-da-stampare.zip con ${foto}: con tante foto grandi ci può volere qualche minuto. ${dove} Se usi il portatile collegato, il file va sul portatile, non sul fisso.`;
 }
 window.dove_va_lo_zip = dove_va_lo_zip;
 window.addEventListener("resize", () => { if (aperta !== null) adatta(); });

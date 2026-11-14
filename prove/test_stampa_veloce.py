@@ -1,4 +1,5 @@
 import io
+import os
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -330,3 +331,150 @@ def test_la_finestra_permette_gli_scaricamenti():
     avvio.permetti_gli_scaricamenti(finta)
     assert finta.settings["ALLOW_DOWNLOADS"] is True
     avvio.permetti_gli_scaricamenti(SimpleNamespace())
+
+
+def _uno_zip(cartella: Path, quanti: int = 3) -> bytes:
+    fuori = io.BytesIO()
+    with zipfile.ZipFile(fuori, "w", zipfile.ZIP_STORED) as dentro:
+        for numero in range(quanti):
+            dentro.writestr(f"foto-{numero}.jpg", os.urandom(300_000 + numero))
+    return fuori.getvalue()
+
+
+def test_lo_zip_si_salva_dal_programma_a_pezzi(archivio, monkeypatch, tmp_path):
+    import json
+
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from officina.programma.salvataggi import Salvataggi
+    from officina.web.server import app
+    from officina.web.strade import stampa as strada
+
+    monkeypatch.setattr(strada, "_stampa", None)
+    cliente = TestClient(app, client=("127.0.0.1", 51000))
+    html = cliente.get("/stampa").text
+    zip_vero = _uno_zip(tmp_path, 20)
+    salvataggi = Salvataggi(lambda nome: str(tmp_path / "scelto" / nome))
+    (tmp_path / "scelto").mkdir()
+    stato = {"foto": [], "approvate": 3, "righe": [], "sta_lavorando": False}
+
+    def rispondi(rotta):
+        indirizzo = rotta.request.url
+        if indirizzo.endswith("/api/stampa/scarica"):
+            rotta.fulfill(status=200, content_type="application/zip", body=zip_vero)
+        elif indirizzo.endswith("/api/stampa"):
+            rotta.fulfill(status=200, content_type="application/json",
+                          body=json.dumps(stato))
+        elif indirizzo.endswith("/stampa"):
+            rotta.fulfill(status=200, content_type="text/html", body=html)
+        else:
+            rotta.fulfill(status=200, content_type="application/json", body="{}")
+
+    with sync_api.sync_playwright() as p:
+        pronto = Path("/opt/pw-browsers/chromium")
+        try:
+            browser = p.chromium.launch(
+                executable_path=str(pronto) if pronto.exists() else None)
+        except sync_api.Error as guasto:
+            pytest.skip(f"niente browser: {guasto}")
+        pagina = browser.new_page(base_url="http://127.0.0.1:51000")
+        pagina.route("**/*", rispondi)
+        pagina.expose_function("py_apri", lambda nome: salvataggi.apri(nome))
+        pagina.expose_function("py_pezzo", lambda chi, testo: salvataggi.pezzo(chi, testo))
+        pagina.expose_function("py_fine", lambda chi, quanti: salvataggi.chiudi(chi, quanti))
+        pagina.expose_function("py_lascia", lambda chi: salvataggi.lascia(chi))
+        pagina.add_init_script("""
+            window.pezzi = 0;
+            window.pywebview = {api: {
+                salva_apri: (n) => window.py_apri(n),
+                salva_pezzo: (c, t) => { window.pezzi += 1; return window.py_pezzo(c, t); },
+                salva_fine: (c, q) => window.py_fine(c, q),
+                salva_lascia: (c) => window.py_lascia(c)}};
+        """)
+        pagina.goto("/stampa")
+        pagina.wait_for_function(
+            "document.getElementById('st-approvate').textContent === '3'")
+        pagina.click("#st-scarica")
+        pagina.wait_for_function(
+            "document.getElementById('st-zip').textContent.startsWith('Fatto')",
+            timeout=20000)
+        detto = pagina.locator("#st-zip").text_content()
+        pezzi = pagina.evaluate("window.pezzi")
+        assert pagina.url.endswith("/stampa")
+        browser.close()
+    salvato = tmp_path / "scelto" / "foto-da-stampare.zip"
+    assert salvato.read_bytes() == zip_vero
+    assert not list((tmp_path / "scelto").glob("*.officina-parziale"))
+    assert pezzi >= 1 and "3 foto salvate" in detto and "si apra bene" in detto
+    strada.la_stampa(archivio).ferma()
+
+
+def test_salvataggi_annullato_e_niente_resta(tmp_path):
+    from officina.programma.salvataggi import Salvataggi
+
+    assert Salvataggi(lambda _nome: None).apri("a.zip") == {"annullato": True}
+
+
+def test_salvataggi_misura_sbagliata_non_lascia_niente(tmp_path):
+    import base64
+
+    from officina.errori import ErroreOfficina
+    from officina.programma.salvataggi import Salvataggi
+
+    salvataggi = Salvataggi(lambda nome: str(tmp_path / nome))
+    zip_vero = _uno_zip(tmp_path, 1)
+    aperto = salvataggi.apri("a.zip")
+    salvataggi.pezzo(aperto["chi"], base64.b64encode(zip_vero[:1000]).decode())
+    with pytest.raises(ErroreOfficina):
+        salvataggi.chiudi(aperto["chi"], len(zip_vero))
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_salvataggi_zip_rotto_non_si_salva(tmp_path):
+    import base64
+
+    from officina.errori import ErroreOfficina
+    from officina.programma.salvataggi import Salvataggi
+
+    salvataggi = Salvataggi(lambda nome: str(tmp_path / nome))
+    rotto = bytearray(_uno_zip(tmp_path, 2))
+    rotto[200] ^= 0xFF
+    aperto = salvataggi.apri("a.zip")
+    salvataggi.pezzo(aperto["chi"], base64.b64encode(bytes(rotto)).decode())
+    with pytest.raises(ErroreOfficina):
+        salvataggi.chiudi(aperto["chi"], len(rotto))
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_salvataggi_lascia_toglie_il_parziale(tmp_path):
+    import base64
+
+    from officina.programma.salvataggi import Salvataggi
+
+    salvataggi = Salvataggi(lambda nome: str(tmp_path / nome))
+    aperto = salvataggi.apri("a.zip")
+    salvataggi.pezzo(aperto["chi"], base64.b64encode(b"abc").decode())
+    salvataggi.lascia(aperto["chi"])
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_salvataggi_aggiunge_l_estensione(tmp_path):
+    import base64
+
+    from officina.programma.salvataggi import Salvataggi
+
+    zip_vero = _uno_zip(tmp_path, 1)
+    salvataggi = Salvataggi(lambda _nome: str(tmp_path / "mie"))
+    aperto = salvataggi.apri("foto-da-stampare.zip")
+    salvataggi.pezzo(aperto["chi"], base64.b64encode(zip_vero).decode())
+    fatto = salvataggi.chiudi(aperto["chi"], len(zip_vero))
+    assert Path(fatto["dove"]).name == "mie.zip"
+    assert (tmp_path / "mie.zip").read_bytes() == zip_vero
+
+
+def test_il_ponte_ha_il_salvataggio():
+    from officina.programma.ponti import PontePrincipale
+
+    for nome in ("salva_apri", "salva_pezzo", "salva_fine", "salva_lascia"):
+        assert callable(getattr(PontePrincipale, nome))
