@@ -530,3 +530,54 @@ def test_la_ram_poca_porta_le_misure_del_momento():
     assert dati["serve"] == 19 * 2**30 and dati["libera"] == 16 * 2**30
     assert dati["ram_totale"] > dati["ram_della_stanza"] > 0
     assert 0 < dati["ram_in_uso"] < dati["ram_totale"]
+
+
+def test_scheda_finita_riprova_una_volta_e_poi_dice_dove(tmp_path, monkeypatch):
+    giri = []
+
+    def lancia(lavoro, al_passo):
+        giri.append(1)
+        return {"guasto": "memoria_scheda_finita", "parte": "precarico, scheda-x, giro 2"}
+
+    prova, _ = _prova(tmp_path, monkeypatch, lancia=lancia)
+    with pytest.raises(Exception) as errore:
+        prova._corri()
+    assert len(giri) == 2
+    assert "memoria della scheda video" in str(errore.value)
+    assert "precarico, scheda-x, giro 2" in str(errore.value)
+    assert prova.turno.chi is None
+
+
+def test_scheda_finita_una_volta_sola_e_la_prova_continua(tmp_path, monkeypatch):
+    giri = []
+
+    def lancia(lavoro, al_passo):
+        giri.append(1)
+        if len(giri) == 1:
+            return {"guasto": "memoria_scheda_finita", "parte": "video a, giro 1 (vecchio)"}
+        return {"fatto": {"passata": False, "clip": []}}
+
+    prova, _ = _prova(tmp_path, monkeypatch, lancia=lancia)
+    prova._gira()
+    assert len(giri) == 2
+    assert prova.lavoro.guasto == ""
+    assert any("video a, giro 1" in riga for riga in prova.lavoro.righe)
+
+
+def test_la_stanza_dice_in_che_pezzo_si_e_fermata(tmp_path, monkeypatch):
+    from officina.miglioria import motori, rete
+    from officina.miglioria import prova_veloce_stanza as stanza
+
+    monkeypatch.setattr(rete, "chiudi", lambda: None)
+    monkeypatch.setattr(motori, "_accesi", None)
+
+    def rotta(*_a, **_k):
+        corsa.sei_a("video b, giro 3 (nuovo)")
+        raise RuntimeError("CUDA out of memory. Tried to allocate 2.00 GiB")
+
+    monkeypatch.setattr(corsa, "corri", rotta)
+    messaggi = []
+    stanza.un_lavoro({"clip": [], "cartella": str(tmp_path), "lavoro": {}},
+                     messaggi.append)
+    assert messaggi[-1]["guasto"] == "memoria_scheda_finita"
+    assert messaggi[-1]["parte"] == "video b, giro 3 (nuovo)"

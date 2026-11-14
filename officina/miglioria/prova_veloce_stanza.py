@@ -50,7 +50,7 @@ def un_lavoro(lavoro: dict, manda) -> int:
                             volti=lavoro.get("volti") or [],
                             quali_volti=lavoro.get("quali_volti") or [])
     except ErroreOfficina as errore:
-        messaggio = {"guasto": errore.codice}
+        messaggio = {"guasto": errore.codice, "parte": corsa.dove_sei()}
         from officina.miglioria.seedvr2_blocchi import RamPoca
 
         if isinstance(errore, RamPoca):
@@ -60,7 +60,7 @@ def un_lavoro(lavoro: dict, manda) -> int:
         manda(messaggio)
         return 1
     except MemoryError:
-        manda({"guasto": "memoria_finita"})
+        manda({"guasto": "memoria_finita", "parte": corsa.dove_sei()})
         return 1
     except Exception as errore:
         from officina import registro as diario
@@ -73,6 +73,7 @@ def un_lavoro(lavoro: dict, manda) -> int:
         dove = diario.dove_si_e_rotto(errore)
         manda({**{chiave: str(valore) for chiave, valore in dove.items()},
                "tipo": str(dove.get("guasto", "")), "guasto": codice,
+               "parte": corsa.dove_sei(),
                "passi": diario.passi_del_guasto(errore)})
         return 1
     finally:

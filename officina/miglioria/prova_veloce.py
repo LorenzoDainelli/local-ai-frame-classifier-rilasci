@@ -372,8 +372,9 @@ class ProvaVeloce:
     def _nella_stanza(self, clip: list[dict], scelti: dict, foto: list[dict] | None = None,
                       tetto: str | None = None, volti: list[dict] | None = None,
                       quali_volti: list[str] | None = None) -> dict:
-        from officina.miglioria.lavoro import (RAM_POCA, _byte, a_parole, in_giga,
-                                               percorsi_della_stanza, ram_a_parole)
+        from officina.miglioria.lavoro import (RAM_POCA, SCHEDA_FINITA, _byte, a_parole,
+                                               in_giga, percorsi_della_stanza,
+                                               ram_a_parole)
 
         self._prendi_la_scheda()
         try:
@@ -403,6 +404,12 @@ class ProvaVeloce:
                 self.lavoro.di(ram_a_parole(esito))
                 lavoro["lavoro"]["opzioni"]["disco"] = True
                 esito = self._lancia(lavoro, self.lavoro.a_che_punto_a_pezzi)
+            if esito.get("guasto") == SCHEDA_FINITA and not self._fermati.is_set():
+                registro.avviso("prova_veloce.scheda_finita_riprovo")
+                dove = esito.get("parte") or "pezzo non detto"
+                self.lavoro.di(f"la scheda video ha finito la memoria ({dove}): la svuoto "
+                               "e riprendo da lì")
+                esito = self._lancia(lavoro, self.lavoro.a_che_punto_a_pezzi)
         finally:
             self._processo = None
             self.turno.lascia(self.lavoro)
@@ -411,6 +418,8 @@ class ProvaVeloce:
             raise Fermata()
         if "guasto" in esito:
             detto = str(esito.get("spiegazione") or "") or a_parole(str(esito["guasto"]))
+            if esito.get("parte"):
+                detto = f"{detto or 'si è fermata per un guasto'} (in: {esito['parte']})"
             guasto = ErroreOfficina(detto or "La prova si è fermata per un guasto.",
                                     codice=str(esito["guasto"]))
             guasto.dettaglio = str(esito.get("passi") or "")

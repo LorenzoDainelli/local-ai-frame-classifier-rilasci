@@ -45,6 +45,17 @@ ORIGINALE_OPZIONI = {
 }
 
 
+QUI = {"parte": ""}
+
+
+def sei_a(parte: str) -> None:
+    QUI["parte"] = parte
+
+
+def dove_sei() -> str:
+    return QUI["parte"]
+
+
 def impronta(file: Path) -> str:
     calcolo = hashlib.sha256()
     with open(file, "rb") as dentro:
@@ -801,12 +812,14 @@ def _il_precarico(cartella: Path, clip: list[dict], lavoro: dict, foto: list[dic
         suo = _lavoro_del_video(lavoro, cartella_clip / ORIGINALE, uno)
         for numero, modo in ordine(volte):
             if (nome, numero) not in gia:
+                sei_a(f"precarico, {nome}, giro {numero + 1} ({modo})")
                 _segna(dove, fai(cartella_clip, uno, suo, numero, modo))
             avanti()
     for uno in foto:
         suo = lavoro_della_foto(cartella, uno, lavoro_foto)
         for numero in range(1, 2 * volte, 2):
             if (f"foto-{uno['nome']}", numero) not in gia:
+                sei_a(f"precarico, foto {uno['nome']}, giro {numero + 1}")
                 _segna(dove, foto_col_precarico(cartella, uno, suo, numero))
             avanti()
 
@@ -848,25 +861,32 @@ def corri(cartella: Path, clip: list[dict], lavoro: dict,
             fai_l_originale(originale, _quadri_da(uno["file"]), uno["codec"],
                             len(uno["file"]))
         suo = _lavoro_del_video(lavoro, originale, uno)
+        sei_a(f"video {uno['nome']}, la scheda")
         la_scheda(cartella_clip, suo, None, freno, racconta)
         avanti()
         if uno.get("fps120"):
+            sei_a(f"video {uno['nome']}, i 120 FPS ({uno['fps120']})")
             registra(cartella_clip, uno, suo, None, freno)
             avanti()
         gia = {giro["giro"] for giro in giri_fatti(cartella)
                if giro.get("clip") == uno["nome"]}
         for numero, modo in ordine(volte):
             if numero not in gia:
+                sei_a(f"video {uno['nome']}, giro {numero + 1} ({modo})")
                 _segna(cartella, un_giro(cartella_clip, uno, suo, numero, modo))
             avanti()
     if foto:
+        sei_a("foto con LucidFlux")
         _le_foto(cartella, foto, lavoro_foto or lavoro, volte, avanti, freno)
     _il_precarico(cartella, clip, lavoro, foto, lavoro_foto or lavoro, volte, avanti)
     if volti and quali_volti:
+        sei_a("volti con " + " e ".join(quali_volti))
         _i_volti(cartella, volti, lavoro_foto or lavoro, quali_volti, volte, avanti)
     if per_i_fili:
+        sei_a("impronte con più fili")
         _i_fili(cartella, per_i_fili, volte, avanti)
     if due:
+        sei_a("lavori dietro")
         _il_dietro(cartella, due, lavoro, volte, avanti)
     dati = esito(clip, giri_fatti(cartella), volte, foto, giri_fatti(cartella / FOTO),
                  giri_del_precarico(cartella), volti, giri_fatti(cartella / VOLTI),
@@ -876,7 +896,7 @@ def corri(cartella: Path, clip: list[dict], lavoro: dict,
     return dati
 
 
-__all__ = ["DIETRO", "ESITO",
+__all__ = ["DIETRO", "QUI", "dove_sei", "sei_a", "ESITO",
            "FISSI", "FOTO", "GIRI", "MEZZI", "MISURA", "NUOVO", "ORIGINALE", "PIANO",
            "PRECARICO", "con_ldf", "con_lo_scambio", "fluido_col_precarico",
            "foto_col_precarico", "giri_del_precarico", "impronta_dei_quadri",

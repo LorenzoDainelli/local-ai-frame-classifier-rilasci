@@ -729,3 +729,36 @@ def test_la_coda_fa_prima_i_lavori_corti_e_poi_gli_altri(importato, monkeypatch)
         assert miglioratore._prossima(connessione)["genere_del_file"] == "video"
     _gira(importato)
     assert len(_riga(importato, coda.DA_RIVEDERE)) == 2
+
+
+def test_la_stanza_che_non_si_chiude_dopo_il_guasto_non_blocca(monkeypatch):
+    codice = ("import json, sys, time\n"
+              "sys.stdout.write(json.dumps({'fatti': 1, 'totale': 4}) + '\\n')\n"
+              "sys.stdout.write(json.dumps({'guasto': 'memoria_scheda_finita'}) + '\\n')\n"
+              "sys.stdout.flush()\n"
+              "time.sleep(600)\n")
+    monkeypatch.setattr(lavoro, "apri_la_stanza", lambda modulo: subprocess.Popen(
+        [sys.executable, "-c", codice], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        text=True))
+    monkeypatch.setattr(lavoro, "ATTESA_DI_CHIUSURA", 1.0)
+    monkeypatch.setattr(lavoro.aspetta_che_si_chiuda, "__defaults__", (1.0,))
+    passi = []
+    processi = []
+    esito = lavoro.lancia_la_stanza({}, lambda fatti, totale: passi.append(fatti),
+                                    processi.append)
+    assert esito["guasto"] == lavoro.SCHEDA_FINITA
+    assert passi == [1]
+    assert processi[0].poll() is not None
+
+
+def test_la_stanza_che_non_si_chiude_dopo_il_fatto_non_blocca(monkeypatch):
+    codice = ("import json, sys, time\n"
+              "sys.stdout.write(json.dumps({'fatto': {'ok': 1}}) + '\\n')\n"
+              "sys.stdout.flush()\n"
+              "time.sleep(600)\n")
+    monkeypatch.setattr(lavoro, "apri_la_stanza", lambda modulo: subprocess.Popen(
+        [sys.executable, "-c", codice], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        text=True))
+    monkeypatch.setattr(lavoro.aspetta_che_si_chiuda, "__defaults__", (1.0,))
+    esito = lavoro.lancia_la_stanza({}, lambda fatti, totale: None, lambda p: None)
+    assert esito == {"fatto": {"ok": 1}}

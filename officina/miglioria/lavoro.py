@@ -36,6 +36,7 @@ DA_RIPRENDERE = ({"memoria_scheda_finita", "memoria_finita", "stanza_caduta"} | 
                  | RAM_POCHE)
 SCHEDA_FINITA = "memoria_scheda_finita"
 DI_FILA_SENZA_MEMORIA = 3
+ATTESA_DI_CHIUSURA = 60.0
 SCHEDA_OCCUPATA = ("La scheda video ha finito la memoria su tre file di fila: di solito vuol dire "
                    "che la sta usando qualcos'altro, per esempio l'intelligenza artificiale. "
                    "Il miglioramento si è fermato e quei file sono tornati in coda: fallo "
@@ -283,7 +284,8 @@ def apri_la_stanza(modulo: str) -> subprocess.Popen:
 
 
 def ascolta_la_stanza(processo: subprocess.Popen, allo_sportello,
-                      al_passo: Callable[[int, int], None]) -> tuple:
+                      al_passo: Callable[[int, int], None],
+                      fine_al_fatto: bool = False) -> tuple:
     esito: dict | None = None
     rotto = None
     for riga in processo.stdout:
@@ -309,6 +311,8 @@ def ascolta_la_stanza(processo: subprocess.Popen, allo_sportello,
             al_passo(int(messaggio["fatti"]), int(messaggio.get("totale") or 0))
         elif "fatto" in messaggio or "guasto" in messaggio:
             esito = messaggio
+            if "guasto" in messaggio or fine_al_fatto:
+                return esito, rotto, None
         elif messaggio.get("accesa") is True and esito is not None and "fatto" in esito:
             return esito, rotto, messaggio
     return esito, rotto, None
@@ -338,13 +342,24 @@ def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
             allo_sportello = _sportello(processo)
         else:
             processo.stdin.close()
-        esito, rotto, _accesa = ascolta_la_stanza(processo, allo_sportello, al_passo)
+        esito, rotto, _accesa = ascolta_la_stanza(processo, allo_sportello, al_passo,
+                                                  fine_al_fatto=True)
     finally:
         if allo_sportello is not None:
             allo_sportello.chiudi()
         _chiudi(processo.stdin)
-        codice_di_uscita = processo.wait()
+        codice_di_uscita = aspetta_che_si_chiuda(processo)
     return esito_della_stanza(esito, rotto, codice_di_uscita)
+
+
+def aspetta_che_si_chiuda(processo: subprocess.Popen,
+                          secondi: float = ATTESA_DI_CHIUSURA) -> int:
+    try:
+        return processo.wait(timeout=secondi)
+    except subprocess.TimeoutExpired:
+        registro.avviso("miglioria.stanza_non_si_chiude", secondi=int(secondi))
+        processo.kill()
+        return processo.wait()
 
 
 def _lancia_il_giro(lavoro: dict, al_passo: Callable[[int, int], None],
