@@ -149,7 +149,8 @@
                     <li class="dc-con-foto dc-con-due">
                         {% if riga.file_id %}<img class="dc-fotina" src="/miniatura/{{ riga.file_id }}" alt="" loading="lazy">{% else %}<span class="dc-fotina"></span>{% endif %}
                         <span class="dc-nome-e-dove"><span class="nome-di-file">{{ riga.nome }}</span>
-                        <span class="dc-perche">{{ riga.perche }}</span></span>
+                        <span class="dc-perche">{{ riga.perche }}</span>
+                        {% if riga.inizio_di %}<span class="dc-perche" data-inizio-di="{{ riga.inizio_di }}">È solo l'inizio di uno scatto sano già in galleria: si è copiato a metà. Puoi toglierlo dal programma da «Perché mancano». <a href="/scatto/{{ riga.inizio_di }}">Guarda quello sano</a></span>{% endif %}</span>
                         <a class="tasto-comando nudo piccolo" href="/scatto/{{ riga.scatto_id }}">Guardalo</a>
                         <form method="post" action="/elenchi/togli-messo-da-parte/{{ riga.scatto_id }}">
                             <button class="tasto-comando nudo piccolo" type="submit" title="Lo toglie dall'archivio senza cancellare il file dal disco: lo ritrovi in Galleria, filtro «fuori archivio»">Togli dall'archivio</button>

@@ -42,6 +42,9 @@
                 </form>
                 {% endif %}
                 <a class="tasto-comando nudo piccolo" href="/scatto/{{ v.scatto }}">Guardalo</a>
+                {% if v.inizio_di and v.prova.esito != "si_apre" %}
+                <span class="dc-perche pm-inizio" data-pm-inizio="{{ v.inizio_di }}">È solo l'inizio di uno scatto sano già in galleria: si è copiato a metà. Puoi toglierlo dal programma con il tasto qui sotto. <a href="/scatto/{{ v.inizio_di }}">Guarda quello sano</a></span>
+                {% endif %}
                 {% if v.sul_disco and v.prova.esito != "si_apre" %}
                 {% set g = giusti.get(v.scatto) %}
                 <span class="pm-giusto" data-pm-giusto="{{ v.scatto }}">

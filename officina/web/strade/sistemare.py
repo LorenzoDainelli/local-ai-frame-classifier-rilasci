@@ -10,7 +10,7 @@ from officina.archivio import accesso
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina, perche_saltato
 from officina.doppioni import decisioni as doppioni_decisioni
-from officina.modello import file_media, salute_file, scatti, segnalazioni
+from officina.modello import file_media, inizi, salute_file, scatti, segnalazioni
 from officina.modello.scatti import Filtro
 
 from officina.web.strade import base, comune, importazione
@@ -81,11 +81,13 @@ def da_sistemare(richiesta: Request):
         schermate_voci = [
             {"id": v["id"], "file_id": v.get("file_id"), "nome": v.get("nome") or ""}
             for v in scatti.pagina(connessione, Filtro(solo_schermate=True), 0, 300)]
-        for voce in messi_da_parte:
+        for numero, voce in enumerate(messi_da_parte):
             riga = uno(connessione,
                        "SELECT id FROM file_media WHERE scatto_id = ? AND ruolo = 'principale' "
                        "LIMIT 1", voce["scatto_id"])
             voce["file_id"] = riga["id"] if riga else None
+            voce["inizio_di"] = (inizi.sano_che_lo_contiene(connessione, voce["scatto_id"])
+                                 if numero < 50 else None)
         conti = {
             "senza_data": scatti.conta(connessione, Filtro(senza_data=True)),
             "data_indovinata": scatti.conta(connessione, Filtro(data_indovinata=True)),

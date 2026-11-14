@@ -10,7 +10,7 @@ from officina.immagini import fotogrammi as estrattore
 from officina.immagini import lettura
 from officina.importazione import gruppi
 from officina.impronte.motore import _il_file_da_guardare
-from officina.modello import file_media, segnalazioni
+from officina.modello import file_media, inizi, segnalazioni
 from officina.sicuro import dall_archivio
 
 QUANTI = 60
@@ -93,6 +93,7 @@ def _uno(connessione, scatto_id: int, mancano: list[str], nel_gruppo: str) -> di
         "nel_gruppo": dentro,
         "lavori": lavori,
         "doppione": _doppione(connessione, file_id),
+        "inizio_di": inizi.sano_che_lo_contiene(connessione, scatto_id),
     }
 
 
