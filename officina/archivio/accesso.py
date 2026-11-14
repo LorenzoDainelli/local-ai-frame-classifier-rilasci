@@ -12,7 +12,7 @@ from typing import Iterator
 
 from officina import registro
 from officina import forziere
-from officina.archivio import copie, database, migrazioni
+from officina.archivio import apertura, copie, database, migrazioni
 from officina.errori import ArchivioChiuso, ErroreOfficina
 from officina.impostazioni import (PREDEFINITE, REALE, SOLO_QUESTA_MACCHINA,
                                    Posizione, chiave_locale, posizione,
@@ -97,13 +97,27 @@ class Archivio:
         if not self.di_prova:
             self._dopo_una_chiusura_di_colpo(nuovo)
 
-        if not nuovo and migrazioni.da_applicare(self._connessione):
-            copie.fai_copia(self._connessione, self.dove, "prima_aggiornamento")
+        apertura.comincia()
+        try:
+            if not nuovo and migrazioni.da_applicare(self._connessione):
+                apertura.passo("Copia di sicurezza prima dell'aggiornamento")
+                _, riusata = copie.copia_prima_dell_aggiornamento(
+                    self._connessione, self.dove)
+                if riusata:
+                    apertura.rinomina("Copia di sicurezza: uguale a quella di chiusura, "
+                                      "tenuta da parte")
 
-        cambiato = bool(migrazioni.aggiorna(self._connessione))
-        if not nuovo and (cambiato
-                          or database.non_ha_mai_guardato(self._connessione)):
-            database.impara_com_e_fatto(self._connessione)
+            def al_passo(migrazione, numero, quante):
+                apertura.passo(f"Aggiornamento {numero} di {quante}: "
+                               f"{migrazione.descrizione}")
+
+            cambiato = bool(migrazioni.aggiorna(self._connessione, al_passo))
+            if not nuovo and (cambiato
+                              or database.non_ha_mai_guardato(self._connessione)):
+                apertura.passo("Statistiche del database")
+                database.impara_com_e_fatto(self._connessione)
+        finally:
+            apertura.finisci()
         if nuovo:
             self._scrivi_valori_di_partenza()
         self._cambiato_all_apertura = nuovo or cambiato

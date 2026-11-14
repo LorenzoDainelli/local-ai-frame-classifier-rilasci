@@ -1645,6 +1645,28 @@ def _versione_80(connessione: sqlite3.Connection) -> None:
         "WHERE chiave = 'miglioria_misura'")
 
 
+PER_ORDINARE = ("coalesce({0}istante_utc, "
+                "strftime('%Y-%m-%dT%H:%M:%SZ', {0}data_locale, 'utc'))")
+
+
+def _versione_81(connessione: sqlite3.Connection) -> None:
+    connessione.execute("ALTER TABLE scatti ADD COLUMN per_ordinare TEXT")
+    connessione.execute(f"UPDATE scatti SET per_ordinare = {PER_ORDINARE.format('')}")
+    indici = connessione.execute(
+        "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'scatti' "
+        "AND sql LIKE '%istante_utc%' AND name != 'scatti_per_istante'").fetchall()
+    for nome, testo in indici:
+        connessione.execute(f"DROP INDEX {nome}")
+        connessione.execute(testo.replace("istante_utc", "per_ordinare"))
+    for nome, quando in (("scatti_per_ordinare_nuovo", "AFTER INSERT ON scatti"),
+                         ("scatti_per_ordinare_cambiato",
+                          "AFTER UPDATE OF istante_utc, data_locale ON scatti")):
+        connessione.execute(
+            f"CREATE TRIGGER {nome} {quando} BEGIN "
+            f"UPDATE scatti SET per_ordinare = {PER_ORDINARE.format('NEW.')} "
+            "WHERE id = NEW.id; END")
+
+
 def _versione_79(connessione: sqlite3.Connection) -> None:
     connessione.execute(
         "ALTER TABLE parti_del_corpo ADD COLUMN nodo_id INTEGER "
@@ -1856,6 +1878,8 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_79),
     Migrazione(80, "la misura di arrivo dei video si sceglie a parte, uguale a prima",
                _versione_80),
+    Migrazione(81, "gli scatti con la data ma senza fuso orario vanno al loro posto in "
+                   "galleria, non in fondo", _versione_81),
 ]
 
 
@@ -1868,7 +1892,9 @@ def da_applicare(connessione: sqlite3.Connection) -> list[Migrazione]:
     return [m for m in MIGRAZIONI if m.versione > corrente]
 
 
-def aggiorna(connessione: sqlite3.Connection) -> list[Migrazione]:
+def aggiorna(connessione: sqlite3.Connection,
+             al_passo: Callable[[Migrazione, int, int], None] | None = None
+             ) -> list[Migrazione]:
     if versione_attuale(connessione) > VERSIONE_SCHEMA:
         raise DatabaseIncoerente(
             "Questo archivio è stato scritto da una versione più nuova del "
@@ -1881,7 +1907,9 @@ def aggiorna(connessione: sqlite3.Connection) -> list[Migrazione]:
         return []
 
     applicate = []
-    for migrazione in mancanti:
+    for numero, migrazione in enumerate(mancanti, 1):
+        if al_passo is not None:
+            al_passo(migrazione, numero, len(mancanti))
         registro.evento("archivio.migrazione_inizio", versione=migrazione.versione)
         connessione.execute("BEGIN")
         try:

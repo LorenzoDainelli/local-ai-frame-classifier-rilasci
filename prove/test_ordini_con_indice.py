@@ -143,7 +143,8 @@ def test_chi_viene_prima_e_chi_dopo_non_riordina_niente(
 def test_anche_sul_primo_sull_ultimo_e_su_uno_senza_data(archivio_grande):
     with archivio_grande.lettura() as connessione:
         senza = connessione.execute(
-            "SELECT id FROM scatti WHERE istante_utc IS NULL ORDER BY id LIMIT 1").fetchone()
+            "SELECT id FROM scatti WHERE per_ordinare IS NULL "
+            "ORDER BY id LIMIT 1").fetchone()
     for quale in (1, QUANTE, senza["id"]):
         colpevoli = chi_riordina(
             archivio_grande, lambda c: scatti.vicini(c, Filtro(), quale))
@@ -160,7 +161,7 @@ def test_la_coda_dei_modelli_non_riordina_niente(archivio_grande):
 def test_la_prova_saprebbe_accorgersene(archivio_grande):
     colpevoli = chi_riordina(archivio_grande, lambda c: c.execute(
         "SELECT s.id FROM scatti s WHERE s.fuori_archivio = 0 "
-        "ORDER BY s.istante_utc IS NULL, s.istante_utc DESC, s.id DESC "
+        "ORDER BY s.per_ordinare IS NULL, s.per_ordinare DESC, s.id DESC "
         "LIMIT 120").fetchall())
     assert colpevoli
 
@@ -215,7 +216,7 @@ def test_ogni_indice_parziale_sa_anche_dire_in_che_ordine(archivio_grande):
             continue
         colonne = [c.strip() for c in
                    testo[testo.index("(") + 1:testo.index(")")].split(",")]
-        if colonne[:1] == ["fuori_archivio"] and colonne[1:2] != ["istante_utc"]:
+        if colonne[:1] == ["fuori_archivio"] and colonne[1:2] != ["per_ordinare"]:
             monchi.append(f"{riga['name']}: ({', '.join(colonne)})")
     assert not monchi, (
         "questi indici parziali sanno dire quali, ma non in che ordine, e la "

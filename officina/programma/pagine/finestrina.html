@@ -57,6 +57,8 @@ body { overflow: hidden; user-select: none; }
     .passi li.adesso { transform: none; }
     .spunta path { stroke-dashoffset: 0; }
 }
+.tempi-apertura { display: grid; gap: 6px; justify-items: center; max-width: 520px; text-align: center; }
+.tempi-apertura ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 .scena-apertura { width: 280px; min-height: 110px; display: grid; place-items: center; }
 .passo p { margin: 0; max-width: 60ch; }
 .scelte { display: flex; flex-direction: column; gap: var(--s2); margin-top: auto; }
@@ -383,6 +385,11 @@ input.campo { user-select: text; }
         </ol>
         <div class="linea" data-linea><span></span></div>
         <p class="nota" data-campo="detto-apertura"></p>
+        <div class="tempi-apertura" data-tempi-apertura hidden>
+            <p class="nota" data-tempo-adesso></p>
+            <ul class="nota" data-tempi-fatti></ul>
+            <button class="tasto-comando" type="button" data-copia-tempi><span>Copia per Claude</span></button>
+        </div>
     </section>
 
     <section class="passo" data-passo="guasto" hidden>
@@ -642,12 +649,47 @@ input.campo { user-select: text; }
         if (window.FotinaScena && scena) {
             try { window.FotinaScena.monta(scena, "C", { fermaA: 7.6 }).gioca(0, 7.6); } catch (e) {}
         }
+        var tempi = sezione.querySelector("[data-tempi-apertura]");
+        var ultimi = null;
+        function a_parole(secondi) {
+            var tondi = Math.round(secondi);
+            return tondi < 60 ? tondi + " s" : Math.floor(tondi / 60) + " min " + (tondi % 60) + " s";
+        }
+        function testo_dei_tempi(d) {
+            return d.fatti.map(function (f) { return f.cosa + ": " + a_parole(f.secondi); })
+                .concat(d.cosa ? [d.cosa + ": " + a_parole(d.secondi) + " (in corso)"] : []);
+        }
+        sezione.querySelector("[data-copia-tempi]").addEventListener("click", function () {
+            if (!ultimi) { return; }
+            var testo = "Apertura dell'archivio\n" + testo_dei_tempi(ultimi).join("\n");
+            try { navigator.clipboard.writeText(testo); } catch (e) {}
+        });
+        function mostra_i_tempi(d) {
+            ultimi = d;
+            var lungo = d.secondi >= 3 || d.fatti.some(function (f) { return f.secondi >= 3; });
+            if (!lungo) { return; }
+            tempi.hidden = false;
+            tempi.querySelector("[data-tempo-adesso]").textContent =
+                d.cosa ? d.cosa + "… " + a_parole(d.secondi) : "";
+            var lista = tempi.querySelector("[data-tempi-fatti]");
+            lista.replaceChildren();
+            d.fatti.forEach(function (f) {
+                var riga = document.createElement("li");
+                riga.textContent = "✓ " + f.cosa + " — " + a_parole(f.secondi);
+                lista.appendChild(riga);
+            });
+        }
         sorveglia_apertura = setInterval(function () {
+            if (api() && api().dettaglio_dell_apertura) {
+                api().dettaglio_dell_apertura().then(mostra_i_tempi);
+            }
             if (!api() || !api().come_va_l_apertura) { return; }
             api().come_va_l_apertura().then(function (quanti) {
                 righe.forEach(function (r, i) { r.className = i < quanti ? "fatto" : (i === quanti ? "adesso" : ""); });
                 linea.style.width = Math.max(6, Math.round(quanti * 100 / righe.length)) + "%";
-                if (quanti >= righe.length) { setTimeout(function () { sezione.classList.add("esce"); }, 450); }
+                if (quanti >= righe.length) {
+                    setTimeout(function () { sezione.classList.add("esce"); }, tempi.hidden ? 450 : 6000);
+                }
             });
         }, 250);
     }

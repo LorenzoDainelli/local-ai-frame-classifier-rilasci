@@ -199,7 +199,7 @@ def numeri(connessione, scelta: Selezione,
     righe = tutti(
         connessione,
         f"SELECT s.id FROM scatti s WHERE {dove} "
-        "ORDER BY s.istante_utc DESC, s.id DESC",
+        "ORDER BY s.per_ordinare DESC, s.id DESC",
         *parametri)
     return [r["id"] for r in righe]
 

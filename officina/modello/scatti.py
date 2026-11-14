@@ -217,12 +217,12 @@ def _ordinamento(filtro: Filtro) -> str:
         primi = filtro.simili_ids[:IN_ORDINE]
         quando = " ".join(f"WHEN {int(x)} THEN {i}" for i, x in enumerate(primi))
         return (f"CASE s.id {quando} ELSE {len(primi)} END ASC, "
-                "s.istante_utc DESC, s.id ASC")
+                "s.per_ordinare DESC, s.id ASC")
     if filtro.ordine == "data_su":
-        return "s.istante_utc ASC NULLS LAST, s.id ASC"
+        return "s.per_ordinare ASC NULLS LAST, s.id ASC"
     if filtro.ordine == "casuale":
         return "(s.id * 2654435761) % 4294967296, s.id"
-    return "s.istante_utc DESC, s.id DESC"
+    return "s.per_ordinare DESC, s.id DESC"
 
 
 def conta(connessione: sqlite3.Connection, filtro: Filtro) -> int:
@@ -392,7 +392,7 @@ def _tutti_in_ordine(connessione: sqlite3.Connection, filtro: Filtro) -> list[in
     return [riga["id"] for riga in tutti(
         connessione,
         f"SELECT s.id FROM scatti s WHERE {dove} "
-        "ORDER BY s.istante_utc ASC NULLS LAST, s.id",
+        "ORDER BY s.per_ordinare ASC NULLS LAST, s.id",
         *parametri,
     )]
 
@@ -403,7 +403,7 @@ def per_id(connessione: sqlite3.Connection, scatto_id: int) -> sqlite3.Row | Non
 
 def vicini(connessione: sqlite3.Connection, filtro: Filtro, scatto_id: int) -> dict:
     mio = uno(connessione,
-              "SELECT id, istante_utc FROM scatti WHERE id = ?", scatto_id)
+              "SELECT id, per_ordinare FROM scatti WHERE id = ?", scatto_id)
     if mio is None:
         return {"prima": None, "dopo": None, "posizione": None, "totale": 0}
 
@@ -449,31 +449,31 @@ def _chi_confina(connessione: sqlite3.Connection, dove: str, parametri: list,
                    *parametri, *in_piu)
         return riga["id"] if riga else None
 
-    senza_data = mio["istante_utc"] is None
+    senza_data = mio["per_ordinare"] is None
     fine = "DESC" if giu else "ASC"
     inizio = "ASC" if giu else "DESC"
 
     if senza_data:
-        indietro = cerca(f"s.istante_utc IS NULL AND s.id {'>' if giu else '<'} ? "
+        indietro = cerca(f"s.per_ordinare IS NULL AND s.id {'>' if giu else '<'} ? "
                          f"ORDER BY s.id {inizio}", mio["id"])
         if indietro is None:
-            indietro = cerca(f"s.istante_utc IS NOT NULL "
-                             f"ORDER BY s.istante_utc {inizio}, s.id {inizio}")
-        avanti = cerca(f"s.istante_utc IS NULL AND s.id {'<' if giu else '>'} ? "
+            indietro = cerca(f"s.per_ordinare IS NOT NULL "
+                             f"ORDER BY s.per_ordinare {inizio}, s.id {inizio}")
+        avanti = cerca(f"s.per_ordinare IS NULL AND s.id {'<' if giu else '>'} ? "
                        f"ORDER BY s.id {fine}", mio["id"])
         return {"prima": indietro, "dopo": avanti}
 
     su, giu_segno = (">", "<") if giu else ("<", ">")
     indietro = cerca(
-        f"s.istante_utc IS NOT NULL AND (s.istante_utc, s.id) {su} (?, ?) "
-        f"ORDER BY s.istante_utc {inizio}, s.id {inizio}",
-        mio["istante_utc"], mio["id"])
+        f"s.per_ordinare IS NOT NULL AND (s.per_ordinare, s.id) {su} (?, ?) "
+        f"ORDER BY s.per_ordinare {inizio}, s.id {inizio}",
+        mio["per_ordinare"], mio["id"])
     avanti = cerca(
-        f"s.istante_utc IS NOT NULL AND (s.istante_utc, s.id) {giu_segno} (?, ?) "
-        f"ORDER BY s.istante_utc {fine}, s.id {fine}",
-        mio["istante_utc"], mio["id"])
+        f"s.per_ordinare IS NOT NULL AND (s.per_ordinare, s.id) {giu_segno} (?, ?) "
+        f"ORDER BY s.per_ordinare {fine}, s.id {fine}",
+        mio["per_ordinare"], mio["id"])
     if avanti is None:
-        avanti = cerca(f"s.istante_utc IS NULL ORDER BY s.id {fine}")
+        avanti = cerca(f"s.per_ordinare IS NULL ORDER BY s.id {fine}")
     return {"prima": indietro, "dopo": avanti}
 
 
@@ -486,12 +486,12 @@ def _quanti_vengono_prima(connessione: sqlite3.Connection, dove: str,
         return riga["q"] if riga else 0
 
     su = ">" if giu else "<"
-    if mio["istante_utc"] is None:
-        return (quanti("s.istante_utc IS NOT NULL")
-                + quanti(f"s.istante_utc IS NULL AND s.id {su} ?", mio["id"]))
+    if mio["per_ordinare"] is None:
+        return (quanti("s.per_ordinare IS NOT NULL")
+                + quanti(f"s.per_ordinare IS NULL AND s.id {su} ?", mio["id"]))
     return quanti(
-        f"s.istante_utc IS NOT NULL AND (s.istante_utc, s.id) {su} (?, ?)",
-        mio["istante_utc"], mio["id"])
+        f"s.per_ordinare IS NOT NULL AND (s.per_ordinare, s.id) {su} (?, ?)",
+        mio["per_ordinare"], mio["id"])
 
 
 def per_giorno(connessione: sqlite3.Connection, filtro: Filtro) -> list[dict]:

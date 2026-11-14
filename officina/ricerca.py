@@ -320,7 +320,7 @@ def _dai_nomi(connessione: sqlite3.Connection, resti: str, quanti: int,
         FROM percorsi p JOIN file_media f ON f.id = p.file_id
         JOIN scatti s ON s.id = f.scatto_id
         WHERE f.scatto_id IS NOT NULL AND s.fuori_archivio = 0 AND {condizioni}
-        GROUP BY f.scatto_id ORDER BY max(s.istante_utc) DESC LIMIT ?
+        GROUP BY f.scatto_id ORDER BY max(s.per_ordinare) DESC LIMIT ?
         """,
         *parametri, quanti,
     )
@@ -370,7 +370,7 @@ def _coi_nomi(connessione: sqlite3.Connection, condizione: str, parametri: list,
         FROM percorsi p JOIN file_media f ON f.id = p.file_id
         JOIN scatti s ON s.id = f.scatto_id
         WHERE f.scatto_id IS NOT NULL AND s.fuori_archivio = 0 AND {condizione}
-        GROUP BY f.scatto_id ORDER BY max(s.istante_utc) DESC
+        GROUP BY f.scatto_id ORDER BY max(s.per_ordinare) DESC
         """ + ("" if quanti == TUTTI else " LIMIT ?"),
         *parametri, *([] if quanti == TUTTI else [quanti]),
     )

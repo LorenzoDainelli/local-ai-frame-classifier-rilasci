@@ -126,6 +126,66 @@ def fai_copia(connessione: sqlite3.Connection, posizione: Posizione,
     return Copia(destinazione, istante, motivo_letto, peso, nato_il)
 
 
+INTESTAZIONE_CHE_CAMBIA = ((24, 28), (40, 44), (92, 96))
+PEZZO_DA_CONFRONTARE = 8 * 1024 * 1024
+
+
+def _uguali_tranne_i_contatori(uno: Path, due: Path) -> bool:
+    if uno.stat().st_size != due.stat().st_size:
+        return False
+    with open(uno, "rb") as a, open(due, "rb") as b:
+        primo = True
+        while True:
+            pezzo_a = a.read(PEZZO_DA_CONFRONTARE)
+            pezzo_b = b.read(PEZZO_DA_CONFRONTARE)
+            if primo:
+                pezzo_a, pezzo_b = bytearray(pezzo_a), bytearray(pezzo_b)
+                for inizio, fine in INTESTAZIONE_CHE_CAMBIA:
+                    pezzo_a[inizio:fine] = pezzo_b[inizio:fine] = bytes(fine - inizio)
+                primo = False
+            if pezzo_a != pezzo_b:
+                return False
+            if not pezzo_a:
+                return True
+
+
+def _ultima_uguale(posizione: Posizione) -> Copia | None:
+    diario = Path(str(posizione.database) + "-wal")
+    if diario.exists() and diario.stat().st_size > 0:
+        return None
+    tutte = elenco(posizione)
+    if not tutte or tutte[0].nome == prenotata(posizione):
+        return None
+    ultima = tutte[0]
+    try:
+        if not _uguali_tranne_i_contatori(posizione.database, ultima.percorso):
+            return None
+    except OSError:
+        return None
+    return ultima
+
+
+def copia_prima_dell_aggiornamento(connessione: sqlite3.Connection,
+                                   posizione: Posizione) -> tuple[Copia, bool]:
+    motivo = "prima_aggiornamento"
+    uguale = _ultima_uguale(posizione)
+    if uguale is None:
+        return fai_copia(connessione, posizione, motivo), False
+    if uguale.motivo == motivo:
+        registro.evento("copie.riusata", byte=uguale.byte)
+        return uguale, True
+    nome = f"{uguale.istante}.{motivo}.sqlite"
+    contatore = 1
+    while (posizione.copie / nome).exists():
+        nome = f"{uguale.istante}-{contatore}.{motivo}.sqlite"
+        contatore += 1
+    nuovo = posizione.copie / nome
+    os.replace(uguale.percorso, nuovo)
+    os.utime(nuovo, (uguale.nato_il, uguale.nato_il))
+    registro.evento("copie.riusata", byte=uguale.byte)
+    return Copia(nuovo, uguale.istante, motivo, uguale.byte, uguale.nato_il), True
+
+
 def elenco(posizione: Posizione) -> list[Copia]:
     trovate = []
     for percorso in posizione.copie.glob("*.sqlite"):

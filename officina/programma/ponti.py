@@ -38,6 +38,11 @@ class PonteFinestrina:
     def come_va_l_apertura(self) -> int:
         return int(getattr(self._programma, "fase_apertura", 0))
 
+    def dettaglio_dell_apertura(self) -> dict:
+        from officina.archivio import apertura
+
+        return apertura.come_va()
+
     def ferma_i_motori(self) -> dict:
         return self._programma.fai(self._programma.ferma_i_motori)
 

@@ -10,6 +10,14 @@
     ],
     "semplice": [
       [
+        "controlla",
+        "Primo avvio dopo una beta più veloce: se l'archivio non è cambiato dalla chiusura, la copia già controllata vale come copia prima dell'aggiornamento. Mentre apre vedi a che punto è, con i secondi e «Copia per Claude»."
+      ],
+      [
+        "controlla",
+        "Galleria in ordine: le foto con la data ma senza fuso orario (WhatsApp, molte macchine, data dal nome) non finiscono più in fondo, vanno al loro giorno. Il fuso mancante si stima con l'ora del computer."
+      ],
+      [
         "cerca",
         "Cerca a parole: se scrivi il nome intero di un file esce solo quel file, senza scatti estranei. Ed è più veloce: legge solo la parte del modello che capisce le parole e la tiene pronta."
       ],

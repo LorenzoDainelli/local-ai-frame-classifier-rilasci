@@ -11,10 +11,10 @@ def test_chiudere_mentre_si_apre_aspetta_la_fine_dell_apertura(tmp_path, monkeyp
         via = threading.Event()
         vero = migrazioni.aggiorna
 
-        def lento(connessione):
+        def lento(connessione, *resto):
             dentro.set()
             via.wait(5)
-            return vero(connessione)
+            return vero(connessione, *resto)
 
         m.setattr(migrazioni, "aggiorna", lento)
         errori = []
@@ -47,10 +47,10 @@ def test_scrivere_mentre_si_apre_aspetta_la_fine_degli_aggiornamenti(tmp_path, m
         via = threading.Event()
         vero = migrazioni.aggiorna
 
-        def lento(connessione):
+        def lento(connessione, *resto):
             dentro.set()
             via.wait(5)
-            return vero(connessione)
+            return vero(connessione, *resto)
 
         m.setattr(migrazioni, "aggiorna", lento)
         filo = threading.Thread(target=archivio.apri)
