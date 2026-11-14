@@ -143,7 +143,73 @@ def _senza_memoria(percorso: Path) -> FileNonLeggibile:
     )
 
 
+VERDE_VUOTO = (0, 136, 0)
+LATO_DEL_RIQUADRO = 256
+
+
+def _taglio(percorso) -> FileNonLeggibile:
+    return FileNonLeggibile(
+        f"«{percorso.name}» si interrompe a metà: mancano dei pezzi della foto, "
+        "che si vedrebbero come riquadri verdi. Il file è stato copiato male.",
+        codice="heif_tagliato",
+    )
+
+
+def _pezzi_mancanti(percorso) -> tuple[int, int] | None:
+    from officina.miglioria.heif_scatole import pezzi_mancanti
+
+    if isinstance(percorso, DallArchivio):
+        try:
+            sorgente = percorso.apri()
+        except Exception:
+            return None
+        try:
+            return pezzi_mancanti(sorgente)
+        finally:
+            sorgente.close()
+    return pezzi_mancanti(percorso)
+
+
+def heif_tagliato(immagine: Image.Image, percorso) -> bool:
+    if immagine.format not in ("HEIF", "AVIF"):
+        return False
+    esito = _pezzi_mancanti(percorso)
+    return bool(esito and esito[0])
+
+
+def riquadri_verdi(immagine: Image.Image) -> bool:
+    import numpy as np
+
+    if immagine.format not in ("HEIF", "AVIF") or immagine.mode not in ("RGB", "RGBA"):
+        return False
+    lato = LATO_DEL_RIQUADRO
+    larga, alta = immagine.size
+    if larga < lato or alta < lato:
+        return False
+    punti = np.asarray(immagine)
+    rosso, verde, blu = (punti[..., i].astype(np.int16) for i in range(3))
+    vuoto = ((rosso <= 3) & (blu <= 3) & (np.abs(verde - VERDE_VUOTO[1]) <= 5))
+    righe, colonne = alta // lato, larga // lato
+    blocchi = vuoto[: righe * lato, : colonne * lato].reshape(righe, lato, colonne, lato)
+    return bool(blocchi.all(axis=(1, 3)).any())
+
+
+def _controlla_heif(immagine: Image.Image, percorso) -> None:
+    if immagine.format not in ("HEIF", "AVIF"):
+        return
+    if heif_tagliato(immagine, percorso):
+        registro.avviso("immagine_tagliata", formato=immagine.format.lower())
+        raise _taglio(percorso)
+
+
+def _dopo_il_carico(immagine: Image.Image, percorso) -> None:
+    if riquadri_verdi(immagine):
+        registro.avviso("immagine_con_riquadri_verdi", formato=immagine.format.lower())
+        raise _taglio(percorso)
+
+
 def controlla_fino_in_fondo(immagine: Image.Image, percorso: Path) -> None:
+    _controlla_heif(immagine, percorso)
     try:
         if immagine.format in FORMATI_A_BLOCCHI:
             immagine.draft("RGB", (1, 1))
@@ -157,6 +223,7 @@ def controlla_fino_in_fondo(immagine: Image.Image, percorso: Path) -> None:
         raise _senza_memoria(percorso) from errore
     except Exception as errore:
         raise _rovinato(percorso, errore) from errore
+    _dopo_il_carico(immagine, percorso)
 
 
 def senza_exif_pesante(immagine: Image.Image) -> bool:
@@ -175,16 +242,26 @@ def _a_turno_se_grande(immagine: Image.Image) -> Iterator[None]:
 
 def _carica(immagine: Image.Image, percorso: Path, lato_massimo: int | None) -> Image.Image:
     try:
+        _controlla_heif(immagine, percorso)
+    except BaseException:
+        immagine.close()
+        raise
+    try:
         if lato_massimo and immagine.format in FORMATI_A_BLOCCHI:
             immagine.draft("RGB", (lato_massimo * 2, lato_massimo * 2))
         immagine.load()
-        return immagine
     except MemoryError as errore:
         immagine.close()
         raise _senza_memoria(percorso) from errore
     except Exception as errore:
         immagine.close()
         raise _rovinato(percorso, errore) from errore
+    try:
+        _dopo_il_carico(immagine, percorso)
+    except BaseException:
+        immagine.close()
+        raise
+    return immagine
 
 
 def apri(percorso: Path, lato_massimo: int | None = None) -> Image.Image:

@@ -70,6 +70,8 @@ PERCHE_SALTATO = {
               "OneDrive, con il contenuto ancora nella nuvola"),
     "estensione_bugiarda": "il file non è del tipo che dice di essere",
     "corrotto": "il file è danneggiato",
+    "heif_tagliato": ("la foto si interrompe a metà: mancano dei pezzi, che si vedono "
+                      "come riquadri verdi"),
     "sicuro_chiuso": ("il file non è sul disco e l'Archivio sicuro è chiuso: lo rifaccio "
                       "quando lo apri"),
     "persa_nell_archivio": ("nell'Archivio sicuro il file è rovinato: lo riprovo quando "

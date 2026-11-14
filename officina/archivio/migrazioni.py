@@ -1747,6 +1747,18 @@ def _versione_82(connessione: sqlite3.Connection) -> None:
         """)
 
 
+def _versione_83(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE heif_controllati (
+            file_id         INTEGER PRIMARY KEY REFERENCES file_media(id) ON DELETE CASCADE,
+            impronta        TEXT NOT NULL,
+            mancano         INTEGER,
+            controllato_il  TEXT NOT NULL
+        )
+        """)
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1897,6 +1909,8 @@ MIGRAZIONI: list[Migrazione] = [
                    "galleria, non in fondo", _versione_81),
     Migrazione(82, "gli scatti rotti tolti dal programma non tornano alla lettura delle "
                    "cartelle", _versione_82),
+    Migrazione(83, "le foto HEIF tagliate a metà, con i riquadri verdi, si cercano "
+                   "una volta sola", _versione_83),
 ]
 
 

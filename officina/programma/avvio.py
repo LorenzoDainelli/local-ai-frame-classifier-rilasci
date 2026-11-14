@@ -1012,12 +1012,13 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
 
     def _salute_in_sottofondo(self) -> None:
         from officina.archivio import accesso
-        from officina.modello import salute_file
+        from officina.modello import heif_tagliati, salute_file
         while not self._sta_chiudendo and not self._spento:
             time.sleep(OGNI_QUANTO_LA_SALUTE)
             if self._disco_occupato():
                 continue
             try:
+                heif_tagliati.un_giro(accesso.aperto(), freno=self._disco_occupato)
                 salute_file.un_giro(accesso.aperto(), freno=self._disco_occupato)
             except ErroreOfficina:
                 continue

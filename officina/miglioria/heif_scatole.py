@@ -644,3 +644,87 @@ def rimetti(originale, uscita: Path) -> list[str]:
 __all__ = ["Heif", "ScatolaStrana", "ausiliarie", "con_la_mappa_iso", "con_le_ausiliarie",
            "contenuto", "controlla_iso", "leggi", "mappe_iso", "rimetti", "scrivi",
            "tipo_ausiliario"]
+
+
+TESTA_MASSIMA = 16 * 1024 * 1024
+
+
+def _testa_e_misura(sorgente) -> tuple[bytes, int]:
+    if isinstance(sorgente, (str, os.PathLike)):
+        with open(sorgente, "rb") as aperto:
+            return _testa_e_misura(aperto)
+    dove = sorgente.tell()
+    try:
+        sorgente.seek(0, os.SEEK_END)
+        misura = sorgente.tell()
+        sorgente.seek(0)
+        testa = bytearray()
+        posto = 0
+        while posto + 8 <= misura and posto < TESTA_MASSIMA:
+            sorgente.seek(posto)
+            capo = sorgente.read(16)
+            if len(capo) < 8:
+                break
+            lunga, tipo = struct.unpack(">I4s", capo[:8])
+            if lunga == 1 and len(capo) >= 16:
+                lunga = struct.unpack(">Q", capo[8:16])[0]
+            elif lunga == 0:
+                lunga = misura - posto
+            if lunga < 8:
+                break
+            if tipo == b"mdat":
+                testa += struct.pack(">I4s", 8, b"free")
+                posto += lunga
+                continue
+            sorgente.seek(posto)
+            pezzo = sorgente.read(min(lunga, TESTA_MASSIMA))
+            testa += pezzo
+            if len(pezzo) < lunga:
+                break
+            posto += lunga
+        return bytes(testa), misura
+    finally:
+        sorgente.seek(dove)
+
+
+def _meta_sola(testa: bytes) -> tuple[dict[int, Pezzo], list, int | None, bytes]:
+    for tipo, da, a in _scatole(testa, 0, len(testa)):
+        if tipo != b"meta":
+            continue
+        dove, rimandi, primaria, idat = {}, [], None, b""
+        for t, d, f in _scatole(testa, da + 4, a):
+            corpo = testa[d:f]
+            if t == b"iloc":
+                dove = _iloc(corpo)
+            elif t == b"iref":
+                rimandi = _iref(corpo)
+            elif t == b"pitm":
+                primaria, _ = _numero(corpo, 4, 2 if corpo[0] == 0 else 4)
+            elif t == b"idat":
+                idat = corpo
+        return dove, rimandi, primaria, idat
+    raise ScatolaStrana("meta mancante")
+
+
+def pezzi_mancanti(sorgente) -> tuple[int, int] | None:
+    try:
+        testa, misura = _testa_e_misura(sorgente)
+        dove, rimandi, primaria, idat = _meta_sola(testa)
+    except (ScatolaStrana, struct.error, IndexError, OSError):
+        return None
+    if primaria is None or primaria not in dove:
+        return None
+    pezzi = [primaria]
+    for tipo, da_chi, verso in rimandi:
+        if tipo == DERIVATA and da_chi == primaria:
+            pezzi = list(verso)
+    mancano = 0
+    for numero in pezzi:
+        voce = dove.get(numero)
+        if voce is None:
+            mancano += 1
+            continue
+        fine = len(idat) if voce.metodo == 1 else misura
+        if any(lungo == 0 or da + lungo > fine for da, lungo in voce.pezzi):
+            mancano += 1
+    return mancano, len(pezzi)
