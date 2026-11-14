@@ -12,6 +12,9 @@ from officina.modello.luoghi import coordinate_valide
 MESI = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
         "agosto", "settembre", "ottobre", "novembre", "dicembre")
 
+IMMAGINI = "immagini"
+IN_ORDINE = 5000
+
 FASCE_FPS = {
     "ridotti": "ROUND(f.fps) <= 55",
     "medi": "ROUND(f.fps) BETWEEN 56 AND 85",
@@ -120,7 +123,9 @@ def _condizioni(connessione: sqlite3.Connection, filtro: Filtro) -> tuple[str, l
     if filtro.al:
         pezzi.append("s.giorno <= ?")
         parametri.append(filtro.al)
-    if filtro.genere:
+    if filtro.genere == IMMAGINI:
+        pezzi.append("s.genere IN ('foto', 'live')")
+    elif filtro.genere:
         pezzi.append("s.genere = ?")
         parametri.append(filtro.genere)
     if filtro.fps in FASCE_FPS:
@@ -201,18 +206,18 @@ def _condizioni(connessione: sqlite3.Connection, filtro: Filtro) -> tuple[str, l
         if not filtro.simili_ids:
             pezzi.append("1 = 0")
         else:
-            segnaposto = ",".join("?" * len(filtro.simili_ids))
-            pezzi.append(f"s.id IN ({segnaposto})")
-            parametri.extend(filtro.simili_ids)
+            numeri = ",".join(str(int(x)) for x in filtro.simili_ids)
+            pezzi.append(f"s.id IN ({numeri})")
 
     return " AND ".join(pezzi) if pezzi else "1 = 1", parametri
 
 
 def _ordinamento(filtro: Filtro) -> str:
     if filtro.ordine == "somiglianza" and filtro.simili_ids:
-        quando = " ".join(f"WHEN {int(x)} THEN {i}"
-                          for i, x in enumerate(filtro.simili_ids))
-        return f"CASE s.id {quando} ELSE {len(filtro.simili_ids)} END ASC, s.id ASC"
+        primi = filtro.simili_ids[:IN_ORDINE]
+        quando = " ".join(f"WHEN {int(x)} THEN {i}" for i, x in enumerate(primi))
+        return (f"CASE s.id {quando} ELSE {len(primi)} END ASC, "
+                "s.istante_utc DESC, s.id ASC")
     if filtro.ordine == "data_su":
         return "s.istante_utc ASC NULLS LAST, s.id ASC"
     if filtro.ordine == "casuale":
@@ -313,7 +318,7 @@ def _cerca_a_parole(connessione: sqlite3.Connection, frase: str) -> list[int]:
         from officina.archivio import accesso
 
         risposta = ricerca.cerca(connessione, accesso.aperto().dove.modelli, frase,
-                                 quanti=QUANTI_A_PAROLE)
+                                 quanti=QUANTI_A_PAROLE, sicuri=ricerca.TUTTI)
         if len(_gia_cercate) > 20:
             _gia_cercate.clear()
         _gia_cercate[frase] = [t.scatto_id for t in risposta.trovati]

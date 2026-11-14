@@ -117,7 +117,7 @@ def zone(punti) -> list[tuple[int, int, int, int]]:
     allarga = (1.0, 1.0, 1.6)
     return [(int(round(c[0] - mezzo * k)), int(round(c[1] - mezzo)),
              int(round(c[0] + mezzo * k)), int(round(c[1] + mezzo)))
-            for c, k in zip(centri, allarga)]
+            for c, k in zip(centri, allarga, strict=True)]
 
 
 def zone_occhi_bocca(fatta, vera, punti_veri) -> float:

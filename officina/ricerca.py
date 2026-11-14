@@ -9,7 +9,7 @@ from officina import istruzioni
 from officina.archivio.database import tutti
 from officina.descrittori import vettori
 from officina import lingua
-from officina.modello import impronte as magazzino, nodi, parti, persone, scatti
+from officina.modello import impronte as magazzino, nodi, parti, persone, posti, scatti
 
 SOGLIA = 0.055
 
@@ -20,6 +20,25 @@ MESI = {
     "giugno": 6, "luglio": 7, "agosto": 8, "settembre": 9, "ottobre": 10,
     "novembre": 11, "dicembre": 12,
 }
+
+TUTTI = -1
+
+PAROLE_DEI_FILTRI = (
+    (("video", "filmati", "filmato"), "genere", "video"),
+    (("live photo", "live photos", "live"), "genere", "live"),
+    (("solo foto", "solo le foto", "solo fotografie"), "genere", "immagini"),
+    (("schermate", "schermata", "screenshot"), "solo_schermate", True),
+    (("senza data",), "senza_data", True),
+    (("data indovinata", "data dedotta"), "data_indovinata", True),
+    (("preferite", "preferiti", "col cuore", "con il cuore", "cuore"), "col_cuore", True),
+    (("evidenziate", "evidenziati", "evidenziata", "evidenziato"), "evidenziati", True),
+    (("senza etichette", "senza etichetta", "senza nodi"), "senza_etichetta", True),
+    (("fps alti", "fps alto"), "fps", "alti"),
+    (("fps medi", "fps medio"), "fps", "medi"),
+    (("fps ridotti", "fps bassi", "fps basso"), "fps", "ridotti"),
+)
+
+NOME_MINIMO = 3
 
 
 @dataclass
@@ -40,6 +59,8 @@ class Capito:
     genere: str
     testo: str
     numero: int | None = None
+    chiave: str | None = None
+    valore: str | bool | None = None
 
 
 @dataclass
@@ -57,29 +78,50 @@ class Risposta:
 
 
 def cerca(connessione: sqlite3.Connection, cartella_modelli: Path, frase: str,
-          quanti: int = 60, riformula: bool = False) -> Risposta:
+          quanti: int = 60, riformula: bool = False,
+          sicuri: int | None = None) -> Risposta:
     fuori = Risposta()
     frase = (frase or "").strip()
     if not frase:
         return fuori
 
+    quanti_sicuri = quanti if sicuri is None else sicuri
     resti = frase
     for pezzo, capito in _cosa_riconosco(connessione, frase):
         fuori.capito.append(capito)
         resti = resti.replace(pezzo, " ")
 
     gia_visti: set[int] = set()
-    for riga in _dalle_tue_etichette(connessione, fuori.capito, quanti):
+    filtri = [c for c in fuori.capito if c.genere == "filtro"]
+    altri = [c for c in fuori.capito if c.genere != "filtro"]
+    resti_veri = " ".join(resti.split())
+    da_etichette = altri + filtri if altri or not resti_veri else []
+    for riga in _dalle_tue_etichette(connessione, da_etichette, quanti_sicuri):
         gia_visti.add(riga.scatto_id)
         fuori.trovati.append(riga)
+    if filtri and not altri and not resti_veri:
+        quante = len(fuori.trovati)
+        fuori.detto.append(f"{quante} {'va' if quante == 1 else 'vanno'} bene col filtro"
+                           if quante else "nessuna va bene col filtro")
+        return fuori
     if fuori.trovati:
         quanti_tuoi = len(fuori.trovati)
         fuori.detto.append(
             f"{quanti_tuoi} {'lo hai' if quanti_tuoi == 1 else 'li hai'} "
             "etichettati tu")
 
+    quanti_nomi = 0
+    for riga in _dai_nomi(connessione, resti, quanti_sicuri, gia_visti):
+        gia_visti.add(riga.scatto_id)
+        fuori.trovati.append(riga)
+        quanti_nomi += 1
+    if quanti_nomi:
+        come = "ce l'ha nel nome del file" if quanti_nomi == 1 \
+            else "ce l'hanno nel nome del file"
+        fuori.detto.append(f"{quanti_nomi} {come}")
+
     for riga in _dalle_scritte(connessione, da_cercare_scritte(frase, resti),
-                               quanti, gia_visti):
+                               quanti_sicuri, gia_visti):
         gia_visti.add(riga.scatto_id)
         fuori.trovati.append(riga)
         if not any(c.genere == "scritta" for c in fuori.capito):
@@ -92,7 +134,7 @@ def cerca(connessione: sqlite3.Connection, cartella_modelli: Path, frase: str,
 
     quante_descritte = 0
     for riga in _dalle_descrizioni(connessione, da_cercare_scritte(frase, resti),
-                                   quanti, gia_visti):
+                                   quanti_sicuri, gia_visti):
         gia_visti.add(riga.scatto_id)
         fuori.trovati.append(riga)
         quante_descritte += 1
@@ -124,7 +166,19 @@ def cerca(connessione: sqlite3.Connection, cartella_modelli: Path, frase: str,
     elif motivo and not fuori.trovati:
         fuori.detto.append(motivo)
 
+    if filtri:
+        _solo_dentro_i_filtri(connessione, fuori, filtri)
     return fuori
+
+
+def _solo_dentro_i_filtri(connessione: sqlite3.Connection, fuori: Risposta,
+                          filtri: list[Capito]) -> None:
+    filtro = scatti.Filtro()
+    for capito in filtri:
+        setattr(filtro, capito.chiave, capito.valore)
+    dentro = set(scatti.soli_numeri(connessione, filtro))
+    fuori.trovati = [t for t in fuori.trovati if t.scatto_id in dentro]
+    fuori.vicini = [t for t in fuori.vicini if t.scatto_id in dentro]
 
 
 def _dai_i_livelli(elenco: list[Trovato]) -> None:
@@ -157,13 +211,35 @@ def _cosa_riconosco(connessione: sqlite3.Connection,
                               Capito("persona", voce["nome"], voce["id"])))
     for voce in parti.elenco(connessione):
         candidati.append((voce["nome"].casefold(), Capito("parte", voce["nome"], voce["id"])))
-    candidati.sort(key=lambda coppia: -len(coppia[0]))
+    for riga in posti.attivi(connessione):
+        if riga["nome"]:
+            candidati.append((riga["nome"].casefold(),
+                              Capito("luogo", riga["nome"], riga["id"])))
+    proprie = len(candidati)
+    for parole, chiave, valore in PAROLE_DEI_FILTRI:
+        for parola in parole:
+            candidati.append((parola, Capito("filtro", parola, None, chiave, valore)))
+    candidati = sorted(candidati[:proprie], key=lambda coppia: -len(coppia[0])) + \
+        sorted(candidati[proprie:], key=lambda coppia: -len(coppia[0]))
 
     for nome, capito in candidati:
-        dove = basso.find(nome)
+        if capito.genere == "filtro":
+            trovato = re.search(rf"(?<!\w){re.escape(nome)}(?!\w)", basso)
+            dove = trovato.start() if trovato else -1
+        else:
+            dove = basso.find(nome)
         if dove >= 0 and libero(dove, dove + len(nome)):
             presi.append((dove, dove + len(nome)))
             fuori.append((frase[dove:dove + len(nome)], capito))
+
+    for trovato in re.finditer(r"(?<!\w)(\d{2,3})\s*fps(?!\w)", basso):
+        if not libero(trovato.start(), trovato.end()):
+            continue
+        presi.append((trovato.start(), trovato.end()))
+        numero = int(trovato.group(1))
+        fascia = "ridotti" if numero <= 55 else "medi" if numero <= 85 else "alti"
+        fuori.append((frase[trovato.start():trovato.end()],
+                      Capito("filtro", trovato.group(0), None, "fps", fascia)))
 
     for anno in re.findall(r"\b(19\d{2}|20\d{2})\b", frase):
         fuori.append((anno, Capito("quando", anno)))
@@ -192,9 +268,18 @@ def _dalle_tue_etichette(connessione: sqlite3.Connection, capiti: list[Capito],
             filtro.dal = f"{capito.testo}-01-01"
             filtro.al = f"{capito.testo}-12-31"
             qualcosa = True
+        elif capito.genere == "luogo" and filtro.luogo is None:
+            filtro.luogo = capito.numero
+            qualcosa = True
+        elif capito.genere == "filtro" and capito.chiave:
+            setattr(filtro, capito.chiave, capito.valore)
+            qualcosa = True
     if not qualcosa:
         return []
 
+    if quanti == TUTTI:
+        return [Trovato(scatto_id=numero, file_id=None, sorgente="tua")
+                for numero in scatti.soli_numeri(connessione, filtro)]
     return [
         Trovato(scatto_id=vista["id"],
                 file_id=(vista.get("file_id") or vista.get("principale")),
@@ -203,6 +288,33 @@ def _dalle_tue_etichette(connessione: sqlite3.Connection, capiti: list[Capito],
                 giorno=vista.get("giorno"))
         for vista in scatti.pagina(connessione, filtro, 0, quanti)
     ]
+
+
+def _dai_nomi(connessione: sqlite3.Connection, resti: str, quanti: int,
+              gia_visti: set[int]) -> list[Trovato]:
+    from officina.parole.magazzino import PAROLE_VUOTE
+
+    pezzi = [p for p in (resti or "").casefold().split()
+             if len(p) >= NOME_MINIMO and p not in PAROLE_VUOTE]
+    if not pezzi:
+        return []
+    condizioni = " AND ".join(["lower(p.nome) LIKE ? ESCAPE '\\'"] * len(pezzi))
+    parametri = ["%" + p.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+                 for p in pezzi]
+    righe = tutti(
+        connessione,
+        f"""
+        SELECT f.scatto_id, min(f.id) AS file_id, min(p.nome) AS nome
+        FROM percorsi p JOIN file_media f ON f.id = p.file_id
+        JOIN scatti s ON s.id = f.scatto_id
+        WHERE f.scatto_id IS NOT NULL AND s.fuori_archivio = 0 AND {condizioni}
+        GROUP BY f.scatto_id ORDER BY max(s.istante_utc) DESC LIMIT ?
+        """,
+        *parametri, quanti,
+    )
+    return [Trovato(scatto_id=riga["scatto_id"], file_id=riga["file_id"],
+                    sorgente="nome", testo=riga["nome"], punteggio=1.0)
+            for riga in righe if riga["scatto_id"] not in gia_visti]
 
 
 def da_cercare_scritte(frase: str, resti: str) -> str:
