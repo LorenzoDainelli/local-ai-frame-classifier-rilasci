@@ -182,7 +182,8 @@ jobs:
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
           python -m pip install -r requirements.txt timm==1.0.31 einops==0.8.2 ftfy==6.1.1 \
             regex iopath==0.1.10 "setuptools<81" huggingface-hub==1.33.0 \
-            opencv-python-headless==4.14.0.94 pycocotools tqdm typing_extensions
+            opencv-python-headless==4.14.0.94 pycocotools tqdm typing_extensions \
+            psutil scipy
           git clone -q https://github.com/facebookresearch/sam3 "$RUNNER_TEMP/sam3-meta"
           git -C "$RUNNER_TEMP/sam3-meta" checkout -q f1647e8d0c1d280991f4d1b7d974c2704537fe66
       - name: La corsa
