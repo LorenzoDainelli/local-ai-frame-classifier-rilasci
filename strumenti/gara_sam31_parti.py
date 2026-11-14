@@ -109,10 +109,30 @@ def _sul_processore(torch) -> None:
     torch.Tensor.pin_memory = lambda tensore, *parti, **scelte: tensore
 
 
+def _somma_piena(attivazione, lineare, entrata):
+    import torch
+
+    uscita = lineare(entrata)
+    if attivazione in (torch.nn.functional.relu, torch.nn.ReLU):
+        return torch.nn.functional.relu(uscita)
+    if attivazione in (torch.nn.functional.gelu, torch.nn.GELU):
+        return torch.nn.functional.gelu(uscita)
+    raise ValueError(f"attivazione inattesa {attivazione}")
+
+
+def _precisione_piena() -> None:
+    from sam3.model import vitdet
+    from sam3.perflib import fused
+
+    fused.addmm_act = _somma_piena
+    vitdet.addmm_act = _somma_piena
+
+
 def costruisci_sam31(codice: Path):
     from officina.ritocco import sam31
 
     sam31.carica_il_pacchetto(codice)
+    _precisione_piena()
     from sam3 import model_builder as costruttore
     from sam3.model.sam3_multiplex_detector import Sam3MultiplexDetector
     from sam3.model.vl_combiner import SAM3VLBackboneTri
@@ -137,6 +157,7 @@ def costruisci_sam3meta(codice: Path):
     from officina.ritocco import sam31
 
     sam31.carica_il_pacchetto(codice)
+    _precisione_piena()
     from sam3 import model_builder as costruttore
 
     parole = str(codice / "sam3" / "assets" / "bpe_simple_vocab_16e6.txt.gz")
