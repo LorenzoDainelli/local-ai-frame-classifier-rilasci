@@ -25,6 +25,10 @@ class NonSiToglie(ErroreOfficina):
     codice = "non_si_toglie"
 
 
+class GiaSistemato(NonSiToglie):
+    codice = "gia_sistemato"
+
+
 def perche_no(connessione: sqlite3.Connection, scatto_id: int) -> str | None:
     if uno(connessione, "SELECT 1 FROM scatti WHERE id = ?", scatto_id) is None:
         return "Questo scatto non c'è più nel programma."

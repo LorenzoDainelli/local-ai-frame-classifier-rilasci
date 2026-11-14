@@ -191,7 +191,9 @@ def togli_dal_programma(archivio, scatto_id: int) -> dict:
         raise tolti.NonSiToglie("Mancano i modelli delle impronte: non so dire se è rotto.")
     with archivio.lettura() as connessione:
         if scatto_id not in _senza_impronta(connessione, nomi):
-            raise tolti.NonSiToglie("Questo scatto ha l'impronta: non è fra i rotti.")
+            raise tolti.GiaSistemato(
+                "Nel frattempo questo scatto ha avuto l'impronta: si è sistemato da solo, "
+                "non serve toglierlo.")
         motivo = tolti.perche_no(connessione, scatto_id)
     if motivo:
         raise tolti.NonSiToglie(motivo)

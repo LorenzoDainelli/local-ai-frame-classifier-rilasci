@@ -563,7 +563,8 @@ def api_togli_dal_programma(scatto_id: int):
     try:
         fatto = perche.togli_dal_programma(accesso.aperto(), scatto_id)
     except tolti.NonSiToglie as errore:
-        return JSONResponse({"messaggio": errore.messaggio}, status_code=409)
+        return JSONResponse({"messaggio": errore.messaggio, "codice": errore.codice},
+                            status_code=409)
     return {"tolto": True, "nome": fatto["nome"]}
 
 

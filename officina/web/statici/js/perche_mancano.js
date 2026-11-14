@@ -15,7 +15,11 @@ async function rispostaDi(risposta) {
     } catch {
         dati = {};
     }
-    if (!risposta.ok) throw new Error(dati.messaggio || dati.detail || "Il programma non ha risposto bene: riprova.");
+    if (!risposta.ok) {
+        const sbaglio = new Error(dati.messaggio || dati.detail || "Il programma non ha risposto bene: riprova.");
+        sbaglio.codice = dati.codice || "";
+        throw sbaglio;
+    }
     return dati;
 }
 
@@ -124,7 +128,13 @@ for (const via of document.querySelectorAll("[data-pm-via]")) {
         } catch (errore) {
             parla.textContent = errore.message;
             conferma.hidden = true;
-            chiedi.hidden = false;
+            if (errore.codice === "gia_sistemato") {
+                const riga = via.closest("li");
+                riga.querySelectorAll("form, [data-pm-giusto], [data-pm-inizio]").forEach((pezzo) => { pezzo.hidden = true; });
+                riga.classList.add("pm-sistemato");
+            } else {
+                chiedi.hidden = false;
+            }
         }
         si.disabled = false;
         no.disabled = false;

@@ -107,7 +107,8 @@ def test_uno_scatto_con_l_impronta_non_si_toglie(archivio_misurabile):
     [scatto] = _foto(archivio_misurabile, 1)
     risposta = _cliente().post(f"/api/perche-mancano/{scatto}/togli-dal-programma")
     assert risposta.status_code == 409
-    assert "ha l'impronta" in risposta.json()["messaggio"]
+    assert "ha avuto l'impronta" in risposta.json()["messaggio"]
+    assert risposta.json()["codice"] == "gia_sistemato"
     assert _c_e(archivio_misurabile, scatto)
 
 

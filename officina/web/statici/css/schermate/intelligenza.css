@@ -46,7 +46,9 @@
 .pm-via-conferma .dc-perche { flex: 1 1 320px; min-width: 0; }
 .pm-via [data-pm-via-detto] { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
 li.pm-tolto .dc-nome-e-dove { opacity: .55; }
+li.pm-sistemato [data-pm-via-detto] { font-weight: 600; }
 .pm-salva { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; }
 .pm-salva p { margin: 0; flex: 1 1 320px; min-width: 0; }
 .pm-carta { display: grid; gap: 10px; padding: 16px 20px; }
 .pm-carta > h2, .pm-carta > p { margin: 0; }
+.pm-carta [hidden] { display: none !important; }

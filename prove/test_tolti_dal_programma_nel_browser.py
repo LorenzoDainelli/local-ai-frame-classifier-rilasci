@@ -47,3 +47,31 @@ def test_togli_chiede_conferma_poi_toglie_e_si_rimette(navigatore, rotto):  # no
     with archivio.lettura() as connessione:
         assert connessione.execute(
             "SELECT count(*) FROM tolti_dal_programma").fetchone()[0] == 0
+
+
+def test_se_ha_avuto_l_impronta_dice_che_si_e_sistemato(navigatore, rotto):  # noqa: F811
+    from officina.web import origine
+    from officina.web.server import app
+
+    archivio, scatto, posto = rotto
+    with _servito(app) as indirizzo:
+        pagina = navigatore.new_page(viewport={"width": 1280, "height": 900})
+        pagina.goto(origine.indirizzo_per_entrare(indirizzo, "/intelligenza/perche-mancano"),
+                    wait_until="load")
+        with archivio.scrittura() as connessione:
+            colonne = [r[1] for r in connessione.execute("PRAGMA table_info(impronte)")
+                       if r[1] not in ("id", "scatto_id")]
+            elenco = ", ".join(colonne)
+            connessione.execute(
+                f"INSERT INTO impronte (scatto_id, {elenco}) SELECT ?, {elenco} "
+                "FROM impronte WHERE scatto_id = (SELECT min(scatto_id) FROM impronte "
+                "WHERE scatto_id != ?)", (scatto, scatto))
+        via = pagina.locator(f"[data-pm-via='{scatto}']")
+        via.locator("[data-pm-via-chiedi]").click()
+        via.locator("[data-pm-via-si]").click()
+        sync_api.expect(via.locator("[data-pm-via-detto]")).to_contain_text("sistemato")
+        assert via.locator("[data-pm-via-chiedi]").is_hidden()
+        riga = pagina.locator("li", has=via)
+        assert "pm-sistemato" in (riga.get_attribute("class") or "")
+        assert _c_e(archivio, scatto)
+        pagina.close()
