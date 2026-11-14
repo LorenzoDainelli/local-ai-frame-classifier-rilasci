@@ -27,7 +27,7 @@
 
     <section class="carta">
         <h2>Gli scatti</h2>
-        <p class="piccolo tenue">Se un file è rotto, ricopialo nella sua cartella e poi rifai «Aggiungi foto» su quella cartella.</p>
+        <p class="piccolo tenue">Se un file è rotto e hai la sua copia intera, premi «Scegli il file giusto»: il programma lo controlla subito. Quando hai caricato quelli che vuoi, premi «Salva» in fondo.</p>
         {% if cosa.in_tutto > cosa.scatti|length %}<p class="piccolo tenue">Qui ci sono i primi {{ cosa.scatti|length }}.</p>{% endif %}
         <ul class="dc-file">
             {% for v in cosa.scatti %}
@@ -42,10 +42,24 @@
                 </form>
                 {% endif %}
                 <a class="tasto-comando nudo piccolo" href="/scatto/{{ v.scatto }}">Guardalo</a>
+                {% if v.sul_disco and v.prova.esito != "si_apre" %}
+                {% set g = giusti.get(v.scatto) %}
+                <span class="pm-giusto" data-pm-giusto="{{ v.scatto }}">
+                    <label class="tasto-comando nudo piccolo">{{ icona('cartella', 14) }} Scegli il file giusto
+                        <input type="file" hidden data-pm-scegli></label>
+                    <span class="dc-perche" data-pm-esito data-esito="{{ g.esito if g else '' }}">{% if g %}{{ g.nome }}: {{ g.motivo }}{% if g.scatto_doppio %} <a href="/scatto/{{ g.scatto_doppio }}">Guarda quella già nella galleria</a>{% endif %}{% endif %}</span>
+                    <button class="tasto-comando nudo piccolo" type="button" data-pm-togli {% if not g %}hidden{% endif %}>Togli</button>
+                </span>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>
+        <div class="pm-salva">
+            <button class="tasto-comando principale" type="button" data-pm-salva disabled>Salva</button>
+            <p class="piccolo tenue" data-pm-detto>Salva sostituisce sul disco solo i file con «Sì, hai ragione». Il rotto non si cancella: va nella cartella dei rovinati del programma.</p>
+        </div>
     </section>
+    <script type="module" src="/statici/js/perche_mancano.js"></script>
     <script type="module">
     (function () {
         const tasto = document.getElementById("copia-perche");

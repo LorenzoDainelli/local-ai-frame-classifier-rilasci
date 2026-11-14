@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from officina import registro
@@ -517,10 +517,41 @@ def come_va_la_fila_ia() -> dict:
 def pagina_perche_mancano(richiesta: Request):
     from officina.impronte import perche
 
+    from officina.impronte import giusto
+
+    archivio = accesso.aperto()
     return base.pagine.TemplateResponse(richiesta, "perche-mancano.html", {
         **base.comune(richiesta, "intelligenza"),
-        "cosa": perche.guarda(accesso.aperto()),
+        "cosa": perche.guarda(archivio),
+        "giusti": giusto.caricati(archivio),
     })
+
+
+@strada.post("/api/perche-mancano/{scatto_id}/giusto")
+async def api_il_file_giusto(scatto_id: int, file: UploadFile = File(...)):
+    from officina.immagini import consegna
+    from officina.impronte import giusto
+
+    try:
+        return await consegna.subito(giusto.ricevi, accesso.aperto(), scatto_id,
+                                     file.filename or "", file.file)
+    finally:
+        await file.close()
+
+
+@strada.post("/api/perche-mancano/{scatto_id}/togli")
+def api_togli_il_file_giusto(scatto_id: int):
+    from officina.impronte import giusto
+
+    giusto.togli(accesso.aperto(), scatto_id)
+    return {"tolto": True}
+
+
+@strada.post("/api/perche-mancano/salva")
+def api_salva_i_file_giusti():
+    from officina.impronte import giusto
+
+    return giusto.salva(accesso.aperto())
 
 
 @strada.post("/intelligenza/perche-mancano/{scatto_id}/apri", dependencies=solo_qui)
