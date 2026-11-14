@@ -786,6 +786,107 @@ def _sicurezze_in_breve(sicurezze: dict) -> dict:
             for nome, gruppi in sicurezze.items()}
 
 
+PAROLE_DELLE_PARTI = {"face": ((0, 1, 2), 0.15), "hand": ((9, 10), 0.6),
+                      "foot": ((15, 16), 0.6)}
+PERSONA_PICCOLA = 0.25
+SOGLIE_PARTI = (0.3, 0.4, 0.5, 0.6, 0.7)
+
+
+def _dentro(punto, riquadro, margine: float) -> bool:
+    x, y, larga, alta = riquadro
+    return (x - larga * margine <= punto[0] <= x + larga * (1 + margine)
+            and y - alta * margine <= punto[1] <= y + alta * (1 + margine))
+
+
+def _parti_vere(annotazioni: list[dict], larga: int, alta: int) -> dict:
+    vere: dict = {parola: [] for parola in PAROLE_DELLE_PARTI}
+    for annotazione in annotazioni:
+        if annotazione["iscrowd"] or not annotazione["num_keypoints"]:
+            continue
+        punti = annotazione["keypoints"]
+        piccola = annotazione["bbox"][3] / alta < PERSONA_PICCOLA
+        for parola, (quali, _margine) in PAROLE_DELLE_PARTI.items():
+            visti = [(punti[3 * i] / larga, punti[3 * i + 1] / alta, punti[3 * i + 2])
+                     for i in quali if punti[3 * i + 2] > 0]
+            if parola == "face":
+                visti = visti[:1]
+            for x, y, v in visti:
+                coperta = v == 1
+                gruppi = {"tutti"}
+                gruppi.add("difficili" if coperta or piccola else "facili")
+                if coperta:
+                    gruppi.add("coperte")
+                if piccola:
+                    gruppi.add("piccole")
+                if coperta and piccola:
+                    gruppi.add("molto difficili")
+                vere[parola].append(((x, y), gruppi))
+    return vere
+
+
+def _persone_di(annotazioni: list[dict], larga: int, alta: int) -> list:
+    return [(a["bbox"][0] / larga, a["bbox"][1] / alta, a["bbox"][2] / larga,
+             a["bbox"][3] / alta) for a in annotazioni]
+
+
+def _conta_le_parti(trovate: dict, vere: dict, persone: list, soglia: float,
+                    conti: dict) -> None:
+    for parola, (_quali, margine) in PAROLE_DELLE_PARTI.items():
+        riquadri = [r for r, sicurezza in trovate.get(parola, []) if sicurezza >= soglia]
+        per_parola = conti.setdefault(parola, {"falsi": 0})
+        for punto, gruppi in vere[parola]:
+            preso = any(_dentro(punto, r, margine) for r in riquadri)
+            for gruppo in gruppi:
+                riga = per_parola.setdefault(gruppo, [0, 0])
+                riga[0] += int(preso)
+                riga[1] += 1
+        for riquadro in riquadri:
+            centro = (riquadro[0] + riquadro[2] / 2, riquadro[1] + riquadro[3] / 2)
+            vicino = any(_dentro(punto, riquadro, margine) for punto, _g in vere[parola])
+            in_persona = any(_dentro(centro, p, 0.05) for p in persone)
+            if not vicino and not in_persona:
+                per_parola["falsi"] += 1
+
+
+def prova_delle_parti(casa: Path, cartella: Path, quante: int) -> dict:
+    from PIL import Image
+
+    from officina.corpi import parti
+
+    dati = _annotazioni(cartella)
+    scelte = scegli_le_foto(dati, quante)
+    cercatore = parti.apri_il_cercatore(casa.parent)
+    cercatore.accendi()
+    tabelle: dict = {str(s): {} for s in SOGLIE_PARTI}
+    tempi: list[float] = []
+    for numero, (foto, annotazioni) in enumerate(scelte, start=1):
+        percorso = _scarica(FOTO + foto["file_name"], cartella / "foto" / foto["file_name"])
+        immagine = Image.open(percorso).convert("RGB")
+        larga, alta = immagine.size
+        partito = time.monotonic()
+        trovate = cercatore.cerca(parti._di_lavoro(immagine), list(PAROLE_DELLE_PARTI),
+                                  min(SOGLIE_PARTI))
+        tempi.append(time.monotonic() - partito)
+        vere = _parti_vere(annotazioni, larga, alta)
+        persone = _persone_di(annotazioni, larga, alta)
+        for soglia in SOGLIE_PARTI:
+            _conta_le_parti(trovate, vere, persone, soglia, tabelle[str(soglia)])
+        if numero % 10 == 0 or numero == len(scelte):
+            print(f"[{numero}/{len(scelte)}] parti cercate", flush=True)
+    cercatore.spegni()
+    voti: dict = {}
+    for soglia, tabella in tabelle.items():
+        voti[soglia] = {}
+        for parola, righe in tabella.items():
+            voti[soglia][parola] = {
+                gruppo: (round(riga[0] / riga[1], 3) if riga[1] else None, riga[1])
+                for gruppo, riga in righe.items() if gruppo != "falsi"}
+            voti[soglia][parola]["falsi ogni 100 foto"] = round(
+                100 * righe["falsi"] / max(1, len(scelte)), 1)
+    return {"parti": voti, "foto": len(scelte), "adesso": parti.SICUREZZA_MINIMA,
+            "secondi_per_foto": round(sum(tempi) / max(1, len(tempi)), 2)}
+
+
 def prova_dei_punti(casa: Path, cartella: Path, quante: int) -> dict:
     from PIL import Image
 
@@ -825,6 +926,9 @@ def riassunto(esito: dict) -> dict:
     from officina.corpi import rilevatore, sam3
 
     prova_ = esito["prova"]
+    if "parti" in prova_:
+        return {"parti_adesso": prova_["parti"][str(prova_["adesso"])],
+                "secondi_per_foto": prova_["secondi_per_foto"]}
     if "seguito" in prova_:
         return {"seguito": {nome: voti["media"] for nome, voti in prova_["seguito"].items()},
                 "come_la_via_dritta": prova_["come_la_via_dritta"]["media"],
@@ -862,7 +966,13 @@ def controlla(esito: dict) -> list[str]:
 
     guai = []
     prova_ = esito["prova"]
-    if "seguito" in prova_:
+    if "parti" in prova_:
+        adesso = prova_["parti"][str(prova_["adesso"])]
+        for parola in PAROLE_DELLE_PARTI:
+            presi = (adesso.get(parola, {}).get("tutti") or (None, 0))[0]
+            if not presi:
+                guai.append(f"SAM 3 non ha trovato nessuna parte «{parola}»")
+    elif "seguito" in prova_:
         guai.extend(_controlla_il_seguito(prova_))
     elif "clic" in prova_:
         guai.extend(_controlla_i_clic(prova_))
@@ -903,7 +1013,7 @@ def main() -> int:
     parser.add_argument("--cartella", type=Path, required=True)
     parser.add_argument("--quante", type=int, default=60)
     parser.add_argument("--uscita", type=Path, required=True)
-    parser.add_argument("--parte", choices=("tutto", "punti", "clic", "segui"),
+    parser.add_argument("--parte", choices=("tutto", "punti", "clic", "segui", "parti"),
                         default="tutto")
     argomenti = parser.parse_args()
     sys.path.insert(0, str(RADICE))
@@ -911,13 +1021,13 @@ def main() -> int:
 
     torcia.con_la_rete_accesa()
     chiave = os.environ.get("HF_TOKEN") or None
-    if not chiave and argomenti.parte in ("tutto", "clic", "segui"):
+    if not chiave and argomenti.parte in ("tutto", "clic", "segui", "parti"):
         raise SystemExit("manca HF_TOKEN nei segreti del deposito")
     cartella = argomenti.cartella
     casa = cartella / "modelli" / "corpi"
     casa.mkdir(parents=True, exist_ok=True)
     esito: dict = {}
-    if argomenti.parte in ("tutto", "clic", "segui"):
+    if argomenti.parte in ("tutto", "clic", "segui", "parti"):
         esito["sam3"] = _sam3(casa, chiave)
     if argomenti.parte in ("tutto", "punti"):
         esito["rtmw"] = _rtmw(casa, cartella, chiave)
@@ -928,6 +1038,8 @@ def main() -> int:
         esito["prova"] = prova_dei_clic(casa, cartella, argomenti.quante)
     elif argomenti.parte == "segui":
         esito["prova"] = prova_del_seguito(casa, cartella, argomenti.quante)
+    elif argomenti.parte == "parti":
+        esito["prova"] = prova_delle_parti(casa, cartella, argomenti.quante)
     elif argomenti.parte == "tutto":
         esito["prova"] = prova(casa, cartella, argomenti.quante)
     else:

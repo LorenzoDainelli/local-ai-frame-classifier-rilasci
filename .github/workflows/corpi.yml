@@ -20,9 +20,9 @@ on:
         type: number
         default: 40
       parte:
-        description: "tutto (SAM 3 e RTMW), solo i punti di RTMW, i clic di SAM 3 per il ritocco, oppure SAM 3 che segue nei video"
+        description: "tutto (SAM 3 e RTMW), solo i punti di RTMW, i clic di SAM 3 per il ritocco, SAM 3 che segue nei video, oppure le parti del corpo a parole"
         type: choice
-        options: [tutto, punti, clic, segui]
+        options: [tutto, punti, clic, segui, parti]
         default: tutto
 
 permissions:
