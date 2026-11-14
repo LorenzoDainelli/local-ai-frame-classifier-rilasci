@@ -122,6 +122,7 @@ def main() -> int:
     rilevatore._riconosce = object()
     rilevatore._impronta_di = lambda dritta, numpy: None
     insight.LATO_MINIMO = 0.015
+    insight.SICUREZZA_SOLO_GRANDE = 0.0
 
     def cerca(immagine, lati) -> list:
         insight.LATI_DEL_QUADRATO = lati

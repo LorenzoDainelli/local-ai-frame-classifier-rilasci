@@ -232,6 +232,10 @@
       [
         "spunta",
         "Un TIFF con la posizione GPS non si riusciva a salvare dopo il miglioramento: ora si salva e la posizione resta"
+      ],
+      [
+        "volto",
+        "Meno volti falsi, soprattutto nelle foto con rumore: un volto visto solo dalla misura grande ora deve essere molto sicuro. Il collaudo su 1076 foto pubbliche li ha dimezzati. I volti già trovati restano"
       ]
     ],
     "tecnico": [
@@ -273,7 +277,8 @@
       "Volti tenuti (<code>veloce.VOLTI_ACCESI</code>, <code>veloce.FACEME_ACCESO</code>): <code>motori.apri(..., tieni=True)</code> avvolge il motore in <code>Parcheggiato</code>; <code>parcheggia()</code> sposta le reti in RAM e <code>motori.libera_per</code> le spegne davvero se la RAM serve. FaceMe dimentica <code>_visti</code> come appena caricato. La prova usa 6 foto di WIDER FACE (<code>miglioria.prova_volti</code>, revisione e sha256 fissati, prese a pezzi dallo zip con Range).",
       "Impronte a più fili (<code>veloce.IMPRONTE_FILI</code>): <code>impronte.motore.Passata</code> apre e ritaglia con 4 fili in ordine; il calcolo resta su un filo, e video, file dall'archivio e formati diversi da jpg e png vanno uno alla volta. La prova confronta le impronte di 60 file nei due modi.",
       "Lavori dietro (<code>veloce.LAVORI_DIETRO</code>): <code>miglioria.dietro.Dietro</code> (un filo, in ordine) fa <code>_finisci</code> (copie da guardare, <code>impronta.del_file</code>, <code>DA_RIVEDERE</code>, secondi misurati alla fine della scheda) mentre la scheda passa al file dopo; solo se il disco resta sopra max(50 GB, 10%) contando i file ancora dietro e la RAM libera è almeno 3 GB. Originali solo nell'archivio come prima (regola 583). Se si rompe, fallisce solo quel lavoro; «Ferma» lo aspetta. La prova confronta 2 video di fila e le loro copie da guardare.",
-      "Ordine della coda (<code>miglioria.ordine.Ordine</code>): gruppi per modello, prima quello caricato, poi i più corti (secondi della previsione se ci sono per tutto il gruppo, se no pixel per fotogrammi); dopo 2 ore di attesa si passa davanti in ordine di arrivo."
+      "Ordine della coda (<code>miglioria.ordine.Ordine</code>): gruppi per modello, prima quello caricato, poi i più corti (secondi della previsione se ci sono per tutto il gruppo, se no pixel per fotogrammi); dopo 2 ore di attesa si passa davanti in ordine di arrivo.",
+      "Volti (<code>volti.insight</code>): un volto trovato solo nella passata a 1280, senza una proposta a 640 (sicurezza ≥0,30) sovrapposta per almeno 0,40, si tiene solo con sicurezza ≥0,80. Scelta dal collaudo soglie su 1076 foto WIDER FACE pulite e rovinate (regola 585)."
     ]
   },
   {

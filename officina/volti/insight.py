@@ -22,6 +22,9 @@ LATO_FACCIA = 112
 
 LATO_DEL_QUADRATO = 640
 LATI_DEL_QUADRATO = (640, 1280)
+SICUREZZA_SOLO_GRANDE = 0.80
+SICUREZZA_CONFERMA = 0.30
+STESSO_VOLTO = 0.40
 
 __all__ = ["FILE_RICONOSCITORE", "FILE_RILEVATORE", "NOME", "VERSIONE",
            "ci_sono_i_modelli", "dove_stanno", "si_puo_usare"]
@@ -83,19 +86,27 @@ class Rilevatore:
             return []
 
         proposte = []
+        per_lato = {}
         for lato in LATI_DEL_QUADRATO:
             piccola, scala = _rimpicciolita(intera, lato)
-            proposte.extend(
-                ([valore / scala for valore in riquadro],
-                 [(x / scala, y / scala) for x, y in punti], sicurezza)
-                for riquadro, punti, sicurezza in self._proposte(piccola))
+            queste = [([valore / scala for valore in riquadro],
+                       [(x / scala, y / scala) for x, y in punti], sicurezza)
+                      for riquadro, punti, sicurezza in self._proposte(piccola)]
+            per_lato[lato] = queste
+            proposte.extend(queste)
         self.conteggio.proposte += len(proposte)
         proposte.sort(key=lambda voce: -voce[2])
         tenute = _togli_i_doppioni(proposte, SOVRAPPOSIZIONE_MASSIMA)
+        conferme = _conferme(per_lato)
 
         facce = []
         for riquadro, punti, sicurezza in tenute:
             if sicurezza < self.sicurezza_minima:
+                self.conteggio.poco_sicure += 1
+                continue
+            if conferme is not None and sicurezza < SICUREZZA_SOLO_GRANDE and not any(
+                    _quanto_si_sovrappongono(riquadro, altro) >= STESSO_VOLTO
+                    for altro in conferme):
                 self.conteggio.poco_sicure += 1
                 continue
 
@@ -193,6 +204,15 @@ def _i_centri(larga: int, alta: int, gradino: int, numpy):
     if PROPOSTE_PER_POSIZIONE > 1:
         centri = numpy.repeat(centri, PROPOSTE_PER_POSIZIONE, axis=0)
     return centri
+
+
+def _conferme(per_lato: dict) -> list | None:
+    if len(per_lato) < 2:
+        return None
+    primo = per_lato[min(per_lato)]
+    sicure = sorted((voce for voce in primo if voce[2] >= SICUREZZA_CONFERMA),
+                    key=lambda voce: -voce[2])
+    return [voce[0] for voce in _togli_i_doppioni(sicure, SOVRAPPOSIZIONE_MASSIMA)]
 
 
 def _togli_i_doppioni(proposte, quanto: float) -> list:

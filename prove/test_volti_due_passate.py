@@ -57,3 +57,53 @@ def test_le_gia_viste_si_riguardano_solo_con_i_piccoli_accesi():
     acceso = motore._domanda_da_fare("s.id", piccoli=True)
     assert "g.da_riguardare IN (0, 2)" in spento
     assert "g.da_riguardare = 0" in acceso
+
+
+def _rilevatore_finto(per_lato, tmp_path):
+    from PIL import Image
+
+    rilevatore = insight.Rilevatore(tmp_path)
+    rilevatore._trova = object()
+    rilevatore._riconosce = object()
+    rilevatore._impronta_di = lambda dritta, numpy: None
+    rilevatore._raddrizza = lambda *altro: Image.new("RGB", (112, 112))
+
+    def proposte(quadro):
+        return per_lato[quadro.shape[0]]
+    rilevatore._proposte = proposte
+    return rilevatore
+
+
+def _riquadro(x, y, lato, scala):
+    return [x * scala, y * scala, (x + lato) * scala, (y + lato) * scala]
+
+
+def test_un_volto_visto_solo_a_1280_deve_essere_sicuro_all_80(tmp_path):
+    import numpy
+
+    foto = numpy.full((640, 640, 3), 128, numpy.uint8)
+    punti = [(0.0, 0.0)] * 5
+    per_lato = {
+        640: [(_riquadro(10, 10, 100, 1), punti, 0.90),
+              (_riquadro(300, 300, 60, 1), punti, 0.35)],
+        1280: [(_riquadro(300, 300, 60, 2), punti, 0.70),
+               (_riquadro(500, 20, 40, 2), punti, 0.75),
+               (_riquadro(500, 500, 40, 2), punti, 0.85)],
+    }
+    facce = _rilevatore_finto(per_lato, tmp_path).guarda(foto)
+    sicurezze = sorted(round(faccia.sicurezza, 2) for faccia in facce)
+    assert sicurezze == [0.70, 0.85, 0.90]
+
+
+def test_con_una_passata_sola_la_regola_non_si_applica(tmp_path, monkeypatch):
+    import numpy
+
+    monkeypatch.setattr(insight, "LATI_DEL_QUADRATO", (640,))
+    foto = numpy.full((640, 640, 3), 128, numpy.uint8)
+    per_lato = {640: [(_riquadro(10, 10, 100, 1), [(0.0, 0.0)] * 5, 0.65)]}
+    assert len(_rilevatore_finto(per_lato, tmp_path).guarda(foto)) == 1
+
+
+def test_le_soglie_della_regola_scelta():
+    assert insight.SICUREZZA_MINIMA == 0.60
+    assert insight.SICUREZZA_SOLO_GRANDE == 0.80
