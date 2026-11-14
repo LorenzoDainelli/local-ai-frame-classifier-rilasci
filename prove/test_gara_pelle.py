@@ -221,3 +221,83 @@ def test_il_voto_dal_web_e_cieco(cliente, monkeypatch):
     votato = cliente.post("/api/gara-pelle/voto/0", json={"lettera": "C"}).json()
     assert votato["scelta"] == "C" and len(votato["chi"]) == 4
     assert cliente.get("/gara-pelle/foto/0/vera").status_code == 200
+
+
+def test_attesa_segue_il_sito():
+    import urllib.error
+
+    adagio = urllib.error.HTTPError("https://upload.wikimedia.org/x.jpg", 429, "Too Many",
+                                    {"Retry-After": "7"}, None)
+    assert gara._attesa(adagio, 0) == 7.0
+    pieno = urllib.error.HTTPError("https://upload.wikimedia.org/x.jpg", 429, "Too Many",
+                                   {}, None)
+    assert gara._attesa(pieno, 1) == 120.0
+    assert gara._attesa(OSError("giù"), 2) == 30.0
+
+
+def test_se_non_scarica_dice_le_parole_esatte_senza_cartelle(archivio, tmp_path,
+                                                              monkeypatch):
+    import urllib.error
+
+    _finti(monkeypatch, 1)
+    monkeypatch.setattr(gara.time, "sleep", lambda secondi: None)
+    tentativi = []
+
+    def rete(indirizzo, posto):
+        tentativi.append(indirizzo)
+        raise urllib.error.HTTPError(indirizzo, 403, "Forbidden", {}, None)
+    la = gara.GaraPelle(archivio, cartella=tmp_path / "gara", rete=rete,
+                        da_hf=lambda cartella: None)
+    monkeypatch.setattr(la, "_parti_coi_pesi", lambda: None)
+    with pytest.raises(ScaricamentoFallito) as preso:
+        la._corri()
+    assert len(tentativi) == 5
+    dettaglio = preso.value.dettaglio
+    assert "ritratto pubblico 1 di 1" in dettaglio
+    assert "upload.wikimedia.org ha risposto HTTP 403" in dettaglio
+    assert str(tmp_path) not in dettaglio
+
+
+def test_la_corsa_parte_mentre_scaricano_i_pesi(archivio, tmp_path, monkeypatch):
+    import threading
+
+    dati = _finti(monkeypatch, 2)
+    monkeypatch.setattr(fonti, "NITIDO_BYTE", 1)
+    monkeypatch.setattr(fonti, "NITIDO_SHA256", hashlib.sha256(b"finto").hexdigest())
+    via = threading.Event()
+    corse = []
+
+    def da_hf(cartella):
+        assert via.wait(30)
+        (cartella / fonti.NITIDO).write_bytes(b"finto")
+
+    def lancia(lavoro, al_passo):
+        corse.append((bool(lavoro.get("senza_nitido")), tuple(lavoro["casi"]),
+                      gara.pesi_nitidi(archivio.dove.modelli).is_file()))
+        via.set()
+        return {"fatto": {}}
+    la = gara.GaraPelle(archivio, cartella=tmp_path / "gara", lancia=lancia,
+                        rete=lambda i, posto: posto.write_bytes(dati[i]), da_hf=da_hf)
+    la._corri()
+    tutti = gara.giri(gara.ordine())
+    primo = tuple(c.chiave for c in tutti[0])
+    assert corse[0] == (True, primo, False)
+    pieni = [c for c in corse if not c[0]]
+    assert [c[1] for c in pieni] == [tuple(c.chiave for c in g) for g in tutti]
+    assert all(c[2] for c in pieni)
+
+
+def test_la_stanza_senza_nitido_non_accende_sharp(monkeypatch, tmp_path):
+    accesi = []
+    monkeypatch.setattr(stanza, "motore_di",
+                        lambda cartella, concorrente: (accesi.append(concorrente)
+                                                       or (lambda e, l, a: e), None))
+    monkeypatch.setattr(corsa, "fase_base", lambda *a, **k: None)
+    monkeypatch.setattr(stanza, "finiture_di",
+                        lambda cartella: pytest.fail("i voti aspettano sharp"))
+    _finti(monkeypatch, 1)
+    esito = stanza.corri({"dati": str(tmp_path), "risultati": str(tmp_path / "r"),
+                          "cartella_modelli": str(tmp_path), "casi": [],
+                          "senza_nitido": True}, lambda f, t: None)
+    assert esito["fatti"] == 0
+    assert corsa.AFFILATO not in accesi and corsa.AFFILATO_GRANA not in accesi

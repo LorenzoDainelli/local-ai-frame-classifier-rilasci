@@ -203,6 +203,9 @@ def test_nessun_filo_puo_morire_in_silenzio():
             "il filo del `Sorvegliante` chiama solo `guarda_una_volta`, che si "
             "prende dentro qualunque errore: chi racconta non deve poter "
             "fermare chi lavora",
+        "officina/miglioria/pelle_gara.py":
+            "il filo dei pesi di SeedVR2 sharp prende qualunque errore in "
+            "`_scarica_i_pesi` e lo tiene: la corsa lo mostra con le parole esatte",
         "officina/miglioria/catena.py":
             "`_Scrittore._scrivi` prende dentro qualunque guasto e lo tiene: "
             "`aspetta` lo rilancia nel filo del lavoro, `butta` toglie il video a metà",

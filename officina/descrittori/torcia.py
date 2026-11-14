@@ -4,6 +4,7 @@ import gc
 import os
 import re
 import sys
+import threading
 import time
 from dataclasses import dataclass
 
@@ -12,22 +13,37 @@ for _interruttore in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"):
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
 
+_rete_accesa = {"quanti": 0, "prima": None}
+_serratura_della_rete = threading.Lock()
+
+
 def con_la_rete_accesa() -> dict[str, str | None]:
-    prima = {}
-    for interruttore in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"):
-        prima[interruttore] = os.environ.get(interruttore)
-        os.environ[interruttore] = "0"
-    _anche_dove_e_gia_stato_letto(False)
-    return prima
+    with _serratura_della_rete:
+        prima = {}
+        for interruttore in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"):
+            prima[interruttore] = os.environ.get(interruttore)
+            os.environ[interruttore] = "0"
+        if _rete_accesa["quanti"] == 0:
+            _rete_accesa["prima"] = dict(prima)
+        _rete_accesa["quanti"] += 1
+        _anche_dove_e_gia_stato_letto(False)
+        return prima
 
 
 def rimetti_la_rete_com_era(prima: dict[str, str | None]) -> None:
-    for interruttore, valore in prima.items():
-        if valore is None:
-            os.environ.pop(interruttore, None)
-        else:
-            os.environ[interruttore] = valore
-    _anche_dove_e_gia_stato_letto(True)
+    with _serratura_della_rete:
+        if _rete_accesa["quanti"] > 1:
+            _rete_accesa["quanti"] -= 1
+            return
+        da_rimettere = _rete_accesa["prima"] if _rete_accesa["quanti"] == 1 else prima
+        _rete_accesa["quanti"] = 0
+        _rete_accesa["prima"] = None
+        for interruttore, valore in (da_rimettere or prima).items():
+            if valore is None:
+                os.environ.pop(interruttore, None)
+            else:
+                os.environ[interruttore] = valore
+        _anche_dove_e_gia_stato_letto(True)
 
 
 def _anche_dove_e_gia_stato_letto(chiuso: bool) -> None:

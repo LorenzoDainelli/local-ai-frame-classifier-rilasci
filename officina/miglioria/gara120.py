@@ -8,7 +8,7 @@ from typing import Callable
 
 from officina import registro
 from officina.descrittori import torcia
-from officina.descrittori.scaricamento import ScaricamentoFallito
+from officina.descrittori.scaricamento import ScaricamentoFallito, dettaglio_della_rete
 from officina.errori import ErroreOfficina
 from officina.miglioria import gara120_corsa as corsa
 from officina.miglioria import gara120_scarica as sc
@@ -121,7 +121,9 @@ class Gara120:
         except Exception as errore:
             registro.errore("gara_120.scaricamento_fallito",
                             **registro.dove_si_e_rotto(errore))
-            raise ScaricamentoFallito(SENZA_RETE) from errore
+            fallito = ScaricamentoFallito(SENZA_RETE)
+            fallito.dettaglio = dettaglio_della_rete(errore)
+            raise fallito from errore
         finally:
             torcia.rimetti_la_rete_com_era(prima)
 

@@ -48,6 +48,50 @@ class ScaricamentoFallito(ErroreOfficina):
     codice = "scaricamento_fallito"
 
 
+def _senza_cartelle(testo: str) -> str:
+    import re
+
+    testo = re.sub(r"[A-Za-z]:[\\/][^\s'\"]*", "<cartella>", testo)
+    testo = re.sub(r"(?<![\w:/])/(?:home|Users|root|mnt|tmp|var)/[^\s'\"]*", "<cartella>",
+                   testo)
+    return testo
+
+
+def le_parole_della_rete(errore: BaseException) -> list[str]:
+    from urllib.parse import urlparse
+
+    righe = []
+    giro, visti = errore, set()
+    while giro is not None and id(giro) not in visti:
+        visti.add(id(giro))
+        codice = getattr(giro, "code", None)
+        if codice is None:
+            codice = getattr(getattr(giro, "response", None), "status_code", None)
+        indirizzo = getattr(giro, "url", None) or getattr(
+            getattr(getattr(giro, "response", None), "request", None), "url", None)
+        sito = urlparse(str(indirizzo)).hostname if indirizzo else None
+        if isinstance(codice, int):
+            chi = f"Il sito {sito}" if sito else "Il sito"
+            righe.append(f"{chi} ha risposto HTTP {codice} {getattr(giro, 'reason', '')}")
+        motivo = getattr(giro, "reason", None)
+        if getattr(giro, "filename", None) is None:
+            testo = f"{type(giro).__name__}: {giro}"
+            if motivo is not None and not isinstance(motivo, str):
+                testo += f" ({type(motivo).__name__}: {motivo})"
+            testo = _senza_cartelle(testo.replace("\n", " "))
+            righe.append("Parole esatte: " + (testo[:400] + "..." if len(testo) > 400
+                                              else testo))
+        giro = giro.__cause__ or giro.__context__
+    return righe
+
+
+def dettaglio_della_rete(errore: BaseException, cosa: str = "") -> str:
+    righe = [f"Stava scaricando: {cosa}"] if cosa else []
+    righe += le_parole_della_rete(errore)
+    righe.append(registro.passi_del_guasto(errore))
+    return "\n".join(righe)
+
+
 @dataclass
 class Rapporto:
     nome: str

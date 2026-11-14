@@ -133,17 +133,22 @@ def corri(lavoro: dict, al_passo) -> dict:
     risultati.mkdir(parents=True, exist_ok=True)
     registro = corsa.Risultati(risultati)
     prendi = prenditore(dati, ritratti)
-    for numero, concorrente in enumerate(corsa.CONCORRENTI):
+    senza_nitido = bool(lavoro.get("senza_nitido"))
+    in_gara = [c for c in corsa.CONCORRENTI
+               if not (senza_nitido and c in (corsa.AFFILATO, corsa.AFFILATO_GRANA))]
+    for numero, concorrente in enumerate(in_gara):
         if all(corsa.nome_base(c, concorrente) in registro.fatti(corsa.BASE) for c in casi):
             continue
         motore, acceso = motore_di(cartella_modelli, concorrente)
         try:
             corsa.fase_base(risultati, registro, casi, prendi, concorrente, motore,
                             lambda f, t, n=numero: al_passo(n * len(casi) + f,
-                                                            6 * len(casi)))
+                                                            (len(in_gara) + 1) * len(casi)))
         finally:
             if acceso is not None:
                 acceso.spegni()
+    if senza_nitido:
+        return {"azione": CORSA, "fatti": 0, "chiesti": len(casi)}
     finiture, accesi = finiture_di(cartella_modelli)
     rilevatore = insight.Rilevatore(Path(cartella_modelli))
     try:

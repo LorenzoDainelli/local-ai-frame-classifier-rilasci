@@ -4,13 +4,14 @@ import contextlib
 import hashlib
 import os
 import shutil
+import threading
 import time
 from pathlib import Path
 from typing import Callable
 
 from officina import registro
 from officina.descrittori import torcia
-from officina.descrittori.scaricamento import ScaricamentoFallito
+from officina.descrittori.scaricamento import ScaricamentoFallito, dettaglio_della_rete
 from officina.errori import ErroreOfficina
 from officina.miglioria import gara120
 from officina.miglioria import pelle_casi as pc
@@ -56,7 +57,23 @@ def dalla_rete(indirizzo: str, posto: Path) -> None:
             uscita.write(pezzo)
 
 
-def scarica_ritratti(dati: Path, al_pezzo=None, rete=None) -> None:
+def _attesa(errore: BaseException, prova: int) -> float:
+    dice = None
+    intestazioni = getattr(errore, "headers", None)
+    if intestazioni is not None:
+        dice = intestazioni.get("Retry-After")
+    try:
+        return min(max(float(dice), 1.0), 300.0)
+    except (TypeError, ValueError):
+        pass
+    if getattr(errore, "code", None) in (429, 503):
+        return 60.0 * (prova + 1)
+    return 10.0 * (prova + 1)
+
+
+def scarica_ritratti(dati: Path, al_pezzo=None, rete=None, al_ritratto=None,
+                     dormi=None) -> None:
+    dormi = dormi or time.sleep
     dati.mkdir(parents=True, exist_ok=True)
     mancano = [r for r in fonti.RITRATTI if not posto_di(dati, r).is_file()]
     serve = sum(r.byte for r in mancano) + MARGINE
@@ -66,21 +83,23 @@ def scarica_ritratti(dati: Path, al_pezzo=None, rete=None) -> None:
     for numero, ritratto in enumerate(fonti.RITRATTI):
         posto = posto_di(dati, ritratto)
         if not posto.is_file():
+            if al_ritratto is not None:
+                al_ritratto(numero + 1, len(fonti.RITRATTI))
             parte = posto.with_name(posto.name + PARTE)
-            for prova in range(4):
+            for prova in range(5):
                 try:
                     (rete or dalla_rete)(ritratto.indirizzo, parte)
                     break
-                except OSError:
-                    if prova == 3:
+                except OSError as errore:
+                    if prova == 4:
                         raise
-                    time.sleep(10 * (prova + 1))
+                    dormi(_attesa(errore, prova))
             if _impronta(parte) != ritratto.sha256:
                 parte.unlink(missing_ok=True)
                 raise ScaricamentoFallito("Un ritratto scaricato non è quello giusto "
                                           "(impronta diversa): riprova più tardi.")
             os.replace(parte, posto)
-            time.sleep(PAUSA)
+            dormi(PAUSA)
         if al_pezzo is not None:
             al_pezzo(numero + 1, len(fonti.RITRATTI))
 
@@ -140,6 +159,9 @@ class GaraPelle(gara120.Gara120):
         self.lavoro = Lavoro(COSA)
         self._rete_ritratti = rete
         self._da_hf = da_hf
+        self._cosa = ""
+        self._pesi: threading.Thread | None = None
+        self._pesi_guasto: BaseException | None = None
 
     def parti(self) -> bool:
         if self.lavoro.sta_lavorando:
@@ -160,29 +182,100 @@ class GaraPelle(gara120.Gara120):
         except (gara120.Fermata, ErroreOfficina):
             raise
         except Exception as errore:
-            registro.errore("gara_pelle.scaricamento_fallito",
-                            **registro.dove_si_e_rotto(errore))
-            raise ScaricamentoFallito(SENZA_RETE) from errore
+            raise self._non_scarica(errore) from errore
         finally:
             torcia.rimetti_la_rete_com_era(prima)
 
-    def _corri(self) -> None:
-        self.lavoro.fasi(ritratti=2, pesi=8, corsa=90)
-        with self._in_rete():
-            self.lavoro.di(f"scarico e controllo i {len(fonti.RITRATTI)} ritratti pubblici")
-            scarica_ritratti(self.dati, self._al_pezzo, self._rete_ritratti)
-            self.lavoro.senza_numeri()
-            self.lavoro.fase("pesi")
-            self.lavoro.di("scarico e controllo i pesi di SeedVR2 sharp (16,5 GB)")
+    def _non_scarica(self, errore: BaseException) -> ScaricamentoFallito:
+        registro.errore("gara_pelle.scaricamento_fallito",
+                        **registro.dove_si_e_rotto(errore))
+        fallito = ScaricamentoFallito(SENZA_RETE)
+        fallito.dettaglio = dettaglio_della_rete(errore, self._cosa)
+        return fallito
+
+    def _al_ritratto(self, numero: int, quanti: int) -> None:
+        self._cosa = f"ritratto pubblico {numero} di {quanti} (upload.wikimedia.org)"
+
+    def _scarica_i_pesi(self) -> None:
+        prima = torcia.con_la_rete_accesa()
+        try:
             scarica_i_pesi_nitidi(Path(self.archivio.dove.modelli), da_hf=self._da_hf)
+        except BaseException as errore:
+            self._pesi_guasto = errore
+        finally:
+            torcia.rimetti_la_rete_com_era(prima)
+
+    def _pesi_pronti(self) -> bool:
+        posto = pesi_nitidi(Path(self.archivio.dove.modelli))
+        return posto.is_file() and posto.with_name(posto.name + ".controllato").is_file()
+
+    def _parti_coi_pesi(self) -> None:
+        if self._pesi is not None and self._pesi.is_alive():
+            return
+        if self._pesi_pronti():
+            return
+        posto = pesi_nitidi(Path(self.archivio.dove.modelli))
+        posto.parent.mkdir(parents=True, exist_ok=True)
+        if not posto.is_file() and \
+                shutil.disk_usage(posto.parent).free < fonti.NITIDO_BYTE + MARGINE:
+            raise ErroreOfficina("Non c'è abbastanza spazio sul disco per i pesi di "
+                                 "SeedVR2 sharp (16,5 GB).", codice="gara_pelle_spazio")
+        self._pesi_guasto = None
+        self._pesi = threading.Thread(target=self._scarica_i_pesi, name="pesi-pelle",
+                                      daemon=True)
+        self._pesi.start()
+
+    def _scaricano_i_pesi(self) -> bool:
+        return self._pesi is not None and self._pesi.is_alive()
+
+    def _aspetta_i_pesi(self) -> None:
+        detto = False
+        while self._scaricano_i_pesi():
+            if not detto:
+                self.lavoro.di("aspetto che finiscano di scaricarsi i pesi di SeedVR2 "
+                               "sharp (16,5 GB)")
+                detto = True
+            self._controlla()
+            self._pesi.join(2.0)
+        if self._pesi_guasto is not None:
+            guasto, self._pesi_guasto = self._pesi_guasto, None
+            if isinstance(guasto, ErroreOfficina):
+                raise guasto
+            self._cosa = "pesi di SeedVR2 sharp (huggingface.co)"
+            raise self._non_scarica(guasto) from guasto
+        if not self._pesi_pronti():
+            self._parti_coi_pesi()
+            if self._scaricano_i_pesi():
+                self._aspetta_i_pesi()
+
+    def _corri(self) -> None:
+        self.lavoro.fasi(ritratti=3, corsa=97)
+        self._parti_coi_pesi()
+        with self._in_rete():
+            self.lavoro.di(f"scarico e controllo i {len(fonti.RITRATTI)} ritratti pubblici; "
+                           "intanto si scaricano i pesi di SeedVR2 sharp (16,5 GB)")
+            scarica_ritratti(self.dati, self._al_pezzo, self._rete_ritratti,
+                             al_ritratto=self._al_ritratto)
         self.lavoro.senza_numeri()
         self._controlla()
         self.lavoro.fase("corsa")
         tutti = giri(ordine())
+        senza = set()
         for numero, giro in enumerate(tutti):
             registro_r = voto.leggi_risultati(self.risultati)
             if len(voto.fatti_del_tutto(registro_r, giro)) == len(giro):
                 continue
+            avanti = numero
+            while self._scaricano_i_pesi() and avanti < len(tutti):
+                if avanti not in senza:
+                    self.lavoro.di(f"mentre si scaricano i pesi di SeedVR2 sharp: giro "
+                                   f"{avanti + 1} di {len(tutti)} con i 3 concorrenti "
+                                   "già pronti")
+                    self._nella_stanza_con({"casi": [c.chiave for c in tutti[avanti]],
+                                            "senza_nitido": True})
+                    senza.add(avanti)
+                avanti += 1
+            self._aspetta_i_pesi()
             prima = "i primi casi molto difficili, per votare presto" if numero == 0 else \
                 f"giro {numero + 1} di {len(tutti)}"
             self.lavoro.di(f"la corsa: {prima} ({len(giro)} casi, 5 concorrenti)")

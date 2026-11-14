@@ -5,7 +5,7 @@ const pagina = document.getElementById("gara-pelle");
 const OGNI = 5000;
 const GIGA = 2 ** 30;
 const FASI = {
-    scarico: "Quando premi «Avvia la gara», scarica e controlla i 61 ritratti pubblici (circa 0,5 GB) e i pesi di SeedVR2 sharp (16,5 GB), poi parte la corsa.",
+    scarico: "Quando premi «Avvia la gara», scarica e controlla i 61 ritratti pubblici (circa 0,5 GB) e parte subito: i pesi di SeedVR2 sharp (16,5 GB) si scaricano mentre la corsa lavora.",
     corsa: "La corsa è a metà: riprende da dove era.",
     voto: "Ci sono foto da votare: puoi votare anche mentre la gara continua.",
     votata: "Hai votato tutti i casi.",
@@ -166,6 +166,21 @@ qui("gp-ferma").addEventListener("click", async () => {
 qui("gp-cancella").addEventListener("click", async () => {
     stato = await manda("/api/gara-pelle/cancella", {});
     scriviStato();
+});
+qui("gp-copia").addEventListener("click", async () => {
+    const testo = qui("gp-passi");
+    try {
+        await navigator.clipboard.writeText(testo.textContent);
+        qui("gp-copia").textContent = "Copiato";
+    } catch {
+        const scelta = document.createRange();
+        scelta.selectNodeContents(testo);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(scelta);
+        qui("gp-copia").textContent = "Selezionato: premi Ctrl+C";
+    }
+    setTimeout(() => { qui("gp-copia").textContent = "Copia per Claude"; }, 2500);
 });
 qui("gp-prima").addEventListener("click", () => caso && apriCaso(Math.max(0, numero - 1)));
 qui("gp-dopo").addEventListener("click", () => caso && apriCaso(Math.min(caso.quanti - 1, numero + 1)));
