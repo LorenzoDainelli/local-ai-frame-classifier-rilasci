@@ -789,7 +789,7 @@ def _sicurezze_in_breve(sicurezze: dict) -> dict:
 PAROLE_DELLE_PARTI = {"face": ((0, 1, 2), 0.15), "hand": ((9, 10), 0.6),
                       "foot": ((15, 16), 0.6)}
 PERSONA_PICCOLA = 0.25
-SOGLIE_PARTI = (0.3, 0.4, 0.5, 0.6, 0.7)
+SOGLIE_PARTI = (0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7)
 
 
 def _dentro(punto, riquadro, margine: float) -> bool:

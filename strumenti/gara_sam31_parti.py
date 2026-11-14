@@ -261,7 +261,7 @@ def tabella(esiti: list[dict], soglia: str) -> list[str]:
     for parola in collaudo.PAROLE_DELLE_PARTI:
         righe.append(f"-- {parola}")
         for esito in esiti:
-            voti = esito["prova"]["parti"][soglia].get(parola, {})
+            voti = esito["prova"]["parti"].get(soglia, {}).get(parola, {})
             pezzi = []
             for gruppo in GRUPPI:
                 valore = voti.get(gruppo)
@@ -272,12 +272,43 @@ def tabella(esiti: list[dict], soglia: str) -> list[str]:
     return righe
 
 
+FALSI_PARI = (2.0, 5.0, 10.0, 20.0)
+
+
+def a_pari_falsi(esiti: list[dict]) -> list[str]:
+    righe = ["== a pari falsi: la soglia migliore sui difficili =="]
+    for parola in collaudo.PAROLE_DELLE_PARTI:
+        for tetto in FALSI_PARI:
+            righe.append(f"-- {parola}, al massimo {tetto:g} falsi ogni 100 foto")
+            for esito in esiti:
+                migliore = None
+                for soglia, voti in esito["prova"]["parti"].items():
+                    uno = voti.get(parola, {})
+                    difficili = (uno.get("difficili") or [None])[0]
+                    falsi = uno.get("falsi ogni 100 foto")
+                    if difficili is None or falsi is None or falsi > tetto:
+                        continue
+                    if migliore is None or difficili > migliore[0]:
+                        molto = (uno.get("molto difficili") or [None])[0]
+                        migliore = (difficili, soglia, falsi, molto)
+                if migliore is None:
+                    righe.append(f"   {esito['nome']:34s} nessuna soglia")
+                    continue
+                difficili, soglia, falsi, molto = migliore
+                molto_testo = "-" if molto is None else f"{100 * molto:.1f}%"
+                righe.append(f"   {esito['nome']:34s} difficili {100 * difficili:.1f}% | "
+                             f"molto difficili {molto_testo} | soglia {soglia} | "
+                             f"falsi {falsi}")
+    return righe
+
+
 def confronta(file: list[Path], uscita: Path) -> None:
     esiti = [json.loads(f.read_text(encoding="utf-8")) for f in file if f.is_file()]
     righe = [f"{e['nome']}: {e['prova']['foto']} foto, "
              f"{e['prova']['secondi_per_foto']} s per foto" for e in esiti]
     for soglia in map(str, collaudo.SOGLIE_PARTI):
         righe += tabella(esiti, soglia)
+    righe += a_pari_falsi(esiti)
     testo = "\n".join(righe)
     print(testo, flush=True)
     uscita.write_text(json.dumps(esiti, ensure_ascii=False, indent=1), encoding="utf-8")
