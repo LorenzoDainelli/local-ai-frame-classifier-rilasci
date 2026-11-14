@@ -50,7 +50,8 @@ class SeedVR2:
     resta_acceso = True
 
     def __init__(self, cartella_modelli: str | None = None, stretto: bool = False,
-                 disco: bool = False, **_opzioni) -> None:
+                 disco: bool = False, dit: str = DIT, cartella_pesi: str | None = None,
+                 rumore_latente: float = 0.0, **_opzioni) -> None:
         if not cartella_modelli or not scaricamento.e_in_casa(Path(cartella_modelli)):
             raise MancaSeedVR2("Il modello che migliora foto e video non è ancora "
                                "stato scaricato.")
@@ -63,13 +64,21 @@ class SeedVR2:
         self.tempi: list[dict] = []
         self._blocchi = seedvr2_blocchi.Blocchi(disco=disco)
         self.precarico = False
+        self.dit = dit
+        self.cartella_pesi = Path(cartella_pesi) if cartella_pesi else None
+        self.rumore_latente = float(rumore_latente)
+        if dit != DIT or self.rumore_latente:
+            self.versione = f"{SeedVR2.versione}-{Path(dit).stem}-{self.rumore_latente:g}"
 
     quadri_per_volta = QUADRI_PER_VOLTA
 
     def firma(self) -> dict:
-        return {"nome": NOME, "versione": self.versione, "dit": DIT, "vae": VAE, "seme": SEME,
-                "mucchio": MUCCHIO, "per_volta": QUADRI_PER_VOLTA, "contesto": CONTESTO,
-                "tessera": TESSERA, "sovrapposta": SOVRAPPOSTA}
+        firma = {"nome": NOME, "versione": self.versione, "dit": self.dit, "vae": VAE,
+                 "seme": SEME, "mucchio": MUCCHIO, "per_volta": QUADRI_PER_VOLTA,
+                 "contesto": CONTESTO, "tessera": TESSERA, "sovrapposta": SOVRAPPOSTA}
+        if self.rumore_latente:
+            firma["rumore_latente"] = self.rumore_latente
+        return firma
 
     def _carica(self):
         if self._s is not None:
@@ -143,9 +152,11 @@ class SeedVR2:
         tessera = (scelte["tile"], scelte["tile"])
         sopra = (scelte["overlap"], scelte["overlap"])
         esecutore, cache = utili.prepare_runner(
-            dit_model=DIT, vae_model=VAE, model_dir=str(self.casa / scaricamento.PESI),
+            dit_model=self.dit, vae_model=VAE,
+            model_dir=str(self.cartella_pesi or self.casa / scaricamento.PESI),
             debug=s["debug"], ctx=self._ctx, dit_cache=True, vae_cache=True,
-            dit_id="officina_dit" + ("_stretto" if self.stretto else ""),
+            dit_id="officina_dit" + ("" if self.dit == DIT else "_" + Path(self.dit).stem)
+            + ("_stretto" if self.stretto else ""),
             vae_id="officina_vae" + ("_stretto" if self.stretto else ""),
             block_swap_config={"blocks_to_swap": scelte["blocks_to_swap"],
                                "swap_io_components": scelte["swap_io_components"],
@@ -235,7 +246,8 @@ class SeedVR2:
         partito = self._misura(torch, tempi, "encode", partito)
         ctx = fasi.upscale_all_batches(esecutore, ctx=ctx, debug=debug,
                                        progress_callback=self._fase("upscale"), seed=SEME,
-                                       latent_noise_scale=0.0, cache_model=True)
+                                       latent_noise_scale=self.rumore_latente,
+                                       cache_model=True)
         partito = self._misura(torch, tempi, "upscale", partito)
         ctx = fasi.decode_all_batches(esecutore, ctx=ctx, debug=debug,
                                       progress_callback=self._fase("decode"), cache_model=True)

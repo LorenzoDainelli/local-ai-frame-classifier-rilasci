@@ -38,7 +38,7 @@ jobs:
       - name: Il collaudo
         run: python strumenti/collaudo_volti_soglie.py --cartella "$RUNNER_TEMP/volti" --uscita collaudo-volti-soglie.json
       - if: always()
-        run: cat collaudo-volti-soglie.json
+        run: python -c "import json; d=json.load(open('collaudo-volti-soglie.json')); print(json.dumps({'oggi': d['oggi'], 'foto': d['foto'], 'migliori': [{k: r[k] for k in ('regola', 'media difficili', 'media falsi', 'dettagli')} for r in d['migliori'][:8]]}, ensure_ascii=False))"
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

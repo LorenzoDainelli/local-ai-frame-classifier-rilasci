@@ -41,7 +41,8 @@ class CodeFormer:
     nome = NOME
     versione = f"0.1.0-w{FEDELTA}"
 
-    def __init__(self, cartella_modelli: str | None = None, **_opzioni) -> None:
+    def __init__(self, cartella_modelli: str | None = None, fedelta: float = FEDELTA,
+                 **_opzioni) -> None:
         from officina.volti import rilevatore
 
         if not cartella_modelli or not codeformer_pesi.e_in_casa(Path(cartella_modelli)):
@@ -55,6 +56,9 @@ class CodeFormer:
             rilevatore.FILE_RILEVATORE
         self._reti = None
         self._trova = None
+        self.fedelta = float(fedelta)
+        if self.fedelta != FEDELTA:
+            self.versione = f"0.1.0-w{self.fedelta:g}"
 
     def _accendi(self):
         if self._reti is not None:
@@ -177,7 +181,7 @@ class CodeFormer:
 
         reti = self._accendi()
         with torch.inference_mode():
-            uscita = reti["volto"](self._in_tensore(ritaglio), w=FEDELTA, adain=True)
+            uscita = reti["volto"](self._in_tensore(ritaglio), w=self.fedelta, adain=True)
             uscita = (uscita.squeeze(0).float().cpu().clamp(-1, 1) + 1) / 2
         rgb = (uscita.permute(1, 2, 0).numpy() * 255.0).round().astype("uint8")
         return rgb[:, :, ::-1].copy()
