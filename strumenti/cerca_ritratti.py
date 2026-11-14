@@ -6,6 +6,7 @@ import io
 import json
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -32,16 +33,27 @@ MASSIMO_DA_GUARDARE = 900
 
 
 def chiedi(**parametri) -> dict:
-    parametri = {"format": "json", "formatversion": "2", **parametri}
+    parametri = {"format": "json", "formatversion": "2", "maxlag": "5", **parametri}
     indirizzo = API + "?" + urllib.parse.urlencode(parametri)
-    for prova in range(5):
+    for prova in range(8):
+        time.sleep(1.0)
         try:
-            richiesta = urllib.request.Request(indirizzo, headers={"User-Agent": CHI})
+            richiesta = urllib.request.Request(indirizzo, headers={
+                "User-Agent": CHI, "Accept-Encoding": "identity"})
             with urllib.request.urlopen(richiesta, timeout=60) as risposta:
-                return json.loads(risposta.read())
+                dati = json.loads(risposta.read())
+            if (dati.get("error") or {}).get("code") == "maxlag":
+                raise RuntimeError("maxlag")
+            return dati
+        except urllib.error.HTTPError as guasto:
+            attesa = guasto.headers.get("Retry-After") or ""
+            corpo = guasto.read()[:200].decode("utf-8", "replace").replace("\n", " ")
+            print("API riprovo", prova, guasto.code, attesa, corpo, flush=True)
+            pausa = int(attesa) if attesa.isdigit() else 15 * (prova + 1)
+            time.sleep(min(pausa, 120))
         except Exception as guasto:
-            print("API riprovo", prova, type(guasto).__name__, flush=True)
-            time.sleep(5 * (prova + 1))
+            print("API riprovo", prova, type(guasto).__name__, guasto, flush=True)
+            time.sleep(15 * (prova + 1))
     raise RuntimeError("Commons non risponde")
 
 
