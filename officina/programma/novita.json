@@ -11,6 +11,18 @@
     "semplice": [
       [
         "controlla",
+        "Se l'archivio non si apre per un guasto imprevisto, sotto il messaggio c'è il dettaglio con «Copia per Claude». Dentro ci sono solo versione, punto del guasto e messaggio del database: nessun nome di cartella o di file."
+      ],
+      [
+        "controlla",
+        "Perché mancano: per ogni scatto rotto c'è «Togli dal programma», con conferma. Lo toglie da galleria e programma, il file sul disco resta e non torna quando si rileggono le cartelle. «Rimetti» lo fa tornare."
+      ],
+      [
+        "migliora",
+        "Video HEVC: se la finestra sa leggerli da sola non compare più per qualche secondo «non lo sa aprire»; mentre prova c'è scritto «Apro il video». Il riquadro con «Preparane una copia» arriva solo se davvero non parte."
+      ],
+      [
+        "controlla",
         "Primo avvio dopo una beta più veloce: se l'archivio non è cambiato dalla chiusura, la copia già controllata vale come copia prima dell'aggiornamento. Mentre apre vedi a che punto è, con i secondi e «Copia per Claude»."
       ],
       [

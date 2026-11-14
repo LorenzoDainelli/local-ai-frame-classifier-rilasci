@@ -524,7 +524,15 @@ def pagina_perche_mancano(richiesta: Request):
         **base.comune(richiesta, "intelligenza"),
         "cosa": perche.guarda(archivio),
         "giusti": giusto.caricati(archivio),
+        "tolti": _tolti(archivio),
     })
+
+
+def _tolti(archivio) -> list[dict]:
+    from officina.modello import tolti
+
+    with archivio.lettura() as connessione:
+        return tolti.elenco(connessione)
 
 
 @strada.post("/api/perche-mancano/{scatto_id}/giusto")
@@ -545,6 +553,29 @@ def api_togli_il_file_giusto(scatto_id: int):
 
     giusto.togli(accesso.aperto(), scatto_id)
     return {"tolto": True}
+
+
+@strada.post("/api/perche-mancano/{scatto_id}/togli-dal-programma")
+def api_togli_dal_programma(scatto_id: int):
+    from officina.impronte import perche
+    from officina.modello import tolti
+
+    try:
+        fatto = perche.togli_dal_programma(accesso.aperto(), scatto_id)
+    except tolti.NonSiToglie as errore:
+        return JSONResponse({"messaggio": errore.messaggio}, status_code=409)
+    return {"tolto": True, "nome": fatto["nome"]}
+
+
+@strada.post("/api/tolti-dal-programma/{tolto_id}/rimetti")
+def api_rimetti_nel_programma(tolto_id: int):
+    from officina.modello import tolti
+
+    with accesso.aperto().scrittura() as connessione:
+        if not tolti.rimetti(connessione, tolto_id):
+            return JSONResponse({"messaggio": "Non c'è più in questo elenco."},
+                                status_code=404)
+    return {"rimesso": True}
 
 
 @strada.post("/api/perche-mancano/salva")

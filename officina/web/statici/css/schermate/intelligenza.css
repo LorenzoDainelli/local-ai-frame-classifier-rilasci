@@ -40,6 +40,12 @@
 .ia-modelli li.fatto .barretta > span { background: var(--bene, var(--accento)); }
 .pm-giusto { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
 .pm-giusto [data-pm-esito] { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+.pm-via { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+.pm-via-conferma { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; flex: 1 1 100%; min-width: 0; }
+.pm-via-conferma[hidden] { display: none; }
+.pm-via-conferma .dc-perche { flex: 1 1 320px; min-width: 0; }
+.pm-via [data-pm-via-detto] { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+li.pm-tolto .dc-nome-e-dove { opacity: .55; }
 .pm-salva { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; }
 .pm-salva p { margin: 0; flex: 1 1 320px; min-width: 0; }
 .pm-carta { display: grid; gap: 10px; padding: 16px 20px; }

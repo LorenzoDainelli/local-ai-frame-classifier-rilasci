@@ -116,6 +116,22 @@ TORCH_VECCHIO = ("Il motore delle reti neurali che hai in casa (torch {versione}
                  "eseguire codice sul computer. Scarico da solo quello nuovo. ")
 
 
+def _per_claude(versione: str, guasto: BaseException) -> str:
+    import sqlite3
+
+    righe = [f"Versione {versione}", registro.passi_del_guasto(guasto)]
+    giro, visti = guasto, set()
+    while giro is not None and id(giro) not in visti:
+        visti.add(id(giro))
+        if isinstance(giro, sqlite3.Error):
+            righe.append(f"Database: {str(giro)[:300]}")
+        elif isinstance(giro, OSError):
+            righe.append(f"Disco: errno {giro.errno}, "
+                         f"winerror {getattr(giro, 'winerror', None)}")
+        giro = giro.__cause__ or giro.__context__
+    return "\n".join(righe)
+
+
 class Programma(ColFisso, Finestre, Aggiornarsi):
 
     def __init__(self, webview=None, esamina=None):
@@ -582,7 +598,9 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             registro.errore("programma.apertura_rotta", **registro.dove_si_e_rotto(guasto))
             self._mostra_il_guasto(
                 "L'archivio non si è aperto per un guasto che non avevo "
-                "previsto. Chiudi il programma e riaprilo.")
+                "previsto. Chiudi il programma e riaprilo. Se torna, premi "
+                "«Copia per Claude» e incollalo a Claude.",
+                tecnico=_per_claude(self.versione, guasto))
             return
         self._mostra_la_principale(indirizzo)
 
@@ -942,12 +960,12 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             except Exception as guasto:
                 registro.errore("copie.in_sottofondo_fallita", **registro.dove_si_e_rotto(guasto))
 
-    def _mostra_il_guasto(self, messaggio: str) -> None:
+    def _mostra_il_guasto(self, messaggio: str, tecnico: str = "") -> None:
         self.guasto = messaggio
         if self.principale is not None:
             self.principale.load_html(pagine.attesa(
                 "Non sono riuscito ad aprire l'archivio", messaggio, gira=False,
-                versione=self.versione))
+                versione=self.versione, tecnico=tecnico))
         elif self.finestrina is not None:
             self.finestrina.evaluate_js("window.location.reload()")
 

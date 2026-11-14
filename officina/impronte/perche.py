@@ -181,6 +181,28 @@ def guarda(archivio, quanti: int = QUANTI) -> dict:
             "in_tutto": len(senza), "scatti": voci, "testo": testo}
 
 
+def togli_dal_programma(archivio, scatto_id: int) -> dict:
+    from officina.impronte import giusto
+    from officina.modello import tolti
+
+    nomi = pronti(archivio.dove.modelli)
+    if not nomi:
+        raise tolti.NonSiToglie("Mancano i modelli delle impronte: non so dire se è rotto.")
+    with archivio.lettura() as connessione:
+        if scatto_id not in _senza_impronta(connessione, nomi):
+            raise tolti.NonSiToglie("Questo scatto ha l'impronta: non è fra i rotti.")
+        motivo = tolti.perche_no(connessione, scatto_id)
+    if motivo:
+        raise tolti.NonSiToglie(motivo)
+    esito = prova(archivio, scatto_id, max(scheda(nome).lato for nome in nomi))
+    if esito["esito"] == "si_apre":
+        raise tolti.NonSiToglie("Riprovando, adesso si apre: non lo tolgo.")
+    with archivio.scrittura() as connessione:
+        fatto = tolti.togli(connessione, scatto_id)
+    giusto.togli(archivio, scatto_id)
+    return fatto
+
+
 def tre_inquadrature_accese(archivio) -> str:
     try:
         return "si" if archivio.impostazione("impronte_a_piu_ingrandimenti") else "no"

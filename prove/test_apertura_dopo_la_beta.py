@@ -4,6 +4,7 @@ import sqlite3
 
 import pytest
 
+from officina import VERSIONE_SCHEMA
 from officina.archivio import accesso, apertura, copie, migrazioni
 
 
@@ -115,7 +116,8 @@ def test_l_apertura_dice_a_che_punto_e_e_quanto_ci_ha_messo(chiuso_alla_80, monk
     assert not stato["in_corso"]
     nomi = [f["cosa"] for f in stato["fatti"]]
     assert nomi[0].startswith("Copia di sicurezza: uguale a quella di chiusura")
-    assert any(n.startswith("Aggiornamento 1 di 1:") for n in nomi)
+    quante = VERSIONE_SCHEMA - 80
+    assert any(n.startswith(f"Aggiornamento {quante} di {quante}:") for n in nomi)
     assert nomi[-1] == "Statistiche del database"
     assert visti[0] == "Copia di sicurezza prima dell'aggiornamento"
     assert all(f["secondi"] >= 0 for f in stato["fatti"])

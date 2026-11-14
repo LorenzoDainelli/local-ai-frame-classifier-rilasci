@@ -90,3 +90,43 @@ salva?.addEventListener("click", async () => {
 });
 
 aggiornaSalva();
+
+for (const via of document.querySelectorAll("[data-pm-via]")) {
+    const scatto = via.dataset.pmVia;
+    const chiedi = via.querySelector("[data-pm-via-chiedi]");
+    const conferma = via.querySelector("[data-pm-via-conferma]");
+    const si = via.querySelector("[data-pm-via-si]");
+    const no = via.querySelector("[data-pm-via-no]");
+    const parla = via.querySelector("[data-pm-via-detto]");
+    chiedi.addEventListener("click", () => {
+        chiedi.hidden = true;
+        conferma.hidden = false;
+        parla.textContent = "";
+        no.focus();
+    });
+    no.addEventListener("click", () => {
+        conferma.hidden = true;
+        chiedi.hidden = false;
+        chiedi.focus();
+    });
+    si.addEventListener("click", async () => {
+        si.disabled = true;
+        no.disabled = true;
+        parla.textContent = "Riprovo ad aprirlo e, se è ancora rotto, lo tolgo…";
+        try {
+            await rispostaDi(await fetch(`/api/perche-mancano/${scatto}/togli-dal-programma`, { method: "POST", headers: { Accept: "application/json" } }));
+            conferma.hidden = true;
+            const riga = via.closest("li");
+            riga.querySelectorAll("form, a, [data-pm-giusto]").forEach((pezzo) => { pezzo.hidden = true; });
+            riga.classList.add("pm-tolto");
+            parla.textContent = "Tolto dal programma. Il file sul disco è rimasto dov'era.";
+            aggiornaSalva();
+        } catch (errore) {
+            parla.textContent = errore.message;
+            conferma.hidden = true;
+            chiedi.hidden = false;
+        }
+        si.disabled = false;
+        no.disabled = false;
+    });
+}

@@ -68,7 +68,9 @@ def finestrina(versione: str) -> str:
 
 
 def attesa(titolo: str, detto: str = "", gira: bool = True, versione: str = "",
-           passi: list[str] | None = None, fotina: str = "sveglia") -> str:
+           passi: list[str] | None = None, fotina: str = "sveglia",
+           tecnico: str = "") -> str:
     return _ambiente().get_template("attesa.html").render(
         **_comune(versione), titolo=titolo, detto=detto, gira=gira,
-        passi=passi or [], fotina=fotina, scene=_script("fotina_scene.js"))
+        passi=passi or [], fotina=fotina, scene=_script("fotina_scene.js"),
+        tecnico=tecnico)

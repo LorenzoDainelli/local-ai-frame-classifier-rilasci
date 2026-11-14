@@ -1732,6 +1732,21 @@ def _versione_77(connessione: sqlite3.Connection) -> None:
     connessione.execute("CREATE INDEX parti_guardate_per_parte ON parti_guardate(parte_id)")
 
 
+def _versione_82(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE tolti_dal_programma (
+            id          INTEGER PRIMARY KEY,
+            impronta    TEXT NOT NULL UNIQUE,
+            nome        TEXT,
+            percorso    TEXT,
+            dimensione  INTEGER,
+            genere      TEXT,
+            tolto_il    TEXT NOT NULL
+        )
+        """)
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1880,6 +1895,8 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_80),
     Migrazione(81, "gli scatti con la data ma senza fuso orario vanno al loro posto in "
                    "galleria, non in fondo", _versione_81),
+    Migrazione(82, "gli scatti rotti tolti dal programma non tornano alla lettura delle "
+                   "cartelle", _versione_82),
 ]
 
 

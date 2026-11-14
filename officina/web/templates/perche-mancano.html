@@ -51,6 +51,17 @@
                     <button class="tasto-comando nudo piccolo" type="button" data-pm-togli {% if not g %}hidden{% endif %}>Togli</button>
                 </span>
                 {% endif %}
+                {% if v.prova.esito != "si_apre" %}
+                <span class="pm-via" data-pm-via="{{ v.scatto }}">
+                    <button class="tasto-comando nudo piccolo" type="button" data-pm-via-chiedi>{{ icona('x', 14) }} Togli dal programma</button>
+                    <span class="pm-via-conferma" data-pm-via-conferma hidden>
+                        <span class="dc-perche">Lo tolgo dalla galleria e dal programma. Il file sul disco resta dov'è, non lo tocco; alla prossima lettura delle cartelle non torna. Si può rimettere dall'elenco qui sotto.</span>
+                        <button class="tasto-comando piccolo pericolo" type="button" data-pm-via-si>Sì, toglilo</button>
+                        <button class="tasto-comando nudo piccolo" type="button" data-pm-via-no>No</button>
+                    </span>
+                    <span class="dc-perche" data-pm-via-detto role="status"></span>
+                </span>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>
@@ -81,6 +92,25 @@
         });
     })();
     </script>
+    {% endif %}
+
+    {% if tolti %}
+    <section class="carta pm-carta" id="tolti-dal-programma">
+        <h2>Tolti dal programma</h2>
+        <p class="piccolo tenue">Questi file sono ancora sul disco, ma il programma non li riprende quando legge le cartelle. «Rimetti» li fa tornare alla prossima lettura.</p>
+        <ul class="dc-file">
+            {% for t in tolti %}
+            <li data-pm-tolto="{{ t.id }}">
+                <span class="dc-nome-e-dove"><span class="nome-di-file">{{ t.nome or 'senza nome' }}</span>
+                {% if t.percorso %}<span class="dc-perche">Era in: <span class="nome-di-file">{{ t.percorso }}</span></span>{% endif %}
+                <span class="dc-perche">Tolto il {{ t.tolto_il[:10] }}</span></span>
+                <button class="tasto-comando nudo piccolo" type="button" data-pm-rimetti>Rimetti</button>
+                <span class="dc-perche" data-pm-rimetti-detto role="status"></span>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    <script type="module" src="/statici/js/perche_mancano_tolti.js"></script>
     {% endif %}
 </div>
 </main>

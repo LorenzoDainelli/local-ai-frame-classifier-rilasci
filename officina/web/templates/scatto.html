@@ -132,6 +132,7 @@
     <p class="ft-versione-diversa piccolo" role="note">È una versione diversa da quella importata: l'IA non la usa.</p>
     {% endif %}
     {% if filmato and not si_vede and not non_si_apre and dall_archivio not in ('chiuso', 'si_apre') and not (nell_archivio and nell_archivio.persa) %}
+    {% if not movimento %}<p class="tenue piccolo ft-sotto-la-lastra" id="video-provo" role="status" hidden>Apro il video: la finestra prova a leggerlo da sola…</p>{% endif %}
     <div class="carta ft-non-si-apre ft-sotto-la-lastra" id="live-non-si-legge" {% if movimento %}hidden{% endif %}>
         <p class="attenuato piccolo">
             {{ "Il movimento di questa foto live" if movimento else "Questo video" }} è codificato in
@@ -508,12 +509,29 @@
     const video = document.getElementById("lastra-video");
     if (!video || !video.hidden || !video.dataset.sorgente) return;
     if (!video.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"')) return;
+    const avviso = document.getElementById("live-non-si-legge");
+    const provo = document.getElementById("video-provo");
+    if (avviso) avviso.hidden = true;
+    if (provo) provo.hidden = false;
+    let finito = false;
+    const non_parte = () => {
+        if (finito) return;
+        finito = true;
+        if (provo) provo.hidden = true;
+        if (avviso) avviso.hidden = false;
+        video.removeAttribute("src");
+        video.load();
+    };
+    const attesa = setTimeout(non_parte, 30000);
+    video.addEventListener("error", non_parte, { once: true });
     video.addEventListener("loadeddata", () => {
+        if (finito) return;
+        finito = true;
+        clearTimeout(attesa);
         video.hidden = false;
         const ferma = document.getElementById("lastra-principale");
         if (ferma) ferma.hidden = true;
-        const avviso = document.getElementById("live-non-si-legge");
-        if (avviso) avviso.hidden = true;
+        if (provo) provo.hidden = true;
     }, { once: true });
     video.src = video.dataset.sorgente;
 })();
