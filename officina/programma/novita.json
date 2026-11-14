@@ -10,6 +10,14 @@
     ],
     "semplice": [
       [
+        "cerca",
+        "Cerca a parole: se scrivi il nome intero di un file esce solo quel file, senza scatti estranei. Ed è più veloce: legge solo la parte del modello che capisce le parole e la tiene pronta."
+      ],
+      [
+        "cerca",
+        "Filtro del periodo: i giorni esatti si scrivono come 04/11/2021 e trovano davvero quel giorno; il riquadro sta tutto nello schermo e ricorda i giorni scelti."
+      ],
+      [
         "sfida",
         "Gara della pelle: parte appena ha i 61 ritratti e lavora mentre si scaricano i 16,5 GB di SeedVR2 sharp. Se qualcosa non si scarica, sotto c'è l'errore preciso con «Copia per Claude»."
       ],

@@ -65,18 +65,49 @@ function ultimoGiorno(mese) {
 
 const NOMI_DEI_MESI = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
 
+function inParole(iso) {
+    if (!iso) return "";
+    const [anno, mese, giorno] = iso.split("-");
+    return `${giorno}/${mese}/${anno}`;
+}
+
+function daParole(testo) {
+    const pulito = testo.trim();
+    if (!pulito) return "";
+    const pezzi = pulito.match(/^(\d{1,2})\s*[/.\-\s]\s*(\d{1,2})\s*[/.\-\s]\s*(\d{2}|\d{4})$/);
+    if (!pezzi) return null;
+    const giorno = Number(pezzi[1]);
+    const mese = Number(pezzi[2]);
+    let anno = Number(pezzi[3]);
+    if (pezzi[3].length === 2) anno += anno > new Date().getFullYear() % 100 ? 1900 : 2000;
+    const prova = new Date(anno, mese - 1, giorno);
+    if (prova.getFullYear() !== anno || prova.getMonth() !== mese - 1 || prova.getDate() !== giorno) return null;
+    return `${String(anno).padStart(4, "0")}-${String(mese).padStart(2, "0")}-${String(giorno).padStart(2, "0")}`;
+}
+
 function preparaIlPeriodo(modulo) {
     const campoDal = modulo.querySelector("[data-campo-dal]");
     const campoAl = modulo.querySelector("[data-campo-al]");
     const giornoDal = modulo.querySelector("[data-giorno-dal]");
     const giornoAl = modulo.querySelector("[data-giorno-al]");
+    const sbaglio = modulo.querySelector("[data-giorni-sbaglio]");
     const griglia = modulo.querySelector("[data-mesi]");
     let mesi = {};
     let anni = [];
     let anno = "";
-    let primo = modulo.dataset.dal ? modulo.dataset.dal.slice(0, 7) : "";
-    let ultimo = modulo.dataset.al ? modulo.dataset.al.slice(0, 7) : primo;
+    let dal = modulo.dataset.dal || "";
+    let al = modulo.dataset.al || "";
     let caricato = false;
+    giornoDal.value = inParole(dal);
+    giornoAl.value = inParole(al);
+
+    const scriviIGiorni = () => {
+        giornoDal.value = inParole(dal);
+        giornoAl.value = inParole(al);
+        giornoDal.removeAttribute("aria-invalid");
+        giornoAl.removeAttribute("aria-invalid");
+        sbaglio.hidden = true;
+    };
 
     const disegna = () => {
         modulo.querySelector("[data-anno-nome]").textContent = anno;
@@ -84,6 +115,8 @@ function preparaIlPeriodo(modulo) {
         modulo.querySelector("[data-anno-prima]").disabled = posto <= 0;
         modulo.querySelector("[data-anno-dopo]").disabled = posto >= anni.length - 1;
         griglia.replaceChildren();
+        const primo = dal ? dal.slice(0, 7) : "";
+        const ultimo = al ? al.slice(0, 7) : primo;
         let nell_anno = 0;
         NOMI_DEI_MESI.forEach((nome, indice) => {
             const chiave = anno + "-" + String(indice + 1).padStart(2, "0");
@@ -96,26 +129,60 @@ function preparaIlPeriodo(modulo) {
             tasto.title = quanti + (quanti === 1 ? " scatto" : " scatti");
             tasto.disabled = !quanti;
             tasto.dataset.mese = chiave;
-            if (primo && chiave >= primo && chiave <= ultimo) tasto.classList.add("piena");
+            if ((primo || ultimo) && chiave >= (primo || "0") && chiave <= (ultimo || "9")) {
+                tasto.classList.add("piena");
+            }
             tasto.addEventListener("click", () => {
-                const allunga = primo && primo === ultimo && chiave !== primo;
-                const da = primo;
-                if (!primo || primo !== ultimo) { primo = chiave; ultimo = chiave; }
-                else if (chiave < primo) primo = chiave;
-                else ultimo = chiave;
+                const da = dal.slice(0, 7);
+                const a = al.slice(0, 7);
+                const unMese = da && da === a && dal.endsWith("-01") && al === ultimoGiorno(a);
+                const allunga = unMese && chiave !== da;
+                if (!allunga) { dal = chiave + "-01"; al = ultimoGiorno(chiave); }
+                else if (chiave < da) dal = chiave + "-01";
+                else al = ultimoGiorno(chiave);
+                scriviIGiorni();
                 disegna();
                 if (!allunga || !window.movimenti?.striscia) return;
                 const mesi = [...griglia.querySelectorAll("[data-mese]")]
-                    .filter((m) => m.dataset.mese >= primo && m.dataset.mese <= ultimo && m.dataset.mese !== da);
+                    .filter((m) => m.dataset.mese >= dal.slice(0, 7) && m.dataset.mese <= al.slice(0, 7) && m.dataset.mese !== da);
                 window.movimenti.striscia(chiave < da ? mesi.reverse() : mesi);
             });
             griglia.append(tasto);
         });
         modulo.querySelector("[data-conto-anno]").textContent =
             nell_anno.toLocaleString("it-IT") + " scatti nel " + anno;
-        campoDal.value = primo ? primo + "-01" : "";
-        campoAl.value = ultimo ? ultimoGiorno(ultimo) : "";
     };
+
+    const leggiIGiorni = () => {
+        const nuovoDal = daParole(giornoDal.value);
+        const nuovoAl = daParole(giornoAl.value);
+        giornoDal.toggleAttribute("aria-invalid", nuovoDal === null);
+        giornoAl.toggleAttribute("aria-invalid", nuovoAl === null);
+        if (nuovoDal === null || nuovoAl === null) {
+            sbaglio.textContent = "Scrivi la data come giorno/mese/anno, per esempio 04/11/2021.";
+            sbaglio.hidden = false;
+            return false;
+        }
+        if (nuovoDal && nuovoAl && nuovoDal > nuovoAl) {
+            sbaglio.textContent = "Il primo giorno viene dopo l'ultimo: scambiali.";
+            sbaglio.hidden = false;
+            return false;
+        }
+        sbaglio.hidden = true;
+        dal = nuovoDal;
+        al = nuovoAl;
+        if (anni.length) disegna();
+        return true;
+    };
+    for (const campo of [giornoDal, giornoAl]) {
+        campo.addEventListener("change", leggiIGiorni);
+        campo.addEventListener("input", () => {
+            if (/^\d{2}$|^\d{2}\/\d{2}$/.test(campo.value) && campo.value.length > (campo.dataset.prima || "").length) {
+                campo.value += "/";
+            }
+            campo.dataset.prima = campo.value;
+        });
+    }
 
     const sposta = (verso) => {
         const posto = anni.indexOf(anno) + verso;
@@ -124,21 +191,29 @@ function preparaIlPeriodo(modulo) {
     modulo.querySelector("[data-anno-prima]").addEventListener("click", () => sposta(-1));
     modulo.querySelector("[data-anno-dopo]").addEventListener("click", () => sposta(1));
     modulo.querySelector("[data-tutto-anno]").addEventListener("click", () => {
-        primo = anno + "-01";
-        ultimo = anno + "-12";
+        dal = anno + "-01-01";
+        al = anno + "-12-31";
+        scriviIGiorni();
         disegna();
     });
     modulo.querySelector("[data-togli]")?.addEventListener("click", () => {
+        dal = "";
+        al = "";
+        scriviIGiorni();
         campoDal.value = "";
         campoAl.value = "";
-        giornoDal.value = "";
-        giornoAl.value = "";
-        modulo.requestSubmit();
+        campoDal.disabled = true;
+        campoAl.disabled = true;
+        modulo.submit();
     });
-    modulo.addEventListener("submit", () => {
-        if (giornoDal.value !== giornoDal.defaultValue) campoDal.value = giornoDal.value;
-        if (giornoAl.value !== giornoAl.defaultValue) campoAl.value = giornoAl.value;
-        for (const campo of [campoDal, campoAl]) if (!campo.value) campo.disabled = true;
+    modulo.addEventListener("submit", (evento) => {
+        if (!leggiIGiorni()) {
+            evento.preventDefault();
+            return;
+        }
+        campoDal.value = dal;
+        campoAl.value = al;
+        for (const campo of [campoDal, campoAl]) campo.disabled = !campo.value;
     });
 
     return async () => {
@@ -158,7 +233,7 @@ function preparaIlPeriodo(modulo) {
         modulo.querySelectorAll("[data-con-mesi]").forEach((pezzo) => { pezzo.hidden = !ci_sono; });
         modulo.querySelector("[data-senza-mesi]").hidden = ci_sono;
         if (!ci_sono) return;
-        anno = primo && anni.includes(primo.slice(0, 4)) ? primo.slice(0, 4) : anni[anni.length - 1];
+        anno = dal && anni.includes(dal.slice(0, 4)) ? dal.slice(0, 4) : anni[anni.length - 1];
         disegna();
     };
 }

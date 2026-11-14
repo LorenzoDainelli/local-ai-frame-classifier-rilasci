@@ -107,3 +107,63 @@ def test_le_parole_dei_filtri_portano_a_campi_veri():
     filtro = scatti.Filtro()
     for _parole, chiave, _valore in ricerca.PAROLE_DEI_FILTRI:
         assert hasattr(filtro, chiave), chiave
+
+
+def _un_nome(connessione, simile="IMG_1003%"):
+    return connessione.execute(
+        "SELECT f.scatto_id, p.nome FROM percorsi p JOIN file_media f ON f.id = p.file_id "
+        "WHERE p.nome LIKE ? LIMIT 1", (simile,)).fetchone()
+
+
+def test_il_nome_intero_del_file_trova_solo_lui(archivio_misurabile):
+    connessione = archivio_misurabile.connessione
+    riga = _un_nome(connessione)
+    nodo = nodi.crea(connessione, "img", None)
+    for (numero,) in connessione.execute("SELECT id FROM scatti").fetchall():
+        connessione.execute(
+            "INSERT OR IGNORE INTO etichette "
+            "(scatto_id, nodo_id, stato, origine, creata_il) "
+            "VALUES (?, ?, 'si', 'utente', ?)", (numero, nodo, adesso()))
+    connessione.commit()
+    for frase in (riga["nome"], riga["nome"].lower(), f"  {riga['nome'].upper()} "):
+        risposta = _cerca(archivio_misurabile, frase, sicuri=ricerca.TUTTI)
+        assert [t.scatto_id for t in risposta.trovati] == [riga["scatto_id"]], frase
+        assert risposta.vicini == []
+        assert any("proprio quel nome del file" in d for d in risposta.detto)
+
+
+def test_il_nome_senza_estensione_ma_preciso_trova_solo_lui(archivio_misurabile):
+    connessione = archivio_misurabile.connessione
+    riga = _un_nome(connessione)
+    radice = riga["nome"].rsplit(".", 1)[0]
+    risposta = _cerca(archivio_misurabile, radice, sicuri=ricerca.TUTTI)
+    assert [t.scatto_id for t in risposta.trovati] == [riga["scatto_id"]]
+
+
+def test_un_nome_di_file_che_non_c_e_non_mostra_estranei(archivio_misurabile):
+    risposta = _cerca(archivio_misurabile, "IMG_99999.HEIC", sicuri=ricerca.TUTTI)
+    assert risposta.trovati == [] and risposta.vicini == []
+    assert any("nessun file" in d for d in risposta.detto)
+
+
+def test_la_fine_del_nome_basta_se_ha_l_estensione(archivio_misurabile):
+    connessione = archivio_misurabile.connessione
+    riga = _un_nome(connessione)
+    risposta = _cerca(archivio_misurabile, riga["nome"][3:], sicuri=ricerca.TUTTI)
+    assert riga["scatto_id"] in [t.scatto_id for t in risposta.trovati]
+    assert all(t.sorgente == "nome" for t in risposta.trovati)
+
+
+def test_i_jolly_nel_nome_intero_non_valgono(archivio_misurabile):
+    risposta = _cerca(archivio_misurabile, "IMG_100%.JPG", sicuri=ricerca.TUTTI)
+    assert risposta.trovati == []
+    risposta = _cerca(archivio_misurabile, "IMG_10__", sicuri=ricerca.TUTTI)
+    assert not [t for t in risposta.trovati if t.sorgente == "nome"]
+
+
+def test_un_nome_di_file_nel_mezzo_di_una_frase_resta_una_ricerca_normale():
+    assert ricerca.sembra_un_nome_di_file("IMG_1003.HEIC")
+    assert ricerca.sembra_un_nome_di_file("WhatsApp Image 2021-11-04 at 12.30.45.jpeg")
+    assert not ricerca.sembra_un_nome_di_file("cane al mare")
+    assert not ricerca.sembra_un_nome_di_file("C:/foto/IMG_1003.HEIC")
+    assert not ricerca.sembra_un_nome_di_file("versione 2.0")

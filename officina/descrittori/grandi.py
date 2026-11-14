@@ -240,6 +240,10 @@ class Radio4(Descrittore):
         self._macchina = torcia.macchina()
 
     def _apri(self) -> None:
+        self._in_casa_o_spiega()
+        self._visione = radio4.costruisci_visione(self.cartella, self._macchina.dispositivo)
+
+    def _in_casa_o_spiega(self) -> None:
         _controlla_le_librerie(self.scheda, ("torch", "transformers", "safetensors"))
         if not radio4.ci_sono(self.cartella):
             raise ModelloNonInCasa(
@@ -249,12 +253,20 @@ class Radio4(Descrittore):
                 "Da quel momento il programma non tocca più la rete e funziona "
                 "a scheda di rete spenta."
             )
-        self._visione = radio4.costruisci_visione(self.cartella, self._macchina.dispositivo)
 
     def _apri_le_parole(self) -> None:
         if self._testo is None:
-            self._testo = radio4.costruisci_testo(self.cartella, self._macchina.dispositivo)
+            self._in_casa_o_spiega()
+            dove = self._macchina.dispositivo if self.aperto else "cpu"
+            self._testo = radio4.costruisci_testo(self.cartella, dove)
             self._divisore = radio4.divisore(self.cartella)
+
+    def chiudi(self) -> None:
+        super().chiudi()
+        if self._testo is not None:
+            self._testo = None
+            self._divisore = None
+            torcia.libera()
 
     def _chiudi(self) -> None:
         self._visione = None
@@ -286,11 +298,10 @@ class Radio4(Descrittore):
     def descrivi_parole(self, frasi: list[str]) -> list[list[float]]:
         import torch
 
-        self.apri()
         self._apri_le_parole()
+        dove = next(self._testo.parameters()).device
         ingresso = radio4.gettoni(self._divisore, frasi)
-        ingresso = {chiave: valore.to(self._macchina.dispositivo)
-                    for chiave, valore in ingresso.items()}
+        ingresso = {chiave: valore.to(dove) for chiave, valore in ingresso.items()}
         with torch.inference_mode():
             grezzo = self._testo(**ingresso).pooler_output.float()
         grezzo = grezzo / grezzo.norm(dim=-1, keepdim=True).clamp(min=1e-8)

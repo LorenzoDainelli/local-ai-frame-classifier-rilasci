@@ -5,6 +5,7 @@ import contextvars
 import hashlib
 import json
 import sqlite3
+import sys
 import threading
 from pathlib import Path
 from typing import Iterator
@@ -133,6 +134,9 @@ class Archivio:
     def _chiudi(self, con_copia: bool) -> None:
         if self._connessione is None:
             return
+        cercatore = sys.modules.get("officina.ricerca")
+        if cercatore is not None:
+            cercatore.dimentica_le_impronte()
         self._chiudi_i_lettori()
         try:
             with self._lucchetto:

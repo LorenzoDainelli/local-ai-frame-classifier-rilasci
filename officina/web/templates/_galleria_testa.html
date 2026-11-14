@@ -73,19 +73,20 @@
                 <p class="minuscolo tenue numeri periodo-conto" data-conto-anno data-con-mesi hidden></p>
                 <p class="piccolo tenue tendina-vuota" data-senza-mesi hidden>Nessuna foto ha una data, ancora.</p>
                 <p class="piccolo tenue tendina-vuota" data-carico>Guardo in quali mesi ci sono foto…</p>
+                <p class="minuscolo tenue" data-con-mesi hidden>Un clic su un mese lo sceglie; un clic su un secondo mese sceglie tutti quelli in mezzo.</p>
+                <fieldset class="periodo-giorni">
+                    <legend class="minuscolo tenue">Giorni esatti</legend>
+                    <label class="periodo-giorno"><span class="piccolo tenue">Dal</span>
+                        <input class="campo numeri" type="text" inputmode="numeric" autocomplete="off" placeholder="gg/mm/aaaa" maxlength="10" data-giorno-dal></label>
+                    <label class="periodo-giorno"><span class="piccolo tenue">Al</span>
+                        <input class="campo numeri" type="text" inputmode="numeric" autocomplete="off" placeholder="gg/mm/aaaa" maxlength="10" data-giorno-al></label>
+                    <p class="minuscolo periodo-sbaglio" data-giorni-sbaglio hidden></p>
+                </fieldset>
                 <div class="periodo-piede">
                     {% if filtro.dal or filtro.al %}<button class="tasto-comando nudo piccolo" type="button" data-togli>Togli</button>{% endif %}
                     <button class="tasto-comando nudo piccolo" type="button" data-tutto-anno data-con-mesi hidden>Tutto l'anno</button>
                     <button class="tasto-comando principale piccolo" type="submit">Mostra</button>
                 </div>
-                <p class="minuscolo tenue" data-con-mesi hidden>Un clic su un mese lo sceglie; un clic su un secondo mese sceglie tutti quelli in mezzo.</p>
-                <details class="periodo-esatto">
-                    <summary class="minuscolo tenue">Giorni esatti</summary>
-                    <div class="periodo-giorni">
-                        <label class="piccolo tenue">Dal <input class="campo" type="date" data-giorno-dal value="{{ filtro.dal or '' }}"></label>
-                        <label class="piccolo tenue">Al <input class="campo" type="date" data-giorno-al value="{{ filtro.al or '' }}"></label>
-                    </div>
-                </details>
             </form>
         {% endcall %}
 

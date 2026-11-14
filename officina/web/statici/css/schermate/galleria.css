@@ -192,5 +192,10 @@
 
 .periodo-piede [type=submit] { margin-left: auto; }
 .tendina-periodo p { margin: 0; }
-.periodo-esatto summary { cursor: pointer; }
-.periodo-giorni { display: grid; gap: 6px; margin-top: 6px; }
+.tendina-filtro[data-gruppo="periodo"] .tendina-dentro { max-height: min(640px, calc(100vh - 140px)); overflow-y: auto; overscroll-behavior: contain; }
+.periodo-giorni { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; padding: 10px 2px 2px; border: 0; border-top: 0.5px solid var(--linea); min-width: 0; }
+.periodo-giorni legend { float: left; grid-column: 1 / -1; padding: 0; margin-bottom: 2px; }
+.periodo-giorno { display: grid; gap: 4px; min-width: 0; }
+.periodo-giorno .campo { width: 100%; min-width: 0; box-sizing: border-box; text-align: center; letter-spacing: .02em; }
+.periodo-giorno .campo[aria-invalid] { border-color: var(--male); }
+.periodo-sbaglio { grid-column: 1 / -1; color: var(--male); }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -86,6 +87,17 @@ def cerca(connessione: sqlite3.Connection, cartella_modelli: Path, frase: str,
         return fuori
 
     quanti_sicuri = quanti if sicuri is None else sicuri
+    proprio_quelli = _col_nome_preciso(connessione, frase, quanti_sicuri)
+    if proprio_quelli:
+        fuori.trovati = proprio_quelli
+        fuori.capito.append(Capito("nome", frase))
+        quanti_nomi = len(proprio_quelli)
+        verbo = "ha" if quanti_nomi == 1 else "hanno"
+        fuori.detto.append(f"{quanti_nomi} {verbo} proprio quel nome del file")
+        return fuori
+    if sembra_un_nome_di_file(frase):
+        fuori.detto.append("nessun file si chiama così")
+        return fuori
     resti = frase
     for pezzo, capito in _cosa_riconosco(connessione, frase):
         fuori.capito.append(capito)
@@ -317,6 +329,57 @@ def _dai_nomi(connessione: sqlite3.Connection, resti: str, quanti: int,
             for riga in righe if riga["scatto_id"] not in gia_visti]
 
 
+def sembra_un_nome_di_file(frase: str) -> bool:
+    from officina.importazione.scansione import ESTENSIONI_NOTE
+
+    pulita = (frase or "").strip()
+    if not pulita or "/" in pulita or "\\" in pulita:
+        return False
+    return Path(pulita).suffix.casefold() in ESTENSIONI_NOTE
+
+
+def _col_nome_preciso(connessione: sqlite3.Connection, frase: str,
+                      quanti: int) -> list[Trovato]:
+    pulita = " ".join((frase or "").split())
+    if len(pulita) < NOME_MINIMO:
+        return []
+    con_estensione = sembra_un_nome_di_file(pulita)
+    if not con_estensione and (" " in pulita or not re.search(r"[\d_]", pulita)):
+        return []
+    protetta = pulita.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    if con_estensione:
+        modi = [("p.nome = ? COLLATE NOCASE", [pulita]),
+                ("p.nome LIKE ? ESCAPE '\\'", ["%" + protetta])]
+    else:
+        modi = [("p.nome LIKE ? ESCAPE '\\' AND p.nome NOT LIKE ? ESCAPE '\\'",
+                 [protetta + ".%", protetta + ".%.%"])]
+    for condizione, parametri in modi:
+        trovati = _coi_nomi(connessione, condizione, parametri, quanti)
+        if trovati:
+            return trovati
+    return []
+
+
+def _coi_nomi(connessione: sqlite3.Connection, condizione: str, parametri: list,
+              quanti: int) -> list[Trovato]:
+    righe = tutti(
+        connessione,
+        f"""
+        SELECT f.scatto_id, min(f.id) AS file_id, min(p.nome) AS nome,
+               max(s.giorno) AS giorno
+        FROM percorsi p JOIN file_media f ON f.id = p.file_id
+        JOIN scatti s ON s.id = f.scatto_id
+        WHERE f.scatto_id IS NOT NULL AND s.fuori_archivio = 0 AND {condizione}
+        GROUP BY f.scatto_id ORDER BY max(s.istante_utc) DESC
+        """ + ("" if quanti == TUTTI else " LIMIT ?"),
+        *parametri, *([] if quanti == TUTTI else [quanti]),
+    )
+    return [Trovato(scatto_id=riga["scatto_id"], file_id=riga["file_id"],
+                    sorgente="nome", testo=riga["nome"], punteggio=1.0,
+                    quando=scatti.giorno_a_parole(riga["giorno"]), giorno=riga["giorno"])
+            for riga in righe]
+
+
 def da_cercare_scritte(frase: str, resti: str) -> str:
     pulito = " ".join((resti or "").split())
     return pulito or frase
@@ -386,24 +449,20 @@ def _per_somiglianza(connessione: sqlite3.Connection, cartella_modelli: Path,
     if nome is None:
         return [], avviso
     presenti = dict(magazzino.modelli_presenti(connessione))
-    elenco, dati = magazzino.passata(connessione, nome, presenti[nome], "intera")
+    elenco, matrice = _le_impronte(connessione, nome, presenti[nome])
     if not elenco:
         return [], f"Nessuna impronta di {nome} in questo archivio."
 
-    from officina.descrittori import apri
-
-    modello = apri(nome, Path(cartella_modelli))
     riscritta = _riscrivi(frase, Path(cartella_modelli), riformula)
     fuori.modi = riscritta.modi
     fuori.modi_da_dove = riscritta.da_dove
     fuori.lingua_perche_no = riscritta.perche_no
-    parole = riscritta.modi
-    vettore = modello.descrivi_parole(parole)
+    vettore = _parole_in_vettori(nome, Path(cartella_modelli), list(riscritta.modi))
     numpy = vettori.numpy_o_spiega()
     testo = numpy.asarray(vettore, dtype=numpy.float32)
     if testo.ndim == 1:
         testo = testo.reshape(1, -1)
-    punteggi = (vettori.matrice(dati) @ testo.T).max(axis=1)
+    punteggi = (matrice @ testo.T).max(axis=1)
 
     ordine = numpy.argsort(-punteggi)[:quanti]
     with_file = _file_principali(connessione, [elenco[int(i)] for i in ordine])
@@ -417,6 +476,70 @@ def _per_somiglianza(connessione: sqlite3.Connection, cartella_modelli: Path,
             quando=scatti.giorno_a_parole(riga.get("giorno")),
             giorno=riga.get("giorno")))
     return fuori, ""
+
+
+_serratura = threading.Lock()
+_tenuti: dict[tuple[str, str], object] = {}
+_vettori: dict[tuple, list] = {}
+_impronte: dict[str, tuple] = {}
+VETTORI_TENUTI = 256
+
+
+def _parole_in_vettori(nome: str, cartella_modelli: Path, modi: list[str]) -> list:
+    from officina.descrittori import apri
+
+    chiave = (nome, str(cartella_modelli), tuple(modi))
+    with _serratura:
+        if chiave in _vettori:
+            return _vettori[chiave]
+        modello = _tenuti.get(chiave[:2])
+        if modello is None:
+            dimentica_i_modelli()
+            modello = apri(nome, cartella_modelli)
+        try:
+            vettore = modello.descrivi_parole(modi)
+        except BaseException:
+            modello.chiudi()
+            raise
+        if modello.aperto:
+            modello.chiudi()
+        else:
+            _tenuti[chiave[:2]] = modello
+        if len(_vettori) >= VETTORI_TENUTI:
+            _vettori.pop(next(iter(_vettori)))
+        _vettori[chiave] = vettore
+        return vettore
+
+
+def dimentica_i_modelli() -> None:
+    for modello in _tenuti.values():
+        modello.chiudi()
+    _tenuti.clear()
+
+
+def dimentica_le_impronte() -> None:
+    with _serratura:
+        _impronte.clear()
+
+
+def _le_impronte(connessione: sqlite3.Connection, nome: str, versione: str):
+    dove = connessione.execute("PRAGMA database_list").fetchone()[2]
+    quante, ultima = connessione.execute(
+        "SELECT count(*), max(rowid) FROM impronte WHERE descrittore = ? AND versione = ? "
+        "AND inquadratura = 'intera' AND fotogramma = 0", (nome, versione)).fetchone()
+    segno = (nome, versione, quante, ultima)
+    with _serratura:
+        gia = _impronte.get(dove)
+        if gia is not None and gia[0] == segno:
+            return gia[1], gia[2]
+    elenco, dati = magazzino.passata(connessione, nome, versione, "intera")
+    matrice = vettori.matrice(dati) if elenco else None
+    del dati
+    with _serratura:
+        _impronte.clear()
+        if dove:
+            _impronte[dove] = (segno, elenco, matrice)
+    return elenco, matrice
 
 
 def _riscrivi(frase: str, cartella_modelli: Path,
