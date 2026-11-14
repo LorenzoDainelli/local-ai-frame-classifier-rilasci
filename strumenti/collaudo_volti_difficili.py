@@ -181,23 +181,11 @@ def stampa(titolo: str, tabella: dict[str, dict]) -> None:
               + f" | falsi ogni 100 foto {falsi:.1f} | {tempo:.2f} s a foto", flush=True)
 
 
-def main() -> int:
-    import onnxruntime
+def prendi_tutto(casa: Path):
     from huggingface_hub import HfApi, hf_hub_download
-    from PIL import Image
 
-    from officina.immagini import lettura
-    from officina.volti import insight
     from officina.volti.rilevatore import FILE_RILEVATORE
     from officina.volti.scaricamento import DA_DOVE, SHA256_RILEVATORE, revisione_di
-
-    argomenti = argparse.ArgumentParser()
-    argomenti.add_argument("--cartella", required=True)
-    argomenti.add_argument("--uscita", required=True)
-    argomenti.add_argument("--quante", type=int, default=0)
-    scelti = argomenti.parse_args()
-    casa = Path(scelti.cartella)
-    casa.mkdir(parents=True, exist_ok=True)
 
     nomi = [f.rfilename for f in HfApi().repo_info(
         DEPOSITO, repo_type="dataset", revision=REVISIONE).siblings]
@@ -209,7 +197,7 @@ def main() -> int:
                                     revision=REVISIONE))
     if sha(archivio) != FOTO_SHA256:
         print("le foto di WIDER FACE non sono quelle previste", flush=True)
-        return 1
+        return None, None, None
     pesi = None
     fonte = DA_DOVE[FILE_RILEVATORE]
     for deposito in (fonte.repo, *fonte.riserve):
@@ -232,12 +220,43 @@ def main() -> int:
             break
     if pesi is None:
         print("il rilevatore non è quello del programma", flush=True)
-        return 1
+        return None, None, None
 
     with zipfile.ZipFile(etichette) as z:
         dentro = [n for n in z.namelist() if n.endswith("wider_face_val_bbx_gt.txt")]
         foto = leggi_le_etichette(z.read(dentro[0]).decode())
     print("FOTO_ETICHETTATE", len(foto), flush=True)
+    return archivio, foto, pesi
+
+
+def veri_di(volti: list[dict], larga: int, alta: int) -> list:
+    veri = []
+    for volto in volti:
+        if volto["l"] <= 0 or volto["a"] <= 0:
+            continue
+        veri.append(((volto["x"] / larga, volto["y"] / alta, volto["l"] / larga,
+                      volto["a"] / alta), gruppi_di(volto, larga, alta)))
+    return veri
+
+
+def main() -> int:
+    import onnxruntime
+    from PIL import Image
+
+    from officina.immagini import lettura
+    from officina.volti import insight
+
+    argomenti = argparse.ArgumentParser()
+    argomenti.add_argument("--cartella", required=True)
+    argomenti.add_argument("--uscita", required=True)
+    argomenti.add_argument("--quante", type=int, default=0)
+    scelti = argomenti.parse_args()
+    casa = Path(scelti.cartella)
+    casa.mkdir(parents=True, exist_ok=True)
+
+    archivio, foto, pesi = prendi_tutto(casa)
+    if archivio is None:
+        return 1
 
     rilevatore = insight.Rilevatore(casa)
     rilevatore._trova = onnxruntime.InferenceSession(
@@ -261,12 +280,7 @@ def main() -> int:
             lavoro.write_bytes(dati)
             with Image.open(io.BytesIO(dati)) as prima:
                 larga, alta = prima.size
-            veri = []
-            for volto in foto[nome]:
-                if volto["l"] <= 0 or volto["a"] <= 0:
-                    continue
-                veri.append(((volto["x"] / larga, volto["y"] / alta, volto["l"] / larga,
-                              volto["a"] / alta), gruppi_di(volto, larga, alta)))
+            veri = veri_di(foto[nome], larga, alta)
             for prova, lati, minimo in PROVE:
                 insight.LATI_DEL_QUADRATO = lati
                 insight.LATO_MINIMO = minimo

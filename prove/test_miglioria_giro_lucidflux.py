@@ -14,6 +14,13 @@ from prove.test_miglioria import _jpeg, _metti, _riga, cartella, importato
 pytest.importorskip("av")
 
 __all__ = ["cartella", "importato"]
+
+
+@pytest.fixture(autouse=True)
+def rete_che_non_si_chiude(monkeypatch):
+    from officina.miglioria import rete
+
+    monkeypatch.setattr(rete, "chiudi", lambda: None)
 QUI = "prove.test_miglioria_giro_lucidflux"
 SCELTI = {"foto": motori.LUCIDFLUX, "video": motori.FINTO, "volti": None}
 
