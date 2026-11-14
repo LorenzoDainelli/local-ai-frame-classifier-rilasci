@@ -13,6 +13,9 @@ sys.path.insert(0, str(QUI))
 QUANTE = 24
 VARIANTI = ("pulita", "buio", "rumore", "compresso", "sfocato", "mosso", "piccola")
 DIFFICILI = VARIANTI[1:]
+GETTONI_LARGHI = 1024
+RIGHE_LARGHE = 200
+LIMITI = ("oggi", "larghi")
 
 
 def variante(foto, come: str, seme: int):
@@ -28,11 +31,32 @@ def variante(foto, come: str, seme: int):
     return volti.rovina(foto, come, seme)
 
 
-def somma(esiti: dict) -> dict:
+def leggi_due_volte(motore, foto) -> dict:
+    lettore = motore.lettore
+    discorso = [{"role": "user", "content": [
+        {"type": "image"}, {"type": "text", "text": lettore.DOMANDA}]}]
+    grezzo = lettore.chiedi(motore.preparatore, motore.modello, discorso,
+                            [lettore._pronta(foto)], gettoni_nuovi=GETTONI_LARGHI)
+    scrittore = getattr(motore.preparatore, "tokenizer", motore.preparatore)
+    pezzi = scrittore(grezzo, add_special_tokens=False)["input_ids"]
+    corto = scrittore.decode(pezzi[:lettore.GETTONI_NUOVI], skip_special_tokens=True)
+    oggi = [s.testo for s in lettore.leggi_la_risposta(corto).scritte]
+    prima = lettore.SCRITTE_AL_MASSIMO
+    lettore.SCRITTE_AL_MASSIMO = RIGHE_LARGHE
+    try:
+        larghi = [s.testo for s in lettore.leggi_la_risposta(grezzo).scritte]
+    finally:
+        lettore.SCRITTE_AL_MASSIMO = prima
+    return {"oggi": oggi, "larghi": larghi, "gettoni": len(pezzi),
+            "righe": len(larghi), "grezzo": grezzo[:1500]}
+
+
+def somma(esiti: dict, limite: str = "oggi") -> dict:
     import gara_lettura as gara
 
     conti = {nome: [0, 0, 0, 0] for nome in (*VARIANTI, "solo difficili")}
-    for chiave, voce in esiti.items():
+    for chiave, tutto in esiti.items():
+        voce = tutto[limite]
         come = chiave.rsplit("|", 1)[1]
         for nome in (come, "solo difficili") if come in DIFFICILI else (come,):
             conti[nome][0] += voce["prese"]
@@ -75,16 +99,21 @@ def main() -> int:
         try:
             with Image.open(cartella / voce["file"]) as aperta:
                 brutta = variante(aperta.convert("RGB"), come, numero)
-            sguardo = motore.lettore.leggi_la_risposta(motore.guarda(brutta))
-            lette = [s.testo for s in sguardo.scritte]
+            letto = leggi_due_volte(motore, brutta)
         except Exception as guasto:
             print("GUASTO", voce["id"], come, repr(guasto)[:300], flush=True)
             continue
-        punti = gara.punteggio_scritte(voce["parole"], lette, False)
+        punti = {limite: gara.punteggio_scritte(voce["parole"], letto[limite], False)
+                 for limite in LIMITI}
+        punti["gettoni"] = letto["gettoni"]
+        punti["righe"] = letto["righe"]
         esiti[f"{voce['id']}|{come}"] = punti
-        print("FATTA", voce["id"], come, punti, round(time.monotonic() - inizio), "s",
-              flush=True)
-        print("SOMMA", json.dumps(somma(esiti), ensure_ascii=False), flush=True)
+        print("FATTA", voce["id"], come, json.dumps(punti), round(time.monotonic() - inizio),
+              "s", flush=True)
+        print("GREZZO", json.dumps(letto["grezzo"], ensure_ascii=False), flush=True)
+        for limite in LIMITI:
+            print("SOMMA", limite, json.dumps(somma(esiti, limite), ensure_ascii=False),
+                  flush=True)
     print("ESITI", json.dumps(esiti, ensure_ascii=False), flush=True)
     return 0
 

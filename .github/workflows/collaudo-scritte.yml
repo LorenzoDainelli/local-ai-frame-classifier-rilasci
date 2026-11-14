@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        parte: [0, 1, 2, 3, 4, 5, 6, 7]
+        parte: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     env:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUTF8: "1"
@@ -55,4 +55,4 @@ jobs:
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
           python -m pip install transformers accelerate bitsandbytes huggingface_hub safetensors sentencepiece protobuf pillow numpy opencv-python-headless
       - name: Il collaudo
-        run: python strumenti/collaudo_scritte_difficili.py --cartella "$RUNNER_TEMP/scritte" --parte "${{ matrix.parte }}" --parti 8 --minuti 320
+        run: python strumenti/collaudo_scritte_difficili.py --cartella "$RUNNER_TEMP/scritte" --parte "${{ matrix.parte }}" --parti 12 --minuti 320
