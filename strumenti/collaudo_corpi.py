@@ -848,14 +848,15 @@ def _conta_le_parti(trovate: dict, vere: dict, persone: list, soglia: float,
                 per_parola["falsi"] += 1
 
 
-def prova_delle_parti(casa: Path, cartella: Path, quante: int) -> dict:
+def prova_delle_parti(casa: Path, cartella: Path, quante: int, cercatore=None) -> dict:
     from PIL import Image
 
     from officina.corpi import parti
 
     dati = _annotazioni(cartella)
     scelte = scegli_le_foto(dati, quante)
-    cercatore = parti.apri_il_cercatore(casa.parent)
+    if cercatore is None:
+        cercatore = parti.apri_il_cercatore(casa.parent)
     cercatore.accendi()
     tabelle: dict = {str(s): {} for s in SOGLIE_PARTI}
     tempi: list[float] = []
