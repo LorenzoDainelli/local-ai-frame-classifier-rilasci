@@ -50,8 +50,8 @@ def chiedi(**parametri) -> dict:
             return dati
         except urllib.error.HTTPError as guasto:
             attesa = guasto.headers.get("Retry-After") or ""
-            corpo = guasto.read()[:200].decode("utf-8", "replace").replace("\n", " ")
-            print("API riprovo", prova, guasto.code, attesa, corpo, flush=True)
+            testo = guasto.read()[:200].decode("utf-8", "replace").replace("\n", " ")
+            print("API riprovo", prova, guasto.code, attesa, testo, flush=True)
             pausa = int(attesa) + 5 if attesa.isdigit() else 15 * (prova + 1)
             time.sleep(min(pausa, 180))
         except Exception as guasto:
