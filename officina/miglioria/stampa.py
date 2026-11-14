@@ -22,7 +22,8 @@ ORIGINALI = "originali"
 VISTE = "viste"
 SEEDVR2 = "seedvr2"
 VOLTI = "volti"
-SCELTE = (ORIGINALI, SEEDVR2, VOLTI)
+SCELTE = (ORIGINALI, SEEDVR2)
+TUTTE = (ORIGINALI, SEEDVR2, VOLTI)
 STATO = "stato.json"
 QUALITA_VISTA = 92
 ASPETTA_LA_SCHEDA = 5.0
@@ -93,7 +94,7 @@ class Stampa:
 
     def __init__(self, archivio, cartella: Path | None = None,
                  lancia: Callable[[dict, Callable], dict] | None = None, turno=None,
-                 pronta: Callable[[], bool] | None = None, volti=None, sosta=None):
+                 pronta: Callable[[], bool] | None = None, sosta=None):
         from officina.web.lavori import Lavoro
 
         self.archivio = archivio
@@ -101,7 +102,6 @@ class Stampa:
         self._lancia = lancia or self._lancia_la_stanza
         self._turno = turno
         self._pronta = pronta or self._seedvr2_pronto
-        self._volti = volti
         self._sosta = sosta
         self.lavoro = Lavoro(COSA, scheda=True)
         self._fermati = threading.Event()
@@ -122,7 +122,13 @@ class Stampa:
         except (OSError, ValueError):
             dati = {}
         foto = dati.get("foto") if isinstance(dati, dict) else None
-        return {"foto": foto if isinstance(foto, list) else [],
+        foto = foto if isinstance(foto, list) else []
+        for uno in foto:
+            if isinstance(uno, dict):
+                uno["fatte"] = [q for q in uno.get("fatte") or [] if q in SCELTE]
+                if uno.get("scelta") not in (None, *SCELTE):
+                    uno["scelta"] = None
+        return {"foto": foto,
                 "prossimo": int(dati.get("prossimo") or 1) if isinstance(dati, dict) else 1}
 
     def _salva(self, stato: dict) -> None:
@@ -212,7 +218,7 @@ class Stampa:
             restano = []
             for uno in stato["foto"]:
                 if int(uno["id"]) == int(foto_id):
-                    for quale in SCELTE:
+                    for quale in TUTTE:
                         self.file_di(uno, quale).unlink(missing_ok=True)
                         (self.cartella / VISTE / f"{uno['id']}-{quale}.jpg").unlink(
                             missing_ok=True)
@@ -232,7 +238,6 @@ class Stampa:
         stato = self.lavoro.come_va()
         foto = self._stato()["foto"]
         stato["foto"] = foto
-        stato["volti"] = self._motore_dei_volti()
         stato["pronta"] = bool(self._pronta())
         stato["approvate"] = sum(1 for uno in foto if uno.get("scelta"))
         return stato
@@ -320,15 +325,6 @@ class Stampa:
 
         return bool(preparazione.e_pronto(self.archivio.dove.modelli))
 
-    def _motore_dei_volti(self) -> str | None:
-        if self._volti is not None:
-            return self._volti()
-        from officina.miglioria import motori
-        from officina.miglioria.lavoro import volti_da_soli
-
-        modelli = Path(self.archivio.dove.modelli)
-        return motori.CODEFORMER if volti_da_soli(modelli, senza_faceme=True) else None
-
     def _la_sosta(self):
         if self._sosta is not None:
             return self._sosta
@@ -369,19 +365,14 @@ class Stampa:
 
     def _un_giro(self, sosta, giri: int, prima) -> frozenset | None:
         stato = self._stato()
-        volti = self._motore_dei_volti()
         da_fare = []
         for uno in stato["foto"]:
             if not uno.get("arrivo"):
                 continue
-            mancano = [q for q in (SEEDVR2, VOLTI) if q not in uno["fatte"]]
-            if volti is None and VOLTI in mancano:
-                mancano.remove(VOLTI)
-            if not mancano:
+            if SEEDVR2 in uno["fatte"]:
                 continue
             da_fare.append({"id": uno["id"], "originale": str(self.file_di(uno, ORIGINALI)),
                             "seedvr2": str(self.file_di(uno, SEEDVR2)),
-                            "volti": str(self.file_di(uno, VOLTI)),
                             "larghezza": uno["arrivo"][0], "altezza": uno["arrivo"][1]})
         if not da_fare:
             if not giri:
@@ -399,13 +390,11 @@ class Stampa:
             self._prendi_la_scheda()
         from officina.miglioria.lavoro import RAM_POCA, a_parole, percorsi_della_stanza
 
-        lavoro = {"foto": da_fare, "volti": volti,
+        lavoro = {"foto": da_fare,
                   "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
                   "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli)},
                   "percorsi": percorsi_della_stanza()}
-        self.lavoro.di(f"SeedVR2 si carica una volta e fa {len(da_fare)} foto"
-                       + (f", poi {volti} i volti" if volti else
-                          "; i volti non si ritoccano: il motore non è pronto"))
+        self.lavoro.di(f"SeedVR2 si carica una volta e fa {len(da_fare)} foto")
         self.lavoro.fasi(lavoro=1)
         self.lavoro.fase("lavoro")
         partito = time.monotonic()
@@ -429,7 +418,7 @@ class Stampa:
         with self._serratura:
             stato = self._stato()
             for uno in stato["foto"]:
-                fatte = [q for q in (SEEDVR2, VOLTI) if self.file_di(uno, q).is_file()]
+                fatte = [q for q in (SEEDVR2,) if self.file_di(uno, q).is_file()]
                 uno["fatte"] = fatte
             self._salva(stato)
 

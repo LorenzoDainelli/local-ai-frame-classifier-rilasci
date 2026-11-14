@@ -73,8 +73,7 @@ def _stampa(tmp_path, monkeypatch):
                                impostazione=lambda chiave: None)
     sosta = SostaFinta()
     fatta = stampa.Stampa(archivio, cartella=tmp_path / "s", lancia=lancia,
-                          turno=TurnoFinto(), pronta=lambda: True,
-                          volti=lambda: motori.CODEFORMER, sosta=sosta)
+                          turno=TurnoFinto(), pronta=lambda: True, sosta=sosta)
     monkeypatch.setattr(stampa.Stampa, "_la_sosta", lambda self: sosta)
     return fatta, sosta
 
@@ -99,11 +98,13 @@ def test_dall_importazione_allo_zip(tmp_path, monkeypatch):
     fatta._gira()
     assert sosta.giri == [True, False]
     foto = {uno["id"]: uno for uno in fatta.come_va()["foto"]}
-    assert foto[piccola["id"]]["fatte"] == ["seedvr2", "volti"]
+    assert foto[piccola["id"]]["fatte"] == ["seedvr2"]
     assert foto[grande["id"]]["fatte"] == []
     with Image.open(fatta.file_di(foto[piccola["id"]], "seedvr2")) as fatto:
         assert fatto.size == (4096, 2731)
-    fatta.scegli(piccola["id"], "volti")
+    with pytest.raises(Exception):
+        fatta.scegli(piccola["id"], "volti")
+    fatta.scegli(piccola["id"], "seedvr2")
     fatta.scegli(grande["id"], "originali")
     with pytest.raises(Exception):
         fatta.scegli(grande["id"], "seedvr2")
@@ -114,7 +115,9 @@ def test_dall_importazione_allo_zip(tmp_path, monkeypatch):
         assert nomi == ["grande.jpg", "mare.jpg"]
         with Image.open(io.BytesIO(letto.read("mare.jpg"))) as uscita:
             assert uscita.size == (4096, 2731) and uscita.format == "JPEG"
-    assert fatta.vista(piccola["id"], "volti").is_file()
+    assert fatta.vista(piccola["id"], "seedvr2").is_file()
+    assert fatta.vista(piccola["id"], "volti") is None
+    assert not (fatta.cartella / "volti").exists()
     assert fatta.vista(piccola["id"], "../x") is None
 
 
@@ -272,7 +275,7 @@ def test_foto_aggiunte_mentre_lavora(tmp_path, monkeypatch):
     fatta._lancia = lancia
     fatta._gira()
     assert len(giri) == 2 and giri[0] == [prima["id"]] and len(giri[1]) == 1
-    assert all(uno["fatte"] == ["seedvr2", "volti"] for uno in fatta.come_va()["foto"])
+    assert all(uno["fatte"] == ["seedvr2"] for uno in fatta.come_va()["foto"])
 
 
 def test_foto_che_non_viene_non_gira_per_sempre(tmp_path, monkeypatch):
@@ -478,3 +481,21 @@ def test_il_ponte_ha_il_salvataggio():
 
     for nome in ("salva_apri", "salva_pezzo", "salva_fine", "salva_lascia"):
         assert callable(getattr(PontePrincipale, nome))
+
+
+def test_la_versione_dei_volti_di_prima_non_si_sceglie_piu(tmp_path, monkeypatch):
+    fatta, _sosta = _stampa(tmp_path, monkeypatch)
+    uno = fatta.aggiungi("a.jpg", _jpeg(300, 200))
+    fatta._gira()
+    vecchio = fatta.file_di(uno, "volti")
+    vecchio.parent.mkdir(parents=True, exist_ok=True)
+    vecchio.write_bytes(b"x")
+    stato = fatta._stato()
+    stato["foto"][0]["fatte"] = ["seedvr2", "volti"]
+    stato["foto"][0]["scelta"] = "volti"
+    fatta._salva(stato)
+    [letta] = fatta.come_va()["foto"]
+    assert letta["fatte"] == ["seedvr2"] and letta["scelta"] is None
+    assert fatta.zip(tmp_path / "z.zip") == 0
+    fatta.togli(uno["id"])
+    assert not vecchio.exists()

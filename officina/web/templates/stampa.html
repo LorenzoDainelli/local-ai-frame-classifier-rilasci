@@ -8,7 +8,7 @@
 <div class="pagina st-pagina">
     <header>
         <h1 class="titolo-pagina">Stampa veloce</h1>
-        <p class="sottotitolo">Foto a parte, fuori dalla galleria: SeedVR2 le porta a {{ lato }} sul lato lungo, poi una versione anche con i volti ritoccati. Scegli e scarica.</p>
+        <p class="sottotitolo">Foto a parte, fuori dalla galleria: SeedVR2 le porta a {{ lato }} sul lato lungo. Per ognuna scegli l'originale o SeedVR2 e scarica.</p>
         <p><a class="tasto-comando piccolo" href="/miglioramento">{{ icona('su', 14) }} Torna al miglioramento</a></p>
     </header>
 
@@ -82,7 +82,7 @@ const $ = (id) => document.getElementById(id);
 let stato = { foto: [] };
 let aperta = null;
 const vista = { scala: 0, x: 0, y: 0 };
-const NOMI = { originali: "Originale", seedvr2: "SeedVR2", volti: "SeedVR2 + volti ritoccati" };
+const NOMI = { originali: "Originale", seedvr2: "SeedVR2" };
 
 async function chiedi(indirizzo, opzioni = {}) {
     const risposta = await fetch(indirizzo, opzioni);

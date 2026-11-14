@@ -33,9 +33,8 @@ def corri(lavoro: dict, al_passo, freno=None) -> dict:
     from officina.miglioria import metadati, motori
 
     foto = lavoro["foto"]
-    volti = lavoro.get("volti")
     opzioni = dict(lavoro.get("opzioni") or {})
-    totale = len(foto) * (2 if volti else 1)
+    totale = len(foto)
     fatti = 0
     al_passo(fatti, totale)
     motore = motori.apri(motori.FOTO, motori.SEEDVR2, tieni=True, **opzioni)
@@ -57,19 +56,6 @@ def corri(lavoro: dict, al_passo, freno=None) -> dict:
     finally:
         motore.spegni()
         motori.spegni_tutti()
-    if volti:
-        ritocco = motori.apri(motori.VOLTI, volti, tieni=True, **opzioni)
-        try:
-            for uno in foto:
-                verso = Path(uno["volti"])
-                if not verso.is_file():
-                    with Image.open(uno["seedvr2"]) as aperta:
-                        base = aperta.convert("RGB")
-                    _salva(ritocco.sistema(base, []).convert("RGB"), verso)
-                fatti += 1
-                al_passo(fatti, totale)
-        finally:
-            ritocco.spegni()
     return {"fatte": len(foto)}
 
 

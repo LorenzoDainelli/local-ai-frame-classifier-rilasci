@@ -10,6 +10,10 @@
     ],
     "semplice": [
       [
+        "migliora",
+        "Stampa veloce più semplice: per ogni foto fa solo la versione SeedVR2, senza la seconda con i volti ritoccati. Scegli l'originale o SeedVR2 e scarica."
+      ],
+      [
         "controlla",
         "In «Perché mancano?», per ogni foto rotta premi «Scegli il file giusto» e prendi la sua copia intera: il programma controlla byte per byte che sia proprio lei e non sia già in galleria, e con «Salva» la mette al posto della rotta."
       ],
