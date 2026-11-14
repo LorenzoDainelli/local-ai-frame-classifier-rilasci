@@ -21,6 +21,7 @@ from officina.programma.servitore import (PORTA_DELLA_RETE, PORTA_PREFERITA, Ser
                                           per_la_rete, porta_libera)
 
 ATTESA_DELLO_SPEGNIMENTO = 60.0
+ATTESA_DELL_ARCHIVIO = 600.0
 
 OGNI_QUANTO_LA_COPIA = 120.0
 OGNI_QUANTO_LA_SALUTE = 60.0
@@ -1163,11 +1164,26 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         except Exception as guasto:
             registro.avviso("programma.misura_non_ricordata", **registro.dove_si_e_rotto(guasto))
 
+    _chiude_l_archivio = False
+
+    def _fase_dello_spegnimento(self, fase: str) -> None:
+        from officina.archivio import accesso, chiusura
+
+        try:
+            aperto = accesso.aperto()
+        except ErroreOfficina:
+            return
+        if not aperto.di_prova:
+            chiusura.segna_la_fase(aperto.dove, fase)
+
     def spegni_entro(self, avanza=None, secondi: float = ATTESA_DELLO_SPEGNIMENTO) -> bool:
         lavoro = threading.Thread(target=self.spegni, args=(avanza,),
                                   name="spegnimento", daemon=True)
         lavoro.start()
         lavoro.join(secondi)
+        if lavoro.is_alive() and self._chiude_l_archivio:
+            registro.avviso("programma.archivio_lento_a_chiudersi", secondi=secondi)
+            lavoro.join(ATTESA_DELL_ARCHIVIO)
         if lavoro.is_alive():
             registro.errore("programma.spegnimento_bloccato", secondi=secondi)
             return False
@@ -1179,6 +1195,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         self._spento = True
         avanza = avanza or (lambda quanti: None)
         partenza = time.monotonic()
+        self._fase_dello_spegnimento("lavori")
         self.installatore.ferma(aspetta=10.0)
         self._esci_dal_fisso()
         sfoglia = sys.modules.get("officina.web.sfoglia")
@@ -1199,6 +1216,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             self.servitore.ferma()
         avanza(1)
         if self.sicuro is not None:
+            self._fase_dello_spegnimento("sicuro")
             try:
                 self.sicuro.chiudi()
             except Exception as guasto:
@@ -1207,6 +1225,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         try:
             from officina.archivio import accesso
 
+            self._chiude_l_archivio = True
             accesso.chiudi()
             avanza(3)
         except Exception as guasto:

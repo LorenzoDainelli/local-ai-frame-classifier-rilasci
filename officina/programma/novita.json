@@ -11,6 +11,10 @@
     "semplice": [
       [
         "controlla",
+        "Chiudendo il programma (anche con «Riavvia ora») non esce più «si è chiuso di colpo»: ora aspetta che la copia di chiusura finisca, così l'avvio dopo non rifà il lungo controllo dell'archivio."
+      ],
+      [
+        "controlla",
         "«Togli dal programma»: se nel frattempo lo scatto ha avuto l'impronta, ora lo dice chiaro e la riga resta segnata come sistemata. Prima il tasto tornava come se niente fosse."
       ],
       [

@@ -195,3 +195,49 @@ def test_se_il_controllo_si_rompe_il_programma_si_apre_lo_stesso(archivio, monke
 
     monkeypatch.setattr(chiusura, "controlla", rotto)
     assert accesso.apri(dove.nome).e_aperto
+
+
+def test_la_fase_della_chiusura_si_segna_e_si_rilegge(tmp_path):
+    dove = _dove(tmp_path)
+    chiusura.segna_aperto(dove)
+    assert chiusura.ultima_fase(dove) is None
+    chiusura.segna_la_fase(dove, "lavori")
+    chiusura.segna_la_fase(dove, "copia")
+    chiusura.segna_la_fase(dove, "inventata")
+    fase = chiusura.ultima_fase(dove)
+    assert fase["fase"] == "copia" and fase["secondi"] >= 0
+    assert not chiusura.era_aperto(dove)
+
+
+def test_la_fase_di_un_altro_programma_non_si_tocca(tmp_path, monkeypatch):
+    dove = _dove(tmp_path)
+    monkeypatch.setattr(chiusura, "_vivo", lambda pid: False)
+    _segno_di_un_morto(dove)
+    chiusura.segna_la_fase(dove, "copia")
+    assert chiusura.ultima_fase(dove) is None
+
+
+def test_chiudendo_bene_le_fasi_passano_e_il_segno_sparisce(archivio, monkeypatch):
+    viste = []
+    vera = chiusura.segna_la_fase
+    monkeypatch.setattr(chiusura, "segna_la_fase",
+                        lambda dove, fase: (viste.append(fase), vera(dove, fase)))
+    accesso.chiudi()
+    assert viste == ["statistiche", "copia", "database"]
+    assert not (archivio.dove.radice / chiusura.SEGNO).exists()
+
+
+def test_dopo_una_chiusura_di_colpo_dice_in_che_fase_si_era_fermato(archivio, monkeypatch):
+    dove = archivio.dove
+    accesso.chiudi(con_copia=False)
+    monkeypatch.setattr(chiusura, "_vivo", lambda pid: pid == os.getpid())
+    (dove.radice / chiusura.SEGNO).write_text(json.dumps(
+        {"pid": 2**22 + 12345, "acceso_dal": None, "fase": "copia",
+         "fase_dal": 1070.0, "chiusura_dal": 1000.0}), encoding="utf-8")
+    accesso.apri(dove.nome)
+    esito = chiusura.da_dire(dove)
+    assert esito["fase"] == chiusura.FASI["copia"] and esito["fase_dopo"] == 70
+    pagina = _cliente().get("/impostazioni").text
+    assert "Mentre si chiudeva facevo e controllavo la copia di chiusura" in pagina
+    assert "dopo 70 secondi" in pagina
+    assert str(dove.radice) not in pagina

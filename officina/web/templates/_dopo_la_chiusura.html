@@ -1,7 +1,7 @@
 {% set c = dopo_la_chiusura %}
 {% if c.archivio == "sano" %}
 <div class="avviso" id="dopo-la-chiusura">
-    <span>L'ultima volta il programma si è chiuso di colpo. Ho controllato l'archivio dei dati: è tutto a posto.{% if c.provvisori %} Ho tolto {{ c.provvisori|numero }} file a metà del programma.{% endif %}</span>
+    <span>L'ultima volta il programma si è chiuso di colpo. Ho controllato l'archivio dei dati: è tutto a posto.{% if c.provvisori %} Ho tolto {{ c.provvisori|numero }} file a metà del programma.{% endif %}{% if c.fase %} <span class="tenue">Mentre si chiudeva {{ c.fase }}{% if c.fase_dopo is defined %}, dopo {{ c.fase_dopo }} secondi{% endif %}.</span>{% endif %}</span>
     <form method="post" action="/dopo-la-chiusura/visto" style="margin-left:auto">
         <button class="tasto-comando nudo" type="submit">Ho capito</button>
     </form>

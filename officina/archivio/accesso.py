@@ -133,7 +133,8 @@ class Archivio:
 
         try:
             if not nuovo and chiusura.era_aperto(self.dove):
-                chiusura.controlla(self._connessione, self.dove)
+                chiusura.controlla(self._connessione, self.dove,
+                                   chiusura.ultima_fase(self.dove))
             chiusura.segna_aperto(self.dove)
         except Exception:
             registro.errore("chiusura.controllo_fallito")
@@ -152,6 +153,7 @@ class Archivio:
         if cercatore is not None:
             cercatore.dimentica_le_impronte()
         self._chiudi_i_lettori()
+        self._fase("statistiche")
         try:
             with self._lucchetto:
                 database.ripassa_com_e_fatto(self._connessione)
@@ -159,12 +161,14 @@ class Archivio:
             registro.errore("archivio.statistiche_non_aggiornate")
         try:
             if con_copia and self._serve_la_copia():
+                self._fase("copia")
                 with self._lucchetto:
                     self._connessione.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                     copie.fai_copia(self._connessione, self.dove, "chiusura")
         except Exception:
             registro.errore("copie.fallita")
         finally:
+            self._fase("database")
             with self._lucchetto:
                 self._connessione.close()
                 self._connessione = None
@@ -177,6 +181,13 @@ class Archivio:
                     registro.errore("chiusura.segno_non_tolto")
             registro.evento("archivio.chiuso")
             self._rimetti_nel_forziere()
+
+    def _fase(self, fase: str) -> None:
+        if self.di_prova:
+            return
+        from officina.archivio import chiusura
+
+        chiusura.segna_la_fase(self.dove, fase)
 
     def _serve_la_copia(self) -> bool:
         if self._cambiato_all_apertura or not copie.elenco(self.dove):

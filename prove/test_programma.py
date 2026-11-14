@@ -689,3 +689,45 @@ def test_lo_spegnimento_bloccato_non_tiene_aperto_il_programma(casa):
     fermo.set()
     programma.spegni = lambda avanza=None: None
     assert programma.spegni_entro(secondi=1) is True
+
+
+def test_se_sta_chiudendo_l_archivio_lo_spegnimento_aspetta_di_piu(casa, monkeypatch):
+    from officina.programma import avvio
+
+    programma = avvio.Programma.__new__(avvio.Programma)
+    finito = threading.Event()
+
+    def lento(avanza=None):
+        programma._chiude_l_archivio = True
+        time.sleep(0.6)
+        finito.set()
+
+    programma.spegni = lento
+    assert programma.spegni_entro(secondi=0.1) is True
+    assert finito.is_set()
+    monkeypatch.setattr(avvio, "ATTESA_DELL_ARCHIVIO", 0.1)
+    finito.clear()
+    programma.spegni = lento
+    assert programma.spegni_entro(secondi=0.1) is False
+
+
+def test_lo_spegnimento_segna_le_fasi_e_toglie_il_segno(archivio, monkeypatch):
+    from types import SimpleNamespace
+
+    from officina.archivio import chiusura
+    from officina.programma import avvio
+
+    viste = []
+    vera = chiusura.segna_la_fase
+    monkeypatch.setattr(chiusura, "segna_la_fase",
+                        lambda dove, fase: (viste.append(fase), vera(dove, fase)))
+    programma = avvio.Programma.__new__(avvio.Programma)
+    programma._spento = False
+    programma.installatore = SimpleNamespace(ferma=lambda aspetta: None)
+    programma._esci_dal_fisso = lambda: None
+    programma.servitore = programma.servitore_di_rete = None
+    programma.sicuro = SimpleNamespace(chiudi=lambda: None)
+    programma.spegni()
+    assert viste[:2] == ["lavori", "sicuro"] and viste[-1] == "database"
+    assert programma._chiude_l_archivio
+    assert not (archivio.dove.radice / chiusura.SEGNO).exists()

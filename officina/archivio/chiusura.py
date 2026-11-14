@@ -88,6 +88,50 @@ def segna_aperto(dove: Posizione) -> None:
     os.replace(provvisorio, _segno(dove))
 
 
+FASI = {
+    "lavori": "fermavo i lavori in corso",
+    "sicuro": "chiudevo l'Archivio sicuro",
+    "statistiche": "aggiornavo le statistiche del database",
+    "copia": "facevo e controllavo la copia di chiusura",
+    "database": "chiudevo il database",
+}
+
+
+def segna_la_fase(dove: Posizione, fase: str) -> None:
+    if fase not in FASI or di_un_altro(dove):
+        return
+    try:
+        scritto = json.loads(_segno(dove).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if not isinstance(scritto, dict) or scritto.get("pid") != os.getpid():
+        return
+    adesso = datetime.now(timezone.utc).timestamp()
+    scritto["fase"] = fase
+    scritto["fase_dal"] = adesso
+    scritto.setdefault("chiusura_dal", adesso)
+    provvisorio = _segno(dove).with_name(SEGNO + ".nuovo")
+    try:
+        provvisorio.write_text(json.dumps(scritto), encoding="utf-8")
+        os.replace(provvisorio, _segno(dove))
+    except OSError:
+        registro.errore("chiusura.fase_non_segnata")
+
+
+def ultima_fase(dove: Posizione) -> dict | None:
+    try:
+        scritto = json.loads(_segno(dove).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(scritto, dict) or scritto.get("fase") not in FASI:
+        return None
+    inizio = scritto.get("chiusura_dal")
+    fase_dal = scritto.get("fase_dal")
+    if not isinstance(inizio, (int, float)) or not isinstance(fase_dal, (int, float)):
+        return {"fase": scritto["fase"]}
+    return {"fase": scritto["fase"], "secondi": max(0, round(fase_dal - inizio))}
+
+
 def segna_chiuso(dove: Posizione) -> None:
     if di_un_altro(dove):
         return
@@ -131,7 +175,8 @@ def _legami_rotti(connessione: sqlite3.Connection) -> int:
         return -1
 
 
-def controlla(connessione: sqlite3.Connection, dove: Posizione) -> dict:
+def controlla(connessione: sqlite3.Connection, dove: Posizione,
+              fase: dict | None = None) -> dict:
     difetti = _difetti(connessione)
     legami = 0 if difetti else _legami_rotti(connessione)
     try:
@@ -143,6 +188,10 @@ def controlla(connessione: sqlite3.Connection, dove: Posizione) -> dict:
     esito = {"quando": datetime.now(timezone.utc).isoformat(timespec="seconds"),
              "archivio": SANO if sano else ROVINATO, "difetti": len(difetti),
              "legami_rotti": max(legami, 0), "provvisori": provvisori, "visto": False}
+    if fase:
+        esito["fase"] = FASI[fase["fase"]]
+        if "secondi" in fase:
+            esito["fase_dopo"] = fase["secondi"]
     if sano:
         registro.avviso("chiusura.di_colpo_tutto_a_posto", provvisori=provvisori)
     else:
