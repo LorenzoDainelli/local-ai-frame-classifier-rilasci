@@ -32,6 +32,9 @@ PER_AUTORE = 2
 QUANTI = 80
 RISERVE = 20
 MASSIMO_DA_GUARDARE = 900
+MINIATURA = 1280
+ATTESA_MASSIMA = 900
+MINUTI = 270
 
 
 def chiedi(**parametri) -> dict:
@@ -97,12 +100,14 @@ def informazioni(titoli: list[str]) -> list[dict]:
     fuori = []
     for inizio in range(0, len(titoli), 50):
         dati = chiedi(action="query", prop="imageinfo", titles="|".join(
-            titoli[inizio:inizio + 50]), iiprop="url|size|sha1|mime|extmetadata")
+            titoli[inizio:inizio + 50]), iiprop="url|size|sha1|mime|extmetadata",
+            iiurlwidth=str(MINIATURA))
         for pagina in dati.get("query", {}).get("pages", []):
             info = (pagina.get("imageinfo") or [{}])[0]
             meta = info.get("extmetadata") or {}
             fuori.append({
                 "titolo": pagina["title"], "indirizzo": info.get("url"),
+                "miniatura": info.get("thumburl"),
                 "larghezza": info.get("width") or 0, "altezza": info.get("height") or 0,
                 "sha1": info.get("sha1"), "tipo": info.get("mime"),
                 "licenza": (meta.get("LicenseShortName") or {}).get("value", ""),
@@ -131,7 +136,7 @@ def scarica(indirizzo: str) -> bytes:
             attesa = guasto.headers.get("Retry-After") or ""
             print("FILE riprovo", prova, guasto.code, attesa, flush=True)
             pausa = int(attesa) + 5 if attesa.isdigit() else 15 * (prova + 1)
-            time.sleep(min(pausa, 180))
+            time.sleep(min(pausa, ATTESA_MASSIMA))
         except Exception as guasto:
             print("FILE riprovo", prova, type(guasto).__name__, flush=True)
             time.sleep(10 * (prova + 1))
@@ -155,18 +160,20 @@ def rumore(pixel) -> float:
     return float(numpy.median(numpy.abs(alto)) * 1.4826)
 
 
-def guarda(voce: dict, dati: bytes, rilevatore) -> dict | None:
+def guarda(voce: dict, dati: bytes, rilevatore, intera_vera: bool = True) -> dict | None:
     import numpy
     from PIL import Image, ImageOps
 
-    if hashlib.sha1(dati).hexdigest() != voce["sha1"]:
+    if intera_vera and hashlib.sha1(dati).hexdigest() != voce["sha1"]:
         print("SCARTO impronta diversa", voce["titolo"], flush=True)
         return None
     with Image.open(io.BytesIO(dati)) as aperta:
         intera = ImageOps.exif_transpose(aperta).convert("RGB")
     larga, alta = intera.size
     facce = [f for f in rilevatore.guarda(intera) if f.sicurezza >= VOLTO_SICURO]
-    grandi = [f for f in facce if f.riquadro[2] * larga >= VOLTO_MINIMO]
+    larga_vera = max(voce["larghezza"], voce["altezza"]) if larga >= alta else min(
+        voce["larghezza"], voce["altezza"])
+    grandi = [f for f in facce if f.riquadro[2] * larga_vera >= VOLTO_MINIMO]
     if len(grandi) != 1:
         print("SCARTO volti grandi", len(grandi), voce["titolo"], flush=True)
         return None
@@ -179,9 +186,11 @@ def guarda(voce: dict, dati: bytes, rilevatore) -> dict | None:
     if colore < COLORE_MINIMO:
         print("SCARTO bianco e nero", voce["titolo"], flush=True)
         return None
-    return {**voce, "sha256": hashlib.sha256(dati).hexdigest(), "byte": len(dati),
+    impronte = ({"sha256": hashlib.sha256(dati).hexdigest(), "byte": len(dati)}
+                if intera_vera else {})
+    return {**voce, **impronte,
             "volto": [round(v, 5) for v in volto.riquadro],
-            "volto_px": int(lv * larga), "sicurezza": round(volto.sicurezza, 3),
+            "volto_px": int(lv * larga_vera), "sicurezza": round(volto.sicurezza, 3),
             "nitidezza_volto": round(nitidezza(ritaglio), 1),
             "rumore_volto": round(rumore(ritaglio), 2), "colore": round(colore, 1)}
 
@@ -195,7 +204,9 @@ def main() -> int:
     argomenti = argparse.ArgumentParser()
     argomenti.add_argument("--uscita", required=True)
     argomenti.add_argument("--cartella", required=True)
+    argomenti.add_argument("--minuti", type=float, default=MINUTI)
     scelti = argomenti.parse_args()
+    partito = time.monotonic()
     casa = Path(scelti.cartella)
     casa.mkdir(parents=True, exist_ok=True)
     pesi = base.prendi_il_rilevatore()
@@ -214,8 +225,13 @@ def main() -> int:
     voci.sort(key=lambda v: hashlib.sha256(v["titolo"].encode()).hexdigest())
     buoni = []
     for numero, voce in enumerate(voci[:MASSIMO_DA_GUARDARE]):
+        if (time.monotonic() - partito) / 60 > scelti.minuti / 2:
+            print("TEMPO metà finito: smetto di guardare le miniature", flush=True)
+            break
+        if not voce.get("miniatura"):
+            continue
         try:
-            esito = guarda(voce, scarica(voce["indirizzo"]), rilevatore)
+            esito = guarda(voce, scarica(voce["miniatura"]), rilevatore, False)
         except Exception as guasto:
             print("SCARTO guasto", type(guasto).__name__, voce["titolo"], flush=True)
             continue
@@ -232,8 +248,19 @@ def main() -> int:
         chi = voce["autore"]
         if per_autore.get(chi, 0) >= PER_AUTORE:
             continue
+        if (time.monotonic() - partito) / 60 > scelti.minuti:
+            print("TEMPO finito: tengo quelli già controllati", flush=True)
+            break
+        try:
+            vero = guarda(voce, scarica(voce["indirizzo"]), rilevatore)
+        except Exception as guasto:
+            print("SCARTO originale", type(guasto).__name__, voce["titolo"], flush=True)
+            continue
+        if not vero:
+            continue
         per_autore[chi] = per_autore.get(chi, 0) + 1
-        scelti_ritratti.append(voce)
+        scelti_ritratti.append(vero)
+        scrivi(scelti.uscita, scelti_ritratti, buoni, voci, titoli)
         if len(scelti_ritratti) >= QUANTI + RISERVE:
             break
     print("SCELTI", len(scelti_ritratti), "su buoni", len(buoni), flush=True)
@@ -241,10 +268,15 @@ def main() -> int:
         print("RITRATTO", voce["titolo"], voce["larghezza"], voce["altezza"],
               voce["volto_px"], voce["nitidezza_volto"], voce["rumore_volto"],
               voce["licenza"], flush=True)
-    Path(scelti.uscita).write_text(json.dumps(
+    scrivi(scelti.uscita, scelti_ritratti, buoni, voci, titoli)
+    return 0
+
+
+def scrivi(uscita: str, scelti_ritratti: list, buoni: list, voci: list,
+           titoli: list) -> None:
+    Path(uscita).write_text(json.dumps(
         {"scelti": scelti_ritratti, "buoni": len(buoni), "adatti": len(voci),
          "trovati": len(titoli)}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    return 0
 
 
 if __name__ == "__main__":
