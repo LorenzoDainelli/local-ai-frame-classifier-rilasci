@@ -29,6 +29,12 @@ ATTESA_DELLA_FINESTRA_VUOTA = 5.0
 GB = 2 ** 30
 
 
+def permetti_gli_scaricamenti(webview) -> None:
+    impostazioni = getattr(webview, "settings", None)
+    if isinstance(impostazioni, dict):
+        impostazioni["ALLOW_DOWNLOADS"] = True
+
+
 def numero(quanti: int) -> str:
     return f"{quanti:,}".replace(",", ".")
 
@@ -132,6 +138,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         if self._webview is None:
             import webview
 
+            permetti_gli_scaricamenti(webview)
             self._webview = webview
         return self._webview
 

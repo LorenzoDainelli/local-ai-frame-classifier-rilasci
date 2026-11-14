@@ -9,6 +9,7 @@
       "siglip2"
     ],
     "semplice": [
+      "Stampa veloce: lo zip con le foto ora si scarica davvero anche nella finestra del programma (prima veniva bloccato senza dirlo). Si apre «Salva con nome» e la pagina dice dove va il file.",
       [
         "migliora",
         "LucidFlux non finisce più la memoria della scheda video sulle foto grandi: l'ultimo passo, che trasforma il risultato in foto, ora si fa a strisce con gli stessi conti. Il risultato è uguale a prima, ma serve circa metà della scheda"

@@ -287,3 +287,46 @@ def test_foto_che_non_viene_non_gira_per_sempre(tmp_path, monkeypatch):
     fatta._gira()
     assert len(giri) == 1
     assert fatta.come_va()["foto"][0]["fatte"] == []
+
+
+def test_lo_zip_dice_dove_va(archivio, monkeypatch):
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from officina.web.server import app
+    from officina.web.strade import stampa as strada
+
+    monkeypatch.setattr(strada, "_stampa", None)
+    cliente = TestClient(app, client=("127.0.0.1", 51000))
+    html = cliente.get("/stampa").text
+    with sync_api.sync_playwright() as p:
+        pronto = Path("/opt/pw-browsers/chromium")
+        try:
+            browser = p.chromium.launch(
+                executable_path=str(pronto) if pronto.exists() else None)
+        except sync_api.Error as guasto:
+            pytest.skip(f"niente browser: {guasto}")
+        pagina = browser.new_page()
+        pagina.route("**/*", lambda rotta: rotta.fulfill(
+            status=200, content_type="application/json", body="{}"))
+        pagina.set_content(html)
+        assert pagina.locator("#st-zip").is_hidden()
+        nel_programma = pagina.evaluate("dove_va_lo_zip(3, true)")
+        nel_browser = pagina.evaluate("dove_va_lo_zip(1, false)")
+        browser.close()
+    assert "foto-da-stampare.zip con 3 foto" in nel_programma
+    assert "«Salva con nome»" in nel_programma and "Download" in nel_programma
+    assert "con 1 foto" in nel_browser and "cartella Download" in nel_browser
+    assert "portatile" in nel_browser
+    strada.la_stampa(archivio).ferma()
+
+
+def test_la_finestra_permette_gli_scaricamenti():
+    from types import SimpleNamespace
+
+    from officina.programma import avvio
+
+    finta = SimpleNamespace(settings={"ALLOW_DOWNLOADS": False})
+    avvio.permetti_gli_scaricamenti(finta)
+    assert finta.settings["ALLOW_DOWNLOADS"] is True
+    avvio.permetti_gli_scaricamenti(SimpleNamespace())

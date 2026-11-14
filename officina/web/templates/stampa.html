@@ -25,6 +25,7 @@
         <a class="tasto-comando" id="st-scarica" href="/api/stampa/scarica">Scarica le approvate (<span id="st-approvate">0</span>)</a>
         <button class="tasto-comando" id="st-svuota" type="button">Svuota</button>
     </section>
+    <div class="st-zip" id="st-zip" role="status" aria-live="polite" hidden></div>
     <p class="st-nota" id="st-adesso"></p>
     <div class="st-barra"><div id="st-barra-dentro"></div></div>
 
@@ -60,6 +61,7 @@
 .st-tessera img { width: 100%; aspect-ratio: 3 / 2; object-fit: contain; background: #111; border-radius: 4px; cursor: pointer; }
 .st-tessera .st-riga { display: flex; justify-content: space-between; gap: 6px; align-items: center; font-size: .88em; }
 .st-avviso { color: #d08a00; }
+.st-zip { border: 1px solid var(--bordo, #8884); border-radius: 10px; padding: 10px 14px; margin: 10px 0; line-height: 1.5; }
 .st-forma { padding: 10px 14px; border-radius: 8px; font-weight: 600; }
 .st-forma.male { background: color-mix(in srgb, #d08a00 22%, transparent); }
 .st-forma.bene { background: color-mix(in srgb, #2f9d5a 20%, transparent); }
@@ -337,8 +339,18 @@ $("st-svuota").addEventListener("click", async () => {
     try { stato = await chiedi("/api/stampa/svuota", { method: "POST" }); disegna(); } catch (e) { alert(e.message); }
 });
 $("st-scarica").addEventListener("click", (e) => {
-    if (!stato.approvate) { e.preventDefault(); alert("Prima scegli almeno una foto."); }
+    if (!stato.approvate) { e.preventDefault(); alert("Prima scegli almeno una foto."); return; }
+    $("st-zip").textContent = dove_va_lo_zip(stato.approvate, Boolean(window.pywebview));
+    $("st-zip").hidden = false;
 });
+function dove_va_lo_zip(quante, nel_programma) {
+    const foto = quante === 1 ? "1 foto" : `${quante} foto`;
+    const dove = nel_programma
+        ? "Si apre la finestra «Salva con nome», che parte dalla cartella Download di questo computer: scegli tu dove metterlo."
+        : "Il browser lo mette nella cartella Download di questo computer.";
+    return `Preparo foto-da-stampare.zip con ${foto}: ci può volere qualche secondo. ${dove} Se usi il portatile collegato, il file va sul portatile, non sul fisso.`;
+}
+window.dove_va_lo_zip = dove_va_lo_zip;
 window.addEventListener("resize", () => { if (aperta !== null) adatta(); });
 aggiorna();
 setInterval(aggiorna, 4000);
