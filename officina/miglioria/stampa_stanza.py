@@ -25,23 +25,76 @@ def _salva(immagine, verso: Path) -> None:
     os.replace(provvisorio, verso)
 
 
-def corri(lavoro: dict, al_passo, freno=None) -> dict:
+def _apri(posto: Path):
+    from officina.miglioria import metadati
+
+    return metadati.apri(posto).immagine.convert("RGB")
+
+
+def _scrivi_json(dati: dict, verso: Path) -> None:
+    provvisorio = verso.with_name(verso.name + ".parziale")
+    verso.parent.mkdir(parents=True, exist_ok=True)
+    provvisorio.write_text(json.dumps(dati), encoding="utf-8")
+    os.replace(provvisorio, verso)
+
+
+def fai_la_grana(uno: dict) -> None:
+    import numpy as np
+    from PIL import Image
+
+    from officina.miglioria.pelle_stanza import rimetti_la_grana
+
+    entrata = np.asarray(_apri(Path(uno["originale"])))
+    with Image.open(uno["seedvr2"]) as aperta:
+        fatta = np.asarray(aperta.convert("RGB"))
+    _salva(Image.fromarray(rimetti_la_grana(entrata, fatta)), Path(uno["grana"]))
+
+
+def controlla_i_volti(uno: dict, rilevatore) -> dict:
+    import numpy as np
+    from PIL import Image
+
+    from officina.miglioria import stampa_controllo
+
+    originale = _apri(Path(uno["originale"]))
+    larghezza, altezza = int(uno["larghezza"]), int(uno["altezza"])
+    vera = np.asarray(originale.resize((larghezza, altezza), Image.Resampling.LANCZOS))
+    fatte = {}
+    for nome in ("seedvr2", "grana"):
+        with Image.open(uno[nome]) as aperta:
+            fatte[nome] = np.asarray(aperta.convert("RGB"))
+    ingrandimento = max(larghezza, altezza) / max(originale.size)
+    return stampa_controllo.controlla(rilevatore, vera, fatte, ingrandimento)
+
+
+def il_rilevatore(cartella_modelli: str):
+    from officina.volti import insight
+
+    rilevatore = insight.Rilevatore(Path(cartella_modelli))
+    rilevatore.accendi()
+    return rilevatore
+
+
+def corri(lavoro: dict, al_passo, freno=None, rilevatore_di=None) -> dict:
     import time
 
     from PIL import Image
 
+    from officina.errori import ErroreOfficina
     from officina.miglioria import metadati, motori
 
     foto = lavoro["foto"]
     opzioni = dict(lavoro.get("opzioni") or {})
-    totale = len(foto)
+    totale = len(foto) * 2
     fatti = 0
     al_passo(fatti, totale)
-    motore = motori.apri(motori.FOTO, motori.SEEDVR2, tieni=True, **opzioni)
+    motore = None
     try:
         for uno in foto:
             verso = Path(uno["seedvr2"])
             if not verso.is_file():
+                if motore is None:
+                    motore = motori.apri(motori.FOTO, motori.SEEDVR2, tieni=True, **opzioni)
                 immagine = metadati.apri(Path(uno["originale"])).immagine
                 larghezza, altezza = int(uno["larghezza"]), int(uno["altezza"])
                 partito = time.monotonic()
@@ -54,8 +107,30 @@ def corri(lavoro: dict, al_passo, freno=None) -> dict:
             fatti += 1
             al_passo(fatti, totale)
     finally:
-        motore.spegni()
+        if motore is not None:
+            motore.spegni()
         motori.spegni_tutti()
+    rilevatore, senza = None, None
+    for uno in foto:
+        if not Path(uno["grana"]).is_file():
+            fai_la_grana(uno)
+        if not Path(uno["controllo"]).is_file():
+            if rilevatore is None and senza is None:
+                try:
+                    rilevatore = (rilevatore_di or il_rilevatore)(
+                        opzioni.get("cartella_modelli", ""))
+                except ErroreOfficina:
+                    senza = "mancano i modelli dei volti"
+            if senza:
+                esito = {"non_fatto": senza}
+            else:
+                try:
+                    esito = controlla_i_volti(uno, rilevatore)
+                except Exception:
+                    esito = {"non_fatto": "il controllo dei volti si è rotto"}
+            _scrivi_json(esito, Path(uno["controllo"]))
+        fatti += 1
+        al_passo(fatti, totale)
     return {"fatte": len(foto)}
 
 

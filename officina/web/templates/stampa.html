@@ -8,7 +8,7 @@
 <div class="pagina st-pagina">
     <header>
         <h1 class="titolo-pagina">Stampa veloce</h1>
-        <p class="sottotitolo">Foto a parte, fuori dalla galleria: SeedVR2 le porta a {{ lato }} sul lato lungo. Per ognuna scegli l'originale o SeedVR2 e scarica.</p>
+        <p class="sottotitolo">Foto a parte, fuori dalla galleria: SeedVR2 le porta a {{ lato }} sul lato lungo. Per ognuna scegli l'originale, SeedVR2 o SeedVR2 con la grana dell'originale rimessa sopra, e scarica. Il programma confronta ogni volto con l'originale e ti avvisa se è cambiato.</p>
         <p><a class="tasto-comando piccolo" href="/miglioramento">{{ icona('su', 14) }} Torna al miglioramento</a></p>
     </header>
 
@@ -82,7 +82,20 @@ const $ = (id) => document.getElementById(id);
 let stato = { foto: [] };
 let aperta = null;
 const vista = { scala: 0, x: 0, y: 0 };
-const NOMI = { originali: "Originale", seedvr2: "SeedVR2" };
+const NOMI = { originali: "Originale", seedvr2: "SeedVR2", grana: "SeedVR2 + grana" };
+
+function sulVolto(uno, quale) {
+    const c = uno.controllo;
+    if (!c || quale === "originali") return null;
+    if (c.non_fatto) return { male: false, testo: `Volti non controllati: ${c.non_fatto}` };
+    const v = c[quale];
+    if (!v) return null;
+    const testo = [];
+    if (v.cambiati) testo.push(`${v.cambiati} ${v.cambiati === 1 ? "volto cambiato" : "volti cambiati"}: guarda`);
+    else if (v.controllati) testo.push(`${v.controllati === 1 ? "Volto uguale" : `${v.controllati} volti uguali`} all'originale`);
+    if (v.piccoli) testo.push(`${v.piccoli} ${v.piccoli === 1 ? "volto troppo piccolo" : "volti troppo piccoli"} per controllarli`);
+    return testo.length ? { male: v.cambiati > 0, testo: testo.join(" · ") } : null;
+}
 
 async function chiedi(indirizzo, opzioni = {}) {
     const risposta = await fetch(indirizzo, opzioni);
@@ -138,6 +151,8 @@ function riga(uno) {
     const testo = [];
     if (!uno.arrivo) testo.push("già sopra il 4K: saltata");
     if (!uno.due_terzi) testo.push("non è 2:3");
+    const cambiati = ["seedvr2", "grana"].filter((q) => sulVolto(uno, q)?.male).map((q) => NOMI[q]);
+    if (cambiati.length) testo.push(`volto cambiato in ${cambiati.join(" e ")}`);
     const segno = document.createElement("span");
     segno.className = "st-avviso";
     segno.textContent = testo.join(" · ");
@@ -184,7 +199,9 @@ function disegna() {
     $("st-ferma").disabled = !stato.sta_lavorando;
     if (aperta !== null) {
         const uno = stato.foto.find((f) => f.id === aperta);
-        if (uno && versioni(uno).length !== $("st-pannelli").children.length) apri(aperta, true);
+        const cambiato = uno && (versioni(uno).length !== $("st-pannelli").children.length
+            || $("st-pannelli").dataset.controllo !== JSON.stringify(uno.controllo || null));
+        if (cambiato) apri(aperta, true);
         else if (uno) segnaLaScelta(uno);
     }
 }
@@ -267,10 +284,15 @@ function apri(id, tieniLaVista = false) {
         tasto.type = "button";
         tasto.textContent = "Questa in stampa";
         tasto.addEventListener("click", () => scegli(quale));
-        p.append(titolo, vetro, tasto);
+        const detto = sulVolto(uno, quale);
+        const volto = document.createElement("span");
+        volto.className = detto && detto.male ? "st-avviso" : "st-ok";
+        volto.textContent = detto ? detto.testo : "";
+        p.append(titolo, volto, vetro, tasto);
         return p;
     });
     $("st-pannelli").replaceChildren(...pannelli);
+    $("st-pannelli").dataset.controllo = JSON.stringify(uno.controllo || null);
     segnaLaScelta(uno);
 }
 

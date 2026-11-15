@@ -21,9 +21,12 @@ LATO = 4096
 ORIGINALI = "originali"
 VISTE = "viste"
 SEEDVR2 = "seedvr2"
+GRANA = "grana"
 VOLTI = "volti"
-SCELTE = (ORIGINALI, SEEDVR2)
-TUTTE = (ORIGINALI, SEEDVR2, VOLTI)
+CONTROLLI = "controlli"
+SCELTE = (ORIGINALI, SEEDVR2, GRANA)
+FATTE = (SEEDVR2, GRANA)
+TUTTE = (ORIGINALI, SEEDVR2, GRANA, VOLTI)
 STATO = "stato.json"
 QUALITA_VISTA = 92
 ASPETTA_LA_SCHEDA = 5.0
@@ -140,6 +143,16 @@ class Stampa:
             return self.cartella / ORIGINALI / foto["file"]
         return self.cartella / quale / f"{foto['id']}.png"
 
+    def controllo_di(self, foto: dict) -> Path:
+        return self.cartella / CONTROLLI / f"{foto['id']}.json"
+
+    def _controllo(self, foto: dict) -> dict | None:
+        try:
+            dati = json.loads(self.controllo_di(foto).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return dati if isinstance(dati, dict) else None
+
     def vista(self, foto_id: int, quale: str) -> Path | None:
         if quale not in SCELTE:
             return None
@@ -222,6 +235,7 @@ class Stampa:
                         self.file_di(uno, quale).unlink(missing_ok=True)
                         (self.cartella / VISTE / f"{uno['id']}-{quale}.jpg").unlink(
                             missing_ok=True)
+                    self.controllo_di(uno).unlink(missing_ok=True)
                 else:
                     restano.append(uno)
             stato["foto"] = restano
@@ -237,6 +251,8 @@ class Stampa:
     def come_va(self) -> dict:
         stato = self.lavoro.come_va()
         foto = self._stato()["foto"]
+        for uno in foto:
+            uno["controllo"] = self._controllo(uno)
         stato["foto"] = foto
         stato["pronta"] = bool(self._pronta())
         stato["approvate"] = sum(1 for uno in foto if uno.get("scelta"))
@@ -369,10 +385,12 @@ class Stampa:
         for uno in stato["foto"]:
             if not uno.get("arrivo"):
                 continue
-            if SEEDVR2 in uno["fatte"]:
+            if all(q in uno["fatte"] for q in FATTE) and self.controllo_di(uno).is_file():
                 continue
             da_fare.append({"id": uno["id"], "originale": str(self.file_di(uno, ORIGINALI)),
                             "seedvr2": str(self.file_di(uno, SEEDVR2)),
+                            "grana": str(self.file_di(uno, GRANA)),
+                            "controllo": str(self.controllo_di(uno)),
                             "larghezza": uno["arrivo"][0], "altezza": uno["arrivo"][1]})
         if not da_fare:
             if not giri:
@@ -394,7 +412,8 @@ class Stampa:
                   "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
                   "opzioni": {"cartella_modelli": str(self.archivio.dove.modelli)},
                   "percorsi": percorsi_della_stanza()}
-        self.lavoro.di(f"SeedVR2 si carica una volta e fa {len(da_fare)} foto")
+        self.lavoro.di(f"SeedVR2 si carica una volta e fa {len(da_fare)} foto, "
+                       "poi la grana e il controllo dei volti")
         self.lavoro.fasi(lavoro=1)
         self.lavoro.fase("lavoro")
         partito = time.monotonic()
@@ -418,7 +437,7 @@ class Stampa:
         with self._serratura:
             stato = self._stato()
             for uno in stato["foto"]:
-                fatte = [q for q in (SEEDVR2,) if self.file_di(uno, q).is_file()]
+                fatte = [q for q in FATTE if self.file_di(uno, q).is_file()]
                 uno["fatte"] = fatte
             self._salva(stato)
 

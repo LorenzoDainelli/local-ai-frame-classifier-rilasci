@@ -10,6 +10,10 @@
     ],
     "semplice": [
       [
+        "migliora",
+        "Stampa veloce: c'è una terza versione, SeedVR2 con la grana dell'originale rimessa sopra (pelle meno liscia). Il programma confronta ogni volto con l'originale e scrive «volto cambiato: guarda» se è cambiato."
+      ],
+      [
         "controlla",
         "Chiudendo il programma (anche con «Riavvia ora») non esce più «si è chiuso di colpo»: ora aspetta che la copia di chiusura finisca, così l'avvio dopo non rifà il lungo controllo dell'archivio."
       ],

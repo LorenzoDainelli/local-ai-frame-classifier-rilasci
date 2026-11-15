@@ -98,7 +98,8 @@ def test_dall_importazione_allo_zip(tmp_path, monkeypatch):
     fatta._gira()
     assert sosta.giri == [True, False]
     foto = {uno["id"]: uno for uno in fatta.come_va()["foto"]}
-    assert foto[piccola["id"]]["fatte"] == ["seedvr2"]
+    assert foto[piccola["id"]]["fatte"] == ["seedvr2", "grana"]
+    assert foto[piccola["id"]]["controllo"] == {"non_fatto": "mancano i modelli dei volti"}
     assert foto[grande["id"]]["fatte"] == []
     with Image.open(fatta.file_di(foto[piccola["id"]], "seedvr2")) as fatto:
         assert fatto.size == (4096, 2731)
@@ -275,7 +276,7 @@ def test_foto_aggiunte_mentre_lavora(tmp_path, monkeypatch):
     fatta._lancia = lancia
     fatta._gira()
     assert len(giri) == 2 and giri[0] == [prima["id"]] and len(giri[1]) == 1
-    assert all(uno["fatte"] == ["seedvr2"] for uno in fatta.come_va()["foto"])
+    assert all(uno["fatte"] == ["seedvr2", "grana"] for uno in fatta.come_va()["foto"])
 
 
 def test_foto_che_non_viene_non_gira_per_sempre(tmp_path, monkeypatch):
@@ -499,3 +500,107 @@ def test_la_versione_dei_volti_di_prima_non_si_sceglie_piu(tmp_path, monkeypatch
     assert fatta.zip(tmp_path / "z.zip") == 0
     fatta.togli(uno["id"])
     assert not vecchio.exists()
+
+
+def test_la_grana_si_sceglie_e_va_nello_zip(tmp_path, monkeypatch):
+    import numpy as np
+
+    from officina.miglioria.pelle_stanza import rimetti_la_grana
+
+    fatta, _sosta = _stampa(tmp_path, monkeypatch)
+    sorgente = io.BytesIO()
+    casuale = np.random.default_rng(3).integers(0, 255, (200, 300, 3), dtype=np.uint8)
+    Image.fromarray(casuale).save(sorgente, "PNG")
+    sorgente.seek(0)
+    uno = fatta.aggiungi("rumore.png", sorgente)
+    fatta._gira()
+    with Image.open(fatta.file_di(uno, "seedvr2")) as a, \
+            Image.open(fatta.file_di(uno, "grana")) as b:
+        liscia, granosa = np.asarray(a.convert("RGB")), np.asarray(b.convert("RGB"))
+    assert granosa.shape == liscia.shape
+    assert np.array_equal(granosa, rimetti_la_grana(casuale, liscia))
+    fatta.scegli(uno["id"], "grana")
+    assert fatta.zip(tmp_path / "z.zip") == 1
+    assert fatta.vista(uno["id"], "grana").is_file()
+    fatta.togli(uno["id"])
+    assert not fatta.controllo_di(uno).exists()
+
+
+def test_se_seedvr2_c_e_gia_fa_solo_grana_e_controllo(tmp_path, monkeypatch):
+    fatta, _sosta = _stampa(tmp_path, monkeypatch)
+    uno = fatta.aggiungi("a.jpg", _jpeg(300, 200))
+    fatta._gira()
+    fatta.file_di(uno, "grana").unlink()
+    fatta.controllo_di(uno).unlink()
+
+    def nessun_motore(*_a, **_k):
+        raise AssertionError("SeedVR2 non doveva ripartire")
+
+    monkeypatch.setattr(motori, "apri", nessun_motore)
+    fatta._gira()
+    [letta] = fatta.come_va()["foto"]
+    assert letta["fatte"] == ["seedvr2", "grana"] and letta["controllo"]
+
+
+def test_se_il_controllo_si_rompe_lo_dice(tmp_path, monkeypatch):
+    fatta, _sosta = _stampa(tmp_path, monkeypatch)
+    uno = fatta.aggiungi("a.jpg", _jpeg(300, 200))
+    monkeypatch.setattr(stampa_stanza, "il_rilevatore", lambda cartella: object())
+    fatta._gira()
+    assert fatta.come_va()["foto"][0]["controllo"] == {
+        "non_fatto": "il controllo dei volti si è rotto"}
+    assert fatta.file_di(uno, "grana").is_file()
+
+
+def test_la_pagina_dice_se_un_volto_e_cambiato(archivio, monkeypatch):
+    import json
+
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from officina.web.server import app
+    from officina.web.strade import stampa as strada
+
+    monkeypatch.setattr(strada, "_stampa", None)
+    html = TestClient(app, client=("127.0.0.1", 51000)).get("/stampa").text
+    controllo = {"seedvr2": {"controllati": 2, "cambiati": 0, "piccoli": 1,
+                             "persona": 0.9, "spostati": 0.02},
+                 "grana": {"controllati": 2, "cambiati": 1, "piccoli": 1,
+                           "persona": 0.3, "spostati": 0.02}}
+    stato = {"foto": [{"id": 1, "nome": "a.jpg", "file": "1-a.jpg", "larghezza": 300,
+                       "altezza": 200, "arrivo": [600, 400], "due_terzi": True,
+                       "fatte": ["seedvr2", "grana"], "scelta": None,
+                       "controllo": controllo}],
+             "approvate": 0, "righe": [], "sta_lavorando": False}
+    immagine = _jpeg(300, 200).getvalue()
+
+    def rispondi(rotta):
+        if rotta.request.url.endswith(".jpg"):
+            rotta.fulfill(status=200, content_type="image/jpeg", body=immagine)
+        else:
+            rotta.fulfill(status=200, content_type="application/json",
+                          body=json.dumps(stato))
+
+    with sync_api.sync_playwright() as p:
+        pronto = Path("/opt/pw-browsers/chromium")
+        try:
+            browser = p.chromium.launch(
+                executable_path=str(pronto) if pronto.exists() else None)
+        except sync_api.Error as guasto:
+            pytest.skip(f"niente browser: {guasto}")
+        pagina = browser.new_page()
+        pagina.route("**/*", rispondi)
+        pagina.goto("http://127.0.0.1:9/stampa")
+        pagina.set_content(html)
+        pagina.locator("#st-elenco img").first.wait_for(state="attached", timeout=10000)
+        tessera = pagina.locator(".st-tessera").first.inner_text()
+        pagina.locator("#st-elenco img").first.click()
+        pagina.locator(".st-pannello").nth(2).wait_for(state="attached", timeout=10000)
+        pannelli = [p.inner_text() for p in pagina.locator(".st-pannello").all()]
+        browser.close()
+    strada.la_stampa(archivio).ferma()
+    assert "volto cambiato in SeedVR2 + grana" in tessera
+    assert "2 volti uguali all'originale" in pannelli[1]
+    assert "1 volto troppo piccolo" in pannelli[1]
+    assert "1 volto cambiato: guarda" in pannelli[2]
+    assert "SeedVR2 + grana" in pannelli[2]
