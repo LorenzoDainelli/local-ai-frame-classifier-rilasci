@@ -73,6 +73,13 @@ def _ferma() -> dict:
     return _stato()
 
 
+def _chiedi_il_voto() -> dict:
+    archivio = accesso.aperto()
+    if not sosta.per_la_copia.aspetta_la_copia(sosta.GARA120):
+        la_gara(archivio).chiedi_il_voto()
+    return _stato()
+
+
 def _cancella() -> dict:
     tolti = la_gara(accesso.aperto()).cancella_i_dati()
     return {**_stato(), "tolti": tolti}
@@ -91,6 +98,11 @@ async def api_avvia():
 @strada.post("/api/gara-120/ferma")
 async def api_ferma():
     return await consegna.subito(_ferma)
+
+
+@strada.post("/api/gara-120/voto-alla-cieca")
+async def api_chiedi_il_voto():
+    return await consegna.subito(_chiedi_il_voto)
 
 
 @strada.post("/api/gara-120/cancella")

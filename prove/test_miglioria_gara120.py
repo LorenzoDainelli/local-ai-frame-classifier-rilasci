@@ -435,13 +435,31 @@ def test_corsa_intera_e_classifica(tmp_path, monkeypatch):
     visti = []
     registro = corsa.corri(dati, risultati, gimm, ldf,
                            al_caso=lambda f, a, b: visti.append((f, a, b)))
-    assert visti[-1] == (corsa.LDF, 4, 4)
+    assert visti[-1] == (corsa.LDF, 2, 2)
+    assert gimm.chiamate == 1 and ldf.chiamate == 1
     assert gimm.spento == 1 and ldf.spento == 1
     piano = corsa.leggi_piano(dati)
+    assert corsa.finita(registro, piano.casi)
+    assert set(registro.fatti(corsa.GIMM)) == {"s/a/000100/p16x4/buio"}
     esito = corsa.classifiche(registro, piano.casi)
-    assert esito["tutto"]["primo"] in (corsa.LDF, corsa.FUSIONE)
-    assert esito["tutto"]["medie"][corsa.GIMM]["casi"] == 2
+    assert list(esito) == ["difficilissimi"]
+    assert esito["difficilissimi"]["primo"] in (corsa.LDF, corsa.FUSIONE)
     assert esito["difficilissimi"]["medie"][corsa.GIMM]["casi"] == 1
+
+
+def test_la_corsa_tiene_quello_che_gimm_aveva_gia_fatto(tmp_path, monkeypatch):
+    dati, risultati = _gara_finta(tmp_path, monkeypatch)
+    vecchia = corsa.leggi_piano(dati)
+    gimm, ldf = _MotoreFinto("g"), _MotoreFinto("l")
+    registro = corsa.Risultati(risultati)
+    registro.ricomincia({corsa.GIMM: gimm.firma(), corsa.LDF: ldf.firma(),
+                         "casi": g.impronta(g.testo_casi(vecchia.casi))})
+    corsa.corri(dati, risultati, gimm, ldf, fermati=lambda: gimm.chiamate >= 1)
+    assert not corsa.finita(corsa.Risultati(risultati), vecchia.casi)
+    gimm2, ldf2 = _MotoreFinto("g"), _MotoreFinto("l")
+    corsa.corri(dati, risultati, gimm2, ldf2)
+    assert gimm2.chiamate == 0 and ldf2.chiamate == 1
+    assert corsa.finita(corsa.Risultati(risultati), vecchia.casi)
 
 
 def test_corsa_riprende_senza_rifare(tmp_path, monkeypatch):
@@ -453,7 +471,7 @@ def test_corsa_riprende_senza_rifare(tmp_path, monkeypatch):
     assert gimm.chiamate == 1 and ldf.chiamate == 0
     gimm2, ldf2 = _MotoreFinto("g"), _MotoreFinto("l")
     corsa.corri(dati, risultati, gimm2, ldf2)
-    assert gimm2.chiamate == 1 and ldf2.chiamate == 2
+    assert gimm2.chiamate == 0 and ldf2.chiamate == 1
 
 
 def test_corsa_ricomincia_se_cambia_un_modello(tmp_path, monkeypatch):
@@ -461,7 +479,7 @@ def test_corsa_ricomincia_se_cambia_un_modello(tmp_path, monkeypatch):
     corsa.corri(dati, risultati, _MotoreFinto("g"), _MotoreFinto("l"))
     nuovo = _MotoreFinto("g2")
     corsa.corri(dati, risultati, nuovo, _MotoreFinto("l"))
-    assert nuovo.chiamate == 2
+    assert nuovo.chiamate == 1
 
 
 def test_ldf_che_non_ci_sta_conta_come_zero(tmp_path, monkeypatch):
@@ -471,7 +489,7 @@ def test_ldf_che_non_ci_sta_conta_come_zero(tmp_path, monkeypatch):
                            non_ci_sta=(_NonCiSta,))
     piano = corsa.leggi_piano(dati)
     esito = corsa.classifica(registro, piano.casi)
-    assert esito["medie"][corsa.LDF]["non_riusciti"] == 2
+    assert esito["medie"][corsa.LDF]["non_riusciti"] == 1
     assert esito["medie"][corsa.LDF]["somiglianza"] == 0.0
     assert esito["primo"] == corsa.GIMM
 
@@ -658,8 +676,8 @@ def test_stanza_fa_la_corsa_e_le_clip_senza_rete(tmp_path, monkeypatch):
     lavoro = {"azione": "corsa", "dati": str(dati), "risultati": str(risultati)}
     assert stanza.un_lavoro(lavoro, messaggi.append, motori) == 0
     assert chiusa == [1]
-    assert messaggi[-1] == {"fatto": {"azione": "corsa", "gimm": 2, "ldf": 2}}
-    assert {"fatti": 4, "totale": 4, "fase": corsa.LDF} in messaggi
+    assert messaggi[-1] == {"fatto": {"azione": "corsa", "gimm": 1, "ldf": 1}}
+    assert {"fatti": 2, "totale": 2, "fase": corsa.LDF} in messaggi
     piano = corsa.leggi_piano(dati)
     elenco = sc.Elenco(piano.casi, {}, {("s/a", n): f"s/a/{n:05d}.png"
                                         for n in range(1, 200)}, {"s/a": set(range(1, 200))})
@@ -728,47 +746,98 @@ def _regista(tmp_path, monkeypatch, motori=None, fermati_dopo=None):
     archivio = SimpleNamespace(dove=SimpleNamespace(modelli=tmp_path))
     gara = gara120.Gara120(archivio, cartella=tmp_path, lancia=lancia,
                            turno=TurnoDellaScheda(),
-                           prepara=lambda: azioni.append("prepara"))
+                           prepara=lambda: azioni.append("prepara"),
+                           ha_vinto=lambda: azioni.append("ha vinto"))
     return gara, azioni, scaricati
 
 
-def test_regista_fa_tutto_fino_al_voto(tmp_path, monkeypatch):
-    pytest.importorskip("av")
+def test_regista_finisce_la_corsa_e_vince_chi_e_primo_nei_numeri(tmp_path, monkeypatch):
     from officina.miglioria import gara120
 
     gara, azioni, scaricati = _regista(tmp_path, monkeypatch)
     assert gara.fase() == gara120.CORSA
     gara._gira()
-    assert azioni == ["prepara", "corsa", "clip"]
-    assert len(scaricati) == 2 and scaricati[1][0].startswith("s/a/")
-    assert gara.fase() == gara120.VOTO
+    assert azioni == ["prepara", "corsa", "ha vinto"]
+    assert len(scaricati) == 1
+    assert gara.fase() == gara120.FINITA
     assert gara.turno.chi is None
     esito = gara.esito()
+    assert esito["corsa_finita"] and not esito["votato"]
     assert esito["automatico"] == esito["classifiche"]["difficilissimi"]["primo"]
-    assert esito["vincitore"] is None and not esito["decidiamo_insieme"]
+    assert esito["vincitore"] == esito["automatico"] is not None
+    assert not esito["decidiamo_insieme"]
+    assert any("facoltativo" in riga for riga in gara.lavoro.righe)
+
+
+def test_senza_un_primo_nei_numeri_decidiamo_insieme(tmp_path, monkeypatch):
+    from officina.miglioria import gara120
+
+    gara, azioni, _ = _regista(tmp_path, monkeypatch)
+    monkeypatch.setattr(corsa, "classifica",
+                        lambda registro, casi: {"medie": {}, "vincitori": {}, "primo": None})
+    gara._gira()
+    assert azioni == ["prepara", "corsa"]
+    assert gara.fase() == gara120.FINITA
+    esito = gara.esito()
+    assert esito["vincitore"] is None and esito["decidiamo_insieme"]
+
+
+def test_il_voto_si_prepara_solo_se_lo_chiedi(tmp_path, monkeypatch):
+    pytest.importorskip("av")
+    from officina.miglioria import gara120
+
+    gara, azioni, scaricati = _regista(tmp_path, monkeypatch)
+    assert not gara.chiedi_il_voto()
+    assert not gara.voto_chiesto()
+    gara._gira()
+    partite = []
+    monkeypatch.setattr(gara, "parti", lambda: partite.append(1) or True)
+    assert gara.chiedi_il_voto() and partite == [1]
+    assert gara.fase() == gara120.CLIP
+    gara._gira()
+    assert azioni == ["prepara", "corsa", "ha vinto", "prepara", "corsa", "clip"]
+    assert len(scaricati) == 3 and scaricati[2][0].startswith("s/a/")
+    assert gara.fase() == gara120.VOTO
+    prima = gara.esito()
+    assert prima["vincitore"] == prima["automatico"] and not prima["decidiamo_insieme"]
     lettere = voto.lettere(tmp_path / "risultati", 0)
-    scelta = next(k for k, v in lettere["lettere"].items() if v == esito["automatico"])
+    scelta = next(k for k, v in lettere["lettere"].items() if v == prima["automatico"])
     voto.vota(tmp_path / "risultati", 0, scelta)
     assert gara.fase() == gara120.VOTATA
-    assert gara.esito()["vincitore"] == esito["automatico"]
+    assert gara.esito()["vincitore"] == prima["automatico"]
     assert gara.occupa() > 0
     assert gara.cancella_i_dati() > 0 and gara.occupa() == 0
     assert voto.clip_pronte(tmp_path / "risultati")
 
 
-def test_regista_fermato_riprende(tmp_path, monkeypatch):
+def test_se_il_tuo_voto_non_e_d_accordo_decidiamo_insieme(tmp_path, monkeypatch):
     pytest.importorskip("av")
+
+    gara, _, _ = _regista(tmp_path, monkeypatch)
+    gara._gira()
+    monkeypatch.setattr(gara, "parti", lambda: True)
+    gara.chiedi_il_voto()
+    gara._gira()
+    automatico = gara.esito()["automatico"]
+    lettere = voto.lettere(tmp_path / "risultati", 0)
+    scelta = next(k for k, v in lettere["lettere"].items() if v != automatico)
+    voto.vota(tmp_path / "risultati", 0, scelta)
+    esito = gara.esito()
+    assert esito["votato"] and esito["vincitore"] is None and esito["decidiamo_insieme"]
+
+
+def test_regista_fermato_riprende(tmp_path, monkeypatch):
     from officina.miglioria import gara120
 
     gara, azioni, _ = _regista(tmp_path, monkeypatch, fermati_dopo=2)
     gara._gira()
     assert azioni == ["prepara", "corsa"]
     assert any("riprende" in riga for riga in gara.lavoro.righe)
-    assert gara.fase() == gara120.CLIP
+    assert gara.fase() == gara120.FINITA
     gara._fermati.clear()
     gara._gira()
-    assert azioni == ["prepara", "corsa", "prepara", "corsa", "clip"]
-    assert gara.fase() == gara120.VOTO
+    assert azioni == ["prepara", "corsa", "prepara", "corsa", "ha vinto"]
+    assert gara.fase() == gara120.FINITA
 
 
 def test_regista_dice_il_guasto_della_stanza(tmp_path, monkeypatch):
@@ -896,7 +965,7 @@ def test_la_gara_scarica_i_motori_prima_della_corsa(tmp_path, monkeypatch):
                         lambda cartella, di, nome="seedvr2", **_: azioni.append(nome))
     gara._gira()
     assert azioni == ["gimmvfi", "ldfvfi", "corsa"]
-    assert gara.fase() == gara120.CLIP
+    assert gara.fase() == gara120.FINITA
 
 
 def test_senza_i_motori_la_gara_dice_quale_manca(tmp_path, monkeypatch):

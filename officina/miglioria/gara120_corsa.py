@@ -205,6 +205,10 @@ def fase_ldf(caso, entrate, veri, ldf, risultati: Path, non_ci_sta=()) -> dict:
             "voti_fusione": _voti_lista(fatti_fusi, veri)}
 
 
+def da_correre(casi: list) -> list:
+    return [caso for caso in casi if caso.gruppo == g.DIFFICILISSIMO]
+
+
 def corri(cartella: Path, risultati: Path, gimm, ldf,
           al_caso: Callable[[str, int, int], None] | None = None,
           fermati: Callable[[], bool] | None = None, non_ci_sta=()) -> Risultati:
@@ -214,10 +218,12 @@ def corri(cartella: Path, risultati: Path, gimm, ldf,
         g.testo_casi(piano.casi))}
     if registro.firma() != firma:
         registro.ricomincia(firma)
-    totale = 2 * len(piano.casi)
+    casi = da_correre(piano.casi)
+    nomi = {caso.nome for caso in casi}
+    totale = 2 * len(casi)
     for fase, motore in ((GIMM, gimm), (LDF, ldf)):
         fatti = registro.fatti(fase)
-        for caso in piano.casi:
+        for caso in casi:
             if fermati is not None and fermati():
                 return registro
             if caso.nome not in fatti:
@@ -229,7 +235,8 @@ def corri(cartella: Path, risultati: Path, gimm, ldf,
                 registro.aggiungi(riga)
                 fatti[caso.nome] = riga
             if al_caso is not None:
-                gia = len(registro.fatti(GIMM)) + len(registro.fatti(LDF))
+                gia = sum(1 for nome in registro.fatti(GIMM) if nome in nomi)
+                gia += sum(1 for nome in registro.fatti(LDF) if nome in nomi)
                 al_caso(fase, gia, totale)
         motore.spegni()
     return registro
@@ -283,12 +290,16 @@ def classifica(registro: Risultati, casi: list) -> dict:
     return {"medie": medie, "vincitori": vincitori, "primo": primo}
 
 
+def finita(registro: Risultati, casi: list) -> bool:
+    nomi = {caso.nome for caso in da_correre(casi)}
+    return all(nomi <= set(registro.fatti(fase)) for fase in (GIMM, LDF))
+
+
 def classifiche(registro: Risultati, casi: list) -> dict:
-    difficilissimi = [c for c in casi if c.gruppo == g.DIFFICILISSIMO]
-    return {"tutto": classifica(registro, casi),
-            "difficilissimi": classifica(registro, difficilissimi)}
+    return {"difficilissimi": classifica(registro, da_correre(casi))}
 
 
 __all__ = ["CONCORRENTI", "FUSIONE", "GIMM", "LDF", "MISURE", "NOMI", "Piano", "Risultati",
-           "caso_da_lista", "classifica", "classifiche", "corri", "indice", "leggi_piano",
+           "caso_da_lista", "classifica", "classifiche", "corri", "da_correre", "finita",
+           "indice", "leggi_piano",
            "per_concorrente", "prendi_per", "scrivi_piano"]

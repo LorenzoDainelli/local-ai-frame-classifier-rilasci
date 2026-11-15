@@ -22,6 +22,8 @@ RISULTATI = "risultati"
 ASPETTA_LA_SCHEDA = 30.0
 MODULO = "officina.miglioria.gara120_stanza"
 SCARICO, CORSA, CLIP, VOTO, VOTATA = "scarico", "corsa", "clip", "voto", "votata"
+FINITA = "finita"
+VOTO_CHIESTO = "voto-chiesto"
 MOTORI = (("gimmvfi", "GIMM-VFI"), ("ldfvfi", "LDF-VFI"))
 SENZA_RETE = ("Non riesco a scaricare i video pubblici della gara: controlla che "
               "internet funzioni e premi di nuovo «Avvia gara». Riprende da dove era.")
@@ -35,7 +37,8 @@ class Gara120:
 
     def __init__(self, archivio, cartella: Path | None = None,
                  lancia: Callable[[dict, Callable], dict] | None = None, turno=None,
-                 scarica_da_hf=None, dalla_rete=None, api=None, prepara=None):
+                 scarica_da_hf=None, dalla_rete=None, api=None, prepara=None,
+                 ha_vinto=None):
         from officina.web.lavori import Lavoro
 
         self.archivio = archivio
@@ -48,6 +51,7 @@ class Gara120:
         self._rete = dalla_rete
         self._api = api
         self._prepara = prepara or self._prepara_i_motori
+        self._ha_vinto = ha_vinto or self._rifai_a_120
         self.lavoro = Lavoro(COSA)
         self._fermati = threading.Event()
         self._processo: subprocess.Popen | None = None
@@ -146,12 +150,23 @@ class Gara120:
         self.lavoro.senza_numeri()
         self._controlla()
         piano = corsa.scrivi_piano(self.dati, elenco, sc.cartelle_adobe(self.dati))
-        self.lavoro.di(f"la corsa: {len(piano.casi)} casi, prima GIMM-VFI e poi LDF-VFI")
+        quanti = len(corsa.da_correre(piano.casi))
+        self.lavoro.di(f"la corsa: {quanti} casi difficilissimi, prima GIMM-VFI e poi "
+                       "LDF-VFI")
         self.lavoro.fase("corsa")
-        esito = self._nella_stanza(stanza.CORSA)
-        if min(esito.get("gimm", 0), esito.get("ldf", 0)) < len(piano.casi):
-            raise Fermata()
+        self._nella_stanza(stanza.CORSA)
         registro_r = corsa.Risultati(self.risultati)
+        if not corsa.finita(registro_r, piano.casi):
+            raise Fermata()
+        if not self.voto_chiesto():
+            esito = self.esito()
+            registro.evento("gara_120.corsa_finita", vincitore=esito["vincitore"] or "")
+            if esito["vincitore"]:
+                self._ha_vinto()
+                self.lavoro.di("la corsa è finita: il voto alla cieca è facoltativo")
+            else:
+                self.lavoro.di("la corsa è finita senza un primo: decidiamo insieme")
+            return
         try:
             clip = voto.leggi_clip(self.risultati)
         except (OSError, ValueError):
@@ -228,17 +243,42 @@ class Gara120:
             raise guasto
         return esito.get("fatto") or {}
 
+    def _rifai_a_120(self) -> None:
+        from officina.miglioria import rifai
+
+        try:
+            rifai.a_centoventi(self.archivio)
+        except Exception as guasto:
+            registro.errore("gara_120.rifai_a_120", **registro.dove_si_e_rotto(guasto))
+
+    def voto_chiesto(self) -> bool:
+        return (self.risultati / VOTO_CHIESTO).is_file()
+
+    def chiedi_il_voto(self) -> bool:
+        if self.fase() != FINITA:
+            return False
+        self.risultati.mkdir(parents=True, exist_ok=True)
+        (self.risultati / VOTO_CHIESTO).write_text("sì\n", encoding="utf-8")
+        registro.evento("gara_120.voto_chiesto")
+        return self.parti()
+
+    def _corsa_finita(self) -> bool | None:
+        try:
+            piano = corsa.leggi_piano(self.dati)
+        except (OSError, ValueError, KeyError):
+            return None
+        return corsa.finita(corsa.Risultati(self.risultati), piano.casi)
+
     def fase(self) -> str:
         if voto.clip_pronte(self.risultati):
             quante = len(voto.leggi_clip(self.risultati))
             return VOTATA if voto.conto(self.risultati, quante)["votati"] == quante else VOTO
-        try:
-            piano = corsa.leggi_piano(self.dati)
-        except (OSError, ValueError, KeyError):
+        finita = self._corsa_finita()
+        if finita is None:
             return SCARICO
-        registro_r = corsa.Risultati(self.risultati)
-        fatti = min(len(registro_r.fatti(corsa.GIMM)), len(registro_r.fatti(corsa.LDF)))
-        return CLIP if fatti >= len(piano.casi) else CORSA
+        if not finita:
+            return CORSA
+        return CLIP if self.voto_chiesto() else FINITA
 
     def classifiche(self) -> dict | None:
         try:
@@ -269,14 +309,16 @@ class Gara120:
         if voto.clip_pronte(self.risultati):
             conto = voto.conto(self.risultati, len(voto.leggi_clip(self.risultati)))
         automatico = (classifiche or {}).get("difficilissimi", {}).get("primo")
-        su_tutto = (classifiche or {}).get("tutto", {}).get("primo")
-        dal_voto = conto["primo"] if conto else None
-        finito = bool(conto) and conto["votati"] == conto["quanti"]
+        corsa_finita = bool(self._corsa_finita())
+        votato = bool(conto) and conto["votati"] == conto["quanti"]
+        if votato:
+            vincitore = voto.vincitore(automatico, conto["primo"])
+        else:
+            vincitore = automatico if corsa_finita else None
         return {"classifiche": classifiche, "conto": conto, "automatico": automatico,
-                "su_tutto_un_altro": bool(automatico and su_tutto
-                                          and su_tutto != automatico),
-                "vincitore": voto.vincitore(automatico, dal_voto) if finito else None,
-                "decidiamo_insieme": finito and voto.vincitore(automatico, dal_voto) is None}
+                "corsa_finita": corsa_finita, "votato": votato, "vincitore": vincitore,
+                "decidiamo_insieme": corsa_finita and vincitore is None
+                and (conto is None or votato)}
 
 
 __all__ = ["CARTELLA", "COSA", "Fermata", "Gara120"]

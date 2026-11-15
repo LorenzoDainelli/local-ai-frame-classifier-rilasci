@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_icone.html" import icona %}
+{% from "_spiega.html" import spiega %}
 {% block titolo %}Stampa veloce — Local AI Frame Classifier{% endblock %}
 
 {% block corpo %}
@@ -8,7 +9,10 @@
 <div class="pagina st-pagina">
     <header>
         <h1 class="titolo-pagina">Stampa veloce</h1>
-        <p class="sottotitolo">Foto a parte, fuori dalla galleria: SeedVR2 le porta a {{ lato }} sul lato lungo. Per ognuna scegli l'originale, SeedVR2 o SeedVR2 con la grana dell'originale rimessa sopra, e scarica. Il programma confronta ogni volto con l'originale e ti avvisa se è cambiato.</p>
+        <p class="sottotitolo">Foto a parte, fuori dalla galleria: SeedVR2 le porta a {{ lato }} sul lato lungo.{% call spiega("Come funziona") %}
+            <p>Per ognuna scegli l'originale, SeedVR2 o SeedVR2 con la grana dell'originale rimessa sopra, e scarica.</p>
+            <p>Il programma confronta ogni volto con l'originale e ti avvisa se è cambiato.</p>
+        {% endcall %}</p>
         <p><a class="tasto-comando piccolo" href="/miglioramento">{{ icona('su', 14) }} Torna al miglioramento</a></p>
     </header>
 

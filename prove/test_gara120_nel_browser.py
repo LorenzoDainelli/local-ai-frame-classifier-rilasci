@@ -161,3 +161,43 @@ def test_il_guasto_si_vede_con_i_suoi_passi_e_si_copia(apri):
 def test_senza_guasto_niente_dettagli(apri):
     pagina = apri("/gara-120")
     assert not pagina.locator("[data-g1-dettaglio]").is_visible()
+
+
+def _classifiche():
+    medie = {chi: {"casi": 170, "non_riusciti": 0, "secondi": 1.0,
+                   "somiglianza": 30.0, "struttura": 0.9, "zona_peggiore": 20.0}
+             for chi in corsa.CONCORRENTI}
+    return {"difficilissimi": {"medie": medie, "vincitori": {}, "primo": corsa.LDF}}
+
+
+def test_finita_la_corsa_dice_chi_ha_vinto_e_il_voto_e_facoltativo(apri, monkeypatch):
+    gara = apri.gara
+    chiesti = []
+    monkeypatch.setattr(gara, "fase", lambda: gara120.FINITA)
+    monkeypatch.setattr(gara, "esito", lambda: {
+        "classifiche": _classifiche(), "conto": None, "automatico": corsa.LDF,
+        "corsa_finita": True, "votato": False, "vincitore": corsa.LDF,
+        "decidiamo_insieme": False})
+    monkeypatch.setattr(gara, "chiedi_il_voto", lambda: chiesti.append(1) or True)
+    pagina = apri("/gara-120")
+    assert not pagina.locator("[data-g1-avvia]").is_visible()
+    assert pagina.locator("[data-g1-chiedi-voto]").is_visible()
+    assert "facoltativo" in pagina.locator("[data-g1-fase]").inner_text()
+    esito = pagina.locator("[data-g1-esito]").inner_text()
+    assert "Ha vinto LDF-VFI" in esito and "Su tutti i casi" not in esito
+    pagina.locator("[data-g1-chiedi-voto]").click()
+    pagina.wait_for_timeout(300)
+    assert chiesti == [1]
+    assert apri.errori == []
+
+
+def test_senza_un_primo_nei_numeri_la_pagina_dice_decidiamo_insieme(apri, monkeypatch):
+    gara = apri.gara
+    monkeypatch.setattr(gara, "fase", lambda: gara120.FINITA)
+    monkeypatch.setattr(gara, "esito", lambda: {
+        "classifiche": _classifiche(), "conto": None, "automatico": None,
+        "corsa_finita": True, "votato": False, "vincitore": None,
+        "decidiamo_insieme": True})
+    pagina = apri("/gara-120")
+    assert "Decidiamo insieme" in pagina.locator("[data-g1-esito]").inner_text()
+    assert apri.errori == []

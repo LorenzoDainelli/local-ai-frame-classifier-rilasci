@@ -10,6 +10,10 @@
     ],
     "semplice": [
       [
+        "sfida",
+        "Gara dei 120 FPS più corta: si corre solo sui casi difficilissimi e si tiene quello che è già fatto. Alla fine chi è primo nei numeri fa subito i 120 FPS; il voto alla cieca diventa facoltativo."
+      ],
+      [
         "migliora",
         "Stampa veloce: c'è una terza versione, SeedVR2 con la grana dell'originale rimessa sopra (pelle meno liscia). Il programma confronta ogni volto con l'originale e scrive «volto cambiato: guarda» se è cambiato."
       ],

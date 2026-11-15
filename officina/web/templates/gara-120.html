@@ -15,9 +15,11 @@
             <p>Tre concorrenti creano i fotogrammi che mancano in video pubblici
             girati veloci (SNU-FILM, X-TEST e Adobe240): GIMM-VFI-F-P, LDF-VFI e la
             Fusione zona per zona. <b>I tuoi video non entrano mai.</b></p>
-            <p>Prima il voto automatico su 430 casi, poi il tuo voto alla cieca su 20
-            casi difficilissimi. Vince solo chi è primo in tutte e due; se non sono
-            d'accordo, decidiamo insieme.</p>
+            <p>Il voto automatico usa solo i casi difficilissimi: buio, rumore,
+            compressi, mossi e i video 4K di X-TEST. Vince chi è primo in almeno 2
+            misure su 3. Se nessuno lo è, decidiamo insieme.</p>
+            <p>Il voto alla cieca su 20 casi è facoltativo. Se lo fai e non è
+            d'accordo col voto automatico, decidiamo insieme.</p>
             <p>Si ferma con «Ferma» e riprende da dove era. Se la fermi mentre scarica
             l'archivio di XVFI, quel pezzo ricomincia da capo.</p>
         {% endcall %}</h1>
@@ -41,6 +43,7 @@
         <div class="in-fila">
             <button class="tasto-comando principale" type="button" data-g1-avvia>Avvia la gara</button>
             <button class="tasto-comando nudo" type="button" data-g1-ferma hidden>Ferma</button>
+            <button class="tasto-comando" type="button" data-g1-chiedi-voto hidden>Prepara il voto alla cieca</button>
             <button class="tasto-comando nudo" type="button" data-g1-cancella hidden>Cancella i dati scaricati</button>
             <span class="g1-sicuro" data-g1-sicuro hidden>
                 <span class="ds">Si cancellano i video pubblici scaricati; i risultati e i video del voto restano.</span>

@@ -6,8 +6,9 @@ const OGNI = 5000;
 const GIGA = 2 ** 30;
 const FASI = {
     scarico: "Quando premi «Avvia gara», per prima cosa scarica e controlla i video pubblici (circa 21 GB) e i due modelli in gara, GIMM-VFI e LDF-VFI (circa 6,5 GB).",
-    corsa: "La corsa sui 430 casi è a metà: riprende da dove era.",
-    clip: "La corsa è finita: mancano i video del voto alla cieca.",
+    corsa: "La corsa sui casi difficilissimi è a metà: riprende da dove era.",
+    finita: "La corsa è finita. Il voto alla cieca è facoltativo: 20 video da 2 secondi, da preparare prima.",
+    clip: "Mancano i video del voto alla cieca: riprende da dove era.",
     voto: "I video del voto sono pronti: tocca a te.",
     votata: "Hai votato tutti i casi.",
 };
@@ -25,8 +26,9 @@ const qui = (nome) => pagina.querySelector(`[data-${nome}]`);
 
 function scriviStato() {
     const lavora = Boolean(stato.sta_lavorando);
-    qui("g1-avvia").hidden = lavora || stato.fase === "voto" || stato.fase === "votata";
+    qui("g1-avvia").hidden = lavora || ["finita", "voto", "votata"].includes(stato.fase);
     qui("g1-ferma").hidden = !lavora;
+    qui("g1-chiedi-voto").hidden = lavora || stato.fase !== "finita";
     qui("g1-cancella").hidden = lavora || !stato.occupa;
     qui("g1-fase").textContent = lavora ? "La gara sta lavorando." : (FASI[stato.fase] || "");
     let riga = (stato.righe || []).slice(-1)[0] || "";
@@ -82,7 +84,7 @@ function scriviEsito() {
     }
     const pezzi = [];
     const conto = esito.conto;
-    if (conto && conto.votati === conto.quanti) {
+    if (esito.votato) {
         if (esito.vincitore) {
             pezzi.push(`<h2>Ha vinto ${nomi[esito.vincitore]}</h2><p>È primo sia nel voto automatico sui difficilissimi sia nel tuo voto.</p>`);
         } else {
@@ -90,15 +92,14 @@ function scriviEsito() {
         }
         const punti = Object.entries(conto.punti).map(([chi, quanti]) => `${nomi[chi]}: ${quanti}`).join(" · ");
         pezzi.push(`<p class="ds">Il tuo voto: ${punti}.</p>`);
+    } else if (esito.vincitore) {
+        pezzi.push(`<h2>Ha vinto ${nomi[esito.vincitore]}</h2><p>È primo in almeno 2 misure su 3 sui casi difficilissimi. Da ora fa lui i 120 FPS.</p>`);
+    } else if (esito.decidiamo_insieme) {
+        pezzi.push("<h2>Decidiamo insieme</h2><p>Sui casi difficilissimi nessuno è primo in almeno 2 misure su 3.</p>");
     }
     const automatico = esito.automatico ? nomi[esito.automatico] : "nessuno (ogni misura ha un vincitore diverso)";
     pezzi.push(`<h2>Voto automatico sui difficilissimi</h2><p>Primo: ${automatico}.</p>`);
     pezzi.push(tabella(esito.classifiche.difficilissimi));
-    if (esito.su_tutto_un_altro) {
-        pezzi.push(`<p class="avviso forte"><span>Attenzione: su tutti i casi, facili compresi, è primo ${nomi[esito.classifiche.tutto.primo]}.</span></p>`);
-    }
-    pezzi.push("<h2>Su tutti i casi</h2>");
-    pezzi.push(tabella(esito.classifiche.tutto));
     dove.innerHTML = pezzi.join("");
 }
 
@@ -203,6 +204,7 @@ async function premi(dove) {
 if (pagina) {
     qui("g1-avvia").addEventListener("click", () => premi("avvia"));
     qui("g1-ferma").addEventListener("click", () => premi("ferma"));
+    qui("g1-chiedi-voto").addEventListener("click", () => premi("voto-alla-cieca"));
     qui("g1-cancella").addEventListener("click", () => { qui("g1-sicuro").hidden = false; });
     qui("g1-cancella-no").addEventListener("click", () => { qui("g1-sicuro").hidden = true; });
     qui("g1-copia").addEventListener("click", async () => {

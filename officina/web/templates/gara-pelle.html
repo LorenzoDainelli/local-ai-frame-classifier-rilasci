@@ -56,9 +56,11 @@
                 <button class="tasto-comando nudo piccolo" type="button" data-gp-dopo aria-label="Caso dopo">&rarr;</button>
             </span>
         </div>
-        <p class="ds">Guarda le quattro foto e vota quella con la pelle più vera: grana e pori
-            naturali, niente cera, occhi e bocca giusti, la stessa persona. Clicca una foto
-            per vederla grande. La foto vera e i nomi si vedono solo dopo il voto.</p>
+        <p class="ds">Vota la foto con la pelle più vera.{% call spiega("Come si vota") %}
+            <p>Grana e pori naturali, niente cera, occhi e bocca giusti, la stessa
+            persona. Clicca una foto per vederla grande.</p>
+            <p>La foto vera e i nomi si vedono solo dopo il voto.</p>
+        {% endcall %}</p>
         <p class="ds" data-gp-rovine></p>
         <div class="gp-foto" data-gp-foto></div>
         <div class="in-fila g1-vota" data-gp-vota>
