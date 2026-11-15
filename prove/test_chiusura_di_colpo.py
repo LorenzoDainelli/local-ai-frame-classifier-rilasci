@@ -241,3 +241,30 @@ def test_dopo_una_chiusura_di_colpo_dice_in_che_fase_si_era_fermato(archivio, mo
     assert "Mentre si chiudeva facevo e controllavo la copia di chiusura" in pagina
     assert "dopo 70 secondi" in pagina
     assert str(dove.radice) not in pagina
+
+
+def test_chiudendo_senza_copia_il_segno_non_si_riscrive(archivio, monkeypatch):
+    viste = []
+    monkeypatch.setattr(chiusura, "segna_la_fase", lambda dove, fase: viste.append(fase))
+    accesso.chiudi(con_copia=False)
+    assert viste == []
+    assert not (archivio.dove.radice / chiusura.SEGNO).exists()
+    assert not list(archivio.dove.radice.glob(chiusura.SEGNO + "*"))
+
+
+def test_se_il_segno_e_tenuto_occupato_riprova_a_toglierlo(tmp_path, monkeypatch):
+    dove = _dove(tmp_path)
+    chiusura.segna_aperto(dove)
+    monkeypatch.setattr(chiusura, "PAUSA", 0.0)
+    vera, tentativi = type(chiusura._segno(dove)).unlink, []
+
+    def occupato(percorso, missing_ok=False):
+        tentativi.append(1)
+        if len(tentativi) < 3:
+            raise PermissionError("occupato")
+        return vera(percorso, missing_ok=missing_ok)
+
+    monkeypatch.setattr(type(chiusura._segno(dove)), "unlink", occupato)
+    chiusura.segna_chiuso(dove)
+    assert len(tentativi) == 3
+    assert not chiusura._segno(dove).exists()

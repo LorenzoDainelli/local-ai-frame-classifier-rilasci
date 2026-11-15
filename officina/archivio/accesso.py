@@ -153,7 +153,7 @@ class Archivio:
         if cercatore is not None:
             cercatore.dimentica_le_impronte()
         self._chiudi_i_lettori()
-        self._fase("statistiche")
+        self._fase("statistiche", con_copia)
         try:
             with self._lucchetto:
                 database.ripassa_com_e_fatto(self._connessione)
@@ -161,14 +161,14 @@ class Archivio:
             registro.errore("archivio.statistiche_non_aggiornate")
         try:
             if con_copia and self._serve_la_copia():
-                self._fase("copia")
+                self._fase("copia", con_copia)
                 with self._lucchetto:
                     self._connessione.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                     copie.fai_copia(self._connessione, self.dove, "chiusura")
         except Exception:
             registro.errore("copie.fallita")
         finally:
-            self._fase("database")
+            self._fase("database", con_copia)
             with self._lucchetto:
                 self._connessione.close()
                 self._connessione = None
@@ -182,8 +182,8 @@ class Archivio:
             registro.evento("archivio.chiuso")
             self._rimetti_nel_forziere()
 
-    def _fase(self, fase: str) -> None:
-        if self.di_prova:
+    def _fase(self, fase: str, con_copia: bool) -> None:
+        if self.di_prova or not con_copia:
             return
         from officina.archivio import chiusura
 

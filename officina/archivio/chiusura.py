@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,6 +17,8 @@ SANO = "sano"
 ROVINATO = "rovinato"
 QUANTI_DIFETTI = 20
 TOLLERANZA_ACCENSIONE = 5.0
+TENTATIVI = 10
+PAUSA = 0.2
 PROVVISORIO = re.compile(r"\.\d+(\.\d+)?\.tmp$")
 
 
@@ -135,7 +138,14 @@ def ultima_fase(dove: Posizione) -> dict | None:
 def segna_chiuso(dove: Posizione) -> None:
     if di_un_altro(dove):
         return
-    _segno(dove).unlink(missing_ok=True)
+    for volta in range(TENTATIVI):
+        try:
+            _segno(dove).unlink(missing_ok=True)
+            return
+        except PermissionError:
+            if volta == TENTATIVI - 1:
+                raise
+            time.sleep(PAUSA)
 
 
 def _cartelle_del_programma(dove: Posizione) -> tuple[Path, ...]:
