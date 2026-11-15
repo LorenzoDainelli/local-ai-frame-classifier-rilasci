@@ -249,7 +249,7 @@ function monta(dove, lettera, opzioni = {}) {
   const m = rif(svg);
   m.nome = opzioni.nome || "";
   m.fine = opzioni.fine || "";
-  const scena = { svg, t: 0, tv: 0, fino: def.durata, poi: null, via: false, prima: 0 };
+  const scena = { svg, t: 0, tv: 0, fino: def.durata, poi: null, via: false, prima: 0, vel: 1 };
   const disegna = () => rendi(m, def, scena.t, scena.tv);
   const giro = (ora) => {
     if (scena.via || !svg.isConnected) return;
@@ -257,14 +257,14 @@ function monta(dove, lettera, opzioni = {}) {
     scena.prima = ora;
     scena.tv += dt;
     if (scena.t < scena.fino) {
-      scena.t = Math.min(scena.fino, scena.t + dt);
+      scena.t = Math.min(scena.fino, scena.t + dt * scena.vel);
       if (scena.t >= scena.fino && scena.poi) { const p = scena.poi; scena.poi = null; p(scena); }
     }
     disegna();
     requestAnimationFrame(giro);
   };
-  scena.gioca = (da, fino, poi = null) => {
-    scena.t = da; scena.fino = fino; scena.poi = poi;
+  scena.gioca = (da, fino, poi = null, vel = 1) => {
+    scena.t = da; scena.fino = fino; scena.poi = poi; scena.vel = vel;
     if (fermo()) { scena.t = opzioni.fermaA ?? fino; disegna(); if (poi) setTimeout(() => poi(scena), 0); }
   };
   scena.ferma = () => { scena.via = true; };
@@ -274,5 +274,30 @@ function monta(dove, lettera, opzioni = {}) {
   return scena;
 }
 
-window.FotinaScena = { monta, fermo };
+const TEMPI = {
+  sveglia: { entra: [0, 4.6, 5], resta: 4.6, gesto: [6.2, 7.4], esce: [4.8, 5.75, 1.2] },
+  addormenta: { entra: [7.6, 9.0, 2], resta: 9.0, gesto: null, esce: [9.0, 11.4, 3] },
+};
+
+function treTempi(dove, modo) {
+  const t = TEMPI[modo] || TEMPI.sveglia;
+  const scena = monta(dove, "C", { fermaA: t.resta });
+  let attesa = null, finita = false;
+  const gesto = () => {
+    if (finita || !t.gesto) return;
+    attesa = setTimeout(() => { if (!finita) scena.gioca(t.gesto[0], t.gesto[1], gesto); }, 4000);
+  };
+  scena.gioca(t.entra[0], t.entra[1], gesto, t.entra[2]);
+  return {
+    scena,
+    finisci() {
+      if (finita) return;
+      finita = true;
+      clearTimeout(attesa);
+      scena.gioca(t.esce[0], t.esce[1], null, t.esce[2]);
+    },
+  };
+}
+
+window.FotinaScena = { monta, fermo, treTempi };
 })();

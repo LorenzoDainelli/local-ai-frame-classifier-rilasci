@@ -45,10 +45,8 @@ body { overflow: hidden; user-select: none; }
 @keyframes linea-luccica { to { transform: translateX(100%); } }
 .esce { animation: esce 520ms var(--uscita) forwards !important; }
 @keyframes esce { to { opacity: 0; transform: scale(.97) translateY(-6px); filter: blur(2px); } }
-.si-spegne { animation: si-spegne 1.6s 400ms var(--uscita) forwards; }
-@keyframes si-spegne { to { opacity: .55; transform: scale(.985); } }
 @media (prefers-reduced-motion: reduce) {
-    .passi li.adesso .spunta, .passi li.fatto .spunta, .linea span::after, .esce, .si-spegne { animation: none !important; }
+    .passi li.adesso .spunta, .passi li.fatto .spunta, .linea span::after, .esce { animation: none !important; }
     .passi li.adesso { transform: none; }
     .spunta path { stroke-dashoffset: 0; }
 }
@@ -111,11 +109,13 @@ body:has(.per-claude) { overflow: auto; }
     if (!window.FotinaScena || !dove) return;
     var modo = "{{ fotina }}";
     if (modo === "ferma") return;
-    var scena = window.FotinaScena.monta(dove, "C", { fermaA: modo === "addormenta" ? 12.6 : 7.6 });
-    if (modo === "addormenta") { scena.gioca(7.6, 12.6); return; }
-    var guarda = function () { setTimeout(function () { scena.gioca(6.2, 7.4, guarda); }, 6000); };
-    scena.gioca(0, 7.6, guarda);
+    window.tempiDiFotina = window.FotinaScena.treTempi(dove, modo);
 })();
+window.finisci = function () {
+    if (window.tempiDiFotina) { window.tempiDiFotina.finisci(); }
+    setTimeout(function () { document.querySelector(".attesa-piena").classList.add("esce"); }, 300);
+    return true;
+};
 </script>
 <script>
 window.segna = function (quanti) {
@@ -125,7 +125,6 @@ window.segna = function (quanti) {
     });
     var linea = document.querySelector("#linea span");
     if (linea && righe.length) { linea.style.width = Math.max(6, Math.round(quanti * 100 / righe.length)) + "%"; }
-    if (righe.length && quanti >= righe.length) { document.querySelector(".attesa-piena").classList.add("si-spegne"); }
 };
 </script>
 </body>

@@ -139,14 +139,14 @@ class Archivio:
         except Exception:
             registro.errore("chiusura.controllo_fallito")
 
-    def chiudi(self, con_copia: bool = True) -> None:
+    def chiudi(self, con_copia: bool = True, prima_del_forziere=None) -> None:
         from officina.archivio import riserva
 
         riserva.ferma_e_aspetta()
         with self._lucchetto_delle_copie:
-            self._chiudi(con_copia)
+            self._chiudi(con_copia, prima_del_forziere)
 
-    def _chiudi(self, con_copia: bool) -> None:
+    def _chiudi(self, con_copia: bool, prima_del_forziere=None) -> None:
         if self._connessione is None:
             return
         cercatore = sys.modules.get("officina.ricerca")
@@ -180,6 +180,8 @@ class Archivio:
                 except OSError:
                     registro.errore("chiusura.segno_non_tolto")
             registro.evento("archivio.chiuso")
+            if prima_del_forziere is not None:
+                prima_del_forziere()
             self._rimetti_nel_forziere()
 
     def _fase(self, fase: str, con_copia: bool) -> None:
@@ -497,7 +499,7 @@ class ArchivioDiProva(Archivio):
         self._modifiche_all_apertura = copia.total_changes
         return self
 
-    def chiudi(self, con_copia: bool = True) -> None:
+    def chiudi(self, con_copia: bool = True, prima_del_forziere=None) -> None:
         with self._lucchetto:
             if self._connessione is not None:
                 self._connessione.close()
@@ -557,8 +559,8 @@ def aperto() -> Archivio:
     return vero()
 
 
-def chiudi(con_copia: bool = True) -> None:
+def chiudi(con_copia: bool = True, prima_del_forziere=None) -> None:
     global _aperto
     if _aperto is not None:
-        _aperto.chiudi(con_copia)
+        _aperto.chiudi(con_copia, prima_del_forziere)
         _aperto = None

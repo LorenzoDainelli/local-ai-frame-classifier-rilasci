@@ -640,6 +640,14 @@ input.campo { user-select: text; }
     }
 
     var sorveglia_apertura = null;
+    var tempi_di_fotina = null;
+    window.finisci = function () {
+        var sezione = document.querySelector("[data-passo='apertura']");
+        if (!sezione || sezione.hidden) { return false; }
+        if (tempi_di_fotina) { tempi_di_fotina.finisci(); }
+        setTimeout(function () { sezione.classList.add("esce"); }, 300);
+        return true;
+    };
     function guarda_l_apertura() {
         if (sorveglia_apertura) { return; }
         var sezione = document.querySelector("[data-passo='apertura']");
@@ -647,7 +655,7 @@ input.campo { user-select: text; }
         var linea = sezione.querySelector("[data-linea] span");
         var scena = sezione.querySelector("[data-scena-apertura]");
         if (window.FotinaScena && scena) {
-            try { window.FotinaScena.monta(scena, "C", { fermaA: 7.6 }).gioca(0, 7.6); } catch (e) {}
+            try { tempi_di_fotina = window.FotinaScena.treTempi(scena, "sveglia"); } catch (e) {}
         }
         var tempi = sezione.querySelector("[data-tempi-apertura]");
         var ultimi = null;
@@ -687,9 +695,6 @@ input.campo { user-select: text; }
             api().come_va_l_apertura().then(function (quanti) {
                 righe.forEach(function (r, i) { r.className = i < quanti ? "fatto" : (i === quanti ? "adesso" : ""); });
                 linea.style.width = Math.max(6, Math.round(quanti * 100 / righe.length)) + "%";
-                if (quanti >= righe.length) {
-                    setTimeout(function () { sezione.classList.add("esce"); }, tempi.hidden ? 450 : 6000);
-                }
             });
         }, 250);
     }

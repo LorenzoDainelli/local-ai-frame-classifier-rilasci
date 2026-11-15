@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 from pathlib import Path
 
 from officina import registro
@@ -16,6 +17,12 @@ MINIMA_PRINCIPALE = (960, 620)
 FONDO = "#262624"
 FONDO_CHIARO = "#FAF9F5"
 ATTESA_DELLA_PRINCIPALE = 60.0
+DURATA_DELL_USCITA = 0.9
+PASSI_DELL_APERTURA = ["Apro l'archivio", "Preparo le proposte", "Ci siamo"]
+
+
+def aspetta_l_uscita() -> None:
+    time.sleep(DURATA_DELL_USCITA)
 
 
 def windows_e_chiaro() -> bool:
@@ -89,7 +96,8 @@ class Finestre:
             opzioni["url"] = indirizzo
         else:
             opzioni["html"] = pagine.attesa(self.apertura["titolo"], self.apertura["detto"],
-                                            versione=self.versione)
+                                            versione=self.versione,
+                                            passi=PASSI_DELL_APERTURA)
         finestra = self.webview.create_window(NOME, **opzioni)
         finestra.events.closing += self._quando_chiude
         finestra.events.loaded += self._accendi_i_tasti_del_browser
@@ -147,10 +155,31 @@ class Finestre:
     def _segna_massimizzata(self, si: bool) -> None:
         self._massimizzata = si
 
+    def fai_uscire(self, finestra) -> None:
+        if finestra is None:
+            return
+        try:
+            uscita = finestra.evaluate_js("window.finisci ? window.finisci() : false")
+        except Exception:
+            return
+        if uscita is True:
+            aspetta_l_uscita()
+
+    def segna_l_apertura(self, fase: int) -> None:
+        self.fase_apertura = fase
+        if self.principale is None:
+            return
+        try:
+            self.principale.evaluate_js(f"window.segna && window.segna({int(fase)})")
+        except Exception:
+            pass
+
     def _mostra_la_principale(self, indirizzo: str) -> None:
         if self.principale is None:
+            self.fai_uscire(self.finestrina)
             self.crea_la_principale(indirizzo)
         else:
+            self.fai_uscire(self.principale)
             self.principale.load_url(indirizzo)
         if self.finestrina is not None:
             self.principale.events.loaded.wait(ATTESA_DELLA_PRINCIPALE)

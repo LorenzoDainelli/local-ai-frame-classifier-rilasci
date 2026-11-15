@@ -10,6 +10,10 @@
     ],
     "semplice": [
       [
+        "controlla",
+        "Apertura e chiusura seguono il lavoro vero: Fotina entra in meno di un secondo, aspetta finché il programma non è davvero pronto (o chiuso) e solo allora fa una breve uscita. I passi si spuntano con le fasi vere."
+      ],
+      [
         "sfida",
         "Gara dei 120 FPS più corta: si corre solo sui casi difficilissimi e si tiene quello che è già fatto. Alla fine chi è primo nei numeri fa subito i 120 FPS; il voto alla cieca diventa facoltativo."
       ],

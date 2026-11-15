@@ -618,11 +618,11 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         self._togli_pe_core(archivio)
         threading.Thread(target=self._miglioria_in_grande, args=(archivio,),
                          name="miglioria_in_grande", daemon=True).start()
-        self.fase_apertura = 1
+        self.segna_l_apertura(1)
         aperto_in = time.monotonic() - partenza
         in_rete = bool(archivio.impostazione("accesso_dalla_rete"))
         caricamento.join()
-        self.fase_apertura = 2
+        self.segna_l_apertura(2)
         if self.servitore is None:
             self.servitore = Servitore(porta=porta_libera(PORTA_PREFERITA))
             self.servitore.parti()
@@ -636,7 +636,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                 schermo.apri_la_porta_del_portatile()
             except Exception as guasto:
                 registro.errore("schermo.porta_non_riaperta", **registro.dove_si_e_rotto(guasto))
-        self.fase_apertura = 3
+        self.segna_l_apertura(3)
         self._apri_l_archivio_sicuro_in_sottofondo(password)
         self._parti_la_sosta()
         self._parti_il_rifacimento()
@@ -1125,6 +1125,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
 
         try:
             self.spegni_entro(avanza)
+            self.fai_uscire(self.principale)
         finally:
             self._chiusura_consentita = True
             self.principale.destroy()
@@ -1226,7 +1227,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
             from officina.archivio import accesso
 
             self._chiude_l_archivio = True
-            accesso.chiudi()
+            accesso.chiudi(prima_del_forziere=lambda: avanza(2))
             avanza(3)
         except Exception as guasto:
             registro.errore("programma.archivio_non_chiuso", **registro.dove_si_e_rotto(guasto))

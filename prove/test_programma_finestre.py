@@ -652,3 +652,86 @@ def test_cerca_adesso_due_volte_non_cerca_insieme(casa, monkeypatch):
         if filo.name == "cerca-aggiornamenti":
             filo.join(timeout=30)
     assert cercati == [1]
+
+
+def test_prima_di_aprire_la_grande_la_finestrina_fa_la_sua_uscita(casa, monkeypatch):
+    programma, finto = _programma()
+    finestrina = programma.crea_la_finestrina()
+    finestrina.risposta_js = True
+    ordine = []
+    monkeypatch.setattr(finestre, "aspetta_l_uscita", lambda: ordine.append(("aspetta",)))
+    crea_davvero = finto.create_window
+
+    def crea(titolo, **opzioni):
+        ordine.append(("grande",))
+        return crea_davvero(titolo, **opzioni)
+
+    finto.create_window = crea
+    try:
+        programma._mostra_la_principale("http://127.0.0.1:1/")
+        assert "window.finisci" in finestrina.codici[0]
+        assert ordine[:2] == [("aspetta",), ("grande",)]
+    finally:
+        _chiudi_davvero(programma)
+
+
+def test_senza_l_animazione_di_uscita_non_si_aspetta(casa, monkeypatch):
+    programma, _ = _programma()
+    programma.crea_la_finestrina()
+    attese = []
+    monkeypatch.setattr(finestre, "aspetta_l_uscita", lambda: attese.append(1))
+    try:
+        programma._mostra_la_principale("http://127.0.0.1:1/")
+        assert attese == []
+    finally:
+        _chiudi_davvero(programma)
+
+
+def test_aprendo_dalla_grande_i_passi_seguono_le_fasi_vere(casa, monkeypatch):
+    carta.comincia_da_zero()
+    carta.aggiorna(obblighi_sospesi=True, chiave_chiesta=True)
+    programma, _ = _programma()
+    programma.crea_la_principale()
+    principale = programma.principale
+    assert "Preparo le proposte" in principale.html[0]
+    principale.risposta_js = True
+    monkeypatch.setattr(finestre, "aspetta_l_uscita",
+                        lambda: principale.codici.append("aspetta"))
+    try:
+        indirizzo = programma.accendi()
+        programma._mostra_la_principale(indirizzo)
+        segni = [c for c in principale.codici if "segna(" in c or "finisci" in c
+                 or c == "aspetta"]
+        assert [s[-3:] for s in segni[:3]] == ["(1)", "(2)", "(3)"]
+        assert "finisci" in segni[3] and segni[4] == "aspetta"
+        assert principale.url == indirizzo
+    finally:
+        _chiudi_davvero(programma)
+
+
+def test_chiudendo_i_passi_seguono_le_fasi_e_poi_l_uscita(casa, monkeypatch):
+    carta.comincia_da_zero()
+    carta.aggiorna(obblighi_sospesi=True, chiave_chiesta=True)
+    programma, _ = _programma()
+    indirizzo = programma.accendi()
+    programma.crea_la_principale(indirizzo)
+    principale = programma.principale
+    principale.risposta_js = True
+    distrutta_quando = []
+    monkeypatch.setattr(finestre, "aspetta_l_uscita",
+                        lambda: principale.codici.append("aspetta"))
+    vera = principale.destroy
+
+    def distruggi():
+        distrutta_quando.append(list(principale.codici))
+        vera()
+
+    principale.destroy = distruggi
+    principale.chiudi_dalla_x()
+    for filo in threading.enumerate():
+        if filo.name == "chiusura":
+            filo.join(timeout=30)
+    codici = distrutta_quando[0]
+    segni = [c[-3:] for c in codici if "window.segna" in c]
+    assert segni == ["(1)", "(2)", "(3)"]
+    assert "finisci" in codici[-2] and codici[-1] == "aspetta"
