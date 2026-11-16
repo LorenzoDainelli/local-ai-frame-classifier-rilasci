@@ -51,23 +51,11 @@ class Avanzamento:
         return round((self.letti + self.saltati) * 100 / self.totale, 1)
 
     def quanto_manca(self) -> str:
-        if self.resta == 0:
-            return "finito"
-        if not self.ms_per_scatto:
-            return "sto ancora misurando"
-        secondi = int(self.resta * self.ms_per_scatto / 1000)
-        if secondi < 15:
-            return "un istante"
-        if secondi < 90:
-            return f"circa {secondi} secondi"
-        if secondi < 5400:
-            minuti = round(secondi / 60)
-            return f"circa {minuti} minut{'o' if minuti == 1 else 'i'}"
-        ore = secondi / 3600
-        if ore < 10:
-            return f"circa {ore:.1f} ore"
-        notti = max(round(ore / 8), 1)
-        return f"circa {notti} nott{'e' if notti == 1 else 'i'}"
+        from officina import tempo_gara
+
+        secondi = (int(self.resta * self.ms_per_scatto / 1000) if self.ms_per_scatto
+                   else None)
+        return tempo_gara.quanto_manca(self.resta, secondi)
 
 
 class Passata:

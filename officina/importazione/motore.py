@@ -60,23 +60,9 @@ class Avanzamento:
         return int(self.resta * self.ms_per_file / 1000)
 
     def quanto_manca(self) -> str:
-        if self.resta == 0:
-            return "finito"
-        secondi = self.secondi_rimasti
-        if secondi is None:
-            return "sto ancora misurando"
-        if secondi < 15:
-            return "un istante"
-        if secondi < 90:
-            return f"circa {secondi} secondi"
-        if secondi < 5400:
-            minuti = round(secondi / 60)
-            return f"circa {minuti} minut{'o' if minuti == 1 else 'i'}"
-        ore = secondi / 3600
-        if ore < 10:
-            return f"circa {ore:.1f} ore"
-        notti = max(round(ore / 8), 1)
-        return f"circa {notti} nott{'e' if notti == 1 else 'i'}"
+        from officina import tempo_gara
+
+        return tempo_gara.quanto_manca(self.resta, self.secondi_rimasti)
 
 
 class Motore:

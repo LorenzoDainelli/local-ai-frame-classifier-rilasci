@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import time
 from pathlib import Path
 
@@ -114,3 +116,24 @@ def test_nella_ripresa_senza_secondi_veri_seedvr2_non_e_misurato(importato):
     lettera = "A" if riga["a_e"] == motori_mg.SEEDVR2 else "B"
     assert sfida.secondi_della_lettera(riga, lettera) is None
     assert sfida.secondi_della_lettera(riga, "B" if lettera == "A" else "A") is not None
+
+
+@pytest.mark.parametrize("resta, secondi, atteso", [
+    (0, 50, "finito"),
+    (3, None, "sto ancora misurando"),
+    (3, 14, "un istante"),
+    (3, 15, "circa 15 secondi"),
+    (3, 89, "circa 89 secondi"),
+    (3, 90, "circa 2 minuti"),
+    (3, 84, "circa 84 secondi"),
+    (3, 5399, "circa 90 minuti"),
+    (3, 5400, "circa 1.5 ore"),
+    (3, 9 * 3600, "circa 9.0 ore"),
+    (3, 10 * 3600, "circa 1 notte"),
+    (3, 20 * 3600, "circa 2 notti"),
+    (3, 28 * 3600, "circa 4 notti"),
+])
+def test_quanto_manca_a_parole(resta, secondi, atteso):
+    from officina import tempo_gara
+
+    assert tempo_gara.quanto_manca(resta, secondi) == atteso

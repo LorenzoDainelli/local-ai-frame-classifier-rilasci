@@ -248,6 +248,9 @@ def cartella_di_sistema() -> Path:
     return Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32"
 
 
+ATTESA_DI_POWERSHELL = 60
+
+
 def dov_e_powershell(c_e: Callable[[Path], bool] | None = None) -> str | None:
     guarda = c_e if c_e is not None else (lambda p: p.is_file())
     fisso = cartella_di_sistema() / "WindowsPowerShell" / "v1.0" / "powershell.exe"
@@ -268,8 +271,14 @@ def _powershell(script: str) -> str:
             a_mano(RADICE, RADICE / f"{NOME_VISIBILE}.cmd",
                    "PowerShell non si trova su questo computer"))
 
-    fatto = subprocess.run(comando_di_powershell(dove, script),
-                           capture_output=True, text=True, check=False)
+    try:
+        fatto = subprocess.run(comando_di_powershell(dove, script),
+                               capture_output=True, text=True, check=False,
+                               timeout=ATTESA_DI_POWERSHELL)
+    except subprocess.TimeoutExpired:
+        raise ErroreOfficina(
+            a_mano(RADICE, RADICE / f"{NOME_VISIBILE}.cmd",
+                   "PowerShell non ha risposto in tempo")) from None
     if fatto.returncode != 0 or not fatto.stdout.strip():
         raise ErroreOfficina(
             a_mano(RADICE, RADICE / f"{NOME_VISIBILE}.cmd",

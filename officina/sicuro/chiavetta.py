@@ -1538,12 +1538,16 @@ class Guardiano:
     def _gira(self) -> None:
         senza_finestre_di_errore()
         while not self._fermo.is_set():
-            try:
-                self.giro()
-            except Exception:
-                with self._serratura:
-                    self._metti(PROBLEMA, "guardiano")
+            self.giro_senza_guasti()
             self._fermo.wait(self._ogni)
+
+    def giro_senza_guasti(self) -> str:
+        try:
+            return self.giro()
+        except Exception:
+            with self._serratura:
+                self._metti(PROBLEMA, "guardiano")
+                return self.stato
 
     def ferma(self, aspetta: float | None = None) -> None:
         self._fermo.set()

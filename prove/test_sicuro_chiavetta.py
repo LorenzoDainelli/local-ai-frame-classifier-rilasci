@@ -1593,6 +1593,17 @@ def test_il_guardiano_senza_chiavetta(tmp_path, chiave):
     assert guardiano.giro() == chiavetta.DA_ATTACCARE
 
 
+def test_il_guardiano_che_si_rompe_lo_dice_invece_di_tacere(tmp_path, chiave):
+    prova = Prova(tmp_path, chiave)
+
+    def rotti():
+        raise OSError("dischi illeggibili")
+
+    guardiano = Guardiano(_lavoro(prova), dischi=rotti)
+    assert guardiano.giro_senza_guasti() == chiavetta.PROBLEMA
+    assert guardiano.istantanea()["codice"] == "guardiano"
+
+
 def test_il_guardiano_aggiorna_e_dice_puoi_staccarla(tmp_path, chiave):
     prova = Prova(tmp_path, chiave)
     prova.foto(2)

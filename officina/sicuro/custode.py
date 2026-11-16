@@ -521,9 +521,7 @@ class Custode:
         with self._cambio:
             self._con_chiavetta = False
         try:
-            self.guardiano.giro()
-        except Exception:
-            pass
+            self.guardiano.giro_senza_guasti()
         finally:
             with self._cambio:
                 self._con_chiavetta = True

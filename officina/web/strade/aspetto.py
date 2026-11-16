@@ -23,10 +23,11 @@ def api_aspetto(chiave: str = Form(...), valore: str = Form(...)):
     return JSONResponse(aspetto.imposta(chiave, valore))
 
 
-def _col_biscotto(dove: str, prova) -> RedirectResponse:
+def _col_biscotto(richiesta: Request, dove: str, prova) -> RedirectResponse:
     risposta = RedirectResponse(dove, status_code=303)
     risposta.set_cookie(in_prova.BISCOTTO, prova.segno, httponly=True,
-                        samesite="strict", path="/")
+                        samesite="strict", path="/",
+                        secure=richiesta.url.scheme == "https")
     return risposta
 
 
@@ -37,7 +38,7 @@ def _senza_biscotto(dove: str) -> RedirectResponse:
 
 
 @strada.post("/prova/comincia")
-def prova_comincia(chiave: str = Form(...), valore: str = Form(...),
+def prova_comincia(richiesta: Request, chiave: str = Form(...), valore: str = Form(...),
                    con: str = Form("")):
     if chiave not in aspetto.PRONTE:
         raise ErroreOfficina("Questa parte non ha ancora le sue tre versioni: "
@@ -52,7 +53,7 @@ def prova_comincia(chiave: str = Form(...), valore: str = Form(...),
             {"chiave": chiave, "valore": valore}), status_code=303)
     prova = in_prova.comincia(chiave, valore, con)
     voce = aspetto.VOCI[chiave]
-    return _col_biscotto(voce.get("dove_per", {}).get(valore, voce["dove"]), prova)
+    return _col_biscotto(richiesta, voce.get("dove_per", {}).get(valore, voce["dove"]), prova)
 
 
 @strada.post("/prova/cambia")

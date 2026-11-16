@@ -25,6 +25,25 @@ def a_parole(secondi) -> str:
     return f"{resto} s" if tondi else "meno di 1 s"
 
 
+def quanto_manca(resta: int, secondi: int | None) -> str:
+    if resta == 0:
+        return "finito"
+    if secondi is None:
+        return "sto ancora misurando"
+    if secondi < 15:
+        return "un istante"
+    if secondi < 90:
+        return f"circa {secondi} secondi"
+    if secondi < 5400:
+        minuti = round(secondi / 60)
+        return f"circa {minuti} minut{'o' if minuti == 1 else 'i'}"
+    ore = secondi / 3600
+    if ore < 10:
+        return f"circa {ore:.1f} ore"
+    notti = max(round(ore / 8), 1)
+    return f"circa {notti} nott{'e' if notti == 1 else 'i'}"
+
+
 def media(valori) -> float | None:
     presi = [v for v in (buoni(x) for x in valori) if v is not None]
     return sum(presi) / len(presi) if presi else None

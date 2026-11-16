@@ -273,3 +273,19 @@ def test_se_c_e_tutto_non_dice_niente(monkeypatch):
 
     monkeypatch.setattr(riga_di_comando.importlib.util, "find_spec", lambda nome: object())
     riga_di_comando._controlla_che_ci_sia_tutto()
+
+
+def test_se_powershell_non_risponde_non_resta_appeso(monkeypatch):
+    import subprocess
+
+    chiesto = {}
+
+    def lento(comando, **opzioni):
+        chiesto.update(opzioni)
+        raise subprocess.TimeoutExpired(comando, opzioni["timeout"])
+
+    monkeypatch.setattr(finestra, "dov_e_powershell", lambda: "powershell.exe")
+    monkeypatch.setattr(finestra.subprocess, "run", lento)
+    with pytest.raises(ErroreOfficina, match="non ha risposto in tempo"):
+        finestra._powershell("Write-Output 1")
+    assert chiesto["timeout"] == finestra.ATTESA_DI_POWERSHELL

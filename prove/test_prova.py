@@ -61,6 +61,16 @@ def test_nella_prova_si_etichetta_ma_l_archivio_vero_non_cambia(cliente, archivi
     assert vera.total_changes == prima, "l'archivio vero non ha visto una sola scrittura"
 
 
+def test_il_biscotto_della_prova_viaggia_cifrato_quando_la_strada_e_cifrata(cliente):
+    from officina.web import server
+
+    assert "secure" not in _comincia(cliente).headers["set-cookie"].lower()
+    cifrato = TestClient(server.app, base_url="https://127.0.0.1:8080",
+                         client=("127.0.0.1", 51000))
+    biscotto = _comincia(cifrato, valore="C").headers["set-cookie"].lower()
+    assert "prova=" in biscotto and "secure" in biscotto
+
+
 def test_chi_non_ha_il_biscotto_vede_l_archivio_vero(cliente):
     from officina.web import server
 
