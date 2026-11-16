@@ -887,6 +887,11 @@ def test_la_foto_aperta_arriva_dall_archivio_e_non_si_tiene(foto_nell_archivio):
     assert max(Image.open(io.BytesIO(piccola.content)).size) == 48
     assert piccola.headers["cache-control"] == "no-store"
     assert not pronta.originale.exists()
+    intera = pronta.cliente.get(f"/in3d/foto/{pronta.file_id}")
+    assert intera.status_code == 200
+    assert intera.headers["cache-control"] == "no-store"
+    assert "etag" not in intera.headers
+    assert Image.open(io.BytesIO(intera.content)).size == (96, 64)
 
 
 def test_l_originale_dall_archivio_arriva_intero_e_a_pezzi(foto_nell_archivio):

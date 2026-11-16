@@ -327,3 +327,32 @@ def test_il_formato_cifrato_non_si_apre_con_un_altra_chiave():
 
 
 __all__ = ["casa", "costo_leggero"]
+
+
+def test_se_la_cifratura_al_volo_non_riesce_si_mostra_lo_stesso(tmp_path, monkeypatch):
+    chiave = bytes(range(32))
+    percorso = tmp_path / "aa" / "vecchia.jpg"
+    percorso.parent.mkdir()
+    percorso.write_bytes(b"in chiaro di prima")
+
+    def bloccato(*argomenti, **opzioni):
+        raise PermissionError("aperto da un altro programma")
+
+    monkeypatch.setattr(cache_cifrata.os, "replace", bloccato)
+    assert cache_cifrata.leggi(percorso, "aa/vecchia.jpg", chiave) == b"in chiaro di prima"
+    assert percorso.exists()
+    assert sorted(p.name for p in percorso.parent.iterdir()) == ["vecchia.jpg"]
+
+
+def test_chiuso_l_archivio_le_chiavi_delle_miniature_si_dimenticano(cifrate):
+    pronta = cifrate
+    pronta.cliente.get(f"/miniatura/{pronta.file_id}")
+    assert cache_cifrata._chiavi
+    assert pronta.casa.archivio.chiudi(ATTESA)
+    assert pronta.archivio.cache_delle_miniature() == (cache_cifrata.CHIUSA, None)
+    assert not cache_cifrata._chiavi
+    pronta.casa.archivio.apri(PAROLA)
+    assert pronta.archivio.cache_delle_miniature()[0] == cache_cifrata.APERTA
+    assert cache_cifrata._chiavi
+    cache_cifrata.dimentica_le_chiavi()
+    assert not cache_cifrata._chiavi

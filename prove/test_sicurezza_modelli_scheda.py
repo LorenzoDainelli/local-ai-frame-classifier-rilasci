@@ -192,9 +192,9 @@ def test_faceme_non_apre_il_pickle_con_una_torch_vecchia(tmp_path, monkeypatch):
     assert letti == []
 
 
-def _chiamate_di_torch_load():
+def _chiamate_di_torch_load(cartella: str = "officina"):
     trovate = []
-    for file in sorted((CASA / "officina").rglob("*.py")):
+    for file in sorted((CASA / cartella).rglob("*.py")):
         if "__pycache__" in file.parts:
             continue
         for nodo in ast.walk(ast.parse(file.read_text(encoding="utf-8"))):
@@ -214,6 +214,13 @@ def _chiamate_di_torch_load():
 def test_ogni_torch_load_del_programma_vuole_weights_only_e_nessun_pickle_a_mano():
     chiamate = _chiamate_di_torch_load()
     assert chiamate, "il giro dovrebbe trovare almeno le letture dei pesi"
+    storte = [c for c in chiamate if not (c[2] == "torch.load" and c[3])]
+    assert not storte, storte
+
+
+def test_anche_gli_strumenti_aprono_i_pt_solo_con_weights_only():
+    chiamate = _chiamate_di_torch_load("strumenti")
+    assert chiamate
     storte = [c for c in chiamate if not (c[2] == "torch.load" and c[3])]
     assert not storte, storte
 

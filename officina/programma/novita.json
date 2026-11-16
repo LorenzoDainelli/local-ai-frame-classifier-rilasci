@@ -11,6 +11,14 @@
     "semplice": [
       [
         "controlla",
+        "Se all'avvio un altro programma prende la porta del programma o quella del collegamento col portatile proprio nell'attimo sbagliato, ora si riprova da solo su un'altra porta libera invece di non partire."
+      ],
+      [
+        "controlla",
+        "Più sicurezza: con l'Archivio sicuro la vista 3D non lascia foto, stanze e persone nella cache del browser, e chiuso l'archivio le sue chiavi spariscono subito dalla memoria."
+      ],
+      [
+        "controlla",
         "Con l'Archivio sicuro anche le copie dei video fatte per il browser e le copie da guardare si salvano solo cifrate: si aprono quando le guardi e spariscono quando chiudi l'archivio."
       ],
       [

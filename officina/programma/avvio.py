@@ -624,8 +624,7 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
         caricamento.join()
         self.segna_l_apertura(2)
         if self.servitore is None:
-            self.servitore = Servitore(porta=porta_libera(PORTA_PREFERITA))
-            self.servitore.parti()
+            self.servitore = self._servitore_acceso()
         if in_rete:
             self._apri_alla_rete()
         from officina.web.strade import schermo
@@ -868,16 +867,39 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
                             **registro.dove_si_e_rotto(guasto))
             return []
 
+    def _servitore_acceso(self) -> Servitore:
+        servitore = Servitore(porta=porta_libera(PORTA_PREFERITA))
+        try:
+            servitore.parti()
+            return servitore
+        except ErroreOfficina as guasto:
+            if servitore.gira or not PORTA_PREFERITA:
+                raise
+            registro.avviso("programma.porta_presa", porta=servitore.porta,
+                            **registro.dove_si_e_rotto(guasto))
+        servitore = Servitore(porta=porta_libera(0))
+        servitore.parti()
+        return servitore
+
     def _apri_alla_rete(self) -> None:
         from officina.web import origine
 
         if self.servitore_di_rete is not None:
             return
-        try:
-            servitore, impronta = per_la_rete(carta.casa() / "rete", PORTA_DELLA_RETE)
-            servitore.parti()
-        except Exception as guasto:
-            registro.errore("programma.rete_non_aperta", **registro.dove_si_e_rotto(guasto))
+        servitore = None
+        for preferita in (PORTA_DELLA_RETE, 0):
+            try:
+                servitore, impronta = per_la_rete(carta.casa() / "rete", preferita)
+                servitore.parti()
+                break
+            except Exception as guasto:
+                livello = registro.errore if preferita == 0 else registro.avviso
+                livello("programma.rete_non_aperta", porta=preferita,
+                        **registro.dove_si_e_rotto(guasto))
+                if servitore is not None:
+                    servitore.ferma()
+                servitore = None
+        if servitore is None:
             return
         self.servitore_di_rete = servitore
         origine.segna_la_rete(servitore.porta, impronta)

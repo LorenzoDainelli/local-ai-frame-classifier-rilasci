@@ -163,7 +163,11 @@ def test_la_grana_resta_della_stessa_misura():
     assert finita.shape == fatta.shape and finita.dtype == np.uint8
 
 
-def test_la_stanza_dice_il_guasto_e_il_fatto():
+def test_la_stanza_dice_il_guasto_e_il_fatto(monkeypatch):
+    from officina.miglioria import rete
+
+    chiusure = []
+    monkeypatch.setattr(rete, "chiudi", lambda: chiusure.append(1))
     detti = []
     assert stanza.un_lavoro({"azione": "altro"}, detti.append) == 2
     assert detti[-1] == {"guasto": "azione_sconosciuta"}
@@ -175,6 +179,7 @@ def test_la_stanza_dice_il_guasto_e_il_fatto():
         raise ValueError("rotto")
     assert stanza.un_lavoro({"azione": stanza.CORSA}, detti.append, rotto) == 1
     assert detti[-1]["guasto"] == "rotto"
+    assert chiusure == [1, 1, 1]
 
 
 @pytest.fixture

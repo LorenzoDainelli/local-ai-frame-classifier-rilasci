@@ -219,7 +219,8 @@ def loro(casa: Path, cartella_foto: Path, uscita: Path) -> dict:
             numeri = None
         torch.save({"visti": visti, "ids": ingressi["input_ids"][0].tolist(),
                     "posizioni": ingressi["position_ids"], "usciti": presi["ids"][0], "testo": testo,
-                    "numeri": numeri}, uscita / f"{percorso.stem}.pt")
+                    "numeri": None if numeri is None else [float(n) for n in numeri]},
+                   uscita / f"{percorso.stem}.pt")
         esito["foto"][percorso.stem] = {"numeri": numeri, "parole": len(presi["ids"][0]),
                                         "secondi": round(time.monotonic() - partito, 1)}
         print(percorso.stem, json.dumps(esito["foto"][percorso.stem]), flush=True)
@@ -272,7 +273,7 @@ def confronta(cartella_foto: Path, cartella_loro: Path, cartella: Path, uscita: 
                    "loro": json.loads((cartella_loro / "loro.json").read_text()), "prove": {}}
     print(json.dumps({k: v for k, v in esito.items() if k != "loro"}), flush=True)
     for percorso in sorted(cartella_foto.glob("*.jpg")):
-        atteso = torch.load(cartella_loro / f"{percorso.stem}.pt", weights_only=False)
+        atteso = torch.load(cartella_loro / f"{percorso.stem}.pt", weights_only=True)
         partito = time.monotonic()
         immagine = Image.open(percorso)
         visti, _ = rete.guarda(obiettivo.immagine_per_puffin(immagine).unsqueeze(0))

@@ -269,7 +269,7 @@ async def errore_previsto(richiesta: Request, errore: ErroreOfficina):
     return base.pagine.TemplateResponse(
         richiesta, "errore.html",
         {**base.comune(richiesta), "messaggio": errore.messaggio,
-         "indietro": richiesta.headers.get("referer", "/")},
+         "indietro": base.dove_torna(richiesta, "/")},
         status_code=400,
     )
 
@@ -282,7 +282,7 @@ async def strada_sbagliata(richiesta: Request, errore: ErroreDellaStrada):
         richiesta, "errore.html",
         {**base.comune(richiesta), "titolo": "Questa pagina non c'è",
          "messaggio": "Il collegamento porta a una pagina che non esiste più.",
-         "indietro": richiesta.headers.get("referer", "/")},
+         "indietro": base.dove_torna(richiesta, "/")},
         status_code=404,
     )
 

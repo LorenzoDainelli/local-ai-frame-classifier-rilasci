@@ -624,6 +624,9 @@ class Collegamento:
         fatto = servizio.chiudi(max(0.0, fine - time.monotonic()))
         if modulo.attuale() is servizio:
             modulo.imposta(None)
+        from officina.sicuro import cache_cifrata
+
+        cache_cifrata.dimentica_le_chiavi()
         butta_le_copie_di_passaggio(self.posizione)
         registro.evento("sicuro.chiuso", fermo=fatto)
         self.guarda()

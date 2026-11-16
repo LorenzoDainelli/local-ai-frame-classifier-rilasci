@@ -162,3 +162,26 @@ def test_i_file_mandati_col_modulo_non_hanno_il_limite_del_mb(cliente):
                             data={"chiave": "movimento", "valore": "1"},
                             headers={"origin": "http://127.0.0.1:8080"})
     assert risposta.status_code != 413
+
+
+@pytest.mark.parametrize("venuto, atteso", [
+    ("http://127.0.0.1:8080/galleria?nodo=3", "/galleria?nodo=3"),
+    ("http://testserver/galleria", "/galleria"),
+    ("https://altro-sito.example/trappola", "/trappola"),
+    ("https://altro-sito.example\\\\x", "/"),
+    ("http://127.0.0.1:8080//altro-sito.example/x", "/"),
+    ("javascript:alert(1)", "/"),
+    ("", "/"),
+])
+def test_torna_indietro_porta_solo_dentro_il_programma(cliente, venuto, atteso):
+    risposta = cliente.get("/pagina-che-non-esiste-proprio",
+                           headers={"accept": "text/html", "referer": venuto})
+    assert risposta.status_code == 404
+    assert f'data-torna href="{atteso}"' in risposta.text.replace("&amp;", "&")
+
+
+def test_dopo_la_chiusura_si_torna_solo_dentro_il_programma(cliente):
+    risposta = cliente.post("/dopo-la-chiusura/visto", follow_redirects=False,
+                            headers={"referer": "https://altro-sito.example//di-la"})
+    assert risposta.status_code == 303
+    assert risposta.headers["location"] == "/"

@@ -136,7 +136,7 @@ def dopo_la_chiusura_visto(richiesta: Request):
     archivio = accesso.aperto()
     if not archivio.di_prova:
         chiusura.visto(archivio.dove)
-    return RedirectResponse(richiesta.headers.get("referer") or "/", status_code=303)
+    return RedirectResponse(base.dove_torna(richiesta, "/"), status_code=303)
 
 
 @strada.post("/impostazioni/albero/ripristina")

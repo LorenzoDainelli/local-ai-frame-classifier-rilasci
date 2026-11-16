@@ -37,7 +37,7 @@ def _dove(archivio: Archivio, impronta: str, passaggio: bool) -> Path:
 def _cifrata(archivio: Archivio) -> bool:
     from officina.sicuro import cache_cifrata
 
-    return cache_cifrata.stato(archivio.dove, cache_cifrata.COPIE)[0] != cache_cifrata.SPENTA
+    return cache_cifrata.copie_cifrate(archivio.dove)
 
 
 def gia_fatta(archivio: Archivio, impronta: str, passaggio: bool = False) -> Path | None:
@@ -127,7 +127,7 @@ def _fai_cifrata(archivio: Archivio, impronta: str, originale: Path,
         return gia
     if not si_puo_fare():
         return None
-    if cache_cifrata.stato(archivio.dove, cache_cifrata.COPIE)[0] != cache_cifrata.APERTA:
+    if not cache_cifrata.copie_aperte(archivio.dove):
         return None
     temporaneo = cache_cifrata.copia_da_fare(archivio.dove, dove)
     temporaneo.parent.mkdir(parents=True, exist_ok=True)

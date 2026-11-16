@@ -253,8 +253,7 @@ def _da_vedere(archivio, lavoro: sqlite3.Row, file_id: int, lato: str,
 
 
 def _cifrata(archivio) -> bool:
-    return (cache_cifrata.stato(archivio.dove, cache_cifrata.COPIE)[0]
-            != cache_cifrata.SPENTA)
+    return cache_cifrata.copie_cifrate(archivio.dove)
 
 
 def _c_e(archivio, lavoro: sqlite3.Row, file_id: int, lato: str, file) -> bool:
@@ -401,8 +400,7 @@ def fai_le_copie(archivio, lavoro_id: int) -> bool:
         for voce, lato, sorgente, arrivo in da_fare:
             copie.di(f"preparo la copia da guardare di «{voce['nome']}»")
             cifrata = _cifrata(archivio)
-            if cifrata and (cache_cifrata.stato(archivio.dove, cache_cifrata.COPIE)[0]
-                            != cache_cifrata.APERTA):
+            if cifrata and not cache_cifrata.copie_aperte(archivio.dove):
                 raise ErroreOfficina(CHIUSO_PER_LE_COPIE)
             parziale = (cache_cifrata.copia_da_fare(archivio.dove, arrivo) if cifrata
                         else arrivo.with_name(arrivo.stem + PARZIALE))

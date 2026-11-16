@@ -38,7 +38,7 @@ def percorso(dove, miglioria_id: int, lato: str, passaggio: bool = False) -> Pat
 
 
 def _cifrata(dove) -> bool:
-    return cache_cifrata.stato(dove, cache_cifrata.COPIE)[0] != cache_cifrata.SPENTA
+    return cache_cifrata.copie_cifrate(dove)
 
 
 def _la_copia(dove, miglioria_id: int, lato: str, file) -> Path:
@@ -95,8 +95,7 @@ def fai(dove, miglioria_id: int, file_per_lato: dict[str, Path],
     for lato in mancano(dove, miglioria_id, file_per_lato):
         arrivo = _la_copia(dove, miglioria_id, lato, file_per_lato[lato])
         cifrata = _cifrata(dove)
-        if cifrata and (cache_cifrata.stato(dove, cache_cifrata.COPIE)[0]
-                        != cache_cifrata.APERTA):
+        if cifrata and not cache_cifrata.copie_aperte(dove):
             from officina.sicuro import dall_archivio
 
             raise dall_archivio.da_rifare(dall_archivio.CHIUSO_ADESSO)

@@ -977,7 +977,8 @@ def test_il_programma_fa_ripartire_i_ripassi_quando_l_archivio_si_apre(casa, mon
     try:
         collegamento = programma._il_sicuro()
         assert programma._il_sicuro() is collegamento
-        assert collegamento._dopo_l_apertura == [programma._ripassi_dopo_l_apertura]
+        assert collegamento._dopo_l_apertura == [programma._ripassi_dopo_l_apertura,
+                                                 programma._cifra_le_miniature]
         with monkeypatch.context() as cambia:
             archivio, partiti = _ripassi(cambia)
             cambia.setattr(comune, "gia_ripreso", False)

@@ -1009,3 +1009,24 @@ def test_una_figura_rovinata_si_salta_e_le_altre_persone_restano(con_i_corpi):
     letta = _persone_lette(in3d.persone_in_binario(archivio, scatto_id))
     rimaste = [p["corpo_id"] for p in letta["testa"]["persone"]]
     assert rimaste and corpo_id not in rimaste
+
+
+def test_con_l_archivio_sicuro_la_stanza_e_le_persone_non_restano_nel_browser(
+        archivio_pieno, cliente, monkeypatch):
+    from officina.sicuro import cache_cifrata
+
+    posto_id, _ = _la_stanza(archivio_pieno)
+    scatto_id = _foto_dell_archivio(archivio_pieno)[0]
+    monkeypatch.setattr(cache_cifrata, "stato",
+                        lambda dove, uso=cache_cifrata.USO: (cache_cifrata.CHIUSA, None))
+    persone = cliente.get(f"/api/scatto/{scatto_id}/in3d/persone")
+    assert persone.headers["cache-control"] == "no-store"
+    chiusa = cliente.get(f"/api/stanza/{posto_id}/nuvola")
+    assert chiusa.headers.get("cache-control", "no-store") == "no-store"
+    chiave = bytes(range(32))
+    monkeypatch.setattr(cache_cifrata, "stato",
+                        lambda dove, uso=cache_cifrata.USO: (cache_cifrata.APERTA, chiave))
+    aperta = cliente.get(f"/api/stanza/{posto_id}/nuvola")
+    assert aperta.status_code == 200
+    assert aperta.headers["cache-control"] == "no-store"
+    assert _nuvola_letta(aperta.content)["testa"]["punti"] > 0

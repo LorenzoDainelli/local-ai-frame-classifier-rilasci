@@ -342,3 +342,65 @@ def test_la_rete_si_apre_cifrata_e_la_finestra_resta_in_chiaro(casa):
         programma.spegni()
     assert origine.la_rete() is None
     assert not programma.servitore_di_rete.gira
+
+
+def test_se_la_porta_della_rete_non_parte_si_riprova_su_un_altra(casa, monkeypatch):
+    from officina.archivio import accesso
+    from officina.impostazioni import REALE
+    from officina.programma import avvio, carta, scheda, servitore
+
+    carta.comincia_da_zero()
+    carta.aggiorna(obblighi_sospesi=True, chiave_chiesta=True)
+    accesso.apri(REALE).imposta("accesso_dalla_rete", True)
+    accesso.chiudi(con_copia=False)
+    chieste = []
+    vera = servitore.per_la_rete
+
+    def una_volta_no(cartella, preferita):
+        chieste.append(preferita)
+        fatto, impronta = vera(cartella, preferita)
+        if len(chieste) == 1:
+            def rotta(*_):
+                raise OSError("porta presa")
+            fatto.parti = rotta
+        return fatto, impronta
+
+    monkeypatch.setattr(avvio, "per_la_rete", una_volta_no)
+    preferita = servitore.porta_libera(0, "0.0.0.0")
+    monkeypatch.setattr(avvio, "PORTA_DELLA_RETE", preferita)
+    programma = avvio.Programma(webview=SimpleNamespace(), esamina=scheda.Esame)
+    try:
+        programma.accendi()
+        assert chieste == [preferita, 0]
+        di_rete = programma.servitore_di_rete
+        assert di_rete is not None and di_rete.gira
+        assert origine.la_rete()["porta"] == di_rete.porta
+    finally:
+        programma.spegni()
+    assert origine.la_rete() is None
+
+
+def test_se_la_porta_della_finestra_e_presa_all_ultimo_si_apre_su_un_altra(casa, monkeypatch):
+    import socket
+
+    from officina.programma import avvio, carta, scheda
+
+    carta.comincia_da_zero()
+    carta.aggiorna(obblighi_sospesi=True, chiave_chiesta=True)
+    occupata = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    occupata.bind(("127.0.0.1", 0))
+    occupata.listen(1)
+    presa = occupata.getsockname()[1]
+    vera = avvio.porta_libera
+    monkeypatch.setattr(avvio, "PORTA_PREFERITA", presa)
+    monkeypatch.setattr(avvio, "porta_libera",
+                        lambda preferita=0, host="127.0.0.1":
+                        presa if preferita == presa else vera(preferita, host))
+    programma = avvio.Programma(webview=SimpleNamespace(), esamina=scheda.Esame)
+    try:
+        indirizzo = programma.accendi()
+        assert programma.servitore.gira and programma.servitore.porta != presa
+        assert f":{programma.servitore.porta}/" in indirizzo
+    finally:
+        programma.spegni()
+        occupata.close()

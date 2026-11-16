@@ -15,8 +15,6 @@ except Exception:
 
 radice = tkinter.Tk()
 radice.withdraw()
-# Senza questo la finestra può nascere dietro il browser, e da fuori sembra
-# che il tasto non abbia fatto niente.
 radice.attributes("-topmost", True)
 scelta = filedialog.askdirectory(
     title="Dove sono le foto",

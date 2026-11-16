@@ -181,3 +181,32 @@ def test_le_copie_da_guardare_del_ritocco_sono_cifrate(cifrate, finta, tmp_path)
     assert rivedi_ritocco.togli_le_copie(archivio, 5) == 1
     assert not cache_cifrata.cifrato(copia).exists()
     assert not cache_cifrata.copia_aperta_in(archivio.dove, copia).exists()
+
+
+def test_due_richieste_insieme_decifrano_la_copia_una_volta_sola(cifrate, monkeypatch):
+    import threading
+
+    archivio = cifrate.archivio
+    persistente = archivio.percorso_copia_video(archivio.nome_copia_video(IMPRONTA))
+    fatta = cache_cifrata.copia_da_fare(archivio.dove, persistente)
+    fatta.parent.mkdir(parents=True, exist_ok=True)
+    fatta.write_bytes(VIDEO)
+    cache_cifrata.copia_salva(archivio.dove, persistente, fatta)
+    cache_cifrata.copia_aperta_in(archivio.dove, persistente).unlink()
+    letture = []
+    vera = cache_cifrata.leggi
+
+    def contata(*argomenti, **opzioni):
+        letture.append(1)
+        return vera(*argomenti, **opzioni)
+
+    monkeypatch.setattr(cache_cifrata, "leggi", contata)
+    viste = []
+    fili = [threading.Thread(target=lambda: viste.append(
+        cache_cifrata.copia_da_guardare(archivio.dove, persistente))) for _ in range(4)]
+    for filo in fili:
+        filo.start()
+    for filo in fili:
+        filo.join(30)
+    assert len(viste) == 4 and all(v.read_bytes() == VIDEO for v in viste)
+    assert letture == [1]

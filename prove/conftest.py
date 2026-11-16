@@ -108,6 +108,37 @@ def lavori_nello_stesso_processo(monkeypatch):
     monkeypatch.setattr(in_disparte, "A_PARTE", False)
 
 
+_PEZZI_DELLA_RETE = (("socket", "connect"), ("socket", "connect_ex"), ("socket", "sendto"),
+                     (None, "create_connection"), (None, "getaddrinfo"))
+
+
+def _la_rete_com_e() -> list:
+    import socket
+
+    return [getattr(socket.socket if dove else socket, nome) for dove, nome in _PEZZI_DELLA_RETE]
+
+
+@pytest.fixture(autouse=True)
+def la_rete_non_resta_chiusa():
+    import socket
+
+    from officina.miglioria import rete
+
+    prima = _la_rete_com_e()
+    interruttori = {nome: os.environ.get(nome)
+                    for nome in (*rete.INTERRUTTORI, "HF_HUB_DISABLE_TELEMETRY", "DO_NOT_TRACK")}
+    yield
+    dopo = _la_rete_com_e()
+    for (dove, nome), vecchio in zip(_PEZZI_DELLA_RETE, prima):
+        setattr(socket.socket if dove else socket, nome, vecchio)
+    for nome, valore in interruttori.items():
+        if valore is None:
+            os.environ.pop(nome, None)
+        else:
+            os.environ[nome] = valore
+    assert dopo == prima, "la prova ha lasciato la rete chiusa"
+
+
 @pytest.fixture(autouse=True)
 def il_giro_non_resta_aperto():
     import sys

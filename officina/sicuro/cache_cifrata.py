@@ -95,6 +95,11 @@ def dimentica() -> None:
         _c_e.clear()
 
 
+def dimentica_le_chiavi() -> None:
+    with _serratura:
+        _chiavi.clear()
+
+
 def _vero(dove) -> bool:
     from officina.impostazioni import REALE
 
@@ -112,6 +117,8 @@ def stato(dove, uso: str = USO) -> tuple[str, bytes | None]:
         apertura = servizio.apertura if servizio is not None else None
         if apertura is not None:
             return APERTA, _chiave_di(apertura, uso)
+        if _chiavi:
+            dimentica_le_chiavi()
     if _archivio_esiste(dove):
         return CHIUSA, None
     return SPENTA, None
@@ -122,11 +129,14 @@ def scrivi(percorso: Path, nome: str, dati: bytes, chiave: bytes, uso: str = USO
     destinazione.parent.mkdir(parents=True, exist_ok=True)
     temporaneo = destinazione.with_name(
         f"{destinazione.name}.{secrets.token_hex(4)}.parziale")
-    temporaneo.write_bytes(cifra(chiave, nome, dati, uso))
-    if decifra(chiave, nome, temporaneo.read_bytes(), uso) != bytes(dati):
+    try:
+        temporaneo.write_bytes(cifra(chiave, nome, dati, uso))
+        if decifra(chiave, nome, temporaneo.read_bytes(), uso) != bytes(dati):
+            raise OSError("la copia cifrata non si rilegge uguale")
+        os.replace(temporaneo, destinazione)
+    except BaseException:
         temporaneo.unlink(missing_ok=True)
-        raise OSError("la copia cifrata non si rilegge uguale")
-    os.replace(temporaneo, destinazione)
+        raise
     percorso.unlink(missing_ok=True)
     return destinazione
 
@@ -151,7 +161,11 @@ def leggi(percorso: Path, nome: str, chiave: bytes, uso: str = USO,
         dati = percorso.read_bytes()
     except OSError:
         return None
-    scrivi(percorso, nome, dati, chiave, uso)
+    try:
+        scrivi(percorso, nome, dati, chiave, uso)
+    except OSError as guasto:
+        registro.avviso("miniature.cifratura_rimandata", uso=uso,
+                        **registro.dove_si_e_rotto(guasto))
     return dati
 
 
@@ -296,7 +310,16 @@ def leggi_file(dove, uso: str, percorso: Path) -> bytes:
 
 
 COPIE = "copie dei video"
+_si_apre = threading.Lock()
 APERTE = "aperte"
+
+
+def copie_cifrate(dove) -> bool:
+    return stato(dove, COPIE)[0] != SPENTA
+
+
+def copie_aperte(dove) -> bool:
+    return stato(dove, COPIE)[0] == APERTA
 
 
 def _nome_copia(dove, percorso: Path) -> str:
@@ -329,6 +352,13 @@ def copia_da_guardare(dove, percorso: Path) -> Path | None:
     if stato_ora == CHIUSA:
         return None
     aperta = copia_aperta_in(dove, percorso)
+    if aperta.is_file():
+        return aperta
+    with _si_apre:
+        return _apri_la_copia(dove, percorso, chiave, aperta)
+
+
+def _apri_la_copia(dove, percorso: Path, chiave: bytes, aperta: Path) -> Path | None:
     if aperta.is_file():
         return aperta
     if not cifrato(percorso).is_file() and not percorso.is_file():
