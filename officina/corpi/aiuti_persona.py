@@ -129,7 +129,7 @@ class Passata:
             if accendi is not None:
                 accendi()
             for voce in lavoro:
-                if self.fermata:
+                if self.fermata or self._archivio_chiuso():
                     break
                 try:
                     self._guarda(voce, quale)
@@ -150,6 +150,12 @@ class Passata:
         registro.evento("aiuti_persona.passata", fatti=self.avanzamento.fatti, corpi=self.avanzamento.corpi)
         return self.avanzamento
 
+    def _archivio_chiuso(self) -> bool:
+        from officina.modello import aiuti
+        from officina.sicuro import cache_cifrata
+
+        return aiuti.cifratura(self.archivio)[0] == cache_cifrata.CHIUSA
+
     def _segna(self, aiuto_id: int, quale: str) -> None:
         with self.archivio.scrittura() as connessione:
             connessione.execute("UPDATE aiuti SET guardato = ? WHERE id = ?", (quale, aiuto_id))
@@ -158,9 +164,10 @@ class Passata:
         from officina.immagini import lettura
         from officina.modello import aiuti
 
-        percorso = aiuti.percorso(self.archivio, voce)
-        if not percorso.exists():
-            raise ErroreOfficina("La foto di aiuto non c'è più sul disco.")
+        percorso = aiuti.da_leggere(self.archivio, voce)
+        if percorso is None:
+            raise ErroreOfficina("La foto di aiuto non c'è più sul disco, o l'Archivio "
+                                 "sicuro è chiuso.")
         intera = lettura.copia_di_lavoro(percorso).convert("RGB")
         facce = [f for f in self._volti.guarda(lettura.copia_di_lavoro(percorso, LATO_DEI_VOLTI)) if f.impronta is not None]
         volto = facce[0] if len(facce) == 1 else None

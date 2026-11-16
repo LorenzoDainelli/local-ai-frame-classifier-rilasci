@@ -6,11 +6,13 @@ import pytest
 from PIL import Image
 
 from officina.importazione import miniature
+from officina.modello import aiuti
 from officina.modello import file_media
 from officina.programma import archivio_sicuro
 from officina.sicuro import cache_cifrata
 from prove import test_programma_finestre as finestre
 from prove import test_sicuro_servizio as servizio_di_prova
+from prove.test_costruzione_stanza import _un_posto_con
 from prove.test_sicuro_dall_archivio import _jpeg, _prepara
 from prove.test_sicuro_servizio import ATTESA, PAROLA
 
@@ -178,6 +180,136 @@ def test_se_l_archivio_sicuro_non_c_e_piu_le_cifrate_si_rifanno_in_chiaro(cifrat
     assert rifatta.status_code == 200 and rifatta.content == fatta
     percorso = pronta.archivio.percorso_miniatura(nome)
     assert percorso.exists() and not cache_cifrata.cifrato(percorso).exists()
+
+
+def _aiuto(pronta, tmp_path, seme=3):
+    foto = tmp_path / f"aiuto{seme}.jpg"
+    foto.write_bytes(_jpeg(640, 480, seme=seme))
+    posto_id = _un_posto_con(pronta.archivio, [], f"Camera {seme}")
+    esito = aiuti.aggiungi(pronta.archivio, foto, foto.name, posto_id=posto_id)
+    with pronta.archivio.lettura() as connessione:
+        elenco = aiuti.di_posto(connessione, posto_id)
+    return foto.read_bytes(), esito, elenco
+
+
+def test_le_foto_di_aiuto_si_salvano_solo_cifrate(cifrate, tmp_path):
+    pronta = cifrate
+    dati, esito, elenco = _aiuto(pronta, tmp_path)
+    assert esito["messe"] == 1 and len(elenco) == 1
+    voce = elenco[0]
+    in_chiaro = aiuti.percorso(pronta.archivio, voce)
+    sicuro = cache_cifrata.cifrato(in_chiaro)
+    assert not in_chiaro.exists() and sicuro.exists()
+    assert dati not in sicuro.read_bytes()
+    letta = aiuti.da_leggere(pronta.archivio, voce)
+    with letta.apri() as dentro:
+        assert dentro.read() == dati
+    risposta = pronta.cliente.get(f"/aiuti/{voce['aiuto_id']}/miniatura")
+    assert risposta.status_code == 200 and risposta.headers["cache-control"] == "no-store"
+    for percorso in pronta.archivio.dove.aiuti.rglob("*"):
+        assert dati not in percorso.read_bytes()
+    aiuti.togli(pronta.archivio, voce["aiuto_id"])
+    assert not sicuro.exists() and not in_chiaro.exists()
+
+
+def test_ad_archivio_chiuso_le_foto_di_aiuto_non_entrano_e_non_si_vedono(cifrate,
+                                                                         tmp_path):
+    pronta = cifrate
+    _dati, _esito, elenco = _aiuto(pronta, tmp_path, seme=4)
+    prima = sorted(pronta.archivio.dove.aiuti.rglob("*"))
+    assert pronta.casa.archivio.chiudi(ATTESA)
+    _dati, esito, _ = _aiuto(pronta, tmp_path, seme=5)
+    assert esito == {"messe": 0, "scartate": 1, "perche": aiuti.APRI_L_ARCHIVIO}
+    assert sorted(pronta.archivio.dove.aiuti.rglob("*")) == prima
+    assert aiuti.da_leggere(pronta.archivio, elenco[0]) is None
+    chiusa = pronta.cliente.get(f"/aiuti/{elenco[0]['aiuto_id']}/miniatura")
+    assert chiusa.status_code == 404
+    pronta.casa.archivio.apri(PAROLA)
+    assert aiuti.da_leggere(pronta.archivio, elenco[0]) is not None
+
+
+def test_una_foto_di_aiuto_cifrata_rovinata_non_si_cancella(cifrate, tmp_path):
+    pronta = cifrate
+    _dati, _esito, elenco = _aiuto(pronta, tmp_path, seme=6)
+    sicuro = cache_cifrata.cifrato(aiuti.percorso(pronta.archivio, elenco[0]))
+    blob = bytearray(sicuro.read_bytes())
+    blob[-3] ^= 4
+    sicuro.write_bytes(bytes(blob))
+    assert aiuti.da_leggere(pronta.archivio, elenco[0]) is None
+    assert sicuro.read_bytes() == bytes(blob)
+
+
+def test_le_foto_di_aiuto_di_prima_si_cifrano_in_sottofondo(cifrate, tmp_path,
+                                                             monkeypatch):
+    pronta = cifrate
+    monkeypatch.setattr(cache_cifrata, "_vero", lambda dove: False)
+    dati, esito, elenco = _aiuto(pronta, tmp_path, seme=7)
+    in_chiaro = aiuti.percorso(pronta.archivio, elenco[0])
+    assert in_chiaro.read_bytes() == dati
+    monkeypatch.setattr(cache_cifrata, "_vero", lambda dove: True)
+    vero_scrivi = cache_cifrata.decifra
+    monkeypatch.setattr(cache_cifrata, "decifra", lambda *a, **k: b"diversa")
+    cache_cifrata.cifra_le_vecchie(pronta.archivio)
+    assert in_chiaro.read_bytes() == dati
+    assert not cache_cifrata.cifrato(in_chiaro).exists()
+    monkeypatch.setattr(cache_cifrata, "decifra", vero_scrivi)
+    cache_cifrata.cifra_le_vecchie(pronta.archivio)
+    assert not in_chiaro.exists()
+    with aiuti.da_leggere(pronta.archivio, elenco[0]).apri() as dentro:
+        assert dentro.read() == dati
+
+
+def test_stanze_e_superfici_si_salvano_solo_cifrate(cifrate):
+    import numpy as np
+
+    from officina.corpi import superfici
+    from officina.errori import DaRifare
+    from officina.stanza import costruzione
+
+    pronta = cifrate
+    dove = pronta.archivio.dove
+    punti = np.arange(30, dtype=np.float32).reshape(10, 3) * 1.25
+    colori = np.full((10, 3), 77, dtype=np.uint8)
+    stanza = dove.stanze / "5.npz"
+    costruzione._salva_la_nuvola(stanza, punti, colori, None, dove)
+    assert not stanza.exists() and cache_cifrata.cifrato(stanza).exists()
+    letti, tinte, gruppi = costruzione.leggi_tutta_la_nuvola(stanza, dove)
+    assert np.array_equal(letti, punti) and np.array_equal(tinte, colori)
+    superficie = dove.superfici / "5.npz"
+    superfici.salva(superficie, punti, np.zeros(3), np.ones(10, dtype=bool),
+                    np.zeros((10, 2)), dove)
+    assert not superficie.exists() and cache_cifrata.cifrato(superficie).exists()
+    assert np.allclose(superfici.leggi(superficie, dove)["locali"], punti, atol=0.05)
+    cache_cifrata.cifrato(superficie).write_bytes(cache_cifrata.cifrato(stanza).read_bytes())
+    with pytest.raises(OSError):
+        superfici.leggi(superficie, dove)
+    assert cache_cifrata.cifrato(superficie).exists()
+    assert pronta.casa.archivio.chiudi(ATTESA)
+    with pytest.raises(OSError):
+        costruzione.leggi_tutta_la_nuvola(stanza, dove)
+    with pytest.raises(DaRifare):
+        costruzione._salva_la_nuvola(dove.stanze / "6.npz", punti, colori, None, dove)
+    assert not list(dove.stanze.glob("6.npz*"))
+    pronta.casa.archivio.apri(PAROLA)
+
+
+def test_stanze_e_superfici_di_prima_si_cifrano_in_sottofondo(cifrate):
+    import numpy as np
+
+    from officina.stanza import costruzione
+
+    pronta = cifrate
+    dove = pronta.archivio.dove
+    punti = np.ones((4, 3), dtype=np.float32)
+    vecchia = dove.stanze / "8.npz"
+    costruzione._salva_la_nuvola(vecchia, punti, np.zeros((4, 3)), None, None)
+    facce = dove.superfici / "facce.npy"
+    facce.parent.mkdir(parents=True, exist_ok=True)
+    np.save(facce, np.zeros((2, 3), dtype=np.uint16))
+    cache_cifrata.cifra_le_vecchie(pronta.archivio)
+    assert not vecchia.exists() and cache_cifrata.cifrato(vecchia).exists()
+    assert facce.exists()
+    assert np.array_equal(costruzione.leggi_tutta_la_nuvola(vecchia, dove)[0], punti)
 
 
 def test_il_formato_cifrato_non_si_apre_con_un_altra_chiave():

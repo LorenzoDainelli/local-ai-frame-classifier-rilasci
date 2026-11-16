@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import os
 import threading
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -424,7 +422,8 @@ class Passata:
         from officina.modello import aiuti
 
         try:
-            immagine = lettura.copia_di_lavoro(aiuti.percorso(self.archivio, voce), lato).convert("RGB")
+            immagine = lettura.copia_di_lavoro(aiuti.da_leggere(self.archivio, voce),
+                                               lato).convert("RGB")
         except Exception:                                # noqa: BLE001
             return None
         return Foto(None, immagine, None, aiuto_id=voce["aiuto_id"], quando=voce["quando"])
@@ -550,7 +549,8 @@ class Passata:
             grezze[numero] = None
         punti, tinte, passi, gruppi = a_cubetti(punti, tinte, passi=passi, gruppi=gruppi)
         nome = f"{posto_id}.npz"
-        _salva_la_nuvola(self.archivio.dove.stanze / nome, punti, tinte, gruppi)
+        _salva_la_nuvola(self.archivio.dove.stanze / nome, punti, tinte, gruppi,
+                         self.archivio.dove)
         centri, rotazioni = sistemazione.macchine(*centri_e_rotazioni(estrinseci))
         elenco = _elenco_delle_versioni(cambi, foto, gruppi)
         livello = DETTAGLIO_PIENO if self._dettaglio_pieno else DETTAGLIO_RIDOTTO
@@ -657,27 +657,34 @@ def _a_gruppi(foto: list[Foto]) -> list[list[int]]:
     return pezzi
 
 
-def _salva_la_nuvola(percorso: Path, punti, colori, gruppi=None) -> None:
+def _salva_la_nuvola(percorso: Path, punti, colori, gruppi=None, dove=None) -> None:
+    import io
+
     import numpy as np
 
-    percorso.parent.mkdir(parents=True, exist_ok=True)
+    from officina.sicuro import cache_cifrata
+
     gruppi = np.zeros(len(punti), dtype=np.uint8) if gruppi is None else np.asarray(gruppi, dtype=np.uint8)
-    provvisorio = percorso.with_name(percorso.name + f".{os.getpid()}.{int(time.time() * 1000)}.tmp")
-    with open(provvisorio, "wb") as f:
-        np.savez_compressed(f, punti=np.asarray(punti, dtype=np.float32), colori=np.asarray(colori, dtype=np.uint8),
-                            gruppi=gruppi)
-    os.replace(provvisorio, percorso)
+    scritto = io.BytesIO()
+    np.savez_compressed(scritto, punti=np.asarray(punti, dtype=np.float32),
+                        colori=np.asarray(colori, dtype=np.uint8), gruppi=gruppi)
+    cache_cifrata.scrivi_file(dove, cache_cifrata.STANZE, percorso, scritto.getvalue())
 
 
-def leggi_la_nuvola(percorso: Path):
-    punti, colori, _ = leggi_tutta_la_nuvola(percorso)
+def leggi_la_nuvola(percorso: Path, dove=None):
+    punti, colori, _ = leggi_tutta_la_nuvola(percorso, dove)
     return punti, colori
 
 
-def leggi_tutta_la_nuvola(percorso: Path):
+def leggi_tutta_la_nuvola(percorso: Path, dove=None):
+    import io
+
     import numpy as np
 
-    with np.load(percorso) as dati:
+    from officina.sicuro import cache_cifrata
+
+    letto = io.BytesIO(cache_cifrata.leggi_file(dove, cache_cifrata.STANZE, percorso))
+    with np.load(letto) as dati:
         punti = dati["punti"].astype(np.float32)
         gruppi = dati["gruppi"].astype(np.uint8) if "gruppi" in dati.files else np.zeros(len(punti), dtype=np.uint8)
         return punti, dati["colori"].astype(np.uint8), gruppi

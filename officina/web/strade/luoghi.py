@@ -251,8 +251,8 @@ def _miniatura_aiuto(aiuto_id: int):
         voce = aiuti.per_id(connessione, aiuto_id)
     if voce is None:
         return None
-    percorso = aiuti.percorso(archivio, voce)
-    if not percorso.exists():
+    percorso = aiuti.da_leggere(archivio, voce)
+    if percorso is None:
         return None
     return consegna.da_immagine(lettura.copia_di_lavoro(percorso, 384), "JPEG", 85)
 
@@ -263,8 +263,10 @@ async def miniatura_aiuto(aiuto_id: int):
 
     fatta = await consegna.subito(_miniatura_aiuto, aiuto_id)
     if fatta is None:
-        return Response(status_code=404)
+        return Response(status_code=404, headers={"Cache-Control": "no-store"})
     dati, tipo = fatta
+    if aiuti.cifratura(accesso.aperto())[0] != "spenta":
+        return Response(dati, media_type=tipo, headers={"Cache-Control": "no-store"})
     return Response(dati, media_type=tipo, headers={"Cache-Control": "private, max-age=86400"})
 
 

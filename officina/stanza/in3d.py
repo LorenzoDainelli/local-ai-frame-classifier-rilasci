@@ -269,7 +269,8 @@ def persone_in_binario(archivio, scatto_id: int) -> bytes:
         if riga is None or figura is None:
             continue
         try:
-            superficie = superfici.leggi(archivio.dove.superfici / riga["file"])
+            superficie = superfici.leggi(archivio.dove.superfici / riga["file"],
+                                         archivio.dove)
         except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile):
             continue
         posti = nella_scena(superficie["locali"], superficie["spostamento"], figura["fuoco"], proporzione,
@@ -305,7 +306,8 @@ def nuvola_in_binario(archivio, posto_id: int) -> bytes | None:
     if stanza is None or attivo is None or stanza["stato"] != stanze.FATTA or not stanza["file"]:
         return None
     try:
-        punti, colori, gruppi = costruzione.leggi_tutta_la_nuvola(archivio.dove.stanze / stanza["file"])
+        punti, colori, gruppi = costruzione.leggi_tutta_la_nuvola(
+            archivio.dove.stanze / stanza["file"], archivio.dove)
     except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile):
         return None
     if not len(punti):

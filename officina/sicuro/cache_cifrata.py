@@ -16,10 +16,13 @@ CODA = ".sicuro"
 FIRMA = b"OFCC1"
 NONCE = 12
 USO = "cache delle miniature"
+AIUTI = "foto di aiuto"
+STANZE = "stanze 3D"
+SUPERFICI = "superfici delle persone"
 RICONTROLLO = 2.0
 
 _serratura = threading.Lock()
-_chiave: tuple = (None, None)
+_chiavi: dict[str, tuple] = {}
 _c_e: dict[str, tuple[float, bool]] = {}
 
 
@@ -33,12 +36,12 @@ def _aead():
     return AESGCM
 
 
-def cifra(chiave: bytes, nome: str, dati: bytes) -> bytes:
+def cifra(chiave: bytes, nome: str, dati: bytes, uso: str = USO) -> bytes:
     numero = secrets.token_bytes(NONCE)
-    return FIRMA + numero + _aead()(chiave).encrypt(numero, bytes(dati), _aad(nome))
+    return FIRMA + numero + _aead()(chiave).encrypt(numero, bytes(dati), _aad(nome, uso))
 
 
-def decifra(chiave: bytes, nome: str, blob: bytes) -> bytes | None:
+def decifra(chiave: bytes, nome: str, blob: bytes, uso: str = USO) -> bytes | None:
     from cryptography.exceptions import InvalidTag
 
     if not blob.startswith(FIRMA) or len(blob) < len(FIRMA) + NONCE + 16:
@@ -46,23 +49,25 @@ def decifra(chiave: bytes, nome: str, blob: bytes) -> bytes | None:
     inizio = len(FIRMA)
     numero = blob[inizio:inizio + NONCE]
     try:
-        return _aead()(chiave).decrypt(numero, blob[inizio + NONCE:], _aad(nome))
+        return _aead()(chiave).decrypt(numero, blob[inizio + NONCE:], _aad(nome, uso))
     except InvalidTag:
         return None
 
 
-def _aad(nome: str) -> bytes:
-    return b"officina-miniatura\x00" + nome.replace("\\", "/").encode("utf-8")
+def _aad(nome: str, uso: str = USO) -> bytes:
+    nome = nome.replace("\\", "/").encode("utf-8")
+    if uso == USO:
+        return b"officina-miniatura\x00" + nome
+    return b"officina-" + uso.encode("utf-8") + b"\x00" + nome
 
 
-def _chiave_di(apertura) -> bytes:
-    global _chiave
+def _chiave_di(apertura, uso: str = USO) -> bytes:
     with _serratura:
-        legata, chiave = _chiave
+        legata, chiave = _chiavi.get(uso, (None, None))
         if legata is not None and legata() is apertura:
             return chiave
-        chiave = apertura.chiave.per(USO)
-        _chiave = (weakref.ref(apertura), chiave)
+        chiave = apertura.chiave.per(uso)
+        _chiavi[uso] = (weakref.ref(apertura), chiave)
         return chiave
 
 
@@ -85,9 +90,8 @@ def _archivio_esiste(dove) -> bool:
 
 
 def dimentica() -> None:
-    global _chiave
     with _serratura:
-        _chiave = (None, None)
+        _chiavi.clear()
         _c_e.clear()
 
 
@@ -97,7 +101,7 @@ def _vero(dove) -> bool:
     return getattr(dove, "nome", None) == REALE
 
 
-def stato(dove) -> tuple[str, bytes | None]:
+def stato(dove, uso: str = USO) -> tuple[str, bytes | None]:
     from officina.sicuro import servizio as modulo
     from officina.sicuro import sportello
 
@@ -107,24 +111,28 @@ def stato(dove) -> tuple[str, bytes | None]:
         servizio = modulo.attuale()
         apertura = servizio.apertura if servizio is not None else None
         if apertura is not None:
-            return APERTA, _chiave_di(apertura)
+            return APERTA, _chiave_di(apertura, uso)
     if _archivio_esiste(dove):
         return CHIUSA, None
     return SPENTA, None
 
 
-def scrivi(percorso: Path, nome: str, dati: bytes, chiave: bytes) -> Path:
+def scrivi(percorso: Path, nome: str, dati: bytes, chiave: bytes, uso: str = USO) -> Path:
     destinazione = cifrato(percorso)
     destinazione.parent.mkdir(parents=True, exist_ok=True)
     temporaneo = destinazione.with_name(
         f"{destinazione.name}.{secrets.token_hex(4)}.parziale")
-    temporaneo.write_bytes(cifra(chiave, nome, dati))
+    temporaneo.write_bytes(cifra(chiave, nome, dati, uso))
+    if decifra(chiave, nome, temporaneo.read_bytes(), uso) != bytes(dati):
+        temporaneo.unlink(missing_ok=True)
+        raise OSError("la copia cifrata non si rilegge uguale")
     os.replace(temporaneo, destinazione)
     percorso.unlink(missing_ok=True)
     return destinazione
 
 
-def leggi(percorso: Path, nome: str, chiave: bytes) -> bytes | None:
+def leggi(percorso: Path, nome: str, chiave: bytes, uso: str = USO,
+          butta_se_rovinata: bool = True) -> bytes | None:
     sicuro = cifrato(percorso)
     try:
         blob = sicuro.read_bytes()
@@ -133,16 +141,17 @@ def leggi(percorso: Path, nome: str, chiave: bytes) -> bytes | None:
     except OSError:
         return None
     if blob is not None:
-        dati = decifra(chiave, nome, blob)
+        dati = decifra(chiave, nome, blob, uso)
         if dati is None:
-            registro.avviso("miniature.cifrata_rovinata")
-            sicuro.unlink(missing_ok=True)
+            registro.avviso("miniature.cifrata_rovinata", uso=uso)
+            if butta_se_rovinata:
+                sicuro.unlink(missing_ok=True)
         return dati
     try:
         dati = percorso.read_bytes()
     except OSError:
         return None
-    scrivi(percorso, nome, dati, chiave)
+    scrivi(percorso, nome, dati, chiave, uso)
     return dati
 
 
@@ -181,20 +190,41 @@ def _da_cifrare(cartella: Path):
                 yield percorso
 
 
+def _aiuti_da_cifrare(cartella: Path, code=SOLO_MINIATURE):
+    try:
+        dentro = sorted(cartella.iterdir())
+    except OSError:
+        return
+    for percorso in dentro:
+        if (percorso.suffix.lower() in code and percorso.is_file()
+                and not percorso.name.endswith((CODA, ".tmp", ".parziale"))):
+            yield percorso
+
+
+def _tutte(archivio):
+    miniature = Path(archivio.dove.miniature)
+    for percorso in _da_cifrare(miniature):
+        yield percorso, percorso.relative_to(miniature).as_posix(), USO
+    for percorso in _aiuti_da_cifrare(Path(archivio.dove.aiuti)):
+        yield percorso, percorso.name, AIUTI
+    for cartella, uso in ((archivio.dove.stanze, STANZE),
+                          (archivio.dove.superfici, SUPERFICI)):
+        for percorso in _aiuti_da_cifrare(Path(cartella), (".npz",)):
+            yield percorso, percorso.name, uso
+
+
 def cifra_le_vecchie(archivio) -> int:
     if not _in_corso.acquire(blocking=False):
         return 0
     fatte = 0
     try:
-        cartella = Path(archivio.dove.miniature)
-        for percorso in _da_cifrare(cartella):
-            stato_ora, chiave = stato(archivio.dove)
+        for percorso, nome, uso in _tutte(archivio):
+            stato_ora, chiave = stato(archivio.dove, uso)
             if stato_ora != APERTA:
                 break
-            nome = percorso.relative_to(cartella).as_posix()
             try:
                 dati = percorso.read_bytes()
-                scrivi(percorso, nome, dati, chiave)
+                scrivi(percorso, nome, dati, chiave, uso)
             except OSError:
                 continue
             fatte += 1
@@ -217,3 +247,31 @@ def in_sottofondo(archivio) -> threading.Thread:
     filo = threading.Thread(target=gira, name="miniature-cifrate", daemon=True)
     filo.start()
     return filo
+
+
+def scrivi_file(dove, uso: str, percorso: Path, dati: bytes) -> Path:
+    from officina.sicuro import dall_archivio
+
+    stato_ora, chiave = stato(dove, uso)
+    if stato_ora == CHIUSA:
+        raise dall_archivio.da_rifare(dall_archivio.CHIUSO_ADESSO)
+    if stato_ora == APERTA:
+        return scrivi(percorso, percorso.name, dati, chiave, uso)
+    percorso.parent.mkdir(parents=True, exist_ok=True)
+    temporaneo = percorso.with_name(f"{percorso.name}.{secrets.token_hex(4)}.tmp")
+    temporaneo.write_bytes(dati)
+    os.replace(temporaneo, percorso)
+    cifrato(percorso).unlink(missing_ok=True)
+    return percorso
+
+
+def leggi_file(dove, uso: str, percorso: Path) -> bytes:
+    stato_ora, chiave = stato(dove, uso)
+    if stato_ora == SPENTA:
+        return percorso.read_bytes()
+    if stato_ora == CHIUSA:
+        raise FileNotFoundError("archivio sicuro chiuso")
+    dati = leggi(percorso, percorso.name, chiave, uso, butta_se_rovinata=False)
+    if dati is None:
+        raise FileNotFoundError("non si legge")
+    return dati

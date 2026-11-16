@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import threading
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -12,6 +11,7 @@ from officina.archivio.database import adesso, tutti, uno
 from officina.corpi import corpo3d, figure
 from officina.corpi import rilevatore as rilevatore_mod
 from officina.descrittori import torcia
+from officina.errori import DaRifare
 from officina.importazione import gruppi
 
 VERSIONE = f"1-mhr-{figure.ASPETTO}"
@@ -160,24 +160,31 @@ def allarga(maschera, quanto: int):
     return np.asarray(immagine.filter(ImageFilter.MaxFilter(2 * quanto + 1))) > 0
 
 
-def salva(percorso: Path, vertici_locali, spostamento, visti, uv) -> None:
+def salva(percorso: Path, vertici_locali, spostamento, visti, uv, dove=None) -> None:
+    import io
+
     import numpy as np
 
-    percorso.parent.mkdir(parents=True, exist_ok=True)
-    provvisorio = percorso.with_name(percorso.name + f".{os.getpid()}.{int(time.time() * 1000)}.tmp")
-    with open(provvisorio, "wb") as f:
-        np.savez_compressed(
-            f, vertici=np.asarray(vertici_locali, dtype=np.float16),
-            spostamento=np.asarray(spostamento, dtype=np.float32),
-            visti=np.asarray(visti, dtype=bool),
-            uv=np.round(np.clip(np.asarray(uv), 0, 1) * 65535).astype(np.uint16))
-    os.replace(provvisorio, percorso)
+    from officina.sicuro import cache_cifrata
+
+    scritto = io.BytesIO()
+    np.savez_compressed(
+        scritto, vertici=np.asarray(vertici_locali, dtype=np.float16),
+        spostamento=np.asarray(spostamento, dtype=np.float32),
+        visti=np.asarray(visti, dtype=bool),
+        uv=np.round(np.clip(np.asarray(uv), 0, 1) * 65535).astype(np.uint16))
+    cache_cifrata.scrivi_file(dove, cache_cifrata.SUPERFICI, percorso, scritto.getvalue())
 
 
-def leggi(percorso: Path) -> dict:
+def leggi(percorso: Path, dove=None) -> dict:
+    import io
+
     import numpy as np
 
-    with np.load(percorso) as dati:
+    from officina.sicuro import cache_cifrata
+
+    letto = io.BytesIO(cache_cifrata.leggi_file(dove, cache_cifrata.SUPERFICI, percorso))
+    with np.load(letto) as dati:
         locali = dati["vertici"].astype(np.float32)
         spostamento = dati["spostamento"].astype(np.float32)
         return {"vertici": locali + spostamento, "locali": locali, "spostamento": spostamento,
@@ -272,6 +279,8 @@ class Passata:
                     break
                 try:
                     self._fai_lo_scatto(scatto_id, facce)
+                except DaRifare:
+                    break
                 except Exception as guasto:              # noqa: BLE001
                     if torcia.memoria_finita(guasto):
                         memoria.finita(scatto_id, guasto)
@@ -334,7 +343,8 @@ class Passata:
                                                       larga, alta), ALLARGA_LA_MASCHERA)
             visti, uv = visti_dalla_foto(vertici, facce, profondita, maschera, figura["fuoco"], proporzione)
             nome = f"{corpo['id']}.npz"
-            salva(self.cartella / nome, locale, figura["spostamento"], visti, uv)
+            salva(self.cartella / nome, locale, figura["spostamento"], visti, uv,
+                  self.archivio.dove)
             fatte.append((corpo["id"], nome, len(vertici), int(visti.sum())))
         with self.archivio.scrittura() as connessione:
             for corpo_id, nome, quanti, visti in fatte:

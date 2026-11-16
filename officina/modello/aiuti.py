@@ -16,6 +16,8 @@ FOTOGRAMMI_DA_UN_VIDEO = 24
 LATO_DEI_FOTOGRAMMI = 3840
 LATO_MINIMO = 256
 QUALITA_DEI_FOTOGRAMMI = 95
+APRI_L_ARCHIVIO = ("l'Archivio sicuro è chiuso: aprilo, così la foto di aiuto si salva "
+                   "cifrata")
 
 
 def _impronta(percorso: Path) -> str:
@@ -83,20 +85,42 @@ def _quando(percorso: Path) -> str | None:
     return dati.data_locale
 
 
-def _metti_il_file(cartella: Path, sorgente: Path, impronta: str, estensione: str) -> str:
+def cifratura(archivio) -> tuple[str, bytes | None]:
+    from officina.sicuro import cache_cifrata
+
+    return cache_cifrata.stato(archivio.dove, cache_cifrata.AIUTI)
+
+
+def _c_e(arrivo: Path, chiave: bytes | None) -> bool:
+    from officina.sicuro import cache_cifrata
+
+    return cache_cifrata.c_e(arrivo) if chiave is not None else arrivo.exists()
+
+
+def _scrivi(arrivo: Path, dati: bytes, chiave: bytes | None) -> None:
+    from officina.sicuro import cache_cifrata
+
+    if chiave is not None:
+        cache_cifrata.scrivi(arrivo, arrivo.name, dati, chiave, cache_cifrata.AIUTI)
+        return
+    arrivo.parent.mkdir(parents=True, exist_ok=True)
+    provvisorio = arrivo.with_name(
+        f"{arrivo.name}.{os.getpid()}.{int(time.time() * 1000)}.tmp")
+    provvisorio.write_bytes(dati)
+    os.replace(provvisorio, arrivo)
+
+
+def _metti_il_file(cartella: Path, sorgente: Path, impronta: str, estensione: str,
+                   chiave: bytes | None = None) -> str:
     nome = f"{impronta}{estensione}"
     arrivo = cartella / nome
-    if not arrivo.exists():
-        cartella.mkdir(parents=True, exist_ok=True)
-        provvisorio = arrivo.with_name(f"{nome}.{os.getpid()}.{int(time.time() * 1000)}.tmp")
-        with open(sorgente, "rb") as dentro, open(provvisorio, "wb") as fuori:
-            for pezzo in iter(lambda: dentro.read(1 << 20), b""):
-                fuori.write(pezzo)
-        os.replace(provvisorio, arrivo)
+    if not _c_e(arrivo, chiave):
+        _scrivi(arrivo, Path(sorgente).read_bytes(), chiave)
     return nome
 
 
-def _salva_un_fotogramma(cartella: Path, immagine) -> tuple[str, str]:
+def _salva_un_fotogramma(cartella: Path, immagine,
+                         chiave: bytes | None = None) -> tuple[str, str]:
     import io
 
     scritto = io.BytesIO()
@@ -105,11 +129,8 @@ def _salva_un_fotogramma(cartella: Path, immagine) -> tuple[str, str]:
     impronta = hashlib.sha256(dati).hexdigest()
     nome = f"{impronta}.jpg"
     arrivo = cartella / nome
-    if not arrivo.exists():
-        cartella.mkdir(parents=True, exist_ok=True)
-        provvisorio = arrivo.with_name(f"{nome}.{os.getpid()}.{int(time.time() * 1000)}.tmp")
-        provvisorio.write_bytes(dati)
-        os.replace(provvisorio, arrivo)
+    if not _c_e(arrivo, chiave):
+        _scrivi(arrivo, dati, chiave)
     return nome, impronta
 
 
@@ -117,7 +138,12 @@ def aggiungi(archivio, percorso: Path, nome_originale: str, *, posto_id: int | N
              persona_id: int | None = None) -> dict:
     from officina.immagini import lettura
 
+    from officina.sicuro import cache_cifrata
+
     colonna, chi = _di_chi(posto_id, persona_id)
+    stato, chiave = cifratura(archivio)
+    if stato == cache_cifrata.CHIUSA:
+        return {"messe": 0, "scartate": 1, "perche": APRI_L_ARCHIVIO}
     massimi = MASSIMI_PER_POSTO if colonna == "posto_id" else MASSIMI_PER_PERSONA
     percorso = Path(percorso)
     if percorso.stat().st_size > PESO_MASSIMO:
@@ -136,7 +162,7 @@ def aggiungi(archivio, percorso: Path, nome_originale: str, *, posto_id: int | N
             return {"messe": 0, "scartate": 1, "perche": "dal video non esce nessuna immagine"}
         file = []
         for immagine in immagini[:massimi - gia]:
-            nome, impronta = _salva_un_fotogramma(cartella, immagine)
+            nome, impronta = _salva_un_fotogramma(cartella, immagine, chiave)
             file.append((nome, impronta, "video", immagine.size))
     else:
         immagine = _una_foto(percorso)
@@ -145,7 +171,7 @@ def aggiungi(archivio, percorso: Path, nome_originale: str, *, posto_id: int | N
         impronta = _impronta(percorso)
         if estensione not in lettura.ESTENSIONI_IMMAGINE:
             estensione = ".jpg"
-        nome = _metti_il_file(cartella, percorso, impronta, estensione)
+        nome = _metti_il_file(cartella, percorso, impronta, estensione, chiave)
         file = [(nome, impronta, "foto", immagine.size)]
     messe = 0
     with archivio.scrittura() as connessione:
@@ -192,6 +218,27 @@ def percorso(archivio, voce: dict) -> Path:
     return archivio.dove.aiuti / nome
 
 
+def da_leggere(archivio, voce: dict):
+    import io
+
+    from officina.sicuro import cache_cifrata
+    from officina.sicuro.dall_archivio import DallArchivio
+
+    dove = percorso(archivio, voce)
+    stato, chiave = cifratura(archivio)
+    if stato == cache_cifrata.SPENTA:
+        return dove if dove.exists() else None
+    if stato == cache_cifrata.CHIUSA:
+        return None
+    dati = cache_cifrata.leggi(dove, dove.name, chiave, cache_cifrata.AIUTI,
+                               butta_se_rovinata=False)
+    if dati is None:
+        return None
+    return DallArchivio(numero=f"aiuto-{voce.get('aiuto_id')}", nome=dove.name,
+                        dimensione=len(dati), blake2b="", intero=True, diversa=False,
+                        _prendi=lambda _trovata: io.BytesIO(dati))
+
+
 def togli(archivio, aiuto_id: int) -> dict | None:
     with archivio.scrittura() as connessione:
         voce = per_id(connessione, aiuto_id)
@@ -201,8 +248,7 @@ def togli(archivio, aiuto_id: int) -> dict | None:
         connessione.execute("DELETE FROM aiuti WHERE id = ?", (aiuto_id,))
         ancora = uno(connessione, "SELECT 1 FROM aiuti WHERE file = ?", voce["file"])
     if ancora is None:
-        try:
-            percorso(archivio, voce).unlink()
-        except FileNotFoundError:
-            pass
+        from officina.sicuro import cache_cifrata
+
+        cache_cifrata.butta(percorso(archivio, voce))
     return voce

@@ -11,6 +11,10 @@
     "semplice": [
       [
         "controlla",
+        "Con l'Archivio sicuro anche le foto di aiuto, le stanze 3D e le superfici delle persone si salvano solo cifrate. Una foto di aiuto o una stanza cifrata che non si apre non si cancella mai."
+      ],
+      [
+        "controlla",
         "Gara dei 120 FPS: sotto la riga di stato ora vedi a che punto è dentro il caso (quale concorrente, caso N di M, quadro, passi e da quanto ci lavora). Così si capisce se è lenta o ferma."
       ],
       [
