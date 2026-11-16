@@ -5,10 +5,11 @@ from pathlib import Path
 
 from officina import tempo_gara
 from officina.archivio.database import tutti, uno
-from officina.errori import ErroreOfficina
+from officina.errori import DaRifare, ErroreOfficina
 from officina.miglioria import da_guardare
 from officina.modello import file_media, scatti
 from officina.ritocco import coda, elenco, racconto, sfida_togli
+from officina.sicuro import cache_cifrata
 from officina.sicuro.dall_archivio import CHIUSO, SI_APRE, DallArchivio
 from officina.web import coda_ritocco, lavori
 from officina.web.lavori import Lavoro
@@ -26,6 +27,8 @@ LATI = (*da_guardare.LATI, B)
 PARZIALE = ".parziale.mp4"
 
 copie = Lavoro("le copie da guardare del ritocco")
+CHIUSO_PER_LE_COPIE = ("L'Archivio sicuro è chiuso: le copie da guardare si salvano solo "
+                       "cifrate. Apri l'archivio e riprova.")
 
 
 def quanto(secondi) -> str:
@@ -244,7 +247,25 @@ def _da_vedere(archivio, lavoro: sqlite3.Row, file_id: int, lato: str,
     if da_guardare.si_apre(file):
         return file
     copia = _copia(archivio, lavoro, file_id, lato)
+    if _cifrata(archivio):
+        return cache_cifrata.copia_da_guardare(archivio.dove, copia)
     return copia if copia.is_file() else None
+
+
+def _cifrata(archivio) -> bool:
+    return (cache_cifrata.stato(archivio.dove, cache_cifrata.COPIE)[0]
+            != cache_cifrata.SPENTA)
+
+
+def _c_e(archivio, lavoro: sqlite3.Row, file_id: int, lato: str, file) -> bool:
+    if file is None or not file.is_file():
+        return False
+    if da_guardare.si_apre(file):
+        return True
+    copia = _copia(archivio, lavoro, file_id, lato)
+    if _cifrata(archivio):
+        return cache_cifrata.copia_c_e(archivio.dove, copia)
+    return copia.is_file()
 
 
 def _proporzione(connessione: sqlite3.Connection, lavoro_id: int, file_id: int) -> float:
@@ -370,7 +391,7 @@ def fai_le_copie(archivio, lavoro_id: int) -> bool:
             for lato in lati:
                 sorgente = lati[lato]
                 if (sorgente is not None and sorgente.is_file()
-                        and _da_vedere(archivio, lavoro, voce["id"], lato, sorgente) is None):
+                        and not _c_e(archivio, lavoro, voce["id"], lato, sorgente)):
                     da_fare.append((voce, lato, sorgente, _copia(archivio, lavoro, voce["id"],
                                                                  lato)))
     if not da_fare:
@@ -379,14 +400,25 @@ def fai_le_copie(archivio, lavoro_id: int) -> bool:
     def fai() -> None:
         for voce, lato, sorgente, arrivo in da_fare:
             copie.di(f"preparo la copia da guardare di «{voce['nome']}»")
-            arrivo.parent.mkdir(parents=True, exist_ok=True)
-            parziale = arrivo.with_name(arrivo.stem + PARZIALE)
+            cifrata = _cifrata(archivio)
+            if cifrata and (cache_cifrata.stato(archivio.dove, cache_cifrata.COPIE)[0]
+                            != cache_cifrata.APERTA):
+                raise ErroreOfficina(CHIUSO_PER_LE_COPIE)
+            parziale = (cache_cifrata.copia_da_fare(archivio.dove, arrivo) if cifrata
+                        else arrivo.with_name(arrivo.stem + PARZIALE))
+            parziale.parent.mkdir(parents=True, exist_ok=True)
             try:
                 da_guardare.ricodifica(sorgente, parziale, al_passo=copie.a_che_punto)
             except BaseException:
                 parziale.unlink(missing_ok=True)
                 raise
-            parziale.replace(arrivo)
+            if cifrata:
+                try:
+                    cache_cifrata.copia_salva(archivio.dove, arrivo, parziale)
+                except DaRifare:
+                    raise ErroreOfficina(CHIUSO_PER_LE_COPIE) from None
+            else:
+                parziale.replace(arrivo)
         copie.di("pronta")
 
     return copie.parti(fai, nome="copie da guardare del ritocco")
@@ -399,7 +431,8 @@ def togli_le_copie(archivio, lavoro_id: int) -> int:
     tolte = 0
     for file in cartella.iterdir():
         if file.is_file() and file.name.split("-", 1)[0] == str(int(lavoro_id)):
-            file.unlink(missing_ok=True)
+            cache_cifrata.copia_butta(archivio.dove, file.with_name(
+                file.name.removesuffix(cache_cifrata.CODA)))
             tolte += 1
     return tolte
 

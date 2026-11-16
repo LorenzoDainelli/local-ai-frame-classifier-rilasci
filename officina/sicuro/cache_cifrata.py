@@ -167,6 +167,7 @@ def butta(percorso: Path) -> None:
             pass
 
 
+CON_LE_COPIE = ("revisione", "revisione-ritocco")
 SOLO_MINIATURE = frozenset({".avif", ".jpg", ".jpeg", ".png", ".webp"})
 OGNI = 64
 RIPOSO = 0.02
@@ -197,7 +198,8 @@ def _aiuti_da_cifrare(cartella: Path, code=SOLO_MINIATURE):
         return
     for percorso in dentro:
         if (percorso.suffix.lower() in code and percorso.is_file()
-                and not percorso.name.endswith((CODA, ".tmp", ".parziale"))):
+                and not percorso.name.endswith((CODA, ".tmp", ".parziale"))
+                and ".parziale." not in percorso.name):
             yield percorso
 
 
@@ -211,6 +213,22 @@ def _tutte(archivio):
                           (archivio.dove.superfici, SUPERFICI)):
         for percorso in _aiuti_da_cifrare(Path(cartella), (".npz",)):
             yield percorso, percorso.name, uso
+    for percorso in _copie_da_cifrare(miniature):
+        yield percorso, percorso.relative_to(miniature).as_posix(), COPIE
+
+
+def _copie_da_cifrare(miniature: Path):
+    try:
+        sotto = sorted(miniature.iterdir())
+    except OSError:
+        return
+    for cartella in sotto:
+        if not cartella.is_dir() or cartella.is_symlink():
+            continue
+        if len(cartella.name) != 2 and cartella.name not in CON_LE_COPIE:
+            continue
+        for percorso in _aiuti_da_cifrare(cartella, (".mp4",)):
+            yield percorso
 
 
 def cifra_le_vecchie(archivio) -> int:
@@ -275,3 +293,100 @@ def leggi_file(dove, uso: str, percorso: Path) -> bytes:
     if dati is None:
         raise FileNotFoundError("non si legge")
     return dati
+
+
+COPIE = "copie dei video"
+APERTE = "aperte"
+
+
+def _nome_copia(dove, percorso: Path) -> str:
+    try:
+        return Path(percorso).relative_to(Path(dove.miniature)).as_posix()
+    except ValueError:
+        return Path(percorso).name
+
+
+def copia_aperta_in(dove, percorso: Path) -> Path:
+    piatto = _nome_copia(dove, percorso).replace("/", "_")
+    return Path(dove.miniature) / "di_passaggio" / APERTE / piatto
+
+
+def copia_c_e(dove, percorso: Path) -> bool:
+    stato_ora, _ = stato(dove, COPIE)
+    if stato_ora == SPENTA:
+        return Path(percorso).is_file()
+    if stato_ora == CHIUSA:
+        return False
+    return (cifrato(percorso).is_file() or Path(percorso).is_file()
+            or copia_aperta_in(dove, percorso).is_file())
+
+
+def copia_da_guardare(dove, percorso: Path) -> Path | None:
+    percorso = Path(percorso)
+    stato_ora, chiave = stato(dove, COPIE)
+    if stato_ora == SPENTA:
+        return percorso if percorso.is_file() else None
+    if stato_ora == CHIUSA:
+        return None
+    aperta = copia_aperta_in(dove, percorso)
+    if aperta.is_file():
+        return aperta
+    if not cifrato(percorso).is_file() and not percorso.is_file():
+        return None
+    dati = leggi(percorso, _nome_copia(dove, percorso), chiave, COPIE,
+                 butta_se_rovinata=False)
+    if dati is None:
+        return None
+    if stato(dove, COPIE)[0] != APERTA:
+        return None
+    aperta.parent.mkdir(parents=True, exist_ok=True)
+    temporaneo = aperta.with_name(f"{aperta.stem}.{secrets.token_hex(4)}.parziale.mp4")
+    try:
+        temporaneo.write_bytes(dati)
+        os.replace(temporaneo, aperta)
+    except OSError:
+        temporaneo.unlink(missing_ok=True)
+        return None
+    return aperta
+
+
+def copia_da_fare(dove, percorso: Path) -> Path:
+    percorso = Path(percorso)
+    if stato(dove, COPIE)[0] == SPENTA:
+        arrivo = percorso
+    else:
+        arrivo = copia_aperta_in(dove, percorso)
+    return arrivo.with_name(f"{arrivo.stem}.{secrets.token_hex(4)}.parziale.mp4")
+
+
+def copia_salva(dove, percorso: Path, fatta: Path) -> Path:
+    from officina.sicuro import dall_archivio
+
+    percorso = Path(percorso)
+    stato_ora, chiave = stato(dove, COPIE)
+    if stato_ora == CHIUSA:
+        Path(fatta).unlink(missing_ok=True)
+        raise dall_archivio.da_rifare(dall_archivio.CHIUSO_ADESSO)
+    if stato_ora == SPENTA:
+        percorso.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(fatta, percorso)
+        cifrato(percorso).unlink(missing_ok=True)
+        return percorso
+    try:
+        scrivi(percorso, _nome_copia(dove, percorso), Path(fatta).read_bytes(),
+               chiave, COPIE)
+    except BaseException:
+        Path(fatta).unlink(missing_ok=True)
+        raise
+    aperta = copia_aperta_in(dove, percorso)
+    aperta.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(fatta, aperta)
+    return aperta
+
+
+def copia_butta(dove, percorso: Path) -> None:
+    butta(Path(percorso))
+    try:
+        copia_aperta_in(dove, percorso).unlink(missing_ok=True)
+    except OSError:
+        pass

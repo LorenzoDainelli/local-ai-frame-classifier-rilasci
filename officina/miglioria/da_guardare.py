@@ -6,6 +6,7 @@ from typing import Callable
 
 from officina.immagini import compatibile
 from officina.importazione import quicktime
+from officina.sicuro import cache_cifrata
 from officina.sicuro.dall_archivio import DallArchivio, per_av
 
 PRIMA = "prima"
@@ -36,8 +37,21 @@ def percorso(dove, miglioria_id: int, lato: str, passaggio: bool = False) -> Pat
     return cartella(dove, passaggio) / f"{int(miglioria_id)}-{lato}.mp4"
 
 
+def _cifrata(dove) -> bool:
+    return cache_cifrata.stato(dove, cache_cifrata.COPIE)[0] != cache_cifrata.SPENTA
+
+
 def _la_copia(dove, miglioria_id: int, lato: str, file) -> Path:
+    if _cifrata(dove):
+        return percorso(dove, miglioria_id, lato)
     return percorso(dove, miglioria_id, lato, isinstance(file, DallArchivio))
+
+
+def _c_e(dove, miglioria_id: int, lato: str, file) -> bool:
+    copia = _la_copia(dove, miglioria_id, lato, file)
+    if _cifrata(dove):
+        return cache_cifrata.copia_c_e(dove, copia)
+    return copia.is_file()
 
 
 def _il_file(file):
@@ -62,13 +76,15 @@ def da_fare(file_per_lato: dict[str, Path]) -> list[str]:
 
 def mancano(dove, miglioria_id: int, file_per_lato: dict[str, Path]) -> list[str]:
     return [lato for lato in da_fare(file_per_lato)
-            if not _la_copia(dove, miglioria_id, lato, file_per_lato[lato]).is_file()]
+            if not _c_e(dove, miglioria_id, lato, file_per_lato[lato])]
 
 
 def da_mostrare(dove, miglioria_id: int, lato: str, file):
     if si_apre(file):
         return _il_file(file)
     copia = _la_copia(dove, miglioria_id, lato, file)
+    if _cifrata(dove):
+        return cache_cifrata.copia_da_guardare(dove, copia)
     return copia if copia.is_file() else None
 
 
@@ -78,14 +94,24 @@ def fai(dove, miglioria_id: int, file_per_lato: dict[str, Path],
     fatti = []
     for lato in mancano(dove, miglioria_id, file_per_lato):
         arrivo = _la_copia(dove, miglioria_id, lato, file_per_lato[lato])
-        arrivo.parent.mkdir(parents=True, exist_ok=True)
-        parziale = _parziale(arrivo)
+        cifrata = _cifrata(dove)
+        if cifrata and (cache_cifrata.stato(dove, cache_cifrata.COPIE)[0]
+                        != cache_cifrata.APERTA):
+            from officina.sicuro import dall_archivio
+
+            raise dall_archivio.da_rifare(dall_archivio.CHIUSO_ADESSO)
+        parziale = (cache_cifrata.copia_da_fare(dove, arrivo) if cifrata
+                    else _parziale(arrivo))
+        parziale.parent.mkdir(parents=True, exist_ok=True)
         try:
             ricodifica(_il_file(file_per_lato[lato]), parziale, fermati, al_passo)
         except BaseException:
             parziale.unlink(missing_ok=True)
             raise
-        parziale.replace(arrivo)
+        if cifrata:
+            cache_cifrata.copia_salva(dove, arrivo, parziale)
+        else:
+            parziale.replace(arrivo)
         fatti.append(lato)
     return fatti
 
@@ -95,7 +121,8 @@ def togli(dove, miglioria_id: int) -> int:
     for passaggio in (False, True):
         for lato in LATI:
             arrivo = percorso(dove, miglioria_id, lato, passaggio)
-            for file in (arrivo, _parziale(arrivo)):
+            for file in (arrivo, _parziale(arrivo), cache_cifrata.cifrato(arrivo),
+                         cache_cifrata.copia_aperta_in(dove, arrivo)):
                 if file.is_file():
                     file.unlink()
                     tolti += 1

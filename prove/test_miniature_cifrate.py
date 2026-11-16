@@ -133,9 +133,9 @@ def test_quelle_in_chiaro_di_prima_si_cifrano_in_sottofondo(cifrate, monkeypatch
         percorso.parent.mkdir(parents=True, exist_ok=True)
         percorso.write_bytes(dati)
         vecchie[nome] = dati
-    da_lasciare = archivio.percorso_miniatura("aa/" + "b" * 32 + ".mp4")
-    da_lasciare.parent.mkdir(parents=True, exist_ok=True)
-    da_lasciare.write_bytes(b"video")
+    copia = archivio.percorso_miniatura("aa/" + "b" * 32 + ".mp4")
+    copia.parent.mkdir(parents=True, exist_ok=True)
+    copia.write_bytes(b"video")
     monkeypatch.setattr(cache_cifrata, "RIPOSO", 0)
     cache_cifrata.in_sottofondo(archivio).join(30)
     for nome, dati in vecchie.items():
@@ -143,7 +143,10 @@ def test_quelle_in_chiaro_di_prima_si_cifrano_in_sottofondo(cifrate, monkeypatch
         assert not percorso.exists()
         assert cache_cifrata.cifrato(percorso).exists()
         assert archivio.leggi_miniatura(nome) == dati
-    assert da_lasciare.read_bytes() == b"video"
+    assert not copia.exists()
+    assert b"video" not in cache_cifrata.cifrato(copia).read_bytes()
+    aperta = cache_cifrata.copia_da_guardare(archivio.dove, copia)
+    assert aperta.read_bytes() == b"video"
     assert not list(archivio.dove.miniature.rglob("*.parziale"))
 
 

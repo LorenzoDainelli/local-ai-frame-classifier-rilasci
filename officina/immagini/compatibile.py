@@ -34,9 +34,28 @@ def _dove(archivio: Archivio, impronta: str, passaggio: bool) -> Path:
     return archivio.percorso_copia_video(nome)
 
 
+def _cifrata(archivio: Archivio) -> bool:
+    from officina.sicuro import cache_cifrata
+
+    return cache_cifrata.stato(archivio.dove, cache_cifrata.COPIE)[0] != cache_cifrata.SPENTA
+
+
 def gia_fatta(archivio: Archivio, impronta: str, passaggio: bool = False) -> Path | None:
+    from officina.sicuro import cache_cifrata
+
+    if _cifrata(archivio):
+        return cache_cifrata.copia_da_guardare(archivio.dove,
+                                               _dove(archivio, impronta, False))
     percorso = _dove(archivio, impronta, passaggio)
     return percorso if percorso.exists() else None
+
+
+def pronta(archivio: Archivio, impronta: str, passaggio: bool = False) -> bool:
+    from officina.sicuro import cache_cifrata
+
+    if _cifrata(archivio):
+        return cache_cifrata.copia_c_e(archivio.dove, _dove(archivio, impronta, False))
+    return _dove(archivio, impronta, passaggio).exists()
 
 
 def butta_quelle_di_passaggio(dove) -> int:
@@ -77,6 +96,8 @@ def si_puo_fare() -> bool:
 
 def fai(archivio: Archivio, impronta: str, originale: Path,
         al_passo=None, passaggio: bool = False) -> Path | None:
+    if _cifrata(archivio):
+        return _fai_cifrata(archivio, impronta, originale, al_passo)
     dove = _dove(archivio, impronta, passaggio)
     if dove.exists():
         return dove
@@ -94,6 +115,30 @@ def fai(archivio: Archivio, impronta: str, originale: Path,
                         **registro.dove_si_e_rotto(errore))
         return None
     return dove
+
+
+def _fai_cifrata(archivio: Archivio, impronta: str, originale: Path,
+                 al_passo=None) -> Path | None:
+    from officina.sicuro import cache_cifrata
+
+    dove = _dove(archivio, impronta, False)
+    gia = cache_cifrata.copia_da_guardare(archivio.dove, dove)
+    if gia is not None:
+        return gia
+    if not si_puo_fare():
+        return None
+    if cache_cifrata.stato(archivio.dove, cache_cifrata.COPIE)[0] != cache_cifrata.APERTA:
+        return None
+    temporaneo = cache_cifrata.copia_da_fare(archivio.dove, dove)
+    temporaneo.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        _ricodifica(originale, temporaneo, al_passo)
+        return cache_cifrata.copia_salva(archivio.dove, dove, temporaneo)
+    except Exception as errore:
+        temporaneo.unlink(missing_ok=True)
+        registro.avviso("copia_video_non_riuscita",
+                        **registro.dove_si_e_rotto(errore))
+        return None
 
 
 def _ricodifica(originale: Path, verso: Path, al_passo=None) -> None:

@@ -183,8 +183,8 @@ def uno_scatto(richiesta: Request, scatto_id: int):
         "si_riproduce": quicktime.il_browser_lo_apre(codec),
         "copia_pronta": bool(
             da_leggere is not None
-            and (compatibile.gia_fatta(archivio, _impronta_di(da_leggere, percorso_video))
-                 or (video_dall_archivio and compatibile.gia_fatta(
+            and (compatibile.pronta(archivio, _impronta_di(da_leggere, percorso_video))
+                 or (video_dall_archivio and compatibile.pronta(
                      archivio, _impronta_di(da_leggere, percorso_video), passaggio=True)))),
         "copia_si_puo_fare": compatibile.si_puo_fare(),
         "copia_di_passaggio": video_dall_archivio,
@@ -520,6 +520,9 @@ def un_originale(richiesta: Request, file_id: int, sotto: int = 0):
         return _dall_archivio_a_pezzi(
             richiesta, percorso,
             tipi.get((riga["formato"] or "").lower(), "application/octet-stream"))
+    if copia is not None and archivio.cache_delle_miniature()[0] != cache_cifrata.SPENTA:
+        return FileResponse(copia, media_type="video/mp4",
+                            headers={"Cache-Control": NON_SI_TIENE})
     da_mandare = copia or percorso
     tipo = ("video/mp4" if copia is not None
             else tipi.get((riga["formato"] or "").lower(), "application/octet-stream"))
@@ -640,6 +643,10 @@ def _fai_la_copia(archivio, impronta: str, percorso, durata: int,
         raise ErroreOfficina(
             "L'Archivio sicuro si è chiuso mentre preparavo la copia del video, e la "
             "copia l'ho buttata. Apri l'archivio e riprova.")
+    if fatta is None and archivio.cache_delle_miniature()[0] == cache_cifrata.CHIUSA:
+        raise ErroreOfficina(
+            "L'Archivio sicuro è chiuso: la copia del video si salva solo cifrata. "
+            "Apri l'archivio e riprova.")
     if fatta is None:
         raise ErroreOfficina(
             "Questo video non si è riuscito a ricodificare. L'originale non "

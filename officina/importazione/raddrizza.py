@@ -47,11 +47,9 @@ def _butta(archivio: Archivio, nome: str | None, copia: bool = False) -> None:
     if not copia:
         archivio.butta_miniatura(nome)
         return
-    dove = archivio.percorso_copia_video(nome)
-    try:
-        dove.unlink(missing_ok=True)
-    except OSError:
-        pass
+    from officina.sicuro import cache_cifrata
+
+    cache_cifrata.copia_butta(archivio.dove, archivio.percorso_copia_video(nome))
 
 
 def uno(archivio: Archivio, riga) -> bool:
