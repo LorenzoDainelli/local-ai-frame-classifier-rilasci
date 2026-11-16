@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -20,6 +21,9 @@ CONCORRENTI = (GIMM, LDF, FUSIONE)
 NOMI = {GIMM: "GIMM-VFI-F-P", LDF: "LDF-VFI", FUSIONE: "Fusione zona per zona"}
 MISURE = ("somiglianza", "struttura", "zona_peggiore")
 NON_RIUSCITO = {"somiglianza": 0.0, "struttura": 0.0, "zona_peggiore": 0.0}
+TEMPO_DI_LDF = 5 * 3600
+STIMA_SENZA_MISURE = 1800.0
+QUATTRO_K = "4k"
 
 
 @dataclass
@@ -209,6 +213,58 @@ def da_correre(casi: list) -> list:
     return [caso for caso in casi if caso.gruppo == g.DIFFICILISSIMO]
 
 
+def ceto(caso: g.Caso) -> str:
+    return QUATTRO_K if caso.scena.startswith(g.XTEST) else str(caso.rovina)
+
+
+def _a_caso(caso: g.Caso) -> str:
+    return hashlib.sha256(f"campione|{caso.nome}".encode()).hexdigest()
+
+
+def _secondi(riga: dict) -> float:
+    return float(riga.get("secondi") or 0.0) + float(riga.get("fondere") or 0.0)
+
+
+def _stime(casi: list, fatti: dict) -> dict[str, float]:
+    misure: dict[str, list[float]] = {}
+    for caso in casi:
+        riga = fatti.get(caso.nome)
+        if riga is not None and "non_riuscito" not in riga:
+            misure.setdefault(ceto(caso), []).append(_secondi(riga))
+    medie = {c: sum(v) / len(v) for c, v in misure.items()}
+    peggiore = max(medie.values(), default=STIMA_SENZA_MISURE)
+    return {ceto(caso): medie.get(ceto(caso), peggiore) for caso in casi}
+
+
+def campione(registro: Risultati, casi: list, tempo: float | None = None) -> list:
+    tempo = TEMPO_DI_LDF if tempo is None else tempo
+    casi = da_correre(casi)
+    fatti = registro.fatti(LDF)
+    ordine = list(fatti)
+    file: dict[str, list] = {}
+    for caso in sorted(casi, key=lambda c: (c.nome not in fatti,
+                                            ordine.index(c.nome) if c.nome in fatti
+                                            else 0, _a_caso(c))):
+        file.setdefault(ceto(caso), []).append(caso)
+    stime = _stime(casi, fatti)
+    scelti: list = []
+    speso = 0.0
+    for giro in range(max((len(f) for f in file.values()), default=0)):
+        presi = [file[c][giro] for c in sorted(file) if len(file[c]) > giro]
+        costo = sum(_secondi(fatti[c.nome]) if c.nome in fatti else stime[ceto(c)]
+                    for c in presi)
+        if scelti and speso + costo > tempo:
+            break
+        scelti += presi
+        speso += costo
+    return scelti
+
+
+def _prossimo(registro: Risultati, casi: list):
+    fatti = registro.fatti(LDF)
+    return next((c for c in campione(registro, casi) if c.nome not in fatti), None)
+
+
 def corri(cartella: Path, risultati: Path, gimm, ldf,
           al_caso: Callable[[str, int, int], None] | None = None,
           fermati: Callable[[], bool] | None = None, non_ci_sta=()) -> Risultati:
@@ -220,25 +276,34 @@ def corri(cartella: Path, risultati: Path, gimm, ldf,
         registro.ricomincia(firma)
     casi = da_correre(piano.casi)
     nomi = {caso.nome for caso in casi}
-    totale = 2 * len(casi)
-    for fase, motore in ((GIMM, gimm), (LDF, ldf)):
-        fatti = registro.fatti(fase)
-        for caso in casi:
-            if fermati is not None and fermati():
-                return registro
-            if caso.nome not in fatti:
-                entrate, veri = rovina.prepara(caso, prendi_per(cartella, piano, caso))
-                if fase == GIMM:
-                    riga = fase_gimm(caso, entrate, veri, motore, risultati)
-                else:
-                    riga = fase_ldf(caso, entrate, veri, motore, risultati, non_ci_sta)
-                registro.aggiungi(riga)
-                fatti[caso.nome] = riga
-            if al_caso is not None:
-                gia = sum(1 for nome in registro.fatti(GIMM) if nome in nomi)
-                gia += sum(1 for nome in registro.fatti(LDF) if nome in nomi)
-                al_caso(fase, gia, totale)
-        motore.spegni()
+
+    def conta(fase: str) -> None:
+        if al_caso is None:
+            return
+        scelti = {caso.nome for caso in campione(registro, casi)}
+        gia = sum(1 for nome in registro.fatti(GIMM) if nome in nomi)
+        gia += sum(1 for nome in registro.fatti(LDF) if nome in scelti)
+        al_caso(fase, gia, len(casi) + len(scelti))
+
+    fatti = registro.fatti(GIMM)
+    for caso in casi:
+        if fermati is not None and fermati():
+            return registro
+        if caso.nome not in fatti:
+            entrate, veri = rovina.prepara(caso, prendi_per(cartella, piano, caso))
+            riga = fase_gimm(caso, entrate, veri, gimm, risultati)
+            registro.aggiungi(riga)
+            fatti[caso.nome] = riga
+        conta(GIMM)
+    gimm.spegni()
+    while (caso := _prossimo(registro, casi)) is not None:
+        if fermati is not None and fermati():
+            return registro
+        entrate, veri = rovina.prepara(caso, prendi_per(cartella, piano, caso))
+        registro.aggiungi(fase_ldf(caso, entrate, veri, ldf, risultati, non_ci_sta))
+        conta(LDF)
+    conta(LDF)
+    ldf.spegni()
     return registro
 
 
@@ -292,14 +357,17 @@ def classifica(registro: Risultati, casi: list) -> dict:
 
 def finita(registro: Risultati, casi: list) -> bool:
     nomi = {caso.nome for caso in da_correre(casi)}
-    return all(nomi <= set(registro.fatti(fase)) for fase in (GIMM, LDF))
+    return nomi <= set(registro.fatti(GIMM)) and _prossimo(registro, casi) is None
 
 
 def classifiche(registro: Risultati, casi: list) -> dict:
-    return {"difficilissimi": classifica(registro, da_correre(casi))}
+    scelti = campione(registro, casi)
+    esito = classifica(registro, scelti)
+    esito["ceti"] = sorted({ceto(caso) for caso in scelti})
+    return {"difficilissimi": esito}
 
 
-__all__ = ["CONCORRENTI", "FUSIONE", "GIMM", "LDF", "MISURE", "NOMI", "Piano", "Risultati",
-           "caso_da_lista", "classifica", "classifiche", "corri", "da_correre", "finita",
-           "indice", "leggi_piano",
-           "per_concorrente", "prendi_per", "scrivi_piano"]
+__all__ = ["CONCORRENTI", "FUSIONE", "GIMM", "LDF", "MISURE", "NOMI", "Piano",
+           "QUATTRO_K", "Risultati", "TEMPO_DI_LDF", "campione", "caso_da_lista", "ceto",
+           "classifica", "classifiche", "corri", "da_correre", "finita", "indice",
+           "leggi_piano", "per_concorrente", "prendi_per", "scrivi_piano"]

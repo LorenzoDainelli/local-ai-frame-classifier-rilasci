@@ -151,8 +151,8 @@ class Gara120:
         self._controlla()
         piano = corsa.scrivi_piano(self.dati, elenco, sc.cartelle_adobe(self.dati))
         quanti = len(corsa.da_correre(piano.casi))
-        self.lavoro.di(f"la corsa: {quanti} casi difficilissimi, prima GIMM-VFI e poi "
-                       "LDF-VFI")
+        self.lavoro.di(f"la corsa: {quanti} casi difficilissimi per GIMM-VFI, poi "
+                       "LDF-VFI su un campione di circa 5 ore")
         self.lavoro.fase("corsa")
         self._nella_stanza(stanza.CORSA)
         registro_r = corsa.Risultati(self.risultati)

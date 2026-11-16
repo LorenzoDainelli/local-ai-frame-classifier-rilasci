@@ -998,3 +998,97 @@ def test_regista_porta_i_passi_del_guasto_fino_alla_pagina(tmp_path, monkeypatch
     assert preso.value.dettaglio.startswith("Guasto: RuntimeError")
     assert "segreto" not in preso.value.dettaglio
     assert "qualcuno" not in preso.value.dettaglio
+
+
+def _caso_di(nome: str, rovinato, scena: str = "hard/uno") -> g.Caso:
+    return g.Caso(nome, g.DIFFICILISSIMO, scena, 16, 4, rovinato, (0, 16, 32, 48),
+                  (20, 24, 28))
+
+
+def _molti_casi(per_ceto: int = 6) -> list:
+    casi = []
+    for numero in range(per_ceto):
+        for rovinato in (*g.ROVINE, g.MOSSO):
+            casi.append(_caso_di(f"snu/{rovinato}/{numero}", rovinato))
+        casi.append(_caso_di(f"{g.XTEST}clip{numero}/p32x4", None, f"{g.XTEST}clip{numero}"))
+    casi.append(g.Caso("facile/0", g.FACILE, "x", 4, 2, None, (0, 4, 8, 12), (6,)))
+    return casi
+
+
+def _fatto_ldf(registro, nome: str, secondi: float) -> None:
+    registro.aggiungi({"fase": corsa.LDF, "nome": nome, "secondi": secondi, "fondere": 0.0,
+                       "voti": [], "voti_fusione": []})
+
+
+def test_il_campione_ha_lo_stesso_numero_di_casi_per_ogni_tipo(tmp_path):
+    registro = corsa.Risultati(tmp_path)
+    scelti = corsa.campione(registro, _molti_casi())
+    conti: dict = {}
+    for caso in scelti:
+        conti[corsa.ceto(caso)] = conti.get(corsa.ceto(caso), 0) + 1
+    assert set(conti) == {*g.ROVINE, g.MOSSO, corsa.QUATTRO_K}
+    assert len(set(conti.values())) == 1
+    assert all(caso.gruppo == g.DIFFICILISSIMO for caso in scelti)
+    stima = corsa.STIMA_SENZA_MISURE * len(conti)
+    assert len(scelti) == len(conti) * int(corsa.TEMPO_DI_LDF // stima)
+
+
+def test_il_campione_tiene_i_casi_gia_fatti_e_sta_nelle_ore(tmp_path):
+    casi = _molti_casi()
+    registro = corsa.Risultati(tmp_path)
+    for numero in (4, 2, 5):
+        _fatto_ldf(registro, f"snu/buio/{numero}", 1800.0)
+    scelti = corsa.campione(registro, casi)
+    buio = [c.nome for c in scelti if c.rovina == "buio"]
+    assert buio == ["snu/buio/4", "snu/buio/2"]
+    assert len(scelti) == 10
+
+
+def test_il_campione_si_accorcia_se_un_tipo_e_lento(tmp_path):
+    casi = _molti_casi()
+    registro = corsa.Risultati(tmp_path)
+    _fatto_ldf(registro, "snu/buio/0", 600.0)
+    largo = corsa.campione(registro, casi)
+    _fatto_ldf(registro, "xtest/clip0/p32x4", 4 * 3600.0)
+    stretto = corsa.campione(registro, casi)
+    assert len(stretto) == 5 < len(largo)
+    assert {corsa.ceto(c) for c in stretto} == {*g.ROVINE, g.MOSSO, corsa.QUATTRO_K}
+
+
+def test_il_campione_e_sempre_lo_stesso(tmp_path):
+    casi = _molti_casi()
+    primo = corsa.campione(corsa.Risultati(tmp_path / "a"), casi)
+    secondo = corsa.campione(corsa.Risultati(tmp_path / "b"), list(reversed(casi)))
+    assert [c.nome for c in primo] == [c.nome for c in secondo]
+
+
+def test_ldf_corre_solo_sul_campione_e_la_classifica_usa_quelli(tmp_path, monkeypatch):
+    dati, risultati = _gara_finta(tmp_path, monkeypatch)
+    piano = corsa.leggi_piano(dati)
+    casi = [g.Caso(f"s/a/{centro:06d}/p16x4/{rovinato}", g.DIFFICILISSIMO, "s/a", 16, 4,
+                   rovinato, *g.finestra(centro, 16, 4))
+            for centro in (60, 100, 140) for rovinato in ("buio", "rumore")]
+    elenco = sc.Elenco(casi, {}, {("s/a", n): f"s/a/{n:05d}.png" for n in range(1, 200)},
+                       {})
+    corsa.scrivi_piano(dati, elenco, {})
+    piano = corsa.leggi_piano(dati)
+    monkeypatch.setattr(corsa, "TEMPO_DI_LDF", 0)
+    gimm, ldf = _MotoreFinto("g", sbaglio=3), _MotoreFinto("l")
+    visti = []
+    registro = corsa.corri(dati, risultati, gimm, ldf,
+                           al_caso=lambda f, a, b: visti.append((f, a, b)))
+    scelti = corsa.campione(registro, piano.casi)
+    assert gimm.chiamate == 6 and ldf.chiamate == 2
+    assert sorted(c.rovina for c in scelti) == ["buio", "rumore"]
+    assert set(registro.fatti(corsa.LDF)) == {c.nome for c in scelti}
+    assert visti[-1] == (corsa.LDF, 8, 8)
+    assert corsa.finita(registro, piano.casi)
+    esito = corsa.classifiche(registro, piano.casi)["difficilissimi"]
+    assert esito["medie"][corsa.GIMM]["casi"] == 2
+    assert esito["ceti"] == ["buio", "rumore"]
+
+
+def test_i_tipi_non_ancora_provati_si_stimano_col_tempo_vero_degli_altri(tmp_path):
+    registro = corsa.Risultati(tmp_path)
+    _fatto_ldf(registro, "snu/buio/0", 1200.0)
+    assert len(corsa.campione(registro, _molti_casi())) == 15

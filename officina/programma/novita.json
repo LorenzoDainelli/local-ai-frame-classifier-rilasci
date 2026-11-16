@@ -10,6 +10,10 @@
     ],
     "semplice": [
       [
+        "sfida",
+        "Gara dei 120 FPS in circa 5 ore: GIMM-VFI fa tutti i casi difficilissimi, LDF-VFI (molto più lento) un campione con lo stesso numero di casi per ogni tipo. I casi già fatti si tengono."
+      ],
+      [
         "controlla",
         "Apertura e chiusura seguono il lavoro vero: Fotina entra in meno di un secondo, aspetta finché il programma non è davvero pronto (o chiuso) e solo allora fa una breve uscita. I passi si spuntano con le fasi vere."
       ],
