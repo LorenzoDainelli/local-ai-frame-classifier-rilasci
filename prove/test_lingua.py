@@ -297,6 +297,10 @@ def test_nessun_filo_puo_morire_in_silenzio():
             "il filo che rimette in coda i video da rifare a 120 FPS prende "
             "dentro qualunque errore e lo scrive nel registro: si riprova al "
             "prossimo avvio del programma",
+        "officina/sicuro/cache_cifrata.py":
+            "il filo che cifra le miniature vecchie prende dentro qualunque "
+            "errore e lo scrive nel registro: quelle rimaste si cifrano alla "
+            "prossima apertura dell'archivio o quando si leggono",
     }
 
     radice = Path(__file__).resolve().parent.parent

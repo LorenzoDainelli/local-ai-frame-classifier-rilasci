@@ -17,7 +17,7 @@ from officina.importazione import miniature, quicktime
 from officina.modello import file_media, scatti, segnalazioni
 from officina.miglioria import misura as miglioria_misura
 from officina.ritocco import elenco as elenco_ritocchi
-from officina.sicuro import dall_archivio
+from officina.sicuro import cache_cifrata, dall_archivio
 from officina.sicuro.dall_archivio import DallArchivio
 from officina.web import miglioramento as miglioramento_web
 from officina.web import vista
@@ -367,7 +367,10 @@ def _miniatura_pronta(file_id: int, chiesto: str | None = None) -> tuple | None:
     if riga is None:
         return None
     nome = riga["miniatura"]
-    if not nome or combacia(chiesto, segno("miniatura", nome)):
+    if not nome:
+        return riga, nome, None
+    if (combacia(chiesto, segno("miniatura", nome))
+            and archivio.cache_delle_miniature()[0] == cache_cifrata.SPENTA):
         return riga, nome, None
     return riga, nome, archivio.leggi_miniatura(nome)
 
@@ -397,16 +400,19 @@ async def una_miniatura(richiesta: Request, file_id: int):
     if pronta is None:
         return Response(status_code=404)
     riga, nome, dati = pronta
-    if nome and gia_ce_l_ha(richiesta, segno("miniatura", nome)):
+    cifrata = accesso.aperto().cache_delle_miniature()[0] != cache_cifrata.SPENTA
+    if nome and not cifrata and gia_ce_l_ha(richiesta, segno("miniatura", nome)):
         return non_e_cambiata(segno("miniatura", nome))
     if dati is None:
         fatta = await consegna.a_parte(richiesta, _miniatura_nuova, riga,
                                        filmato=riga["genere"] == "video")
         if fatta is None:
-            return Response(status_code=404)
+            return Response(status_code=404, headers={"Cache-Control": NON_SI_TIENE})
         nome, dati = fatta
     if dati is None:
-        return Response(status_code=404)
+        return Response(status_code=404, headers={"Cache-Control": NON_SI_TIENE})
+    if cifrata:
+        return da_non_tenere(dati, _tipo_della_cache(nome))
     return da_ricontrollare(dati, _tipo_della_cache(nome), segno("miniatura", nome))
 
 

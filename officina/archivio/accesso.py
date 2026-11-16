@@ -414,20 +414,53 @@ class Archivio:
     def percorso_copia_video(self, nome: str) -> Path:
         return self.dove.miniature / nome
 
-    def scrivi_miniatura(self, nome: str, dati: bytes) -> Path:
+    def cache_delle_miniature(self) -> tuple[str, bytes | None]:
+        from officina.sicuro import cache_cifrata
+
+        return cache_cifrata.stato(self.dove)
+
+    def scrivi_miniatura(self, nome: str, dati: bytes) -> Path | None:
+        from officina.sicuro import cache_cifrata
+
         percorso = self.percorso_miniatura(nome)
+        stato, chiave = cache_cifrata.stato(self.dove)
+        if stato == cache_cifrata.CHIUSA:
+            return None
+        if stato == cache_cifrata.APERTA:
+            return cache_cifrata.scrivi(percorso, nome, dati, chiave)
         percorso.parent.mkdir(parents=True, exist_ok=True)
         temporaneo = percorso.with_suffix(percorso.suffix + ".parziale")
         temporaneo.write_bytes(dati)
         temporaneo.replace(percorso)
+        cache_cifrata.cifrato(percorso).unlink(missing_ok=True)
         return percorso
 
     def leggi_miniatura(self, nome: str) -> bytes | None:
+        from officina.sicuro import cache_cifrata
+
         percorso = self.percorso_miniatura(nome)
+        stato, chiave = cache_cifrata.stato(self.dove)
+        if stato == cache_cifrata.CHIUSA:
+            return None
+        if stato == cache_cifrata.APERTA:
+            return cache_cifrata.leggi(percorso, nome, chiave)
         try:
             return percorso.read_bytes()
         except OSError:
             return None
+
+    def c_e_miniatura(self, nome: str) -> bool:
+        from officina.sicuro import cache_cifrata
+
+        percorso = self.percorso_miniatura(nome)
+        if cache_cifrata.stato(self.dove)[0] == cache_cifrata.SPENTA:
+            return percorso.exists()
+        return cache_cifrata.c_e(percorso)
+
+    def butta_miniatura(self, nome: str) -> None:
+        from officina.sicuro import cache_cifrata
+
+        cache_cifrata.butta(self.percorso_miniatura(nome))
 
     def peso_miniature(self) -> tuple[int, int]:
         quante = 0

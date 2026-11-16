@@ -286,7 +286,7 @@ def apri_la_stanza(modulo: str) -> subprocess.Popen:
 
 def ascolta_la_stanza(processo: subprocess.Popen, allo_sportello,
                       al_passo: Callable[[int, int], None],
-                      fine_al_fatto: bool = False) -> tuple:
+                      fine_al_fatto: bool = False, al_dentro=None) -> tuple:
     esito: dict | None = None
     rotto = None
     for riga in processo.stdout:
@@ -308,6 +308,10 @@ def ascolta_la_stanza(processo: subprocess.Popen, allo_sportello,
             registro.evento("miglioria.tempi", **{
                 chiave: valore for chiave, valore in messaggio["tempi"].items()
                 if isinstance(valore, (int, float))})
+        if isinstance(messaggio.get("dentro"), dict):
+            if al_dentro is not None:
+                al_dentro(messaggio["dentro"])
+            continue
         if "fatti" in messaggio:
             al_passo(int(messaggio["fatti"]), int(messaggio.get("totale") or 0))
         elif "fatto" in messaggio or "guasto" in messaggio:
@@ -330,7 +334,7 @@ def esito_della_stanza(esito: dict | None, rotto: dict | None,
 
 def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
                      ricorda: Callable[[subprocess.Popen], None],
-                     modulo: str = "officina.miglioria.stanza") -> dict:
+                     modulo: str = "officina.miglioria.stanza", al_dentro=None) -> dict:
     processo = apri_la_stanza(modulo)
     ricorda(processo)
     esito: dict | None = None
@@ -344,7 +348,7 @@ def lancia_la_stanza(lavoro: dict, al_passo: Callable[[int, int], None],
         else:
             processo.stdin.close()
         esito, rotto, _accesa = ascolta_la_stanza(processo, allo_sportello, al_passo,
-                                                  fine_al_fatto=True)
+                                                  fine_al_fatto=True, al_dentro=al_dentro)
     finally:
         if allo_sportello is not None:
             allo_sportello.chiudi()

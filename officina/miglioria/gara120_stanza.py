@@ -53,8 +53,11 @@ def un_lavoro(lavoro: dict, manda, motori=_motori) -> int:
             def al_caso(fase: str, fatti: int, totale: int) -> None:
                 manda({"fatti": int(fatti), "totale": int(totale), "fase": fase})
 
+            def al_dentro(dentro: dict) -> None:
+                manda({"dentro": dentro})
+
             registro = corsa.corri(dati, risultati, gimm, ldf, al_caso=al_caso,
-                                   non_ci_sta=non_ci_sta)
+                                   non_ci_sta=non_ci_sta, al_dentro=al_dentro)
             esito = {"azione": CORSA, "gimm": len(registro.fatti(corsa.GIMM)),
                      "ldf": len(registro.fatti(corsa.LDF))}
         else:

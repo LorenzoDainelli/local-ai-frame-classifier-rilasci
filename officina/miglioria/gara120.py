@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -92,7 +93,23 @@ class Gara120:
     def _lancia_la_stanza(self, lavoro: dict, al_passo: Callable[[int, int], None]) -> dict:
         from officina.miglioria.lavoro import lancia_la_stanza
 
-        return lancia_la_stanza(lavoro, al_passo, self._ricorda, MODULO)
+        return lancia_la_stanza(lavoro, al_passo, self._ricorda, MODULO,
+                                al_dentro=self._al_dentro)
+
+    def _al_dentro(self, dentro: dict) -> None:
+        fase = str(dentro.get("fase") or "")
+        prima = self.lavoro.numeri.get("dentro") or {}
+        nuovo = (prima.get("fase"), prima.get("caso")) != (fase, dentro.get("caso"))
+        quadro = dentro.get("quadro")
+        if quadro is None:
+            quadro = prima.get("quadro", 0) if not nuovo else 0
+        self.lavoro.numeri["dentro"] = {
+            "chi": corsa.NOMI.get(fase, ""), "caso": int(dentro.get("caso") or 0),
+            "di": int(dentro.get("di") or 0), "quadro": int(quadro or 0),
+            "quadri": int(dentro.get("quadri") or 0),
+            "passi": int(dentro.get("passi") or 0), "lato": int(dentro.get("lato") or 0),
+            "da": time.time() if nuovo else prima.get("da", time.time()),
+            "ultimo": time.time(), "fase": fase}
 
     def _controlla(self) -> None:
         if self._fermati.is_set():
@@ -233,6 +250,7 @@ class Gara120:
             self._processo = None
             self.turno.lascia(self.lavoro)
             self.lavoro.senza_numeri()
+            self.lavoro.numeri.pop("dentro", None)
         if self._fermati.is_set():
             raise Fermata()
         if "guasto" in esito:

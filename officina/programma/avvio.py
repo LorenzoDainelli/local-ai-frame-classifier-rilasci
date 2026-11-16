@@ -659,7 +659,18 @@ class Programma(ColFisso, Finestre, Aggiornarsi):
 
                 self.sicuro = archivio_sicuro.Collegamento(posizione(REALE))
                 self.sicuro.quando_si_apre(self._ripassi_dopo_l_apertura)
+                self.sicuro.quando_si_apre(self._cifra_le_miniature)
             return self.sicuro
+
+    def _cifra_le_miniature(self) -> None:
+        from officina.archivio import accesso
+        from officina.sicuro import cache_cifrata
+
+        try:
+            archivio = accesso.aperto()
+        except ErroreOfficina:
+            return
+        cache_cifrata.in_sottofondo(archivio)
 
     def _ripassi_dopo_l_apertura(self) -> None:
         from officina.archivio import accesso

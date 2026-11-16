@@ -44,8 +44,10 @@ def nome_della_copia_storta(impronta: str) -> str:
 def _butta(archivio: Archivio, nome: str | None, copia: bool = False) -> None:
     if not nome:
         return
-    dove = (archivio.percorso_copia_video(nome) if copia
-            else archivio.percorso_miniatura(nome))
+    if not copia:
+        archivio.butta_miniatura(nome)
+        return
+    dove = archivio.percorso_copia_video(nome)
     try:
         dove.unlink(missing_ok=True)
     except OSError:

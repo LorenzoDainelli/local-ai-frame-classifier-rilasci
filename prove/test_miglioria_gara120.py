@@ -371,12 +371,14 @@ class _MotoreFinto:
     def firma(self):
         return {"nome": self.nome}
 
-    def video(self, quadri, volte):
+    def video(self, quadri, volte, al_quadro=None):
         quadri = [np.asarray(q, dtype=np.float64) for q in quadri]
         self.chiamate += 1
         if self.non_ci_sta is not None:
             raise self.non_ci_sta("grande")
-        for prima, dopo in zip(quadri, quadri[1:]):
+        for numero, (prima, dopo) in enumerate(zip(quadri, quadri[1:])):
+            if numero and al_quadro is not None:
+                al_quadro(numero)
             yield prima.astype(np.uint8)
             for j in range(1, volte):
                 mezzo = prima + (dopo - prima) * j / volte + self.sbaglio
@@ -678,6 +680,13 @@ def test_stanza_fa_la_corsa_e_le_clip_senza_rete(tmp_path, monkeypatch):
     assert chiusa == [1]
     assert messaggi[-1] == {"fatto": {"azione": "corsa", "gimm": 1, "ldf": 1}}
     assert {"fatti": 2, "totale": 2, "fase": corsa.LDF} in messaggi
+    dentro = [m["dentro"] for m in messaggi if "dentro" in m]
+    for fase in (corsa.GIMM, corsa.LDF):
+        di_questa = [d for d in dentro if d["fase"] == fase]
+        assert di_questa[0]["quadro"] == 0 and di_questa[0]["caso"] == 1
+        assert di_questa[0]["di"] == 1 and di_questa[0]["quadri"] > 1
+        assert max(d["quadro"] for d in di_questa) == di_questa[0]["quadri"] - 1
+        assert [d["quadro"] for d in di_questa] == sorted(d["quadro"] for d in di_questa)
     piano = corsa.leggi_piano(dati)
     elenco = sc.Elenco(piano.casi, {}, {("s/a", n): f"s/a/{n:05d}.png"
                                         for n in range(1, 200)}, {"s/a": set(range(1, 200))})
@@ -1092,3 +1101,25 @@ def test_i_tipi_non_ancora_provati_si_stimano_col_tempo_vero_degli_altri(tmp_pat
     registro = corsa.Risultati(tmp_path)
     _fatto_ldf(registro, "snu/buio/0", 1200.0)
     assert len(corsa.campione(registro, _molti_casi())) == 15
+
+
+def test_la_pagina_sa_a_che_punto_e_dentro_il_caso(tmp_path, monkeypatch):
+    import time as tempo
+
+    from officina.miglioria import gara120
+
+    gara = gara120.Gara120.__new__(gara120.Gara120)
+    gara.lavoro = SimpleNamespace(numeri={})
+    monkeypatch.setattr(tempo, "time", lambda: 1000.0)
+    gara._al_dentro({"fase": corsa.LDF, "caso": 3, "di": 9, "quadro": 0, "quadri": 40,
+                     "passi": 0, "lato": 3840})
+    monkeypatch.setattr(tempo, "time", lambda: 1600.0)
+    gara._al_dentro({"fase": corsa.LDF, "caso": 3, "di": 9, "quadro": None,
+                     "quadri": 40, "passi": 12, "lato": 3840})
+    dentro = gara.lavoro.numeri["dentro"]
+    assert dentro["chi"] == corsa.NOMI[corsa.LDF] and dentro["caso"] == 3
+    assert dentro["da"] == 1000.0 and dentro["ultimo"] == 1600.0
+    assert dentro["passi"] == 12 and dentro["quadro"] == 0 and dentro["lato"] == 3840
+    gara._al_dentro({"fase": corsa.LDF, "caso": 4, "di": 9, "quadro": 0, "quadri": 40,
+                     "passi": 0, "lato": 448})
+    assert gara.lavoro.numeri["dentro"]["da"] == 1600.0

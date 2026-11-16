@@ -11,6 +11,14 @@
     "semplice": [
       [
         "controlla",
+        "Gara dei 120 FPS: sotto la riga di stato ora vedi a che punto è dentro il caso (quale concorrente, caso N di M, quadro, passi e da quanto ci lavora). Così si capisce se è lenta o ferma."
+      ],
+      [
+        "controlla",
+        "Con l'Archivio sicuro le miniature della galleria si salvano solo cifrate. Ad archivio chiuso vedi solo il colore di ogni foto; appena lo apri tornano. Quelle vecchie si cifrano da sole in sottofondo."
+      ],
+      [
+        "controlla",
         "«Perché mancano?»: se il file rotto è solo nell'Archivio sicuro, il file giusto ora entra nell'archivio al suo posto. Il rotto non si perde: resta nell'archivio, nella cartella «Rovinati» accanto."
       ],
       [

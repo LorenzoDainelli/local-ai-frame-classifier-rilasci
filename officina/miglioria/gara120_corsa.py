@@ -165,13 +165,15 @@ def _voti_lista(fatti: list, veri: list) -> list[dict]:
     return [voti.voti(f, v) for f, v in zip(fatti, veri, strict=True)]
 
 
-def _uscita(motore, entrate: list, volte: int) -> list:
-    return list(motore.video(iter(entrate), volte))
+def _uscita(motore, entrate: list, volte: int, al_quadro=None) -> list:
+    if al_quadro is None:
+        return list(motore.video(iter(entrate), volte))
+    return list(motore.video(iter(entrate), volte, al_quadro=al_quadro))
 
 
-def fase_gimm(caso, entrate, veri, gimm, risultati: Path) -> dict:
+def fase_gimm(caso, entrate, veri, gimm, risultati: Path, al_quadro=None) -> dict:
     partito = time.monotonic()
-    uscita = _uscita(gimm, entrate, caso.volte)
+    uscita = _uscita(gimm, entrate, caso.volte, al_quadro)
     secondi = round(time.monotonic() - partito, 2)
     tenere = {}
     fatti = []
@@ -186,13 +188,14 @@ def fase_gimm(caso, entrate, veri, gimm, risultati: Path) -> dict:
             "voti": _voti_lista(fatti, veri)}
 
 
-def fase_ldf(caso, entrate, veri, ldf, risultati: Path, non_ci_sta=()) -> dict:
+def fase_ldf(caso, entrate, veri, ldf, risultati: Path, non_ci_sta=(),
+             al_quadro=None) -> dict:
     from officina.miglioria.fusione120 import fondi
 
     da_gimm = _leggi_gimm(_deposito(risultati, caso))
     partito = time.monotonic()
     try:
-        uscita = _uscita(ldf, entrate, caso.volte)
+        uscita = _uscita(ldf, entrate, caso.volte, al_quadro)
     except tuple(non_ci_sta) as errore:
         return {"fase": LDF, "nome": caso.nome, "non_riuscito": type(errore).__name__}
     secondi = round(time.monotonic() - partito, 2)
@@ -207,6 +210,15 @@ def fase_ldf(caso, entrate, veri, ldf, risultati: Path, non_ci_sta=()) -> dict:
     return {"fase": LDF, "nome": caso.nome, "secondi": secondi, "fondere": fondere,
             "voti": _voti_lista(fatti_ldf, veri),
             "voti_fusione": _voti_lista(fatti_fusi, veri)}
+
+
+def _passi(motore) -> int:
+    return len(getattr(motore, "secondi_dei_passi", None) or ())
+
+
+def _lato(entrate: list) -> int:
+    forma = getattr(entrate[0], "shape", None) if entrate else None
+    return int(max(forma[:2])) if forma is not None and len(forma) >= 2 else 0
 
 
 def da_correre(casi: list) -> list:
@@ -267,7 +279,8 @@ def _prossimo(registro: Risultati, casi: list):
 
 def corri(cartella: Path, risultati: Path, gimm, ldf,
           al_caso: Callable[[str, int, int], None] | None = None,
-          fermati: Callable[[], bool] | None = None, non_ci_sta=()) -> Risultati:
+          fermati: Callable[[], bool] | None = None, non_ci_sta=(),
+          al_dentro: Callable[[dict], None] | None = None) -> Risultati:
     piano = leggi_piano(cartella)
     registro = Risultati(risultati)
     firma = {GIMM: gimm.firma(), LDF: ldf.firma(), "casi": g.impronta(
@@ -285,13 +298,39 @@ def corri(cartella: Path, risultati: Path, gimm, ldf,
         gia += sum(1 for nome in registro.fatti(LDF) if nome in scelti)
         al_caso(fase, gia, len(casi) + len(scelti))
 
+    def dentro(fase: str, motore, caso, entrate: list):
+        if al_dentro is None:
+            return None
+        if fase == GIMM:
+            numero = sum(1 for c in casi if c.nome in registro.fatti(GIMM)) + 1
+            quanti = len(casi)
+        else:
+            scelti = campione(registro, casi)
+            numero = sum(1 for c in scelti if c.nome in registro.fatti(LDF)) + 1
+            quanti = len(scelti)
+        base = {"fase": fase, "caso": numero, "di": quanti,
+                "quadri": max(0, len(entrate) - 1), "lato": _lato(entrate)}
+        partenza = _passi(motore)
+
+        def al_quadro(fatti: int) -> None:
+            al_dentro({**base, "quadro": int(fatti), "passi": _passi(motore) - partenza})
+
+        def al_passo(passi: int) -> None:
+            al_dentro({**base, "quadro": None, "passi": max(0, int(passi) - partenza)})
+
+        if hasattr(motore, "al_passo"):
+            motore.al_passo = al_passo
+        al_dentro({**base, "quadro": 0, "passi": 0})
+        return al_quadro
+
     fatti = registro.fatti(GIMM)
     for caso in casi:
         if fermati is not None and fermati():
             return registro
         if caso.nome not in fatti:
             entrate, veri = rovina.prepara(caso, prendi_per(cartella, piano, caso))
-            riga = fase_gimm(caso, entrate, veri, gimm, risultati)
+            riga = fase_gimm(caso, entrate, veri, gimm, risultati,
+                             dentro(GIMM, gimm, caso, entrate))
             registro.aggiungi(riga)
             fatti[caso.nome] = riga
         conta(GIMM)
@@ -300,7 +339,8 @@ def corri(cartella: Path, risultati: Path, gimm, ldf,
         if fermati is not None and fermati():
             return registro
         entrate, veri = rovina.prepara(caso, prendi_per(cartella, piano, caso))
-        registro.aggiungi(fase_ldf(caso, entrate, veri, ldf, risultati, non_ci_sta))
+        registro.aggiungi(fase_ldf(caso, entrate, veri, ldf, risultati, non_ci_sta,
+                                   dentro(LDF, ldf, caso, entrate)))
         conta(LDF)
     conta(LDF)
     ldf.spegni()

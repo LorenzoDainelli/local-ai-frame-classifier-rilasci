@@ -35,6 +35,9 @@ function scriviStato() {
     if (stato.guasto) riga = stato.guasto;
     if (stato.aspetta_la_copia) riga = "Parte appena l'Archivio sicuro finisce la prima copia.";
     qui("g1-riga").textContent = riga;
+    const dentro = lavora && !stato.guasto ? testoDentro(stato.dentro) : "";
+    qui("g1-dentro").hidden = !dentro;
+    qui("g1-dentro").textContent = dentro;
     const dettaglio = !lavora && stato.guasto ? (stato.dettaglio || "") : "";
     qui("g1-dettaglio").hidden = !dettaglio;
     qui("g1-passi").textContent = dettaglio ? `Gara dei 120 FPS\n${stato.guasto}\n${dettaglio}` : "";
@@ -47,6 +50,26 @@ function scriviStato() {
     if (votabile && caso === null) apriCaso(primoDaVotare());
     clearTimeout(pagina.tra);
     if (lavora) pagina.tra = setTimeout(guarda, OGNI);
+}
+
+function durata(secondi) {
+    const minuti = Math.max(0, Math.floor(secondi / 60));
+    if (minuti < 1) return "meno di un minuto";
+    if (minuti < 60) return `${minuti} min`;
+    return `${Math.floor(minuti / 60)} h ${minuti % 60} min`;
+}
+
+function testoDentro(dentro) {
+    if (!dentro || !dentro.chi) return "";
+    const adesso = Date.now() / 1000;
+    const pezzi = [`${dentro.chi}, caso ${dentro.caso} di ${dentro.di}`];
+    if (dentro.lato >= 2000) pezzi.push("4K");
+    if (dentro.quadri) pezzi.push(`quadro ${Math.min(dentro.quadro, dentro.quadri)} di ${dentro.quadri}`);
+    if (dentro.passi) pezzi.push(`${dentro.passi} passi`);
+    pezzi.push(`su questo caso da ${durata(adesso - dentro.da)}`);
+    const fermo = adesso - dentro.ultimo;
+    if (fermo >= 600) pezzi.push(`ultimo passo ${durata(fermo)} fa`);
+    return pezzi.join(" · ");
 }
 
 function primoDaVotare() {
