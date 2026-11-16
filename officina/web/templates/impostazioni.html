@@ -348,6 +348,7 @@
                            ("fusione", "Fusione")]) }}
                 {% endcall %}
 
+                {% if gara_video_pronta %}
                 <div class="riga" data-gara-video>
                     <div class="lato">
                         <div class="nome">La gara dei video per «Togli»</div>
@@ -363,6 +364,7 @@
                         <button class="tasto-comando nudo" type="button" data-gara-video-ferma hidden>Ferma</button>
                     </div>
                 </div>
+                {% endif %}
 
                 <div class="riga" data-gara-120>
                     <div class="lato">

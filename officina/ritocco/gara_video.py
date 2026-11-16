@@ -180,8 +180,13 @@ class Gara:
             return lavori.turno
         return self._turno
 
+    def pronta(self) -> bool:
+        if not any(chi in togliere.MOTORI for chi in self.candidati):
+            return False
+        return self._scarica is not None or bool(prove(self.cartella))
+
     def parti(self) -> bool:
-        if self.lavoro.sta_lavorando:
+        if self.lavoro.sta_lavorando or not self.pronta():
             return False
         self._fermati.clear()
         return self.lavoro.parti(self._gira, nome=COSA)

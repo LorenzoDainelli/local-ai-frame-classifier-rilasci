@@ -364,15 +364,22 @@ def test_una_parte_da_togliere_va_in_coda_come_togli(apri, importato):
     assert coda_ritocco.il_ritoccatore(importato).lavoro.aspetta_che_finisca(60)
 
 
-def test_la_gara_dei_video_si_avvia_e_senza_prove_lo_dice(apri, importato):
+def test_la_gara_dei_video_non_pronta_non_si_vede_e_non_parte(apri, importato):
     cliente = apri()
     prima = cliente.get("/api/gara-video").json()
     assert prima["sta_lavorando"] is False
-    cliente.post("/api/gara-video/avvia", json={})
-    gara = coda_ritocco.la_gara(importato)
-    assert gara.lavoro.aspetta_che_finisca(30)
-    dopo = cliente.get("/api/gara-video").json()
-    assert dopo["guasto"] and dopo["sta_lavorando"] is False
+    dopo = cliente.post("/api/gara-video/avvia", json={}).json()
+    assert dopo["sta_lavorando"] is False and not dopo["guasto"]
     assert cliente.post("/api/gara-video/ferma", json={}).status_code == 200
     pagina = cliente.get("/impostazioni")
-    assert "data-gara-video-avvia" in pagina.text
+    assert pagina.status_code == 200
+    assert "data-gara-video" not in pagina.text
+    assert "Non ci sono video di prova" not in pagina.text
+
+
+def test_la_gara_dei_video_pronta_si_vede(apri, importato, monkeypatch):
+    from officina.ritocco import gara_video
+
+    cliente = apri()
+    monkeypatch.setattr(gara_video.Gara, "pronta", lambda self: True)
+    assert "data-gara-video-avvia" in cliente.get("/impostazioni").text

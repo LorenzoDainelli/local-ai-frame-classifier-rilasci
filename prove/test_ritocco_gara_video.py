@@ -130,6 +130,22 @@ def test_fermata_riprende_da_dove_era(archivio, tmp_path):
 
 def test_senza_prove_non_parte(archivio, tmp_path):
     gara = _gara(archivio, tmp_path / "vuota")
+    assert not gara.pronta()
+    assert not gara.parti()
+    assert not gara.lavoro.sta_lavorando and not gara.lavoro.guasto
+
+
+def test_se_lo_scarico_non_porta_video_lo_dice(archivio, tmp_path):
+    gara = _gara(archivio, tmp_path / "vuota", scarica=lambda cartella: None)
+    assert gara.pronta()
     assert gara.parti()
     assert gara.lavoro.aspetta_che_finisca(30)
-    assert gara.lavoro.guasto
+    assert gara.lavoro.guasto == gara_video.SENZA_PROVE
+
+
+def test_senza_modelli_installati_non_e_pronta(archivio, tmp_path):
+    cartella = tmp_path / "gara"
+    _clip(cartella, "uno")
+    assert not _gara(archivio, cartella, candidati=("manca", "pigro")).pronta()
+    assert _gara(archivio, cartella).pronta()
+    assert not gara_video.Gara(archivio, cartella).pronta()

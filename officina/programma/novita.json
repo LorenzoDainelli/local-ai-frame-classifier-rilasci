@@ -10,6 +10,10 @@
     ],
     "semplice": [
       [
+        "migliora",
+        "Impostazioni: la gara dei video per «Togli» non si vede più finché non ha i modelli e i video pubblici di prova, così non dice più «non ci sono video di prova»."
+      ],
+      [
         "controlla",
         "Forziere più sicuro: l'archivio in chiaro si toglie solo tutto in una volta, dopo che il forziere è scritto. Se Windows tiene un file aperto o lo spazio non basta, non si tocca niente e il programma dice il motivo vero."
       ],

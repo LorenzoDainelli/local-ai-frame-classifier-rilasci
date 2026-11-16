@@ -93,7 +93,14 @@ def impostazioni(richiesta: Request):
         "motore_120_gara": centoventi.dalla_gara(archivio),
         "nomi_120": fluido.NOMI,
         "versione_programma": _versione_del_programma(),
+        "gara_video_pronta": _gara_video_pronta(archivio),
     })
+
+
+def _gara_video_pronta(archivio) -> bool:
+    from officina.web import coda_ritocco
+
+    return coda_ritocco.la_gara(archivio).pronta()
 
 
 def _versione_del_programma() -> str:
