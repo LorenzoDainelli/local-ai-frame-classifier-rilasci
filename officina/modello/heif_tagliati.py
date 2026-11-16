@@ -11,19 +11,21 @@ FORMATI = ("heic", "heif", "avif")
 QUANTI_PER_GIRO = 300
 DETTAGLIO = "heif_tagliato"
 
+_fin_qui: dict[str, int] = {}
 
-def da_guardare(connessione, quanti: int = QUANTI_PER_GIRO) -> list:
+
+def da_guardare(connessione, quanti: int = QUANTI_PER_GIRO, dopo: int = 0) -> list:
     return tutti(
         connessione,
         "SELECT f.id, f.impronta, f.scatto_id, "
         "(SELECT percorso FROM percorsi p WHERE p.file_id = f.id AND p.presente = 1 "
         "ORDER BY p.id LIMIT 1) AS percorso "
         "FROM file_media f LEFT JOIN heif_controllati h ON h.file_id = f.id "
-        "WHERE f.genere = 'immagine' AND lower(f.formato) IN (?, ?, ?) "
+        "WHERE f.id > ? AND f.genere = 'immagine' AND lower(f.formato) IN (?, ?, ?) "
         "AND (h.file_id IS NULL OR h.impronta != f.impronta) "
         "AND EXISTS (SELECT 1 FROM percorsi q WHERE q.file_id = f.id AND q.presente = 1) "
         "ORDER BY f.id LIMIT ?",
-        *FORMATI, quanti)
+        dopo, *FORMATI, quanti)
 
 
 def _guarda(percorso: str) -> int | None:
@@ -51,13 +53,15 @@ def _segna(connessione, riga, mancano: int | None) -> bool:
 def un_giro(archivio, secondi: float = 5.0, freno=None) -> int:
     if archivio.di_prova:
         return 0
+    chiave = str(archivio.dove.radice)
     with archivio.lettura() as connessione:
-        righe = da_guardare(connessione)
+        righe = da_guardare(connessione, dopo=_fin_qui.get(chiave, 0))
     inizio = time.monotonic()
     esiti = []
     for riga in righe:
         if (freno and freno()) or time.monotonic() - inizio > secondi:
             break
+        _fin_qui[chiave] = riga["id"]
         try:
             esiti.append((riga, _guarda(riga["percorso"])))
         except OSError:

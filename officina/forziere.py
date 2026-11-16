@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
 import secrets
 import shutil
 import tarfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,6 +28,17 @@ MINIMO_NUOVA = 12
 BLOCCO = 4 * 1024 * 1024
 
 MARCATORE_APERTO = ".forziere-aperto"
+DA_TOGLIERE = ".da-togliere"
+TENTATIVI = 10
+PAUSA = 0.2
+
+SENZA_SPAZIO = (
+    "Sul disco non c'è abbastanza spazio per il forziere: ne serve circa quanto "
+    "pesa l'archivio. Libera spazio e riprova. Non ho toccato niente.")
+TENUTO_APERTO = (
+    "Un file dell'archivio è tenuto aperto da un altro programma (per esempio "
+    "Esplora file, l'antivirus o una copia in corso). Chiudilo e riprova. Non ho "
+    "toccato niente.")
 
 PROVA = b"officina-forziere-prova"
 
@@ -104,8 +117,23 @@ class Forziere:
         if not self.cartella.is_dir():
             raise ErroreOfficina("Questo archivio non esiste ancora.")
 
-        _scrivi(self.file, self.cartella, password)
-        _svuota(self.cartella)
+        _togli(_cestino(self.cartella))
+        try:
+            _scrivi(self.file, self.cartella, password)
+        except OSError as errore:
+            raise ErroreOfficina(perche(errore)) from errore
+        try:
+            cestino = _metti_da_parte(self.cartella)
+        except OSError as errore:
+            if _togli_il_file(self.file):
+                raise ErroreOfficina(perche(errore)) from errore
+            (self.cartella / MARCATORE_APERTO).write_text(
+                "Questo archivio è aperto. Il file sparisce quando si richiude.\n",
+                encoding="utf-8")
+            registro.avviso("forziere.acceso_ma_aperto", **_motivo(errore))
+            return self.stato()
+        _togli(cestino)
+        _togli_gli_avanzi(self.cartella)
         self.cartella.mkdir(parents=True, exist_ok=True)
         registro.evento("forziere.acceso")
         return self.stato()
@@ -118,6 +146,7 @@ class Forziere:
             registro.avviso("forziere.era_rimasto_aperto")
             return
         _password_utile(password)
+        _togli(_cestino(self.cartella))
         _leggi(self.file, self.cartella, password)
         (self.cartella / MARCATORE_APERTO).write_text(
             "Questo archivio è aperto. Il file sparisce quando si richiude.\n",
@@ -129,9 +158,15 @@ class Forziere:
         if not self.acceso or not self.aperto:
             return
         _password_utile(password)
-        _scrivi(self.file, self.cartella, password)
-        (self.cartella / MARCATORE_APERTO).unlink(missing_ok=True)
-        _svuota(self.cartella)
+        _togli(_cestino(self.cartella))
+        try:
+            _scrivi(self.file, self.cartella, password)
+            cestino = _metti_da_parte(self.cartella)
+        except OSError as errore:
+            registro.avviso("forziere.resta_aperto", **_motivo(errore))
+            raise ErroreOfficina(perche(errore)) from errore
+        _togli(cestino)
+        _togli_gli_avanzi(self.cartella)
         self.cartella.mkdir(parents=True, exist_ok=True)
         registro.evento("forziere.chiuso")
 
@@ -434,11 +469,75 @@ def _rileggi_per_controllo(file: Path, password: str) -> None:
             numero += 1
 
 
-def _svuota(cartella: Path) -> None:
+def _cestino(cartella: Path) -> Path:
+    return cartella.parent / f".{cartella.name}{DA_TOGLIERE}"
+
+
+def _metti_da_parte(cartella: Path) -> Path:
+    cestino = _cestino(cartella)
     if cartella.is_dir():
-        shutil.rmtree(cartella)
+        for volta in range(TENTATIVI):
+            try:
+                cartella.rename(cestino)
+                break
+            except OSError:
+                if volta == TENTATIVI - 1:
+                    raise
+                time.sleep(PAUSA)
+    return cestino
+
+
+def _togli(cestino: Path) -> bool:
+    for volta in range(TENTATIVI):
+        if not cestino.exists():
+            return True
+        try:
+            shutil.rmtree(cestino)
+            return True
+        except FileNotFoundError:
+            return True
+        except OSError as errore:
+            if volta == TENTATIVI - 1:
+                registro.avviso("forziere.avanzi_in_chiaro", **_motivo(errore))
+                return False
+            time.sleep(PAUSA)
+    return False
+
+
+def _togli_il_file(file: Path) -> bool:
+    for volta in range(TENTATIVI):
+        try:
+            file.unlink(missing_ok=True)
+            return True
+        except OSError:
+            if volta == TENTATIVI - 1:
+                return False
+            time.sleep(PAUSA)
+    return False
+
+
+def _togli_gli_avanzi(cartella: Path) -> None:
     for avanzo in cartella.parent.glob(f".{cartella.name}.tar.*"):
-        avanzo.unlink(missing_ok=True)
+        try:
+            avanzo.unlink(missing_ok=True)
+        except OSError as errore:
+            registro.avviso("forziere.avanzo_rimasto", **_motivo(errore))
+
+
+def _motivo(errore: OSError) -> dict:
+    return {"tipo": registro.Parola(type(errore).__name__),
+            "numero": int(getattr(errore, "winerror", None) or errore.errno or 0)}
+
+
+def perche(errore: OSError) -> str:
+    di_windows = getattr(errore, "winerror", None)
+    if errore.errno == errno.ENOSPC or di_windows in (39, 112):
+        return SENZA_SPAZIO
+    if isinstance(errore, PermissionError) or di_windows in (5, 32, 33):
+        return TENUTO_APERTO
+    numero = di_windows or errore.errno or 0
+    return (f"Non sono riuscito a scrivere sul disco (errore {type(errore).__name__} "
+            f"numero {numero}). Non ho toccato niente.")
 
 
 def per(posizione) -> Forziere:

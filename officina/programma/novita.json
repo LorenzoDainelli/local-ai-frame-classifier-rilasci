@@ -10,6 +10,10 @@
     ],
     "semplice": [
       [
+        "controlla",
+        "Forziere più sicuro: l'archivio in chiaro si toglie solo tutto in una volta, dopo che il forziere è scritto. Se Windows tiene un file aperto o lo spazio non basta, non si tocca niente e il programma dice il motivo vero."
+      ],
+      [
         "sfida",
         "Gara dei 120 FPS in circa 5 ore: GIMM-VFI fa tutti i casi difficilissimi, LDF-VFI (molto più lento) un campione con lo stesso numero di casi per ogni tipo. I casi già fatti si tengono."
       ],

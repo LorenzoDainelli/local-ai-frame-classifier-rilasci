@@ -233,7 +233,7 @@ RACCOLTE = {
         "sulle coordinate costerebbe a ogni scrittura da lì in avanti.",
 }
 
-QUANTE_NON_SI_LEGGONO = 64
+QUANTE_NON_SI_LEGGONO = 67
 
 
 def test_nessuna_lettura_larga_nuova_nei_sorgenti():

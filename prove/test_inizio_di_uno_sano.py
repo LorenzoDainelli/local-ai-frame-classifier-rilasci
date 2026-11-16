@@ -70,7 +70,8 @@ def test_con_altro_nome_e_altra_data_non_lo_cerca(coppia):
     posto.rename(altro)
     _metti(archivio, rotto, altro)
     with archivio.scrittura() as connessione:
-        connessione.execute("UPDATE scatti SET data_locale = '1999-01-01T00:00:00' "
+        connessione.execute("UPDATE scatti SET data_locale = '1999-01-01T00:00:00', "
+                            "giorno = '1999-01-01' "
                             "WHERE id = ?", (rotto,))
     assert _trova(archivio, rotto) is None
 
@@ -81,7 +82,8 @@ def test_con_la_stessa_data_lo_trova_anche_con_altro_nome(coppia):
     posto.rename(altro)
     _metti(archivio, rotto, altro)
     with archivio.scrittura() as connessione:
-        connessione.execute("UPDATE scatti SET data_locale = '2001-02-03T04:05:06' "
+        connessione.execute("UPDATE scatti SET data_locale = '2001-02-03T04:05:06', "
+                            "giorno = '2001-02-03' "
                             "WHERE id IN (?, ?)", (rotto, sano))
     assert _trova(archivio, rotto) == sano
 

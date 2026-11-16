@@ -46,14 +46,15 @@ def sano_che_lo_contiene(connessione, scatto_id: int) -> int | None:
         "SELECT f.id, f.impronta, f.scatto_id, f.dimensione, "
         "(SELECT percorso FROM percorsi q WHERE q.file_id = f.id AND q.presente = 1 "
         "ORDER BY q.id LIMIT 1) AS percorso "
-        "FROM file_media f JOIN scatti s ON s.id = f.scatto_id "
-        "WHERE f.id != ? AND f.scatto_id != ? AND f.genere = ? AND f.dimensione > ? "
+        "FROM file_media f WHERE f.id IN ("
+        "SELECT n.file_id FROM percorsi n WHERE n.nome = ? COLLATE NOCASE "
+        "UNION SELECT g.id FROM scatti t JOIN file_media g ON g.scatto_id = t.id "
+        "WHERE t.giorno = substr(?, 1, 10) AND t.data_locale = ?) "
+        "AND f.id != ? AND f.scatto_id != ? AND f.genere = ? AND f.dimensione > ? "
         "AND EXISTS (SELECT 1 FROM impronte i WHERE i.scatto_id = f.scatto_id) "
-        "AND (EXISTS (SELECT 1 FROM percorsi n WHERE n.file_id = f.id "
-        "AND lower(n.nome) = lower(?)) OR (? IS NOT NULL AND s.data_locale = ?)) "
         "ORDER BY f.dimensione LIMIT ?",
-        rotto["id"], scatto_id, rotto["genere"], rotto["dimensione"], rotto["nome"],
-        rotto["data_locale"], rotto["data_locale"], CANDIDATI_AL_MASSIMO)
+        rotto["nome"], rotto["data_locale"], rotto["data_locale"], rotto["id"], scatto_id,
+        rotto["genere"], rotto["dimensione"], CANDIDATI_AL_MASSIMO)
     for candidato in candidati:
         if not candidato["percorso"]:
             continue

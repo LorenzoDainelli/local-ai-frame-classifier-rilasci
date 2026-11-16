@@ -146,8 +146,10 @@ def test_se_si_spegne_mentre_si_richiude_il_lavoro_dell_ultima_volta_resta(
 
     with monkeypatch.context() as cambio:
         cambio.setattr(forziere, "_impacchetta", lambda cartella, flusso: si_spegne(flusso))
-        with pytest.raises(OSError):
+        with pytest.raises(ErroreOfficina) as scoppio:
             cassetto.chiudi(PAROLA)
+    assert "Non ho toccato niente" in scoppio.value.messaggio
+    assert cassetto.aperto
     assert cassetto.file.read_bytes() == vecchio
     assert not cassetto.file.with_suffix(cassetto.file.suffix + ".nuovo").exists()
 
@@ -258,3 +260,104 @@ def test_senza_forziere_niente_cambia(tmp_path, monkeypatch):
     assert archivio.e_aperto
     accesso.chiudi(con_copia=False)
     assert (tmp_path / "archivio" / "finto" / "archivio.sqlite").exists()
+
+
+def _rinomina_che_non_va(errore):
+    vera = forziere.Path.rename
+
+    def rinomina(self, dove):
+        if str(dove).endswith(forziere.DA_TOGLIERE):
+            raise errore
+        return vera(self, dove)
+
+    return rinomina
+
+
+def test_accendere_con_un_file_tenuto_aperto_non_tocca_niente_e_dice_perche(
+        cassetto, monkeypatch):
+    prima = contenuto(cassetto.cartella)
+    monkeypatch.setattr(forziere, "PAUSA", 0)
+    monkeypatch.setattr(forziere.Path, "rename",
+                        _rinomina_che_non_va(PermissionError(13, "occupato")))
+    with pytest.raises(ErroreOfficina) as scoppio:
+        cassetto.accendi(PAROLA)
+    assert scoppio.value.messaggio == forziere.TENUTO_APERTO
+    assert not cassetto.acceso
+    assert contenuto(cassetto.cartella) == prima
+    assert sorted(p.name for p in cassetto.cartella.parent.iterdir()) == ["finto"]
+
+
+def test_accendere_senza_spazio_lo_dice_e_non_tocca_niente(cassetto, monkeypatch):
+    prima = contenuto(cassetto.cartella)
+
+    def pieno(cartella, flusso):
+        raise OSError(forziere.errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(forziere, "_impacchetta", pieno)
+    with pytest.raises(ErroreOfficina) as scoppio:
+        cassetto.accendi(PAROLA)
+    assert scoppio.value.messaggio == forziere.SENZA_SPAZIO
+    assert not cassetto.acceso
+    assert contenuto(cassetto.cartella) == prima
+
+
+def test_se_non_si_toglie_neanche_il_forziere_nuovo_resta_acceso_e_aperto(
+        cassetto, monkeypatch):
+    prima = contenuto(cassetto.cartella)
+    monkeypatch.setattr(forziere, "PAUSA", 0)
+    monkeypatch.setattr(forziere.Path, "rename",
+                        _rinomina_che_non_va(PermissionError(13, "occupato")))
+    monkeypatch.setattr(forziere, "_togli_il_file", lambda file: False)
+    cassetto.accendi(PAROLA)
+    assert cassetto.acceso and cassetto.aperto
+    assert contenuto(cassetto.cartella) == prima
+    monkeypatch.undo()
+    cassetto.chiudi(PAROLA)
+    cassetto.apri(PAROLA)
+    assert contenuto(cassetto.cartella) == prima
+
+
+def test_un_file_occupato_un_attimo_si_aspetta_e_poi_va(cassetto, monkeypatch):
+    prima = contenuto(cassetto.cartella)
+    monkeypatch.setattr(forziere, "PAUSA", 0)
+    vera = forziere.Path.rename
+    volte = []
+
+    def rinomina(self, dove):
+        if str(dove).endswith(forziere.DA_TOGLIERE) and len(volte) < 3:
+            volte.append(1)
+            raise PermissionError(13, "occupato")
+        return vera(self, dove)
+
+    monkeypatch.setattr(forziere.Path, "rename", rinomina)
+    cassetto.accendi(PAROLA)
+    assert cassetto.acceso and not cassetto.aperto
+    assert not any(cassetto.cartella.iterdir())
+    cassetto.apri(PAROLA)
+    assert contenuto(cassetto.cartella) == prima
+
+
+def test_gli_avanzi_in_chiaro_si_tolgono_alla_volta_dopo(cassetto, monkeypatch):
+    prima = contenuto(cassetto.cartella)
+    monkeypatch.setattr(forziere, "PAUSA", 0)
+    vero = forziere.shutil.rmtree
+
+    def non_va(dove, *a, **k):
+        if str(dove).endswith(forziere.DA_TOGLIERE):
+            raise PermissionError(13, "occupato")
+        return vero(dove, *a, **k)
+
+    monkeypatch.setattr(forziere.shutil, "rmtree", non_va)
+    cassetto.accendi(PAROLA)
+    cestino = forziere._cestino(cassetto.cartella)
+    assert cestino.exists() and cassetto.acceso and not cassetto.aperto
+    monkeypatch.undo()
+    cassetto.apri(PAROLA)
+    assert not cestino.exists()
+    assert contenuto(cassetto.cartella) == prima
+
+
+def test_il_motivo_non_dice_mai_nomi_di_file(tmp_path):
+    errore = OSError(5, "Accesso negato", str(tmp_path / "segreto.jpg"))
+    for testo in (forziere.perche(errore), forziere.perche(OSError(99, "x", "y.jpg"))):
+        assert "segreto" not in testo and ".jpg" not in testo
