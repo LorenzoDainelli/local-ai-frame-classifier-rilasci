@@ -815,7 +815,7 @@ class Miglioratore:
         misura, self._misura = self._misura, None
         dal_disco = piu is None
         dopo = (miglioria_id, originale, genere, finale, fatto, fedele, dal_disco, misura)
-        if dal_disco and self._va_dietro(finale):
+        if self._va_dietro(finale):
             fine = time.monotonic()
             self.lavoro.di(f"«{originale.name}» finisce dietro, "
                            "la scheda passa al file dopo")

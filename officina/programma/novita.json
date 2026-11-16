@@ -10,6 +10,18 @@
     ],
     "semplice": [
       [
+        "controlla",
+        "«Perché mancano?»: se il file rotto è solo nell'Archivio sicuro, il file giusto ora entra nell'archivio al suo posto. Il rotto non si perde: resta nell'archivio, nella cartella «Rovinati» accanto."
+      ],
+      [
+        "migliora",
+        "Le impronte a 4 fili ora leggono insieme anche le foto che stanno solo nell'Archivio sicuro: escono identiche, e se chiudi l'archivio si fermano tutte e aspettano."
+      ],
+      [
+        "migliora",
+        "Anche per i file che stanno solo nell'Archivio sicuro, la fine del lavoro (copia da guardare e «da rivedere») si fa dietro, mentre la scheda passa già al file dopo."
+      ],
+      [
         "migliora",
         "Il giro LucidFlux, che carica il modello una volta sola, ora vale anche per le foto che stanno solo nell'Archivio sicuro. Il passaggio di mezzo resta cifrato con una chiave in memoria: se chiudi l'archivio si butta."
       ],

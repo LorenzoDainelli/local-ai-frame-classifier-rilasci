@@ -366,9 +366,10 @@ class Passata:
                                    codice="file_non_trovato",
                                    file_id=principale["id"])
 
+        nome = (percorso.name if isinstance(percorso, dall_archivio.DallArchivio)
+                else str(percorso))
         in_fila = (principale["genere"] != "immagine"
-                   or isinstance(percorso, dall_archivio.DallArchivio)
-                   or str(percorso).lower().rsplit(".", 1)[-1] not in INSIEME)
+                   or nome.lower().rsplit(".", 1)[-1] not in INSIEME)
         with (self._uno_alla_volta if in_fila else contextlib.nullcontext()), \
                 dall_archivio.attento(percorso):
             if principale["genere"] == "immagine":

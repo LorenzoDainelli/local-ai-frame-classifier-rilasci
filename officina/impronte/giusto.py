@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
 import os
 import shutil
@@ -8,12 +10,14 @@ from pathlib import Path
 
 from officina import registro
 from officina.archivio.database import uno
-from officina.errori import ErroreOfficina, FileNonLeggibile
+from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile
 from officina.importazione import impronta as impronta_file
 from officina.importazione import metadati
 from officina.impronte.motore import _il_file_da_guardare
 from officina.modello import file_media, fotocamere, salute_file, segnalazioni
 from officina.modello.scatti import marca_senza_data
+from officina.sicuro import dall_archivio
+from officina.sicuro.dall_archivio import DallArchivio
 
 CARTELLA = "giusti-in-arrivo"
 PEZZO = 1024 * 1024
@@ -22,6 +26,9 @@ GIUSTO = "giusto"
 NON_TORNA = "non_torna"
 GIA_IN_GALLERIA = "gia_in_galleria"
 DATE_DEBOLI = ("assente", "dedotta")
+ROVINATI = "Rovinati"
+APRI_L_ARCHIVIO = ("Il file rotto è solo nell'Archivio sicuro, che adesso è chiuso: "
+                   "aprilo e riprova.")
 
 
 class SostituzioneFerma(ErroreOfficina):
@@ -44,13 +51,50 @@ def rotto(connessione, scatto_id: int) -> dict:
     riga = uno(connessione, "SELECT id, percorso, nome FROM percorsi WHERE file_id = ? "
                "AND presente = 1 ORDER BY id LIMIT 1", principale["id"])
     if riga is None:
-        raise SostituzioneFerma(
-            "Il file rotto non è sul disco (forse è solo nell'Archivio sicuro): per ora "
-            "non si sostituisce.")
+        return _rotto_nell_archivio(connessione, scatto_id, principale)
     return {"scatto": scatto_id, "file_id": principale["id"],
             "impronta": principale["impronta"], "dimensione": principale["dimensione"],
             "genere": principale["genere"], "percorso_id": riga["id"],
             "percorso": Path(riga["percorso"]), "nome": riga["nome"]}
+
+
+def _rotto_nell_archivio(connessione, scatto_id: int, principale) -> dict:
+    riga = uno(connessione, "SELECT id, percorso, nome FROM percorsi WHERE file_id = ? "
+               "ORDER BY id LIMIT 1", principale["id"])
+    if riga is None:
+        raise SostituzioneFerma("Di questo scatto non trovo il file.")
+    try:
+        trovato = file_media.da_guardare(connessione, principale["id"])
+    except DaRifare as errore:
+        raise SostituzioneFerma(APRI_L_ARCHIVIO) from errore
+    except FileNonLeggibile as errore:
+        raise SostituzioneFerma(
+            "Nell'Archivio sicuro c'è una versione diversa del file rotto: non lo "
+            "sostituisco.") from errore
+    if not isinstance(trovato, DallArchivio):
+        raise SostituzioneFerma(
+            "Il file rotto non è sul disco e non lo trovo nemmeno nell'Archivio sicuro.")
+    return {"scatto": scatto_id, "file_id": principale["id"],
+            "impronta": principale["impronta"], "dimensione": principale["dimensione"],
+            "genere": principale["genere"], "percorso_id": riga["id"],
+            "percorso": trovato, "originale": Path(riga["percorso"]),
+            "nome": riga["nome"], "nell_archivio": True}
+
+
+def _aperto(percorso):
+    if isinstance(percorso, DallArchivio):
+        return percorso.apri()
+    return open(percorso, "rb")
+
+
+def _impronta_di(percorso) -> str:
+    if not isinstance(percorso, DallArchivio):
+        return impronta_file.del_file(percorso)
+    segno = hashlib.blake2b(digest_size=32)
+    with _aperto(percorso) as letto:
+        while blocco := letto.read(PEZZO):
+            segno.update(blocco)
+    return segno.hexdigest()
 
 
 def _gia_noto(connessione, segno: str) -> dict | None:
@@ -66,9 +110,9 @@ def _gia_noto(connessione, segno: str) -> dict | None:
     return None
 
 
-def primo_byte_diverso(corto: Path, lungo: Path) -> int | None:
+def primo_byte_diverso(corto, lungo: Path) -> int | None:
     posto = 0
-    with open(corto, "rb") as primo, open(lungo, "rb") as secondo:
+    with _aperto(corto) as primo, open(lungo, "rb") as secondo:
         while True:
             uno_ = primo.read(PEZZO)
             due = secondo.read(len(uno_)) if uno_ else b""
@@ -99,6 +143,23 @@ def _mb(byte: int) -> str:
 
 
 def giudica(connessione, guasto: dict, candidato: Path, nome: str) -> dict:
+    with _guardato(guasto):
+        return _giudica(connessione, guasto, candidato, nome)
+
+
+@contextlib.contextmanager
+def _guardato(guasto: dict):
+    if not guasto.get("nell_archivio"):
+        yield
+        return
+    try:
+        with dall_archivio.attento(guasto["percorso"]):
+            yield
+    except DaRifare as errore:
+        raise SostituzioneFerma(APRI_L_ARCHIVIO) from errore
+
+
+def _giudica(connessione, guasto: dict, candidato: Path, nome: str) -> dict:
     segno = impronta_file.del_file(candidato)
     misura = candidato.stat().st_size
     fuori = {"nome": nome, "impronta": segno, "dimensione": misura}
@@ -106,7 +167,7 @@ def giudica(connessione, guasto: dict, candidato: Path, nome: str) -> dict:
     if not bersaglio.is_file():
         return {**fuori, "esito": NON_TORNA,
                 "motivo": "Il file rotto non è più nella sua cartella."}
-    if impronta_file.del_file(bersaglio) != guasto["impronta"]:
+    if _impronta_di(bersaglio) != guasto["impronta"]:
         return {**fuori, "esito": NON_TORNA,
                 "motivo": "Il file rotto sul disco è cambiato da quando è stato "
                           "aggiunto: rifai «Aggiungi foto» su quella cartella."}
@@ -233,6 +294,8 @@ def _aggiorna(connessione, guasto: dict, segno: str, dimensione: int, dati) -> N
         "AND tipo IN (?, ?, ?)",
         (guasto["scatto"], segnalazioni.NON_SI_APRE, segnalazioni.VOLTI_NON_LETTI,
          segnalazioni.CORPI_NON_LETTI))
+    if guasto.get("nell_archivio"):
+        return
     stato = guasto["percorso"].stat()
     salute_file._scrivi(connessione, {
         "percorso_id": guasto["percorso_id"], "file_id": guasto["file_id"],
@@ -251,6 +314,8 @@ def sostituisci_uno(archivio, scatto_id: int) -> dict:
         esito = giudica(connessione, guasto, file, scheda.get("nome") or guasto["nome"])
     if esito["esito"] != GIUSTO:
         raise SostituzioneFerma(esito["motivo"])
+    if guasto.get("nell_archivio"):
+        return _nell_archivio(archivio, scatto_id, guasto, esito, file)
     segno = esito["impronta"]
     bersaglio = guasto["percorso"]
     da_parte = Path(archivio.dove.rovinati)
@@ -285,6 +350,11 @@ def sostituisci_uno(archivio, scatto_id: int) -> dict:
         _aggiorna(connessione, guasto, segno, esito["dimensione"], dati)
     togli(archivio, scatto_id)
     registro.evento("impronte.giusto_sostituito", genere=guasto["genere"])
+    _miniatura(archivio, guasto)
+    return {"scatto": scatto_id, "nome": guasto["nome"], "rifugio": str(rifugio)}
+
+
+def _miniatura(archivio, guasto: dict) -> None:
     try:
         from officina.importazione import miniature
 
@@ -294,7 +364,47 @@ def sostituisci_uno(archivio, scatto_id: int) -> dict:
     except Exception as errore:
         registro.avviso("impronte.giusto_senza_miniatura",
                         **registro.dove_si_e_rotto(errore))
-    return {"scatto": scatto_id, "nome": guasto["nome"], "rifugio": str(rifugio)}
+
+
+def _nell_archivio(archivio, scatto_id: int, guasto: dict, esito: dict, file: Path) -> dict:
+    from officina.programma import archivio_sicuro
+    from officina.sicuro.sottofondo import FINITO
+
+    originale = guasto["originale"]
+    spostato = originale.parent / ROVINATI / originale.name
+    try:
+        dati = metadati.leggi(file)
+    except FileNonLeggibile as errore:
+        raise SostituzioneFerma(str(errore)) from errore
+    richiesta = {"originale": str(originale), "impronta": guasto["impronta"],
+                 "dimensione": int(guasto["dimensione"]), "nuova": str(file),
+                 "impronta_nuova": esito["impronta"], "verso": str(originale),
+                 "spostato": str(spostato)}
+    _, servizio = archivio_sicuro.per_le_foto()
+    if servizio is None or not hasattr(servizio, "accogli"):
+        raise SostituzioneFerma(APRI_L_ARCHIVIO)
+    try:
+        fatto = servizio.accogli(richiesta)
+    except ErroreOfficina as errore:
+        if errore.codice in ("archivio_chiuso", dall_archivio.CHIUSO_ADESSO):
+            raise SostituzioneFerma(APRI_L_ARCHIVIO) from None
+        raise SostituzioneFerma("L'Archivio sicuro non ha preso il file giusto: "
+                                f"{errore.messaggio}") from None
+    if fatto["stato"] != FINITO or fatto["esito"] is None:
+        if fatto["scritto"]:
+            raise SostituzioneFerma(
+                "L'Archivio sicuro si è fermato a metà mentre prendeva il file giusto: "
+                "riprova. Non si è perso niente.")
+        raise SostituzioneFerma("La sostituzione nell'Archivio sicuro non è avvenuta. "
+                                f"{fatto['errore'] or ''}".strip())
+    with archivio.scrittura() as connessione:
+        _aggiorna(connessione, guasto, esito["impronta"], esito["dimensione"], dati)
+    togli(archivio, scatto_id)
+    registro.evento("impronte.giusto_sostituito", genere=guasto["genere"],
+                    nell_archivio=True)
+    _miniatura(archivio, guasto)
+    return {"scatto": scatto_id, "nome": guasto["nome"],
+            "rifugio": str(Path(fatto["esito"]["spostato"])), "nell_archivio": True}
 
 
 def salva(archivio) -> dict:
