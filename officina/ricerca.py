@@ -10,7 +10,8 @@ from officina import istruzioni
 from officina.archivio.database import tutti
 from officina.descrittori import vettori
 from officina import lingua
-from officina.modello import impronte as magazzino, nodi, parti, persone, posti, scatti
+from officina.modello import fotocamere, nodi, parti, persone, posti, scatti
+from officina.modello import impronte as magazzino
 
 SOGLIA = 0.055
 
@@ -231,6 +232,7 @@ def _cosa_riconosco(connessione: sqlite3.Connection,
     for parole, chiave, valore in PAROLE_DEI_FILTRI:
         for parola in parole:
             candidati.append((parola, Capito("filtro", parola, None, chiave, valore)))
+    candidati.extend(_fotocamere_da_riconoscere(connessione))
     candidati = sorted(candidati[:proprie], key=lambda coppia: -len(coppia[0])) + \
         sorted(candidati[proprie:], key=lambda coppia: -len(coppia[0]))
 
@@ -259,6 +261,22 @@ def _cosa_riconosco(connessione: sqlite3.Connection,
         if nome_mese in basso:
             fuori.append((nome_mese, Capito("quando", nome_mese, numero)))
 
+    return fuori
+
+
+def _fotocamere_da_riconoscere(
+        connessione: sqlite3.Connection) -> list[tuple[str, Capito]]:
+    fuori: list[tuple[str, Capito]] = []
+    for riga in tutti(connessione, "SELECT id, marca, modello FROM fotocamere"):
+        intero = fotocamere.nome(riga["marca"], riga["modello"])
+        for nome in {intero, fotocamere.pulito(riga["modello"])}:
+            if nome and len(nome) >= NOME_MINIMO:
+                fuori.append((nome.casefold(),
+                              Capito("filtro", intero, None, "fotocamera", riga["id"])))
+    for voce in fotocamere.obiettivi(connessione):
+        if len(voce["nome"]) >= NOME_MINIMO:
+            fuori.append((voce["nome"].casefold(),
+                          Capito("filtro", voce["nome"], None, "obiettivo", voce["id"])))
     return fuori
 
 

@@ -40,7 +40,10 @@ def quello_da_guardare(righe):
 
 def crea(connessione: sqlite3.Connection, impronta: str, dimensione: int,
          genere: str, dati) -> int:
+    from officina.modello import fotocamere
+
     latitudine, longitudine = coordinate_valide(dati.latitudine, dati.longitudine)
+    obiettivo = getattr(dati, "obiettivo", None)
     return inserisci(
         connessione,
         """
@@ -48,14 +51,17 @@ def crea(connessione: sqlite3.Connection, impronta: str, dimensione: int,
             (impronta, dimensione, genere, formato, larghezza, altezza,
              orientamento, durata_ms, identificatore_ios, data_locale,
              fuso_minuti, istante_utc, origine_data, latitudine, longitudine,
-             sembra_schermata, marca, modello, aggiunto_il, fps)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             sembra_schermata, marca, modello, aggiunto_il, fps, obiettivo,
+             fotocamera_id, obiettivo_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         impronta, dimensione, genere, dati.formato, dati.larghezza, dati.altezza,
         dati.orientamento, dati.durata_ms, dati.identificatore_ios, dati.data_locale,
         dati.fuso_minuti, dati.istante_utc, dati.origine_data, latitudine,
         longitudine, int(dati.sembra_schermata), dati.marca, dati.modello, adesso(),
-        dati.fps,
+        dati.fps, obiettivo,
+        fotocamere.id_della_fotocamera(connessione, dati.marca, dati.modello),
+        fotocamere.id_dell_obiettivo(connessione, obiettivo),
     )
 
 

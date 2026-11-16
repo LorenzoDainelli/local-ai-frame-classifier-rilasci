@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import threading
 import time
+import weakref
 from pathlib import Path
 from typing import Callable
 
@@ -390,6 +391,7 @@ class Miglioratore:
         self._lancia = lancia or self._accesa.lancia
         self._lancia_il_giro = lancia_il_giro or _lancia_il_giro
         self._mezzi_provati: set[int] = set()
+        self._chiave: tuple = (None, None)
         self.motori_scelti = motori_scelti
         self._sfidanti_pronti = sfidanti_pronti or self._ci_sono_tutti_e_due
         self.lavoro = Lavoro("miglioramento", scheda=True)
@@ -481,9 +483,12 @@ class Miglioratore:
         self._salta = set()
         self._disco = False
         self._mezzi_provati = set()
+        self._dimentica_la_chiave()
         self._pulisci_i_mezzi()
         try:
             while not self._fermati.is_set():
+                if self._chiave[0] is not None:
+                    self._chiave_dei_mezzi()
                 self._giro_della_coda()
                 if self._fermati.is_set():
                     break
@@ -503,6 +508,7 @@ class Miglioratore:
             if self._dietro.quanti:
                 self.lavoro.di("finisco dietro i file già fatti sulla scheda")
             self._dietro.aspetta()
+            self._dimentica_la_chiave()
             self._pulisci_i_mezzi()
             self.adesso = {}
             registro.evento("miglioria.giro", fatti=fatti,
@@ -542,6 +548,31 @@ class Miglioratore:
     def _cartella_dei_mezzi(self) -> Path:
         return mezzi.cartella(self.archivio.dove)
 
+    @staticmethod
+    def _apertura():
+        from officina.programma import archivio_sicuro
+
+        try:
+            _, servizio = archivio_sicuro.per_le_foto()
+        except ErroreOfficina:
+            return None
+        return getattr(servizio, "apertura", None)
+
+    def _dimentica_la_chiave(self) -> None:
+        self._chiave = (None, None)
+        mezzi.butta_i_cifrati(self._cartella_dei_mezzi())
+
+    def _chiave_dei_mezzi(self) -> bytes | None:
+        apertura = self._apertura()
+        legata, chiave = self._chiave
+        if apertura is None or legata is None or legata() is not apertura:
+            if chiave is not None or legata is not None:
+                self._dimentica_la_chiave()
+            if apertura is None:
+                return None
+            self._chiave = (weakref.ref(apertura), mezzi.chiave_nuova())
+        return self._chiave[1]
+
     def _pulisci_i_mezzi(self) -> None:
         with self.archivio.lettura() as connessione:
             tenuti = {riga["id"] for riga in coda.in_stato(connessione, coda.IN_CODA)}
@@ -554,19 +585,31 @@ class Miglioratore:
         if riga is None or riga["stato"] != coda.IN_CODA:
             mezzi.butta(self._cartella_dei_mezzi(), miglioria_id)
 
-    def _c_e_il_mezzo(self, miglioria_id: int, impronta_originale: str) -> bool:
+    def _c_e_il_mezzo(self, miglioria_id: int, impronta_originale: str,
+                      chiave: bytes | None = None) -> bool:
         return mezzi.c_e(self._cartella_dei_mezzi(), miglioria_id, impronta_originale,
-                         _versione_di_lucidflux())
+                         _versione_di_lucidflux(), chiave)
 
-    def _da_mettere_nel_giro(self, riga) -> bool:
+    def _da_mettere_nel_giro(self, riga) -> dict | None:
         if riga["id"] in self._mezzi_provati:
-            return False
+            return None
         originale = Path(riga["percorso_originale"])
-        if not originale.is_file():
-            return False
-        if self._c_e_il_mezzo(riga["id"], riga["impronta_originale"]):
-            return False
-        return impronta.del_file(originale) == riga["impronta_originale"]
+        if originale.is_file():
+            if self._c_e_il_mezzo(riga["id"], riga["impronta_originale"]):
+                return None
+            if impronta.del_file(originale) != riga["impronta_originale"]:
+                return None
+            return {"id": int(riga["id"]), "originale": str(originale)}
+        chiave = self._chiave_dei_mezzi()
+        if chiave is None:
+            return None
+        if self._c_e_il_mezzo(riga["id"], riga["impronta_originale"], chiave):
+            return None
+        _letto, piu, codice = self._originale(riga, originale)
+        if codice is not None or piu is None:
+            return None
+        return {"id": int(riga["id"]), "originale": str(originale),
+                "dall_archivio": piu["dall_archivio"]}
 
     def _giro_della_coda(self) -> None:
         if not self._giro_acceso():
@@ -583,22 +626,24 @@ class Miglioratore:
         self._un_giro(righe)
 
     def _un_giro(self, righe: list) -> None:
-        if not righe or not self._da_mettere_nel_giro(righe[0]):
+        primo = self._da_mettere_nel_giro(righe[0]) if righe else None
+        if primo is None:
             return
-        scelte = []
-        for riga in righe:
+        scelte = [primo]
+        for riga in righe[1:]:
             if len(scelte) >= PER_GIRO or self._fermati.is_set():
                 break
-            if self._da_mettere_nel_giro(riga):
-                scelte.append(riga)
-        if not scelte:
-            return
-        self._mezzi_provati.update(riga["id"] for riga in scelte)
+            if (cosa := self._da_mettere_nel_giro(riga)) is not None:
+                scelte.append(cosa)
+        self._mezzi_provati.update(cosa["id"] for cosa in scelte)
         self._accesa.spegni()
         cartella = self._cartella_dei_mezzi()
+        dall_archivio = sum(1 for cosa in scelte if "dall_archivio" in cosa)
+        chiave = self._chiave[1] if dall_archivio else None
         lavoro = {
-            "giro": [{"id": int(riga["id"]), "originale": str(riga["percorso_originale"])}
-                     for riga in scelte],
+            "giro": scelte,
+            **({"dall_archivio": dall_archivio, "chiave_dei_mezzi": chiave.hex()}
+               if chiave is not None else {}),
             "cartella": str(cartella),
             "misura": self._tetto(),
             "intensita": int(self.archivio.impostazione("intensita_scheda") or 100),
@@ -627,16 +672,24 @@ class Miglioratore:
                            "le foto che mancano si fanno come prima")
 
     def _col_mezzo(self, lavoro: dict, miglioria_id: int) -> dict:
-        if (lavoro.get("genere") != "immagine" or lavoro.get("dall_archivio")
+        if (lavoro.get("genere") != "immagine"
                 or (lavoro.get("motori") or {}).get("foto") != motori.LUCIDFLUX
                 or not self._giro_acceso()):
             return lavoro
+        chiave = None
+        if lavoro.get("dall_archivio"):
+            chiave = self._chiave_dei_mezzi()
+            if chiave is None:
+                return lavoro
         with self.archivio.lettura() as connessione:
             riga = coda.per_id(connessione, miglioria_id)
-        if riga is None or not self._c_e_il_mezzo(miglioria_id, riga["impronta_originale"]):
+        if riga is None or not self._c_e_il_mezzo(miglioria_id, riga["impronta_originale"],
+                                                  chiave):
             return lavoro
-        return dict(lavoro, mezzo={"cartella": str(self._cartella_dei_mezzi()),
-                                   "id": int(miglioria_id)})
+        mezzo = {"cartella": str(self._cartella_dei_mezzi()), "id": int(miglioria_id)}
+        if chiave is not None:
+            mezzo["chiave"] = chiave.hex()
+        return dict(lavoro, mezzo=mezzo)
 
     def _rifai_in_grande(self) -> None:
         from officina.miglioria import rifai

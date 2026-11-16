@@ -11,6 +11,18 @@
     "semplice": [
       [
         "migliora",
+        "Il giro LucidFlux, che carica il modello una volta sola, ora vale anche per le foto che stanno solo nell'Archivio sicuro. Il passaggio di mezzo resta cifrato con una chiave in memoria: se chiudi l'archivio si butta."
+      ],
+      [
+        "migliora",
+        "Video migliorati più veloci anche quando l'originale è solo nell'Archivio sicuro: il video si scrive mentre la scheda lavora, uguale bit per bit, e se chiudi l'archivio a metà si ferma tutto senza lasciare copie in chiaro."
+      ],
+      [
+        "cerca",
+        "Macchina e obiettivo: ogni foto ricorda con quale macchina e quale obiettivo è fatta. In galleria ci sono i filtri «Macchina» e «Obiettivo», e si cerca anche a parole («canon eos 80d»). Le foto già dentro si rileggono piano in sottofondo."
+      ],
+      [
+        "migliora",
         "Impostazioni: la gara dei video per «Togli» non si vede più finché non ha i modelli e i video pubblici di prova, così non dice più «non ci sono video di prova»."
       ],
       [

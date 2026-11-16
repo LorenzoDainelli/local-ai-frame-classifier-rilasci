@@ -14,17 +14,19 @@ def _canale():
     return uscita
 
 
-def _dall_archivio(lavoro: dict, manda, entrata=None) -> dict:
-    cercata = lavoro.get("dall_archivio")
-    if not cercata:
-        return lavoro
-    from officina.errori import ErroreOfficina
-    from officina.sicuro import dall_archivio, sportello, tubo
+def lontano(manda, entrata=None):
+    from officina.sicuro import sportello, tubo
 
     filo = tubo.DaVerso(sys.stdin if entrata is None else entrata, manda)
-    lontano = sportello.DaLontano(filo, filo, filo)
-    ricerca = lontano.cerca(cercata["impronta"], cercata["dimensione"], cercata["percorsi"],
-                            nome=cercata["nome"], intero=lavoro["genere"] == "immagine")
+    return sportello.DaLontano(filo, filo, filo)
+
+
+def trova(da_lontano, cercata: dict, intero: bool):
+    from officina.errori import ErroreOfficina
+    from officina.sicuro import dall_archivio
+
+    ricerca = da_lontano.cerca(cercata["impronta"], cercata["dimensione"],
+                               cercata["percorsi"], nome=cercata["nome"], intero=intero)
     trovata = ricerca.trovata
     if trovata is None:
         if ricerca.perche in (dall_archivio.CHIUSO, dall_archivio.SI_APRE):
@@ -35,6 +37,14 @@ def _dall_archivio(lavoro: dict, manda, entrata=None) -> dict:
         raise ErroreOfficina(
             "Nell'Archivio sicuro c'è una versione diversa dell'originale.",
             codice=dall_archivio.DIVERSA)
+    return trovata
+
+
+def _dall_archivio(lavoro: dict, manda, entrata=None) -> dict:
+    cercata = lavoro.get("dall_archivio")
+    if not cercata:
+        return lavoro
+    trovata = trova(lontano(manda, entrata), cercata, lavoro["genere"] == "immagine")
     return dict(lavoro, originale=trovata)
 
 

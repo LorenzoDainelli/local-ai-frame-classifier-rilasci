@@ -68,6 +68,8 @@ def galleria(richiesta: Request):
                                                      vista.indirizzo)
         elenco_luoghi = conteggi.voci_dei_luoghi(connessione, filtro,
                                                  vista.indirizzo)
+        elenco_fotocamere = conteggi.voci_delle_fotocamere(connessione, filtro,
+                                                           vista.indirizzo)
 
         elenco_gruppi_archivio = _voci_dei_gruppi(connessione, filtro)
 
@@ -102,7 +104,10 @@ def galleria(richiesta: Request):
             _gruppo_di_filtri("nodi", "Nodi", elenco_nodi),
             _gruppo_di_filtri("persone", "Persone", elenco_persone),
             _gruppo_di_filtri("luoghi", "Luoghi", elenco_luoghi),
-        ],
+        ] + [_gruppo_di_filtri(chiave, nome, elenco_fotocamere[chiave])
+             for chiave, nome in (("fotocamere", "Macchina"),
+                                  ("obiettivi", "Obiettivo"))
+             if elenco_fotocamere[chiave]],
         "gruppi_archivio": elenco_gruppi_archivio,
         "conteggio": f"{vista.numero_a_parole(quanti)} scatti",
         "quanti": quanti,

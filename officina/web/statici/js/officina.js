@@ -990,6 +990,7 @@ function disegnaInfo() {
         ["Data", scatto.quando],
         ["Luogo", dettagli.luogo],
         ["Macchina", dettagli.macchina],
+        ["Obiettivo", dettagli.obiettivo],
         ["Misura", [scatto.larghezza && scatto.altezza ? `${scatto.larghezza} × ${scatto.altezza}` : null,
                     (scatto.formato || "").toUpperCase() || null,
                     scatto.genere === "video" ? scatto.durata : null].filter(Boolean).join(" · ")],

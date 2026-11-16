@@ -12,7 +12,7 @@ from officina.errori import ErroreOfficina, FileNonLeggibile
 from officina.importazione import impronta as impronta_file
 from officina.importazione import metadati
 from officina.impronte.motore import _il_file_da_guardare
-from officina.modello import file_media, salute_file, segnalazioni
+from officina.modello import file_media, fotocamere, salute_file, segnalazioni
 from officina.modello.scatti import marca_senza_data
 
 CARTELLA = "giusti-in-arrivo"
@@ -207,11 +207,13 @@ def _aggiorna(connessione, guasto: dict, segno: str, dimensione: int, dati) -> N
         "UPDATE file_media SET impronta = ?, dimensione = ?, formato = ?, larghezza = ?, "
         "altezza = ?, orientamento = ?, durata_ms = ?, fps = ?, "
         "identificatore_ios = coalesce(?, identificatore_ios), marca = ?, modello = ?, "
+        "obiettivo = ?, "
         "latitudine = coalesce(?, latitudine), longitudine = coalesce(?, longitudine), "
         "miniatura = NULL WHERE id = ? AND impronta = ?",
         (segno, dimensione, dati.formato, dati.larghezza, dati.altezza, dati.orientamento,
          dati.durata_ms, dati.fps, dati.identificatore_ios, dati.marca, dati.modello,
-         latitudine, longitudine, guasto["file_id"], guasto["impronta"]))
+         dati.obiettivo, latitudine, longitudine, guasto["file_id"], guasto["impronta"]))
+    fotocamere.segna(connessione, guasto["file_id"])
     if dati.ha_data:
         connessione.execute(
             "UPDATE file_media SET data_locale = ?, fuso_minuti = ?, istante_utc = ?, "

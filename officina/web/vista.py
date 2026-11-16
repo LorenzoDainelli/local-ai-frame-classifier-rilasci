@@ -6,7 +6,7 @@ import sqlite3
 from urllib.parse import urlencode
 
 from officina.archivio.database import uno
-from officina.modello import mappa, nodi, parti, persone, posti, scatti
+from officina.modello import fotocamere, mappa, nodi, parti, persone, posti, scatti
 from officina.modello.scatti import Filtro
 
 
@@ -104,6 +104,8 @@ def filtro_da_parametri(parametri) -> Filtro:
         importazione=_intero(parametri.get("importazione")),
         gruppo=_intero(parametri.get("gruppo")),
         zona=mappa.zona_da_testo(parametri.get("zona")),
+        fotocamera=_intero(parametri.get("fotocamera")),
+        obiettivo=_intero(parametri.get("obiettivo")),
         simili_a=simili,
         simili_larghi=acceso("simili_larghi"),
         parole=(str(parametri.get("parole") or "").strip() or None),
@@ -154,6 +156,10 @@ def parametri_da_filtro(filtro: Filtro) -> dict:
         parametri["gruppo"] = str(filtro.gruppo)
     if filtro.zona:
         parametri["zona"] = mappa.zona_a_testo(filtro.zona)
+    if filtro.fotocamera:
+        parametri["fotocamera"] = str(filtro.fotocamera)
+    if filtro.obiettivo:
+        parametri["obiettivo"] = str(filtro.obiettivo)
     if filtro.simili_a is not None:
         parametri["simili"] = str(filtro.simili_a)
     if filtro.simili_larghi:
@@ -251,6 +257,13 @@ def pillole_attive(connessione: sqlite3.Connection, filtro: Filtro) -> list[dict
 
     if filtro.zona:
         aggiungi("in una zona della mappa", filtro.copia_con(zona=None))
+
+    if filtro.fotocamera:
+        aggiungi("con " + (fotocamere.la_fotocamera(connessione, filtro.fotocamera)
+                           or "una macchina tolta"), filtro.copia_con(fotocamera=None))
+    if filtro.obiettivo:
+        aggiungi("obiettivo " + (fotocamere.l_obiettivo(connessione, filtro.obiettivo)
+                                 or "tolto"), filtro.copia_con(obiettivo=None))
 
     if filtro.parole:
         aggiungi(f"«{filtro.parole}»",

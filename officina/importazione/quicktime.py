@@ -37,6 +37,7 @@ class DatiVideo:
     longitudine: float | None = None
     marca: str | None = None
     modello: str | None = None
+    obiettivo: str | None = None
     rotazione: int = 0
     data_di_scorta: str | None = None
     luogo_di_scorta: str | None = None
@@ -429,6 +430,9 @@ def _usa_metadati(trovati: dict[str, bytes], dati: DatiVideo) -> None:
     modello = testo("com.apple.quicktime.model")
     if modello:
         dati.modello = modello
+    obiettivo = testo("com.apple.quicktime.camera.lens_model")
+    if obiettivo:
+        dati.obiettivo = obiettivo
 
 
 def primo_fotogramma_jpeg(percorso: Path) -> bytes | None:

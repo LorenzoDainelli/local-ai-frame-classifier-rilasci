@@ -7,7 +7,8 @@ from pathlib import PureWindowsPath
 from officina.corpi import chi_e
 from officina.modello import posti
 from officina.modello import etichette as magazzino
-from officina.modello import file_media, indizi_persone, nodi, nomi, parti, scatti
+from officina.modello import (file_media, fotocamere, indizi_persone, nodi, nomi, parti,
+                              scatti)
 from officina.archivio.database import tutti
 from officina.ritocco import elenco as elenco_ritocchi
 
@@ -176,19 +177,18 @@ def _chi_c_e(connessione: sqlite3.Connection, scatto_id: int) -> list[dict]:
 
 def _macchina(riga) -> str | None:
     chiavi = riga.keys()
-    marca = (riga["marca"] if "marca" in chiavi else None) or ""
-    modello = (riga["modello"] if "modello" in chiavi else None) or ""
-    if marca and modello.lower().startswith(marca.lower()):
-        marca = ""
-    return " ".join(parte for parte in (marca, modello) if parte) or None
+    return fotocamere.nome(riga["marca"] if "marca" in chiavi else None,
+                           riga["modello"] if "modello" in chiavi else None)
 
 
 def _dettagli(connessione: sqlite3.Connection, scatto_id: int,
               principale) -> dict:
-    nome = cartella = macchina = None
+    nome = cartella = macchina = obiettivo = None
     volti = []
     if principale is not None:
         macchina = _macchina(principale)
+        if "obiettivo" in principale.keys():
+            obiettivo = fotocamere.pulito(principale["obiettivo"]) or None
         percorsi = file_media.percorsi_di(connessione, principale["id"])
         if percorsi:
             intero = PureWindowsPath(percorsi[0]["percorso"])
@@ -214,6 +214,7 @@ def _dettagli(connessione: sqlite3.Connection, scatto_id: int,
         "cartella": cartella,
         "luogo": ", ".join(m["nome"] for m in messi) or None,
         "macchina": macchina,
+        "obiettivo": obiettivo,
         "volti": volti,
     }
 

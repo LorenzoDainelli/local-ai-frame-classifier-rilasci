@@ -63,7 +63,8 @@ def test_la_rotta_risponde_e_porta_tutti_i_mucchi(cliente):
     risposta = cliente.get("/api/conteggi")
     assert risposta.status_code == 200
     dati = risposta.json()
-    assert set(dati) == {"nodi", "persone", "luoghi", "generi", "cosa_vedi", "fps"}
+    assert set(dati) == {"nodi", "persone", "luoghi", "generi", "cosa_vedi", "fps",
+                         "fotocamere", "obiettivi"}
     assert set(dati["generi"]) == {"foto", "live", "video"}
 
 

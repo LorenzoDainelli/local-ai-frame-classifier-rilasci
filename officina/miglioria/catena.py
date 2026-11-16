@@ -126,22 +126,31 @@ def _un_passaggio(lavoro: dict, nome: str, immagine, larghezza: int, altezza: in
     return grande, usato, sedici
 
 
-def _timbro_del_mezzo(originale: Path, prima: tuple[int, int], passaggio) -> dict:
+def _timbro_del_mezzo(originale, prima: tuple[int, int], passaggio) -> dict:
     from officina.importazione import impronta
 
     classe = motori.classe(motori.FOTO, passaggio[0])
-    return mezzi.timbro(impronta.del_file(originale), classe.nome, classe.versione,
-                        prima, passaggio[1])
+    sua = (originale.blake2b if isinstance(originale, DallArchivio)
+           else impronta.del_file(originale))
+    return mezzi.timbro(sua, classe.nome, classe.versione, prima, passaggio[1])
+
+
+def _chiave_del_mezzo(lavoro: dict, originale) -> tuple[bool, bytes | None]:
+    chiave = (lavoro.get("mezzo") or {}).get("chiave") or lavoro.get("chiave_dei_mezzi")
+    if isinstance(originale, DallArchivio):
+        return bool(chiave), bytes.fromhex(chiave) if chiave else None
+    return True, None
 
 
 def _dal_mezzo(lavoro: dict, originale, prima: tuple[int, int], passaggi: list):
     mezzo = lavoro.get("mezzo")
-    if not mezzo or isinstance(originale, DallArchivio):
+    va, chiave = _chiave_del_mezzo(lavoro, originale)
+    if not mezzo or not va:
         return None
     if passaggi[0][0] != motori.LUCIDFLUX:
         return None
     suo = _timbro_del_mezzo(originale, prima, passaggi[0])
-    letto = mezzi.leggi(Path(mezzo["cartella"]), int(mezzo["id"]), suo)
+    letto = mezzi.leggi(Path(mezzo["cartella"]), int(mezzo["id"]), suo, chiave)
     if letto is None:
         raise mezzi.MezzoRotto("Il passaggio di LucidFlux messo da parte non torna.")
     immagine, usato, misura_del_motore = letto
@@ -150,7 +159,10 @@ def _dal_mezzo(lavoro: dict, originale, prima: tuple[int, int], passaggi: list):
 
 def solo_lucidflux(lavoro: dict, acceso, cartella: Path, miglioria_id: int,
                    freno=None) -> str:
-    originale = Path(lavoro["originale"])
+    originale = _originale(lavoro)
+    va, chiave = _chiave_del_mezzo(lavoro, originale)
+    if not va:
+        return "non_serve"
     aperta = metadati.apri(originale)
     larghezza, altezza = aperta.immagine.size
     quale = tetto(lavoro)
@@ -161,14 +173,15 @@ def solo_lucidflux(lavoro: dict, acceso, cartella: Path, miglioria_id: int,
     if nome != motori.LUCIDFLUX:
         return "non_serve"
     suo = _timbro_del_mezzo(originale, (larghezza, altezza), passaggi[0])
-    if mezzi.leggi(cartella, miglioria_id, suo) is not None:
+    if mezzi.leggi(cartella, miglioria_id, suo, chiave) is not None:
         return "gia_fatto"
     if not mezzi.ci_sta(cartella, fino_larghezza, fino_altezza):
         return "spazio"
     misura_del_motore: dict = {}
     grande, usato = _un_passaggio(lavoro, nome, aperta.immagine, fino_larghezza,
                                   fino_altezza, freno, misura_del_motore, acceso=acceso)
-    if not mezzi.scrivi(cartella, miglioria_id, grande, suo, usato, misura_del_motore):
+    if not mezzi.scrivi(cartella, miglioria_id, grande, suo, usato, misura_del_motore,
+                        chiave):
         return "non_scritto"
     return "fatto"
 
@@ -257,8 +270,7 @@ def filmato(lavoro: dict, al_passo=None, freno=None, racconta=None) -> dict:
     else:
         larghezza, altezza = misura.di_arrivo(piano.larghezza, piano.altezza, pari=True,
                                               tetto=quale)
-        insieme = (verso is None and not isinstance(originale, DallArchivio)
-                   and veloce.acceso(lavoro, veloce.SCRITTURA))
+        insieme = verso is None and veloce.acceso(lavoro, veloce.SCRITTURA)
         scrittore = _Scrittore(originale, uscita, larghezza, altezza) if insieme else None
         try:
             fatti, usati, stanno = _ingrandisci(

@@ -21,6 +21,7 @@ def chiave(filtro: Filtro) -> tuple:
         filtro.evidenziati, filtro.senza_evidenziati,
         tuple(filtro.persone), tuple(filtro.parti), filtro.luogo, filtro.importazione,
         filtro.simili_a, filtro.simili_larghi, filtro.parole,
+        filtro.fotocamera, filtro.obiettivo,
     )
 
 
@@ -57,6 +58,7 @@ def _conta_la_colonna(connessione: sqlite3.Connection, filtro: Filtro) -> dict:
         "nodi": scatti.conteggi_dei_nodi(connessione, filtro),
         "persone": scatti.conteggi_delle_persone(connessione, filtro),
         "luoghi": scatti.conteggi_dei_luoghi(connessione, filtro),
+        **scatti.conteggi_delle_fotocamere(connessione, filtro),
         "generi": {chiave_genere: scatti.conta(
             connessione, filtro.copia_con(genere=chiave_genere))
             for chiave_genere in ("foto", "live", "video")},
@@ -131,6 +133,30 @@ def voci_delle_persone(connessione: sqlite3.Connection, filtro: Filtro,
             "attivo": acceso,
             "collegamento": indirizzo(dopo),
         })
+    return fuori
+
+
+def voci_delle_fotocamere(connessione: sqlite3.Connection, filtro: Filtro,
+                          indirizzo) -> dict[str, list[dict]]:
+    from officina.modello import fotocamere
+
+    conti = scatti.conteggi_delle_fotocamere(connessione, filtro)
+    fuori: dict[str, list[dict]] = {}
+    for chiave, elenco in (("fotocamere", fotocamere.fotocamere(connessione)),
+                           ("obiettivi", fotocamere.obiettivi(connessione))):
+        campo = "fotocamera" if chiave == "fotocamere" else "obiettivo"
+        voci = []
+        for voce in elenco:
+            acceso = getattr(filtro, campo) == voce["id"]
+            peso = conti[chiave].get(voce["id"], 0)
+            if not peso and not acceso:
+                continue
+            voci.append({
+                "id": voce["id"], "nome": voce["nome"], "peso": peso, "attivo": acceso,
+                "collegamento": indirizzo(filtro.copia_con(
+                    **{campo: None if acceso else voce["id"]})),
+            })
+        fuori[chiave] = voci
     return fuori
 
 

@@ -231,9 +231,17 @@ RACCOLTE = {
         "toglie da scatti le coordinate che non stanno sul mondo (infinito, "
         "oltre 90 o 180 gradi). Non c'è nessuna riga da saltare, e un indice "
         "sulle coordinate costerebbe a ogni scrittura da lì in avanti.",
+    "UPDATE file_media SET fotocamera_id = (SELECT c.id FROM fotocamere c WHERE "
+    "c.marca = coalesce(file_media.marca, '') COLLATE NOCASE AND c.modello = "
+    "coalesce(file_media.modello, '') COLLATE NOCASE) WHERE marca IS NOT NULL OR "
+    "modello IS NOT NULL":
+        "la migrazione 84, che gira una volta sola nella vita dell'archivio: lega "
+        "ogni file alla sua macchina nella tabellina nuova. Deve passare tutti i file "
+        "che hanno marca o modello, e un indice su marca e modello costerebbe a ogni "
+        "scrittura da lì in avanti.",
 }
 
-QUANTE_NON_SI_LEGGONO = 67
+QUANTE_NON_SI_LEGGONO = 68
 
 
 def test_nessuna_lettura_larga_nuova_nei_sorgenti():

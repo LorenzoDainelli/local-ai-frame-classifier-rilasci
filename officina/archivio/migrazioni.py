@@ -1759,6 +1759,43 @@ def _versione_83(connessione: sqlite3.Connection) -> None:
         """)
 
 
+def _versione_84(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE TABLE fotocamere (id INTEGER PRIMARY KEY, "
+        "marca TEXT NOT NULL DEFAULT '', modello TEXT NOT NULL DEFAULT '', "
+        "UNIQUE (marca COLLATE NOCASE, modello COLLATE NOCASE))")
+    connessione.execute(
+        "CREATE TABLE lenti (id INTEGER PRIMARY KEY, "
+        "nome TEXT NOT NULL UNIQUE COLLATE NOCASE)")
+    connessione.execute("ALTER TABLE file_media ADD COLUMN obiettivo TEXT")
+    connessione.execute(
+        "ALTER TABLE file_media ADD COLUMN fotocamera_id INTEGER REFERENCES fotocamere(id)")
+    connessione.execute(
+        "ALTER TABLE file_media ADD COLUMN obiettivo_id INTEGER REFERENCES lenti(id)")
+    connessione.execute(
+        "CREATE INDEX file_media_per_fotocamera ON file_media(fotocamera_id, scatto_id) "
+        "WHERE fotocamera_id IS NOT NULL")
+    connessione.execute(
+        "CREATE INDEX file_media_per_obiettivo ON file_media(obiettivo_id, scatto_id) "
+        "WHERE obiettivo_id IS NOT NULL")
+    connessione.execute(
+        "INSERT OR IGNORE INTO fotocamere (marca, modello) "
+        "SELECT DISTINCT coalesce(marca, ''), coalesce(modello, '') FROM file_media "
+        "WHERE marca IS NOT NULL OR modello IS NOT NULL")
+    connessione.execute(
+        "UPDATE file_media SET fotocamera_id = (SELECT c.id FROM fotocamere c "
+        "WHERE c.marca = coalesce(file_media.marca, '') COLLATE NOCASE "
+        "AND c.modello = coalesce(file_media.modello, '') COLLATE NOCASE) "
+        "WHERE marca IS NOT NULL OR modello IS NOT NULL")
+    connessione.execute(
+        "DELETE FROM stato WHERE chiave IN ('macchine_rilette_fino_a', 'macchine_rimandate')")
+    connessione.execute(
+        "INSERT OR REPLACE INTO stato (chiave, valore, aggiornato_il) "
+        "SELECT 'macchine_da_rileggere', CAST(max(id) AS TEXT), "
+        "strftime('%Y-%m-%dT%H:%M:%SZ', 'now') FROM file_media "
+        "HAVING max(id) IS NOT NULL")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1911,6 +1948,8 @@ MIGRAZIONI: list[Migrazione] = [
                    "cartelle", _versione_82),
     Migrazione(83, "le foto HEIF tagliate a metà, con i riquadri verdi, si cercano "
                    "una volta sola", _versione_83),
+    Migrazione(84, "con quale macchina e quale obiettivo è fatta ogni foto, per cercarle "
+                   "e filtrarle", _versione_84),
 ]
 
 

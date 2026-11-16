@@ -36,8 +36,8 @@
         <span class="stacco" aria-hidden="true"></span>
 
         {% for gruppo in gruppi_filtro %}
-        {% call tendina(gruppo.chiave, gruppo.nome, {'nodi': 'etichetta', 'persone': 'persone', 'luoghi': 'luoghi'}[gruppo.chiave], gruppo.quante_accese,
-                        'Cerca ' ~ {'nodi': 'un nodo', 'persone': 'una persona', 'luoghi': 'un luogo'}[gruppo.chiave] if gruppo.quante > 6 else '') %}
+        {% call tendina(gruppo.chiave, gruppo.nome, {'nodi': 'etichetta', 'persone': 'persone', 'luoghi': 'luoghi', 'fotocamere': 'foto', 'obiettivi': 'occhio'}[gruppo.chiave], gruppo.quante_accese,
+                        'Cerca ' ~ {'nodi': 'un nodo', 'persone': 'una persona', 'luoghi': 'un luogo', 'fotocamere': 'una macchina', 'obiettivi': 'un obiettivo'}[gruppo.chiave] if gruppo.quante > 6 else '') %}
             <div class="tendina-voci">
                 {% for voce in gruppo.subito + gruppo.dopo %}{{ voce_filtro(voce, gruppo.chiave) }}
                 {% else %}
@@ -49,12 +49,14 @@
                 {% endfor %}
             </div>
             <p class="piccolo tenue tendina-vuota" data-nessuna hidden>Nessuna voce con questo nome.</p>
+            {% if gruppo.chiave in ('nodi', 'persone', 'luoghi') %}
             <footer>
                 <a class="verso-la-stanza" {% if gruppo.chiave == 'nodi' %}data-apri-albero{% endif %}
                    href="{{ '/albero?da=foto' if gruppo.chiave == 'nodi' else '/persone' if gruppo.chiave == 'persone' else '/luoghi' }}">
                     {% if gruppo.chiave == 'nodi' %}Apri l'albero <kbd>A</kbd>{% elif gruppo.chiave == 'persone' %}Gestisci le persone{% else %}Gestisci i luoghi{% endif %}
                     {{ icona('avanti', 12) }}</a>
             </footer>
+            {% endif %}
         {% endcall %}
         {% endfor %}
 

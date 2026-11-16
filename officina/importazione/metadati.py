@@ -50,6 +50,7 @@ class Metadati:
     identificatore_ios: str | None = None
     marca: str | None = None
     modello: str | None = None
+    obiettivo: str | None = None
     sembra_schermata: bool = False
 
     avvertenze: list[str] = field(default_factory=list)
@@ -75,6 +76,7 @@ DATA_DIGITALIZZATA = 0x9004
 FUSO_ORIGINALE = 0x9011
 FUSO_DIGITALIZZATO = 0x9012
 NOTA_COSTRUTTORE = 0x927C
+OBIETTIVO = 0xA434
 
 DIMENSIONE_TIPO = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
 
@@ -241,6 +243,8 @@ def _leggi_immagine(immagine) -> Metadati:
     if gps:
         dati.latitudine, dati.longitudine = _luogo(gps)
 
+    dati.obiettivo = str(esteso.get(OBIETTIVO) or "").replace("\x00", "").strip() or None
+
     nota = esteso.get(NOTA_COSTRUTTORE)
     if nota:
         dati.identificatore_ios = _identificatore_apple(nota)
@@ -277,6 +281,7 @@ def da_video(percorso: Path) -> Metadati:
         identificatore_ios=video.identificatore_ios,
         marca=video.marca,
         modello=video.modello,
+        obiettivo=video.obiettivo,
     )
     if dati.durata_ms is None:
         dati.avvertenze.append(

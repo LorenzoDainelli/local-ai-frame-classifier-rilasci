@@ -413,3 +413,71 @@ def test_la_catena_prende_le_date_dal_disco_o_dall_archivio(tmp_path):
     catena._date(trovata, nuova, {})
     catena._date(trovata, nuova, {"date": None})
     assert os.stat(nuova).st_mtime_ns == 99
+
+
+def _permessi(casa, monkeypatch) -> list:
+    aperto = casa.aperto
+    vero = aperto.permesso
+    chiesti: list = []
+
+    def conta(numero):
+        chiesti.append(numero)
+        return vero(numero)
+
+    monkeypatch.setattr(aperto, "permesso", conta)
+    return chiesti
+
+
+@SENZA_CODIFICATORE
+def test_dall_archivio_il_video_si_scrive_mentre_la_scheda_lavora_e_resta_uguale(
+        nell_archivio, casa, tmp_path, monkeypatch):
+    dati = nell_archivio.dati[FILMATO]
+    originale = casa.foto / FILMATO
+    dal_disco = nell_archivio.attesa / "1-onde.mp4"
+    assert "fatto" in _lancia(_lavoro("video", originale, dal_disco))
+    originale.unlink()
+    chiesti = _permessi(casa, monkeypatch)
+    da_solo = nell_archivio.attesa / "2-onde.mp4"
+    assert "fatto" in _lancia(_lavoro("video", originale, da_solo, dall_archivio=_cercata(
+        dati, [originale], FILMATO)))
+    senza = len(chiesti)
+    insieme = nell_archivio.attesa / "3-onde.mp4"
+    esito = _lancia(_lavoro("video", originale, insieme, veloce=["scrittura"],
+                            dall_archivio=_cercata(dati, [originale], FILMATO)))
+    assert "fatto" in esito, esito
+    assert len(chiesti) == 2 * senza
+    assert insieme.read_bytes() == da_solo.read_bytes() == dal_disco.read_bytes()
+    _mai_in_chiaro(tmp_path, dati)
+
+
+@SENZA_CODIFICATORE
+@pytest.mark.parametrize("veloce", [[], ["scrittura"]])
+@pytest.mark.parametrize("quando", [2, 3])
+def test_dall_archivio_se_si_chiude_mentre_scrive_si_fermano_tutte_e_due(
+        nell_archivio, casa, tmp_path, monkeypatch, quando, veloce):
+    aperto = casa.aperto
+    vero = aperto.permesso
+    chiesti: list = []
+
+    def e_poi_si_chiude(numero):
+        chiesti.append(numero)
+        if len(chiesti) == quando:
+            assert casa.archivio.chiudi(ATTESA)
+        return vero(numero)
+
+    monkeypatch.setattr(aperto, "permesso", e_poi_si_chiude)
+    dati = nell_archivio.dati[FILMATO]
+    originale = casa.foto / FILMATO
+    originale.unlink()
+    uscita = nell_archivio.attesa / "1-onde.mp4"
+    esito = _lancia(_lavoro("video", originale, uscita, veloce=veloce,
+                            dall_archivio=_cercata(dati, [originale], FILMATO)))
+    assert esito == {"guasto": CHIUSO_ADESSO}
+    assert len(chiesti) >= quando
+    assert not uscita.exists()
+    pezzi = nell_archivio.attesa / "1-onde.mp4.pezzi"
+    assert {x for x in nell_archivio.attesa.iterdir()} == {pezzi}
+    assert {x.suffix for x in pezzi.iterdir()} <= {".json", ".mkv", ""}
+    if quando == 3:
+        assert (pezzi / "finito").exists() == (not veloce)
+    _mai_in_chiaro(tmp_path, dati)

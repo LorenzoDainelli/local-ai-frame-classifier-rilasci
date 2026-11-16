@@ -8,7 +8,7 @@ from officina.archivio.accesso import Archivio
 from officina.archivio.database import tutti
 from officina.errori import FileNonLeggibile
 from officina.importazione import metadati, ripasso
-from officina.modello import file_media
+from officina.modello import file_media, fotocamere
 from officina.sicuro import dall_archivio
 
 FINO_A = "macchine_da_rileggere"
@@ -45,12 +45,14 @@ def uno(archivio: Archivio, file_id: int) -> bool:
             dati = metadati.leggi(percorso)
     except FileNonLeggibile:
         return False
-    if not dati.marca and not dati.modello:
+    if not dati.marca and not dati.modello and not dati.obiettivo:
         return False
     with archivio.scrittura() as connessione:
         connessione.execute(
-            "UPDATE file_media SET marca = coalesce(marca, ?), modello = coalesce(modello, ?) "
-            "WHERE id = ?", (dati.marca, dati.modello, file_id))
+            "UPDATE file_media SET marca = coalesce(marca, ?), "
+            "modello = coalesce(modello, ?), obiettivo = coalesce(obiettivo, ?) WHERE id = ?",
+            (dati.marca, dati.modello, dati.obiettivo, file_id))
+        fotocamere.segna(connessione, file_id)
     return True
 
 
