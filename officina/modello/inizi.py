@@ -65,3 +65,35 @@ def sano_che_lo_contiene(connessione, scatto_id: int) -> int | None:
         if esito:
             return candidato["scatto_id"]
     return None
+
+
+def gemello_probabile(connessione, scatto_id: int) -> int | None:
+    rotto = uno(connessione,
+                "SELECT f.id, f.genere, f.larghezza, f.altezza, f.marca, f.modello, "
+                "s.data_locale FROM file_media f JOIN scatti s ON s.id = f.scatto_id "
+                "WHERE f.scatto_id = ? ORDER BY f.ruolo = 'principale' DESC, f.id LIMIT 1",
+                scatto_id)
+    if rotto is None or not rotto["data_locale"] or not rotto["larghezza"]:
+        return None
+    gemelli = {riga["scatto_id"] for riga in tutti(
+        connessione,
+        "SELECT g.scatto_id, g.larghezza, g.altezza, g.marca, g.modello "
+        "FROM scatti t JOIN file_media g ON g.scatto_id = t.id "
+        "WHERE t.giorno = substr(?, 1, 10) AND t.data_locale = ? AND t.id != ? "
+        "AND t.fuori_archivio = 0 AND g.genere = ? AND g.ruolo = 'principale' "
+        "AND EXISTS (SELECT 1 FROM impronte i WHERE i.scatto_id = t.id)",
+        rotto["data_locale"], rotto["data_locale"], scatto_id, rotto["genere"])
+        if _stessa_misura(rotto, riga) and _stessa_macchina(rotto, riga)}
+    return gemelli.pop() if len(gemelli) == 1 else None
+
+
+def _stessa_misura(una, altra) -> bool:
+    return sorted((una["larghezza"] or 0, una["altezza"] or 0)) == sorted(
+        (altra["larghezza"] or 0, altra["altezza"] or 0))
+
+
+def _stessa_macchina(una, altra) -> bool:
+    for chiave in ("marca", "modello"):
+        if una[chiave] and altra[chiave] and una[chiave] != altra[chiave]:
+            return False
+    return True

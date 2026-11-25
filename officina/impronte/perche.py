@@ -73,6 +73,7 @@ def _uno(connessione, scatto_id: int, mancano: list[str], nel_gruppo: str) -> di
             connessione, "SELECT 1 FROM segnalazioni WHERE tipo = ? AND scatto_id = ? "
             "AND risolta = 0", avviso, scatto_id)
         lavori[chiave] = "fatto" if fatto else ("messo da parte" if fermo else "non fatto")
+    inizio = inizi.sano_che_lo_contiene(connessione, scatto_id)
     dentro = not nel_gruppo or _c_e(
         connessione, "SELECT 1 FROM scatti s WHERE s.id = ?" + nel_gruppo, scatto_id)
     return {
@@ -93,7 +94,8 @@ def _uno(connessione, scatto_id: int, mancano: list[str], nel_gruppo: str) -> di
         "nel_gruppo": dentro,
         "lavori": lavori,
         "doppione": _doppione(connessione, file_id),
-        "inizio_di": inizi.sano_che_lo_contiene(connessione, scatto_id),
+        "inizio_di": inizio,
+        "gemello_di": None if inizio else inizi.gemello_probabile(connessione, scatto_id),
     }
 
 

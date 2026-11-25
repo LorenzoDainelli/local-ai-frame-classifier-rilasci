@@ -88,6 +88,8 @@ def da_sistemare(richiesta: Request):
             voce["file_id"] = riga["id"] if riga else None
             voce["inizio_di"] = (inizi.sano_che_lo_contiene(connessione, voce["scatto_id"])
                                  if numero < 50 else None)
+            voce["gemello_di"] = (inizi.gemello_probabile(connessione, voce["scatto_id"])
+                                  if numero < 50 and not voce["inizio_di"] else None)
         conti = {
             "senza_data": scatti.conta(connessione, Filtro(senza_data=True)),
             "data_indovinata": scatti.conta(connessione, Filtro(data_indovinata=True)),

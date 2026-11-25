@@ -10,9 +10,12 @@ DA_NON_TOCCARE = ("fermati", "chiudi", "spegni", "esci", "aggiorna")
 
 
 @pytest.fixture
-def cliente(archivio_pieno):
+def cliente(archivio_pieno, monkeypatch):
     from officina.web import server
+    from officina.web.strade import gara120, gara_pelle
 
+    for modulo in (gara120, gara_pelle):
+        monkeypatch.setattr(modulo, "parti_la_gara", lambda archivio: None)
     return TestClient(server.app, client=("127.0.0.1", 51000), raise_server_exceptions=False)
 
 
@@ -90,6 +93,15 @@ def test_cifre_finte_non_rompono_i_tasti(cliente):
              for s in [cliente.post(q, data=corpo, follow_redirects=False).status_code]
              if s >= 500]
     assert rotti == []
+
+
+def test_i_tasti_non_fanno_partire_le_gare_che_aprono_la_rete(cliente):
+    from officina.descrittori import torcia
+
+    corpo = {c: "²" for c in CAMPI_NUMERICI}
+    for via in ("/api/gara-120/avvia", "/api/gara-pelle/avvia"):
+        assert cliente.post(via, data=corpo).status_code < 500
+    assert torcia._rete_accesa["quanti"] == 0
 
 
 def test_lunghezza_finta_non_rompe(cliente):

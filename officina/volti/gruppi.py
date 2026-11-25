@@ -148,7 +148,7 @@ _VOLTI_CONFERMATI = (
     "SELECT persona_id, impronta FROM volti "
     "WHERE deciso_da = 'utente' AND persona_id IS NOT NULL AND impronta IS NOT NULL "
     "UNION ALL "
-    "SELECT v.persona_id, v.impronta FROM persone_negli_scatti n "
+    "SELECT v.persona_id, v.impronta FROM persone_negli_scatti n CROSS "
     "JOIN volti v ON v.scatto_id = n.scatto_id AND v.persona_id = n.persona_id "
     "WHERE v.deciso_da = 'sistema' AND v.impronta IS NOT NULL")
 

@@ -106,3 +106,86 @@ def test_le_pagine_lo_dicono_con_il_collegamento_al_sano(coppia):
     assert f'href="/scatto/{sano}">Guarda quello sano' in pagina
     sistemare = cliente.get("/sistemare").text
     assert f'data-inizio-di="{sano}"' in sistemare
+
+
+def _gemelli(archivio, rotto: int, sano: int, **cambi) -> None:
+    with archivio.scrittura() as connessione:
+        connessione.execute("UPDATE scatti SET data_locale = '2001-02-03T04:05:06', "
+                            "giorno = '2001-02-03' WHERE id IN (?, ?)", (rotto, sano))
+        connessione.execute("UPDATE file_media SET larghezza = 3000, altezza = 4000, "
+                            "marca = 'Apple', modello = 'iPhone' WHERE scatto_id IN (?, ?)",
+                            (rotto, sano))
+        for chiave, valore in cambi.items():
+            connessione.execute(f"UPDATE file_media SET {chiave} = ? WHERE scatto_id = ?",
+                                (valore, rotto))
+
+
+def _gemello(archivio, scatto_id: int) -> int | None:
+    with archivio.lettura() as connessione:
+        return inizi.gemello_probabile(connessione, scatto_id)
+
+
+@pytest.fixture
+def rovinato(coppia):
+    archivio, rotto, sano, posto, dati = coppia
+    pezzo = bytearray(dati[: len(dati) // 2])
+    pezzo[-1] ^= 0xFF
+    posto.write_bytes(bytes(pezzo))
+    _metti(archivio, rotto, posto)
+    return archivio, rotto, sano
+
+
+def test_un_rovinato_con_stessa_ora_misura_e_telefono_e_un_probabile_doppione(rovinato):
+    archivio, rotto, sano = rovinato
+    _gemelli(archivio, rotto, sano)
+    assert _trova(archivio, rotto) is None
+    assert _gemello(archivio, rotto) == sano
+
+
+def test_anche_girato_e_lo_stesso(rovinato):
+    archivio, rotto, sano = rovinato
+    _gemelli(archivio, rotto, sano, larghezza=4000, altezza=3000)
+    assert _gemello(archivio, rotto) == sano
+
+
+@pytest.mark.parametrize("cambi", [{"larghezza": 2999}, {"modello": "altro"}])
+def test_misura_o_telefono_diversi_non_sono_doppioni(rovinato, cambi):
+    archivio, rotto, sano = rovinato
+    _gemelli(archivio, rotto, sano, **cambi)
+    assert _gemello(archivio, rotto) is None
+
+
+def test_un_altra_ora_non_e_un_doppione(rovinato):
+    archivio, rotto, sano = rovinato
+    _gemelli(archivio, rotto, sano)
+    with archivio.scrittura() as connessione:
+        connessione.execute("UPDATE scatti SET data_locale = '2001-02-03T04:05:07' "
+                            "WHERE id = ?", (sano,))
+    assert _gemello(archivio, rotto) is None
+
+
+def test_se_i_gemelli_sono_due_non_ne_sceglie_uno(rovinato):
+    archivio, rotto, sano = rovinato
+    _gemelli(archivio, rotto, sano)
+    with archivio.scrittura() as connessione:
+        terzo = connessione.execute(
+            "SELECT s.id FROM scatti s WHERE s.id NOT IN (?, ?) AND s.genere = 'foto' "
+            "AND s.fuori_archivio = 0 AND EXISTS (SELECT 1 FROM impronte i "
+            "WHERE i.scatto_id = s.id) LIMIT 1", (rotto, sano)).fetchone()[0]
+        connessione.execute("UPDATE scatti SET data_locale = '2001-02-03T04:05:06', "
+                            "giorno = '2001-02-03' WHERE id = ?", (terzo,))
+        connessione.execute("UPDATE file_media SET larghezza = 3000, altezza = 4000, "
+                            "marca = 'Apple', modello = 'iPhone' WHERE scatto_id = ?",
+                            (terzo,))
+    assert _gemello(archivio, rotto) is None
+
+
+def test_le_pagine_dicono_il_probabile_doppione(rovinato):
+    archivio, rotto, sano = rovinato
+    _gemelli(archivio, rotto, sano)
+    inizi._ricordati.clear()
+    cliente = _cliente()
+    pagina = cliente.get("/intelligenza/perche-mancano").text
+    assert f'data-pm-gemello="{sano}"' in pagina
+    assert "Probabilmente è un doppione rovinato" in pagina
+    assert f'data-gemello-di="{sano}"' in cliente.get("/sistemare").text
