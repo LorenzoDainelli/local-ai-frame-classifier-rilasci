@@ -170,7 +170,7 @@ def test_lo_stato_dello_scatto_mette_prima_il_piu_probabile(archivio, monkeypatc
 sync_api = pytest.importorskip("playwright.sync_api")
 
 
-def test_nel_browser_una_pillola_per_nodo_e_la_probabile_per_prima(archivio_pieno, monkeypatch,
+def test_nel_browser_una_pillola_sola_per_parte_e_le_altre_dietro_al_piu(archivio_pieno, monkeypatch,
                                                                     tmp_path):
     import threading
     import types
@@ -208,10 +208,18 @@ def test_nel_browser_una_pillola_per_nodo_e_la_probabile_per_prima(archivio_pien
         pagina.wait_for_selector(f'#pillole [data-pmio="{ramo["chiuso"]}"]')
         dopo = [int(v) for v in pagina.locator("#pillole [data-zone][data-pia]").evaluate_all(
             "(tutte) => tutte.map((p) => p.dataset.pia)")]
+        resto = pagina.locator("#pillole [data-altre][data-zone]").inner_text()
+        pagina.locator("#pillole [data-altre][data-zone]").click()
+        pagina.wait_for_selector("#tutte:not([hidden]) #tutte-pillole [data-zone][data-pia]")
+        tutte = [int(v) for v in pagina.locator(
+            "#tutte-pillole [data-zone][data-pia]").evaluate_all(
+            "(tutte) => tutte.map((p) => p.dataset.pia)")]
         assert not errori, errori
         assert not console, console
         browser.close()
 
-    assert ordine == [ramo["chiuso"], ramo["radice"], ramo["aperto"], ramo["teso"]]
+    assert ordine == [ramo["chiuso"]]
     assert "et-probabile" in primo
-    assert dopo == [ramo["radice"], ramo["aperto"], ramo["teso"]]
+    assert dopo == [ramo["radice"]]
+    assert resto.strip() == "+2"
+    assert tutte == [ramo["radice"], ramo["aperto"], ramo["teso"]]

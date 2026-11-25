@@ -442,7 +442,7 @@ function testoTipo(id, voce) {
         : scampa(voce.nome);
 }
 
-function partiTrovate() {
+function partiTrovate(tutte = false) {
     const viste = new Set(mie(0));
     const proposti = new Set(proposte(0).map((voce) => voce.nodo_id));
     return ((st.pezzo && st.pezzo.parti) || []).map((parte, indice) => {
@@ -450,13 +450,17 @@ function partiTrovate() {
         const dove = `<span class="via">· ${scampa(parte.nome.toLowerCase())}${quante}</span>`;
         const nodi = (parte.nodi || []).filter((voce) => !viste.has(voce.nodo_id) && !proposti.has(voce.nodo_id));
         if (nodi.length) {
-            return nodi.map((voce) => {
+            const mostrati = tutte ? nodi : nodi.slice(0, 1);
+            const resto = nodi.length - mostrati.length;
+            return mostrati.map((voce) => {
                 const probabile = voce.nodo_id === parte.probabile;
                 const titolo = probabile
                     ? "Parte trovata nella foto. Secondo le tue etichette è la più probabile: clic per metterla"
                     : "Parte trovata nella foto: clic per mettere l'etichetta";
                 return `<button type="button" class="et-pillola et-ia${probabile ? " et-probabile" : ""}" data-pia="${voce.nodo_id}" data-di="0" data-zone="${indice}" title="${titolo}">${scampa(voce.nome)} ${dove}</button>`;
-            }).join("");
+            }).join("") + (resto > 0
+                ? `<button type="button" class="et-pillola altre" data-altre="1" data-zone="${indice}" title="Gli altri nodi di questa parte">+${resto}</button>`
+                : "");
         }
         return `<span class="et-pillola et-zona" data-zone="${indice}" title="Parte trovata nella foto: passa sopra per vedere dove">${scampa(parte.nome.toLowerCase())}${quante}</span>`;
     }).join("");
@@ -549,12 +553,12 @@ function mostraSagoma(id) {
     quadro.appendChild(strato);
 }
 
-function elencoPillole() {
+function elencoPillole(tutte = false) {
     const confermate = st.pezzo ? st.pezzo.confermate || [] : [];
     const voceDi = (id) => confermate.find((voce) => voce.nodo_id === id);
     return mie(0).map((id) => `<button type="button" class="et-pillola et-mio" data-pmio="${id}" data-di="0" title="Clic per togliere">${testoTipo(id, voceDi(id))}</button>` + tastoSagoma(id)).join("") +
         proposte(0).map((voce) => `<button type="button" class="et-pillola et-ia" data-pia="${voce.nodo_id}" data-di="0" title="Proposta dell'IA: clic per confermare">${testoTipo(voce.nodo_id, voce)}</button>`).join("") +
-        partiTrovate();
+        partiTrovate(tutte);
 }
 
 function disegnaPillole() {
@@ -582,7 +586,7 @@ function disegnaPillole() {
             }
         }
     }
-    if (st.tutte) $("tutte-pillole").innerHTML = elencoPillole();
+    if (st.tutte) $("tutte-pillole").innerHTML = elencoPillole(true);
 }
 
 function disegnaTutto() {

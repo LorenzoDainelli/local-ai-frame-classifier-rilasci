@@ -240,6 +240,7 @@
 .et-pillole-box { position: relative; flex: none; }
 .et-pillole { display: flex; flex-wrap: wrap; gap: 6px; max-height: 90px; overflow: hidden; }
 .et-pillole.aperte { max-height: none; }
+#pillole-persone, #pillole-luogo { max-height: 90px; overflow-y: auto; }
 .et-pillola { height: 24px; box-sizing: border-box; border-radius: var(--raggio-pillola); padding: 0 10px; font: inherit; font-size: 12px; display: inline-flex; align-items: center; cursor: pointer; border: 1px solid transparent; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: transparent; color: var(--ink); }
 .et-pillola.et-mio { background: var(--accento); color: var(--su-accento); font-weight: 600; }
 .et-pillola.et-mio:hover { text-decoration: line-through; }
