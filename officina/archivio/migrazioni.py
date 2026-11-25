@@ -1991,6 +1991,11 @@ def _versione_91(connessione: sqlite3.Connection) -> None:
     indici_dei_legami(connessione)
 
 
+def _versione_92(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE INDEX volti_decisi_da_te ON volti(persona_id) WHERE deciso_da = 'utente'")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -2159,6 +2164,8 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_90),
     Migrazione(91, "le sagome disegnate sulle etichette e le parti del corpo imparate "
                    "dalle sagome", _versione_91),
+    Migrazione(92, "i volti si attaccano da soli solo se somigliano a quelli confermati da te",
+               _versione_92),
 ]
 
 

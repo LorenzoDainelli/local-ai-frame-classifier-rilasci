@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import PureWindowsPath
 
 from officina.corpi import chi_e
+from officina.volti import gruppi as volti_gruppi
 from officina.modello import posti
 from officina.modello import sagome as sagome_fatte
 from officina.modello import etichette as magazzino
@@ -138,19 +139,8 @@ def chi_c_e(connessione: sqlite3.Connection, scatto_id: int) -> list[dict]:
 
 def _chi_c_e(connessione: sqlite3.Connection, scatto_id: int) -> list[dict]:
     fuori: dict[int, dict] = {}
-    for riga in tutti(
-            connessione,
-            "SELECT v.persona_id, p.nome, max(v.area) AS area, "
-            "max(v.id) AS volto FROM volti v JOIN persone p ON p.id = v.persona_id "
-            "WHERE v.scatto_id = ? AND p.stato = 'attiva' "
-            "GROUP BY v.persona_id ORDER BY area DESC", scatto_id):
-        fuori[riga["persona_id"]] = {
-            "persona_id": riga["persona_id"],
-            "nome": riga["nome"] or "senza nome",
-            "volto": riga["volto"],
-            "a_mano": False,
-            "confermata": False,
-        }
+    for voce in _volti_che_reggono(connessione, scatto_id):
+        fuori[voce["persona_id"]] = voce
     for riga in tutti(
             connessione,
             "SELECT n.persona_id, p.nome FROM persone_negli_scatti n "
@@ -189,6 +179,40 @@ def _chi_c_e(connessione: sqlite3.Connection, scatto_id: int) -> list[dict]:
             "perche": voce["perche"],
         }
     return list(fuori.values())
+
+
+def _volti_che_reggono(connessione: sqlite3.Connection, scatto_id: int) -> list[dict]:
+    confermate = {riga["persona_id"] for riga in tutti(
+        connessione,
+        "SELECT persona_id FROM persone_negli_scatti WHERE scatto_id = ?", scatto_id)}
+    conosciuti = None
+    scelti: dict[int, dict] = {}
+    for riga in tutti(
+            connessione,
+            "SELECT v.id, v.persona_id, p.nome, v.area, v.impronta, v.deciso_da "
+            "FROM volti v JOIN persone p ON p.id = v.persona_id "
+            "WHERE v.scatto_id = ? AND p.stato = 'attiva' "
+            "ORDER BY v.area DESC, v.id DESC", scatto_id):
+        persona = riga["persona_id"]
+        if persona in scelti:
+            continue
+        regge = persona in confermate or riga["deciso_da"] == "utente"
+        if not regge and riga["impronta"] is not None:
+            if conosciuti is None:
+                conosciuti = volti_gruppi.Conosciuti(connessione)
+            regge = conosciuti.chi_e(riga["impronta"]) == persona
+        if not regge:
+            continue
+        scelti[persona] = {
+            "persona_id": persona,
+            "nome": riga["nome"] or "senza nome",
+            "volto": riga["id"],
+            "a_mano": False,
+            "confermata": False,
+        }
+        if persona not in confermate:
+            scelti[persona]["perche"] = "il volto somiglia"
+    return list(scelti.values())
 
 
 def _macchina(riga) -> str | None:

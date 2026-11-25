@@ -82,8 +82,10 @@ def test_alle_importazioni_successive_i_sicuri_vanno_in_silenzio(archivio):
     altro = persone.crea(connessione, "Persona B")
     for scatto_id in scatti[:2]:
         metti_volto(connessione, scatto_id, 0.95, persona_id=marco)
+        persone.metti_a_mano(connessione, scatto_id, marco)
     for scatto_id in scatti[2:4]:
-        metti_volto(connessione, scatto_id, 0.02, persona_id=altro)
+        volto = metti_volto(connessione, scatto_id, 0.02, persona_id=altro)
+        connessione.execute("UPDATE volti SET deciso_da = 'utente' WHERE id = ?", (volto,))
     connessione.commit()
 
     metti_volto(connessione, scatti[4], 0.95)
@@ -95,6 +97,51 @@ def test_alle_importazioni_successive_i_sicuri_vanno_in_silenzio(archivio):
     quanti = connessione.execute(
         "SELECT count(*) FROM volti WHERE persona_id = ?", (marco,)).fetchone()[0]
     assert quanti == 3
+
+
+def test_i_volti_attaccati_da_soli_non_insegnano_niente(archivio):
+    connessione = archivio.connessione
+    scatti = metti_scatti(connessione, 6)
+    marco = persone.crea(connessione, "Persona A")
+    for scatto_id in scatti[:3]:
+        metti_volto(connessione, scatto_id, 0.95, persona_id=marco)
+    connessione.commit()
+
+    metti_volto(connessione, scatti[4], 0.95)
+    fatto = gruppi.raggruppa(connessione)
+    connessione.commit()
+
+    assert fatto.assegnati_in_silenzio == 0
+    quanti = connessione.execute(
+        "SELECT count(*) FROM volti WHERE persona_id = ?", (marco,)).fetchone()[0]
+    assert quanti == 3
+
+
+def test_in_etichetta_un_volto_attaccato_male_non_si_propone(archivio):
+    from officina.web import etichettatura
+
+    connessione = archivio.connessione
+    scatti = metti_scatti(connessione, 6)
+    marco = persone.crea(connessione, "Persona A")
+    altro = persone.crea(connessione, "Persona B")
+    for scatto_id in scatti[:2]:
+        metti_volto(connessione, scatto_id, 0.95, persona_id=marco)
+        persone.metti_a_mano(connessione, scatto_id, marco)
+    for scatto_id in scatti[2:4]:
+        metti_volto(connessione, scatto_id, 0.02, persona_id=altro)
+        persone.metti_a_mano(connessione, scatto_id, altro)
+    giusto = metti_volto(connessione, scatti[4], 0.95, persona_id=marco)
+    metti_volto(connessione, scatti[5], 0.02, persona_id=marco)
+    connessione.commit()
+
+    qui = etichettatura._chi_c_e(connessione, scatti[4])
+    assert [(voce["persona_id"], voce["volto"], voce["perche"]) for voce in qui] == [
+        (marco, giusto, "il volto somiglia")]
+    sbagliato = [voce for voce in etichettatura._chi_c_e(connessione, scatti[5])
+                 if voce["persona_id"] == marco]
+    assert sbagliato == []
+    confermato = etichettatura._chi_c_e(connessione, scatti[0])
+    assert [(voce["persona_id"], voce["confermata"]) for voce in confermato] == [(marco, True)]
 
 
 def test_i_forse_finiscono_nel_cassetto_senza_chiedere_niente(archivio):

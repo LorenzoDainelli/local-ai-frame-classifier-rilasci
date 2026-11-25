@@ -623,7 +623,7 @@ function disegnaLeTre() {
     const { conferm, dalVolto } = personeDelloScatto();
     $("pillole-persone").innerHTML =
         conferm.map((chi) => `<button type="button" class="et-pillola et-mio" data-gente="${chi.persona_id}" data-come="togli" title="Clic per togliere">${scampa(chi.nome)}${chi.volto ? "" : ' <span class="via">· senza volto</span>'}</button>`).join("") +
-        dalVolto.map((chi) => (chi.corpo ? pillolaDalCorpo(chi) : `<button type="button" class="et-pillola et-ia" data-gente="${chi.persona_id}" data-come="metti" title="${chi.perche ? `${scampa(chi.perche)}: clic per confermare` : "Il volto somiglia: clic per confermare"}">${scampa(chi.nome)}?${chi.perche ? ` <span class="via">· ${scampa(chi.perche)}</span>` : ""}</button>`)).join("") +
+        dalVolto.map((chi) => (chi.corpo ? pillolaDalCorpo(chi) : `<button type="button" class="et-pillola et-ia" data-gente="${chi.persona_id}" data-come="metti" title="${chi.perche ? `${scampa(chi.perche)}: clic per confermare` : "Il volto somiglia: clic per confermare"}">${chi.volto ? `<img class="faccina" src="/volto/${chi.volto}?lato=44" alt="">` : ""}${scampa(chi.nome)}?${chi.perche ? ` <span class="via">· ${scampa(chi.perche)}</span>` : ""}</button>`)).join("") +
         `<button type="button" class="et-pillola et-scappa${tre.nessuna_persona ? " et-mio" : ""}" data-nessuna="1" title="Nessuna persona (N)">Nessuna persona</button>` +
         (primaDalCorpo() ? '<span class="et-tasti-corpo"><span><kbd>Invio</kbd> conferma</span><span><kbd>Canc</kbd> scarta</span></span>' : "");
     disegnaSagome();

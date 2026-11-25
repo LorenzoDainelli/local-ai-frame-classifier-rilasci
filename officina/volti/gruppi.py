@@ -7,7 +7,6 @@ from officina.archivio.database import tutti
 from officina.descrittori import vettori
 from officina.insiemi import InsiemiUniti
 from officina.modello import persone
-from officina.volti import riferimento
 
 INSIEME = 0.62
 
@@ -77,50 +76,81 @@ def raggruppa(connessione: sqlite3.Connection, insieme: float = INSIEME,
 
 def _attacca_ai_conosciuti(connessione: sqlite3.Connection, liberi: list[dict],
                            sicuro: float, fuori: Raccolto) -> list[dict]:
-    conosciute = [voce for voce in persone.elenco(connessione) if voce["nome"]]
-    if not conosciute:
+    conosciuti = Conosciuti(connessione, sicuro)
+    if not conosciuti:
         return liberi
-
-    centri = []
-    numeri = []
-    for voce in conosciute:
-        dall_archivio = [riga["impronta"] for riga in tutti(
-            connessione,
-            "SELECT impronta FROM volti WHERE persona_id = ? "
-            "AND impronta IS NOT NULL", voce["id"])]
-        if dall_archivio:
-            centri.append(_centro(dall_archivio))
-            numeri.append(voce["id"])
-        insegnate = riferimento.impronte_di(connessione, voce["id"])
-        if insegnate:
-            centri.append(_centro(insegnate))
-            numeri.append(voce["id"])
-    if not centri:
-        return liberi
-
-    numpy = vettori.numpy_o_spiega()
-    tabella_centri = numpy.asarray(centri, dtype=numpy.float32)
-    persone_uniche = sorted(set(numeri))
-    dove = {persona: posto for posto, persona in enumerate(persone_uniche)}
-    di_chi = numpy.asarray([dove[persona] for persona in numeri])
-
     restano = []
     for volto in liberi:
-        mio = numpy.frombuffer(volto["impronta"], dtype="<f4")
-        somiglianze = tabella_centri @ mio
-        per_persona = numpy.full(len(persone_uniche), -1.0, dtype=numpy.float32)
-        numpy.maximum.at(per_persona, di_chi, somiglianze)
-        ordine = numpy.argsort(-per_persona)
-        primo = float(per_persona[ordine[0]])
-        secondo = float(per_persona[ordine[1]]) if len(ordine) > 1 else -1.0
-        if primo >= sicuro and primo - secondo >= 0.08:
+        persona = conosciuti.chi_e(volto["impronta"])
+        if persona is not None:
             connessione.execute(
-                "UPDATE volti SET persona_id = ? WHERE id = ?",
-                (persone_uniche[int(ordine[0])], volto["id"]))
+                "UPDATE volti SET persona_id = ? WHERE id = ?", (persona, volto["id"]))
             fuori.assegnati_in_silenzio += 1
         else:
             restano.append(volto)
     return restano
+
+
+MARGINE = 0.08
+
+
+class Conosciuti:
+    def __init__(self, connessione: sqlite3.Connection, sicuro: float = SICURO,
+                 margine: float = MARGINE):
+        self.sicuro = sicuro
+        self.margine = margine
+        nominate = {riga["id"] for riga in tutti(
+            connessione,
+            "SELECT id FROM persone WHERE stato = 'attiva' AND nome IS NOT NULL")}
+        confermati: dict[int, list[bytes]] = {}
+        for riga in tutti(connessione, _VOLTI_CONFERMATI):
+            if riga["persona_id"] in nominate:
+                confermati.setdefault(riga["persona_id"], []).append(riga["impronta"])
+        insegnati: dict[int, list[bytes]] = {}
+        for riga in tutti(connessione,
+                          "SELECT persona_id, impronta FROM volti_riferimento ORDER BY id"):
+            if riga["persona_id"] in nominate:
+                insegnati.setdefault(riga["persona_id"], []).append(riga["impronta"])
+        centri, numeri = [], []
+        for gruppo in (confermati, insegnati):
+            for persona, impronte in sorted(gruppo.items()):
+                centri.append(_centro(impronte))
+                numeri.append(persona)
+        self.persone = sorted(set(numeri))
+        if not centri:
+            self._centri = None
+            return
+        numpy = vettori.numpy_o_spiega()
+        self._centri = numpy.asarray(centri, dtype=numpy.float32)
+        dove = {persona: posto for posto, persona in enumerate(self.persone)}
+        self._di_chi = numpy.asarray([dove[persona] for persona in numeri])
+
+    def __bool__(self) -> bool:
+        return self._centri is not None
+
+    def chi_e(self, impronta: bytes) -> int | None:
+        if self._centri is None:
+            return None
+        numpy = vettori.numpy_o_spiega()
+        mio = numpy.frombuffer(impronta, dtype="<f4")
+        somiglianze = self._centri @ mio
+        per_persona = numpy.full(len(self.persone), -1.0, dtype=numpy.float32)
+        numpy.maximum.at(per_persona, self._di_chi, somiglianze)
+        ordine = numpy.argsort(-per_persona)
+        primo = float(per_persona[ordine[0]])
+        secondo = float(per_persona[ordine[1]]) if len(ordine) > 1 else -1.0
+        if primo >= self.sicuro and primo - secondo >= self.margine:
+            return self.persone[int(ordine[0])]
+        return None
+
+
+_VOLTI_CONFERMATI = (
+    "SELECT persona_id, impronta FROM volti "
+    "WHERE deciso_da = 'utente' AND persona_id IS NOT NULL AND impronta IS NOT NULL "
+    "UNION ALL "
+    "SELECT v.persona_id, v.impronta FROM persone_negli_scatti n "
+    "JOIN volti v ON v.scatto_id = n.scatto_id AND v.persona_id = n.persona_id "
+    "WHERE v.deciso_da = 'sistema' AND v.impronta IS NOT NULL")
 
 
 def _centro(impronte: list[bytes]):

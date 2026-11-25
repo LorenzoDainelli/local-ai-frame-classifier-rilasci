@@ -230,6 +230,7 @@
 .et-info-blocco[hidden] { display: none; }
 .et-info-blocco .campo { width: 100%; }
 .et-info .faccina { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
+.et-pillola .faccina { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 4px; }
 .et-tutte { position: absolute; inset: 8px; z-index: 8; background: color-mix(in srgb, var(--fondo) 96%, transparent); border: 1px solid var(--linea-forte); border-radius: var(--raggio-controllo); padding: 12px; overflow: auto; }
 .et-tutte[hidden] { display: none; }
 .et-striscia { display: flex; gap: 6px; overflow-x: auto; flex: none; }
