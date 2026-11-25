@@ -562,6 +562,7 @@ def test_finita_mostra_le_ultime_arrivate_una_volta(apri, cliente, foto):
     motore = importazione.motore_attuale()
     motore.prepara([foto])
     motore.esegui()
+    cliente.post("/importazione/cartella", data={"percorso": str(foto)})
     finta = Finta("/api/importazione", {
         **API, "sta_lavorando": False, "percentuale": 100, "guasto": "",
         "ultime": [{"file_id": 3}, {"file_id": 2}, {"file_id": 1}]})

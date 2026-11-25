@@ -8,6 +8,7 @@
 - «Intensità della scheda» nelle Impostazioni: 100
 - Monitor del fisso: 60 Hz
 - Portatile: schermo a 120 Hz; l'utente usa quasi sempre il portatile, collegato al fisso con il collegamento del programma
+- iPhone: iPhone 15 Pro, 256 GB, iOS 27.2.1 (per il Visore iPhone, versione 3)
 
 Non chiederle di nuovo: se cambiano, l'utente lo dice.
 
@@ -21,3 +22,8 @@ Non chiederle di nuovo: se cambiano, l'utente lo dice.
   controllati, niente etichette sbagliate), e oltre ai casi facili ci devono essere casi
   difficili o molto difficili (buio, mosso, sfocato, di lato, coperti, piccoli, rumore,
   compressi), con il punteggio anche solo sui difficili. Sul facile sono bravi tutti.
+
+## Visore iPhone
+
+- Lo stile approvato è in `iphone/STILE.md`: leggerlo prima di toccare la grafica del Visore
+  e seguirlo sempre.

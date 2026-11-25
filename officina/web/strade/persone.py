@@ -19,11 +19,12 @@ from officina.volti import rilevatore as volti_rilevatore
 from officina.volti import riferimento as volti_riferimento
 
 from officina.web import in_disparte, lavori, sosta
+from officina.web import passi as passi_mod
 from officina.web.strade import base, comune
 
 strada = APIRouter()
 
-solo_qui = [Depends(base.solo_da_questo_computer)]
+qui_o_portatile = [Depends(base.solo_qui_o_dal_portatile)]
 
 
 @strada.get("/persone", response_class=HTMLResponse)
@@ -364,6 +365,9 @@ def parti_i_volti(archivio) -> None:
     comune.lavoro_volti.numeri.setdefault("quanto_manca", "sto ancora misurando")
 
 
+PASSI_DEI_VOLTI = {"volti": "Volti", "gruppi": "Gruppi delle persone"}
+
+
 def _guarda_le_facce(archivio, passata) -> None:
     import time
 
@@ -377,19 +381,24 @@ def _guarda_le_facce(archivio, passata) -> None:
         misura.letti = fatti
         if fatti >= 3:
             misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / fatti
-        comune.lavoro_volti.numeri = {
-            "fatti": fatti,
-            "totale": avanzamento.totale,
-            "volti": avanzamento.volti,
-            "quanto_manca": misura.quanto_manca(),
-        }
+        passi.segna("volti", fatti, avanzamento.totale, misura.quanto_manca(),
+                    volti=avanzamento.volti)
 
-    passata.esegui(al_passo=al_passo)
-    comune.lavoro_volti.di(passata.avanzamento.a_parole())
+    passi = passi_mod.Passi(comune.lavoro_volti, PASSI_DEI_VOLTI,
+                            lambda: {"volti": passata.quanti_mancano(), "gruppi": 1})
 
-    with archivio.scrittura() as connessione:
-        fatto = volti_gruppi.raggruppa(connessione)
-    comune.lavoro_volti.di(fatto.a_parole())
+    def i_volti() -> None:
+        passata.esegui(al_passo=al_passo)
+        comune.lavoro_volti.di(passata.avanzamento.a_parole())
+
+    def i_gruppi() -> None:
+        with archivio.scrittura() as connessione:
+            fatto = volti_gruppi.raggruppa(connessione)
+        passi.segna("gruppi", 1, 1)
+        comune.lavoro_volti.di(fatto.a_parole())
+
+    passi.fai("volti", i_volti, lambda: False)
+    passi.fai("gruppi", i_gruppi, lambda: False)
 
     if passata.avanzamento.volti == 0 and passata.avanzamento.fatti:
         from officina.volti import spiegazione
@@ -427,7 +436,7 @@ def pagina_persona(richiesta: Request, persona_id: int):
     })
 
 
-@strada.post("/persone/{persona_id}/insegna", dependencies=solo_qui)
+@strada.post("/persone/{persona_id}/insegna", dependencies=qui_o_portatile)
 def insegna_altre_facce(persona_id: int, cartella: str = Form("")):
     scritto = base.cartella_per_intero(cartella)
     if not scritto:

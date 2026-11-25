@@ -1092,7 +1092,7 @@ def test_la_guardia_conta_solo_gli_ultimi_secondi(monkeypatch):
 def test_ogni_pagina_dice_quando_la_stai_usando():
     radice = Path(__file__).resolve().parents[1] / "officina" / "web"
     base = (radice / "templates" / "base.html").read_text(encoding="utf-8")
-    assert '<script type="module" src="/statici/js/sei_qui.js"></script>' in base
+    assert '<script type="module" src="{{ statico(\'/statici/js/sei_qui.js\') }}"></script>' in base
     codice = (radice / "statici" / "js" / "sei_qui.js").read_text(encoding="utf-8")
     assert '"/api/sei-qui"' in codice and 'method: "POST"' in codice
     for quale in ("mousedown", "keydown", "wheel", "touchstart"):

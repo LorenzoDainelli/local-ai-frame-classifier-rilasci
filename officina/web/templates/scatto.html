@@ -3,6 +3,7 @@
 {% from "_icone.html" import icona %}
 {% from "_ritocca.html" import tasto_ritocca, finestra_ritocca %}
 {% from "_ritocca_video.html" import finestra_ritocca_video %}
+{% from "_taglia.html" import finestra_taglia %}
 {% block titolo %}Scatto — Local AI Frame Classifier{% endblock %}
 
 {% macro la_finestra_3d() %}
@@ -244,6 +245,15 @@
         </div>
         {% endfor %}
     </dd>
+    {% if tagliato_da %}
+    <dt>Tagliato</dt>
+    <dd>{% if tagliato_da.scatto_id %}<a href="/scatto/{{ tagliato_da.scatto_id }}">Da questo video</a>{% else %}Da un video che non c'è più{% endif %}
+        <span class="tenue piccolo">· {{ tagliato_da.pezzi|length }} {{ 'pezzo' if tagliato_da.pezzi|length == 1 else 'pezzi' }}</span></dd>
+    {% endif %}
+    {% if tagliati %}
+    <dt>Tagli</dt>
+    <dd class="in-fila">{% for altro in tagliati %}<a href="/scatto/{{ altro }}">Taglio {{ loop.index }}</a>{% endfor %}</dd>
+    {% endif %}
     {% if percorsi_in_piu %}
     <dt>Doppioni</dt>
     <dd class="piccolo attenuato">
@@ -300,6 +310,9 @@
                     <button class="tasto-comando nudo piccolo" type="button" data-apri-nota aria-controls="ft-info">{{ icona('nota', 14) }} Nota{% if scatto.nota %} ·{% endif %}</button>
                     {% if corpi_visti %}<button class="tasto-comando nudo piccolo" type="button" data-mostra-corpi aria-pressed="false" title="Mostra il contorno e i punti del corpo di ogni persona">{{ icona('persona', 14) }} Corpi · {{ corpi_visti|length }}</button>{% endif %}
                     {% if in3d %}<button class="tasto-comando nudo piccolo" type="button" data-apri-3d aria-haspopup="dialog" aria-controls="in3d" title="Guarda le persone e il luogo di questa foto in 3D">{{ icona('cubo', 14) }} In 3D</button>{% endif %}
+                    {% if si_taglia %}<button class="tasto-comando nudo piccolo" type="button" data-apri-taglia data-scatto="{{ scatto.id }}" aria-haspopup="dialog" aria-controls="taglia" title="Tieni solo i pezzi che vuoi: il video tagliato diventa uno scatto nuovo, l'originale resta com'è">{{ icona('forbici', 14) }} Taglia</button>{% endif %}
+                    {% if tagliato_da and tagliato_da.scatto_id %}<a class="pillola minuscolo" href="/scatto/{{ tagliato_da.scatto_id }}" title="Questo video è tagliato da un altro: apri l'originale">Tagliato da un video</a>{% endif %}
+                    {% if tagliati %}<span class="pillola minuscolo" title="Da questo video sono stati fatti dei tagli: li trovi in Informazioni">{{ tagliati|length }} {{ 'taglio' if tagliati|length == 1 else 'tagli' }}</span>{% endif %}
                     {% if principale and not non_si_apre %}{{ tasto_ritocca(principale.id, ('scatto ' ~ (vicini.posizione|numero) ~ ' di ' ~ vicini.totale) if vicini.posizione else '', video=scatto.genere == 'video') }}{% endif %}
                     <span class="ft-tasti-destra in-fila">
                         {{ lo_stato_del_miglioramento() }}
@@ -339,11 +352,13 @@
     </div>
     {% if in3d %}{{ la_finestra_3d() }}{% endif %}
     {% if principale and not non_si_apre %}{{ finestra_ritocca() }}{{ finestra_ritocca_video() }}{% endif %}
+    {% if si_taglia %}{{ finestra_taglia(scatto.id) }}{% endif %}
 </main>
 </div>
 {% endblock %}
 
 {% block coda %}
+{% if si_taglia %}<script type="module" src="{{ statico('/statici/js/taglia.js') }}"></script>{% endif %}
 <script type="module">
     import { preparaCorpi } from "/statici/js/corpi.js";
     import { mettiInCoda, scriviEsito } from "/statici/js/migliora.js";

@@ -93,7 +93,9 @@ def cambia(connessione, parte_id: int, nome: str, parola: str) -> bool:
         (nome, parola, adesso(), parte_id))
     if parola == prima["parola"]:
         return False
-    dimentica(connessione, parte_id)
+    connessione.execute(
+        "DELETE FROM parti_trovate WHERE parte_id = ? AND come = 'parola'", (parte_id,))
+    connessione.execute("DELETE FROM parti_guardate WHERE parte_id = ?", (parte_id,))
     return True
 
 
@@ -105,12 +107,29 @@ def scegli_il_nodo(connessione, parte_id: int, nodo_id: int | None) -> None:
         "UPDATE parti_del_corpo SET nodo_id = ? WHERE id = ?", (nodo_id, parte_id))
 
 
+def nodi_proposti(connessione, nodo_id: int | None) -> list[dict]:
+    if nodo_id is None:
+        return []
+    return [dict(riga) for riga in tutti(
+        connessione,
+        "WITH RECURSIVE ramo(id, nome, genitore_id, livello, via) AS ("
+        "SELECT id, nome, NULL, 0, '' FROM nodi WHERE id = ? AND stato = 'attivo' "
+        "UNION ALL "
+        "SELECT n.id, n.nome, n.genitore_id, r.livello + 1, "
+        "r.via || char(31) || lower(n.nome) || char(30) || printf('%012d', n.id) "
+        "FROM nodi n JOIN ramo r ON n.genitore_id = r.id "
+        "WHERE n.stato = 'attivo' AND r.livello < 32) "
+        "SELECT id AS nodo_id, nome, genitore_id, livello FROM ramo ORDER BY via",
+        nodo_id)]
+
+
 def consigli(connessione, scatto_id: int) -> list[dict]:
     fuori: dict[int, dict] = {}
     for riga in tutti(
             connessione,
             "SELECT t.parte_id, p.nome, t.fotogramma, t.riquadro, t.sicurezza, "
-            "n.id AS nodo_id, n.nome AS nodo_nome FROM parti_trovate t "
+            "t.come, t.da_controllare, n.id AS nodo_id, n.nome AS nodo_nome "
+            "FROM parti_trovate t "
             "JOIN parti_del_corpo p ON p.id = t.parte_id "
             "LEFT JOIN nodi n ON n.id = p.nodo_id AND n.stato = 'attivo' "
             "WHERE t.scatto_id = ? ORDER BY p.nome COLLATE NOCASE, t.sicurezza DESC",
@@ -120,7 +139,10 @@ def consigli(connessione, scatto_id: int) -> list[dict]:
             "nodo_id": riga["nodo_id"], "nodo_nome": riga["nodo_nome"], "zone": []})
         voce["zone"].append({"fotogramma": riga["fotogramma"],
                              "riquadro": json.loads(riga["riquadro"]),
-                             "sicurezza": riga["sicurezza"]})
+                             "sicurezza": riga["sicurezza"], "come": riga["come"],
+                             "da_controllare": bool(riga["da_controllare"])})
+    for voce in fuori.values():
+        voce["nodi"] = nodi_proposti(connessione, voce["nodo_id"])
     return list(fuori.values())
 
 
@@ -173,7 +195,7 @@ def corpi_di(connessione, scatto_id: int, fotogramma: int) -> list[dict]:
 def salva(connessione, scatto_id: int, file_id: int | None, parte_id: int,
           trovate, modello: str, versione: str) -> int:
     connessione.execute(
-        "DELETE FROM parti_trovate WHERE scatto_id = ? AND parte_id = ?",
+        "DELETE FROM parti_trovate WHERE scatto_id = ? AND parte_id = ? AND come = 'parola'",
         (scatto_id, parte_id))
     per_fotogramma: dict[int, list[dict]] = {}
     ora = adesso()
@@ -194,6 +216,29 @@ def salva(connessione, scatto_id: int, file_id: int | None, parte_id: int,
         "INSERT OR REPLACE INTO parti_guardate (scatto_id, parte_id, modello, versione, "
         "quante, guardata_il) VALUES (?,?,?,?,?,?)",
         (scatto_id, parte_id, modello, versione, quante, ora))
+    return quante
+
+
+def salva_imparate(connessione, scatto_id: int, file_id: int | None, parte_id: int,
+                   trovate) -> int:
+    connessione.execute(
+        "DELETE FROM parti_trovate WHERE scatto_id = ? AND parte_id = ? AND come = 'imparata'",
+        (scatto_id, parte_id))
+    per_fotogramma: dict[int, list[dict]] = {}
+    ora = adesso()
+    quante = 0
+    for fotogramma, riquadro, sicurezza, maschera, da_controllare in trovate:
+        if fotogramma not in per_fotogramma:
+            per_fotogramma[fotogramma] = corpi_di(connessione, scatto_id, fotogramma)
+        corpo_id, copertura = assegna(riquadro, per_fotogramma[fotogramma])
+        connessione.execute(
+            "INSERT INTO parti_trovate (parte_id, scatto_id, file_id, fotogramma, "
+            "corpo_id, riquadro, sicurezza, copertura, trovata_il, come, da_controllare, "
+            "maschera) VALUES (?,?,?,?,?,?,?,?,?,'imparata',?,?)",
+            (parte_id, scatto_id, file_id, fotogramma, corpo_id,
+             json.dumps([round(float(v), 5) for v in riquadro]), float(sicurezza),
+             copertura, ora, int(bool(da_controllare)), maschera))
+        quante += 1
     return quante
 
 

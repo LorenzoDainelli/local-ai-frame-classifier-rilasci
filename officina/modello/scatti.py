@@ -616,20 +616,14 @@ def conteggi_delle_fotocamere(connessione: sqlite3.Connection,
                               filtro: Filtro) -> dict[str, dict[int, int]]:
     dove, parametri = _condizioni(connessione,
                                   filtro.copia_con(fotocamera=None, obiettivo=None))
-    fotocamere: dict[int, set[int]] = {}
-    obiettivi: dict[int, set[int]] = {}
-    for riga in tutti(
-            connessione,
-            f"SELECT DISTINCT s.id, f.fotocamera_id, f.obiettivo_id FROM scatti s "
-            f"JOIN file_media f ON f.scatto_id = s.id WHERE {dove} "
-            f"AND (f.fotocamera_id IS NOT NULL OR f.obiettivo_id IS NOT NULL)",
-            *parametri):
-        if riga["fotocamera_id"] is not None:
-            fotocamere.setdefault(riga["fotocamera_id"], set()).add(riga["id"])
-        if riga["obiettivo_id"] is not None:
-            obiettivi.setdefault(riga["obiettivo_id"], set()).add(riga["id"])
-    return {"fotocamere": {chi: len(dentro) for chi, dentro in fotocamere.items()},
-            "obiettivi": {chi: len(dentro) for chi, dentro in obiettivi.items()}}
+    return {chiave: {riga["chi"]: riga["quanti"] for riga in tutti(
+                connessione,
+                f"SELECT f.{colonna} AS chi, count(DISTINCT s.id) AS quanti FROM scatti s "
+                f"JOIN file_media f ON f.scatto_id = s.id WHERE {dove} "
+                f"AND f.{colonna} IS NOT NULL GROUP BY f.{colonna}",
+                *parametri)}
+            for chiave, colonna in (("fotocamere", "fotocamera_id"),
+                                    ("obiettivi", "obiettivo_id"))}
 
 
 def crea(connessione: sqlite3.Connection, genere: str, dati,

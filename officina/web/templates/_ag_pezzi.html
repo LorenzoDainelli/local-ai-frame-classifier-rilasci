@@ -41,12 +41,12 @@
 </dialog>
 {%- endmacro %}
 
-{% macro aggiungi(primo, da_questo_computer, si_puo_sfogliare, gruppi, gruppo_ultimo) -%}
+{% macro aggiungi(primo, da_questo_computer, si_puo_sfogliare, gruppi, gruppo_ultimo, nella_pagina=false) -%}
 {% if da_questo_computer %}
 <div class="cn ag-aggiungi{{ ' primo' if primo else ' ag-tessera' }}" data-cartella-nuova-riquadro {% if primo %}data-autofocus{% endif %}>
     {% if si_puo_sfogliare %}
     <button class="tasto-comando cn-sfoglia {{ 'principale' if primo }}" type="button"
-            data-sfoglia hidden title="Apre la finestra di Windows per scegliere la cartella.">
+            data-sfoglia hidden {% if nella_pagina %}data-esplora{% endif %} title="Apre la finestra per scegliere la cartella.">
         <span class="gira-poco" data-gira hidden></span>
         <span data-icona>{{ icona('cartella' if primo else 'piu', 16) }}</span>
         <span data-scritta>{{ "Scegli una cartella…" if primo else "Scegli un'altra cartella…" }}</span>

@@ -18,6 +18,7 @@ from officina.corpi import motore as corpi_motore
 from officina.corpi import rilevatore as corpi_rilevatore
 
 from officina.web import in_disparte, lavori, sosta
+from officina.web import passi as passi_mod
 from officina.web.strade import base, comune, misura, persone
 
 strada = APIRouter()
@@ -148,29 +149,93 @@ def _guarda_i_corpi(passata) -> None:
         misura.letti = fatti
         if fatti >= 3:
             misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / fatti
-        comune.lavoro_corpi.numeri = {
+        _metti_corpi("corpi", {
             "fatti": fatti + avanzamento.gia_fatti,
             "totale": avanzamento.totale + avanzamento.gia_fatti,
             "corpi": avanzamento.corpi,
             "quanto_manca": misura.quanto_manca(),
-        }
+        })
 
-    passata.esegui(al_passo=al_passo)
-    comune.lavoro_corpi.di(passata.avanzamento.a_parole())
-    if not passata.fermata:
-        _rifai_i_punti(passata)
-    if not passata.fermata:
-        _fai_le_figure(passata)
-    if not passata.fermata:
-        _fai_le_superfici(passata)
-    if not passata.fermata:
-        _guarda_gli_aiuti_delle_persone(passata)
-    if not passata.fermata:
-        _cerca_le_parti(passata)
-    if not passata.fermata:
-        cerca_chi_e(passata.archivio, comune.lavoro_corpi, fermato=lambda: passata.fermata)
-    if not passata.fermata:
-        _fai_le_stanze(passata)
+    passi = passi_mod.Passi(comune.lavoro_corpi, PASSI_DEI_CORPI,
+                            lambda: _stime_dei_corpi(passata))
+    comune.passi_corpi = passi
+    fermata = lambda: passata.fermata          # noqa: E731
+    try:
+        def i_corpi() -> None:
+            passata.esegui(al_passo=al_passo)
+            comune.lavoro_corpi.di(passata.avanzamento.a_parole())
+
+        passi.fai("corpi", i_corpi, fermata)
+        passi.fai("punti", lambda: _rifai_i_punti(passata), fermata)
+        passi.fai("figure", lambda: _fai_le_figure(passata), fermata)
+        passi.fai("superfici", lambda: _fai_le_superfici(passata), fermata)
+        passi.fai("aiuti", lambda: _guarda_gli_aiuti_delle_persone(passata), fermata)
+        passi.fai("parti", lambda: _cerca_le_parti(passata), fermata)
+        passi.fai("imparate", lambda: _cerca_le_parti_imparate(passata), fermata)
+        passi.fai("chi_e", lambda: cerca_chi_e(
+            passata.archivio, comune.lavoro_corpi, fermato=fermata,
+            segna=lambda numeri: _metti_corpi("chi_e", numeri)), fermata)
+        passi.fai("stanze", lambda: _fai_le_stanze(passata), fermata)
+    finally:
+        comune.passi_corpi = None
+
+
+PASSI_DEI_CORPI = {
+    "corpi": "Corpi",
+    "punti": "Punti del corpo",
+    "figure": "Figure",
+    "superfici": "Superfici",
+    "aiuti": "Aiuti delle persone",
+    "parti": "Parti del corpo",
+    "imparate": "Parti imparate",
+    "chi_e": "Chi è",
+    "stanze": "Stanze",
+}
+
+
+def _metti_corpi(chiave: str, numeri: dict) -> None:
+    passi = comune.passi_corpi
+    if passi is None:
+        comune.lavoro_corpi.numeri = numeri
+        return
+    altro = {k: v for k, v in numeri.items() if k not in ("fatti", "totale", "quanto_manca")}
+    passi.segna(chiave, numeri.get("fatti", 0), numeri.get("totale", 0),
+                numeri.get("quanto_manca", ""), **altro)
+
+
+def _stime_dei_corpi(passata) -> dict[str, int]:
+    archivio = passata.archivio
+    modelli = archivio.dove.modelli
+    stime: dict[str, int] = {"chi_e": 1}
+
+    def prova(chiave: str, conta) -> None:
+        try:
+            stime[chiave] = int(conta() or 0)
+        except Exception as guasto:          # noqa: BLE001
+            registro.avviso("passi.stima_saltata", passo=registro.Parola(chiave),
+                            motivo=registro.Parola(type(guasto).__name__))
+
+    prova("corpi", passata.quanti_mancano)
+    with archivio.lettura() as connessione:
+        from officina.corpi import figure, imparate, superfici
+        from officina.corpi import parti as parti_del_corpo
+        from officina.modello import parti as elenco_delle_parti
+        from officina.stanza import costruzione
+
+        prova("punti", lambda: corpi_motore.quanti_da_ripuntare_senza_aprire(connessione))
+        if not figure.cosa_manca(modelli):
+            prova("figure", lambda: figure.quanti_mancano_senza_aprire(connessione))
+        if not superfici.cosa_manca(modelli):
+            prova("superfici", lambda: superfici.quanti_mancano_senza_aprire(connessione))
+        prova("aiuti", lambda: uno(
+            connessione, "SELECT count(*) AS q FROM aiuti a JOIN persone p "
+            "ON p.id = a.persona_id WHERE p.stato != 'cestino' AND a.guardato IS NULL")["q"])
+        if not parti_del_corpo.cosa_manca(modelli):
+            prova("parti", lambda: elenco_delle_parti.quanti_mancano(connessione))
+        prova("imparate", lambda: imparate.quanti_mancano(connessione))
+        if not costruzione.cosa_manca(modelli):
+            prova("stanze", lambda: len(costruzione.da_fare(connessione)))
+    return stime
 
 
 def _guarda_gli_aiuti_delle_persone(passata_corpi) -> None:
@@ -180,9 +245,9 @@ def _guarda_gli_aiuti_delle_persone(passata_corpi) -> None:
                                     fermato=lambda: passata_corpi.fermata)
 
     def al_passo(avanzamento) -> None:
-        comune.lavoro_corpi.numeri = {"fatti": avanzamento.fatti + avanzamento.saltati,
+        _metti_corpi("aiuti", {"fatti": avanzamento.fatti + avanzamento.saltati,
                                       "totale": avanzamento.totale, "corpi": avanzamento.corpi,
-                                      "quanto_manca": ""}
+                                      "quanto_manca": ""})
 
     try:
         if passata.esegui(al_passo=al_passo).totale:
@@ -205,12 +270,12 @@ def _fai_le_superfici(passata_corpi) -> None:
         misura.letti = avanzamento.fatti
         if avanzamento.fatti >= 3:
             misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / avanzamento.fatti
-        comune.lavoro_corpi.numeri = {
+        _metti_corpi("superfici", {
             "fatti": avanzamento.fatti,
             "totale": avanzamento.totale,
             "corpi": avanzamento.superfici,
             "quanto_manca": misura.quanto_manca(),
-        }
+        })
 
     if passata.esegui(al_passo=al_passo).totale:
         comune.lavoro_corpi.di(passata.avanzamento.a_parole())
@@ -232,12 +297,12 @@ def _fai_le_stanze(passata_corpi) -> None:
         misura.letti = avanzamento.fatti
         if avanzamento.fatti:
             misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / avanzamento.fatti
-        comune.lavoro_corpi.numeri = {
+        _metti_corpi("stanze", {
             "fatti": avanzamento.fatti,
             "totale": avanzamento.totale,
             "corpi": avanzamento.foto_messe,
             "quanto_manca": misura.quanto_manca(),
-        }
+        })
 
     if passata.esegui(al_passo=al_passo).totale:
         comune.lavoro_corpi.di(passata.avanzamento.a_parole())
@@ -253,8 +318,8 @@ def _rifai_i_punti(passata) -> None:
         misura.letti = fatti
         if fatti >= 3:
             misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / fatti
-        comune.lavoro_corpi.numeri = {"fatti": fatti, "totale": totale, "corpi": 0,
-                                      "quanto_manca": misura.quanto_manca()}
+        _metti_corpi("punti", {"fatti": fatti, "totale": totale, "corpi": 0,
+                                      "quanto_manca": misura.quanto_manca()})
 
     rifatti = passata.rifai_i_punti(al_passo=al_passo)
     if rifatti:
@@ -278,12 +343,46 @@ def _cerca_le_parti(passata_corpi) -> None:
         misura.letti = fatti
         if fatti >= 3:
             misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / fatti
-        comune.lavoro_corpi.numeri = {
+        _metti_corpi("parti", {
             "fatti": fatti,
             "totale": avanzamento.totale,
             "corpi": avanzamento.parti,
             "quanto_manca": misura.quanto_manca(),
-        }
+        })
+
+    try:
+        passata.esegui(al_passo=al_passo)
+    except ErroreOfficina as errore:
+        comune.lavoro_corpi.di(errore.messaggio.split("\n")[0])
+        return
+    comune.lavoro_corpi.di(passata.avanzamento.a_parole())
+
+
+def _cerca_le_parti_imparate(passata_corpi) -> None:
+    from officina.corpi import imparate
+    from officina.parole.motore import Avanzamento as Misuratore
+
+    passata = imparate.Passata(passata_corpi.archivio, fermato=lambda: passata_corpi.fermata)
+    try:
+        if not passata.quanti_mancano():
+            return
+    except Exception as guasto:          # noqa: BLE001
+        registro.errore("imparate.non_contate", **registro.dove_si_e_rotto(guasto))
+        return
+    partito = time.monotonic()
+
+    def al_passo(avanzamento) -> None:
+        fatti = avanzamento.fatti + avanzamento.saltati
+        misura = Misuratore(totale=avanzamento.totale)
+        misura.letti = fatti
+        if fatti >= 3:
+            misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / fatti
+        _metti_corpi("imparate", {
+            "fatti": fatti,
+            "totale": avanzamento.totale,
+            "corpi": avanzamento.parti,
+            "quanto_manca": misura.quanto_manca(),
+        })
 
     try:
         passata.esegui(al_passo=al_passo)
@@ -310,18 +409,18 @@ def _fai_le_figure(passata_corpi) -> None:
         misura.letti = fatti
         if fatti >= 3:
             misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / fatti
-        comune.lavoro_corpi.numeri = {
+        _metti_corpi("figure", {
             "fatti": fatti,
             "totale": avanzamento.totale,
             "corpi": avanzamento.figure,
             "quanto_manca": misura.quanto_manca(),
-        }
+        })
 
     passata.esegui(al_passo=al_passo)
     comune.lavoro_corpi.di(passata.avanzamento.a_parole())
 
 
-def cerca_chi_e(archivio, lavoro, fermato=None) -> None:
+def cerca_chi_e(archivio, lavoro, fermato=None, segna=None) -> None:
     from officina.corpi import chi_e, vestiti_a_parole
     from officina.parole.motore import Avanzamento as Misuratore
 
@@ -339,12 +438,16 @@ def cerca_chi_e(archivio, lavoro, fermato=None) -> None:
         misura.letti = avanzamento.fatti
         if avanzamento.fatti:
             misura.ms_per_scatto = (time.monotonic() - partito) * 1000 / avanzamento.fatti
-        lavoro.numeri = {
+        numeri = {
             "fatti": avanzamento.fatti,
             "totale": avanzamento.totale,
             "corpi": avanzamento.proposte,
             "quanto_manca": misura.quanto_manca(),
         }
+        if segna is not None:
+            segna(numeri)
+        else:
+            lavoro.numeri = numeri
 
     passata.esegui(al_passo=al_passo)
     lavoro.di(passata.avanzamento.a_parole())
@@ -390,6 +493,20 @@ def _la_fila_ia(archivio) -> None:
             guasto.dettaglio = sotto.dettaglio
             raise guasto
     comune.fila_ia["adesso"] = ""
+
+
+def _pezzi_che_mancano(archivio) -> int:
+    from officina.apprendimento import pezzi, proposte
+    from officina.descrittori import pronti, scheda
+
+    try:
+        with archivio.lettura() as connessione:
+            nome, _ = proposte.scegli_descrittore(connessione)
+            if not nome or nome not in pronti(archivio.dove.modelli):
+                return 0
+            return pezzi.quanti_da_fare(connessione, nome, scheda(nome).versione)
+    except Exception:
+        return 0
 
 
 def quanti_mancano_ia(archivio) -> dict:
@@ -444,6 +561,12 @@ def quanti_mancano_ia(archivio) -> dict:
         except Exception:
             pass
         try:
+            from officina.corpi import imparate
+
+            corpi_mancano += imparate.quanti_mancano(connessione)
+        except Exception:
+            pass
+        try:
             from officina.stanza import costruzione
 
             if costruzione.ci_sono(archivio.dove.modelli):
@@ -463,6 +586,7 @@ def quanti_mancano_ia(archivio) -> dict:
         impronte_mancano = min(impronte_mancano, quanti_scatti)
     return {"totale": quanti_scatti,
             "impronte": max(0, impronte_mancano),
+            "pezzi": _pezzi_che_mancano(archivio),
             "volti": volti_mancano,
             "corpi": corpi_mancano,
             "scritte": scritte_mancano,
@@ -610,6 +734,41 @@ def apri_la_cartella_dello_scatto(scatto_id: int):
     return RedirectResponse("/intelligenza/perche-mancano", status_code=303)
 
 
+def _quanti_sotto(attivi) -> dict[int, int]:
+    figli: dict[int, list[int]] = {}
+    for riga in attivi:
+        if riga["genitore_id"] is not None:
+            figli.setdefault(riga["genitore_id"], []).append(riga["id"])
+    conto: dict[int, int] = {}
+
+    def conta(nodo_id: int, strada_fatta: frozenset) -> int:
+        if nodo_id not in conto:
+            conto[nodo_id] = sum(1 + conta(figlio, strada_fatta | {nodo_id})
+                                 for figlio in figli.get(nodo_id, [])
+                                 if figlio not in strada_fatta)
+        return conto[nodo_id]
+
+    for riga in attivi:
+        conta(riga["id"], frozenset())
+    return conto
+
+
+def _minimo_delle_imparate() -> int:
+    from officina.corpi import imparate
+
+    return imparate.MINIMO_SAGOME
+
+
+def _stato_delle_imparate(connessione) -> list[dict]:
+    from officina.corpi import imparate
+
+    try:
+        return imparate.stato_delle_parti(connessione)
+    except Exception as guasto:          # noqa: BLE001
+        registro.errore("imparate.stato_rotto", **registro.dove_si_e_rotto(guasto))
+        return []
+
+
 @strada.get("/intelligenza/parti", response_class=HTMLResponse)
 def pagina_delle_parti(richiesta: Request):
     from officina.corpi import parti as lavoro
@@ -619,16 +778,21 @@ def pagina_delle_parti(richiesta: Request):
     with archivio.lettura() as connessione:
         elenco = parti.elenco(connessione)
         mancano = parti.quanti_mancano(connessione) if elenco else 0
+        imparate = _stato_delle_imparate(connessione) if elenco else []
         con_persone = uno(connessione,
                           "SELECT count(DISTINCT scatto_id) AS q FROM corpi")["q"]
+        attivi = nodi_mod.elenco(connessione)
+        sotto = _quanti_sotto(attivi)
         nodi_da_scegliere = sorted(
-            ({"id": riga["id"], "percorso": nodi_mod.percorso(connessione, riga["id"])}
-             for riga in nodi_mod.elenco(connessione)),
+            ({"id": riga["id"], "percorso": nodi_mod.percorso(connessione, riga["id"]),
+              "sotto": sotto[riga["id"]]}
+             for riga in attivi),
             key=lambda voce: voce["percorso"].casefold())
     return base.pagine.TemplateResponse(richiesta, "parti-del-corpo.html", {
         **base.comune(richiesta, "intelligenza"),
         "elenco": elenco, "mancano": mancano, "con_persone": con_persone,
-        "nodi": nodi_da_scegliere,
+        "nodi": nodi_da_scegliere, "imparate": imparate,
+        "imparate_minimo": _minimo_delle_imparate(),
         "manca_il_modello": lavoro.cosa_manca(archivio.dove.modelli),
         "al_massimo": parti.QUANTE_AL_MASSIMO,
         "al_lavoro": comune.lavoro_ia.sta_lavorando or comune.lavoro_corpi.sta_lavorando,

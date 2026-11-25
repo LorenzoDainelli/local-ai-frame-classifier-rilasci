@@ -11,12 +11,14 @@ MONTE = (190, 185, 172, 255)
 
 DOVE = (Path(__file__).resolve().parent.parent
         / "officina" / "web" / "statici" / "officina.ico")
+DOVE_IPHONE = (Path(__file__).resolve().parent.parent / "iphone" / "Visore"
+               / "Assets.xcassets" / "AppIcon.appiconset" / "icona.png")
 
 LATO = 1024
 MISURE = (16, 24, 32, 48, 64, 128, 256)
 
 
-def disegna(lato: int = LATO) -> Image.Image:
+def disegna(lato: int = LATO, arrotondata: bool = True) -> Image.Image:
     u = lato / 200
     giu = 80 * u
     maschera = Image.new("L", (lato, lato), 0)
@@ -40,6 +42,8 @@ def disegna(lato: int = LATO) -> Image.Image:
     ImageDraw.Draw(interno).rounded_rectangle(dentro, radius=int(17.5 * u), fill=255)
     tela.paste(quadro, (0, 0), Image.composite(quadro.getchannel("A"), Image.new("L", (lato, lato), 0), interno))
 
+    if not arrotondata:
+        return tela.convert("RGB")
     fuori_tutto = Image.new("RGBA", (lato, lato), (0, 0, 0, 0))
     fuori_tutto.paste(tela, (0, 0), maschera)
     return fuori_tutto
@@ -52,6 +56,12 @@ def scrivi(dove: Path = DOVE) -> Path:
     return dove
 
 
+def scrivi_iphone(dove: Path = DOVE_IPHONE) -> Path:
+    dove.parent.mkdir(parents=True, exist_ok=True)
+    disegna(arrotondata=False).save(dove, format="PNG", optimize=True)
+    return dove
+
+
 if __name__ == "__main__":
-    fatto = scrivi()
-    print(f"  {fatto} — {fatto.stat().st_size / 1024:.0f} KB")
+    for fatto in (scrivi(), scrivi_iphone()):
+        print(f"  {fatto} — {fatto.stat().st_size / 1024:.0f} KB")

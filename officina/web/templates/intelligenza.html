@@ -38,8 +38,9 @@
     <div class="ia-carte">
         {% for L in LAVORI %}
         {% set k = L.chiave %}
-        {% set manca = mancano[k] %}
-        {% set manca_scatti = [manca, totale]|min %}
+        {% set pezzi = (mancano.pezzi or 0) if k == "impronte" else 0 %}
+        {% set manca_scatti = [mancano[k], totale]|min %}
+        {% set manca = mancano[k] + pezzi %}
         {% set fatti = totale - manca_scatti %}
         {% set vivo = fila.lavori[k] %}
         {% set da_sole = not corre and fila.impronte_da_sole and k == "impronte" %}
@@ -69,8 +70,7 @@
                 <span class="barretta"><span data-barra style="width:{{ vivo.percento or 0 }}%"></span></span>
                 <span class="piccolo numeri"><span data-pct>{{ vivo.percento or 0 }}</span>%<span data-manca>{{ (' · ' ~ vivo.quanto_manca) if vivo.quanto_manca }}</span></span>
             </div>
-            {% if vivo.modelli and vivo.modelli|length > 1 %}
-            <ul class="ia-modelli" data-modelli>
+            <ul class="ia-modelli" data-modelli {{ 'hidden' if not (vivo.modelli and vivo.modelli|length > 1) }}>
                 {% for m in vivo.modelli %}
                 <li class="{{ 'ora' if m.adesso }}{{ ' fatto' if m.percento >= 100 }}" data-modello="{{ m.nome }}">
                     <span class="piccolo">{{ m.titolo }}</span>
@@ -79,7 +79,6 @@
                 </li>
                 {% endfor %}
             </ul>
-            {% endif %}
             {% else %}
             <div class="ia-num numeri">{{ fatti|numero }} <small>di {{ totale|numero }}</small></div>
             <div class="ia-stato">
@@ -91,6 +90,8 @@
                 <span class="bollino">Ancora nessuno scatto</span>
                 {% elif manca == 0 %}
                 <span class="bollino bene">Tutti {{ L.fatti }}</span>
+                {% elif manca_scatti == 0 %}
+                <span class="bollino attenzione">Mancano {{ pezzi|numero }} {{ 'sagoma' if pezzi == 1 else 'sagome' }} da imparare</span>
                 {% elif in_fila %}
                 <span class="bollino" data-fila-scritta>In fila</span>
                 {% elif corre and not acceso %}
@@ -99,7 +100,7 @@
                 <span class="bollino">Mai {{ L.fatti }}</span>
                 {% else %}
                 <span class="bollino attenzione">Mancano {{ manca_scatti|numero }} {{ 'scatto' if manca_scatti == 1 else 'scatti' }}</span>
-                {% if k == "impronte" and not corre %}<a class="tasto-comando nudo piccolo" href="/intelligenza/perche-mancano">Perché mancano?</a>{% endif %}
+                {% if k == "impronte" %}<a class="tasto-comando nudo piccolo" href="/intelligenza/perche-mancano">Perché mancano?</a>{% endif %}
                 {% endif %}
             </div>
             {% endif %}
@@ -198,5 +199,5 @@
     </div>
 </dialog>
 {% endif %}
-<script type="module" src="/statici/js/intelligenza.js"></script>
+<script type="module" src="{{ statico('/statici/js/intelligenza.js') }}"></script>
 {% endblock %}

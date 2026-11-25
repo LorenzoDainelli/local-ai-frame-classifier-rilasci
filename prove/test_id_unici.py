@@ -19,10 +19,9 @@ PAGINE = ["/", "/scatto/1", "/officina", "/importazione", "/elenchi", "/sistemar
 GIRI = {
     "a": {},
     "b": {"navigazione": "B", "stato": "B", "lavoro": "B", "impostazioni": "B", "foto": "C",
-          "persone": "C", "collegamenti": "B", "doppioni": "B",
+          "persone": "C", "doppioni": "B",
           "miglioramento": "B", "impronte": "C", "qualita": "C", "misura": "B"},
-    "c": {"navigazione": "C", "stato": "C", "lavoro": "C", "impostazioni": "C",
-          "collegamenti": "C"},
+    "c": {"navigazione": "C", "stato": "C", "lavoro": "C", "impostazioni": "C"},
 }
 
 

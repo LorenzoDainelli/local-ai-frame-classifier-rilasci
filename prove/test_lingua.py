@@ -178,6 +178,14 @@ def test_nessun_filo_puo_morire_in_silenzio():
     from pathlib import Path
 
     SAPUTI = {
+        "officina/telefono/cavo.py":
+            "la seconda strada della copia col cavo prende dentro qualunque "
+            "errore, rimette in fila il file che stava mandando e si ferma: la "
+            "prima strada finisce da sola e ogni file resta riletto e confrontato",
+        "officina/telefono/cavo_lontano.py":
+            "le mani del portatile prendono dentro qualunque errore di un comando "
+            "e lo rimandano al fisso come risposta: se una mano si ferma, l'altra "
+            "continua e il fisso, senza risposta, tiene chiuso il Visore",
         "officina/archivio/riserva.py":
             "`_fai` prende dentro qualunque errore, lo scrive nel registro e lo "
             "tiene per la pagina: quello già copiato resta copiato",

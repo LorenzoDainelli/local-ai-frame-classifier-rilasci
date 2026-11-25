@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 
-CHIAVI_PUBBLICHE: tuple[str, ...] = ("KwBRm9kpcI+HigAkh4IaOW6dU16RBxzuZTVwnM+74og=",)
+CHIAVI_PUBBLICHE: tuple[str, ...] = ("He/QxQSURqdKRsU6cxgKOyxwC+b/tNiGh/IWjLD9Ef0=",)
 
 INTESTAZIONE = "local-ai-frame-classifier aggiornamento 1"
 

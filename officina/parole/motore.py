@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from officina import registro
+from officina import anticipo, registro
 from officina.archivio.accesso import Archivio
 from officina.descrittori import torcia
 from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile
@@ -92,6 +92,9 @@ class Passata:
         self._fermati.clear()
         self.avanzamento.totale = min(self.quanti_mancano(),
                                       quanti_al_massimo or 10 ** 9)
+        if self.avanzamento.totale == 0:
+            registro.evento("parole.passata_gia_finita")
+            return self.avanzamento
 
         lettore = self._lettore
         if lettore is None:
@@ -119,19 +122,24 @@ class Passata:
     def _gira(self, lettore, freno, al_passo, quanti_al_massimo) -> None:
         fatti = 0
         for righe in self._da_leggere(quanti_al_massimo):
-            for riga in righe:
-                if self.fermata:
-                    return
-                if quanti_al_massimo and fatti >= quanti_al_massimo:
-                    return
-                cominciato = time.perf_counter()
-                if self._uno(lettore, riga["id"]):
-                    fatti += 1
-                durata = time.perf_counter() - cominciato
-                self._segna_tempo(durata)
-                if al_passo:
-                    al_passo(self.avanzamento)
-                freno.riposa(durata)
+            lette = anticipo.avanti(
+                ((riga["id"], self._prepara(riga["id"])) for riga in righe), "parole-legge")
+            try:
+                for scatto_id, pronto in lette:
+                    if self.fermata:
+                        return
+                    if quanti_al_massimo and fatti >= quanti_al_massimo:
+                        return
+                    cominciato = time.perf_counter()
+                    if self._uno(lettore, scatto_id, pronto):
+                        fatti += 1
+                    durata = time.perf_counter() - cominciato
+                    self._segna_tempo(durata)
+                    if al_passo:
+                        al_passo(self.avanzamento)
+                    freno.riposa(durata)
+            finally:
+                lette.close()
 
     def _da_leggere(self, quanti_al_massimo: int | None):
         while not self.fermata:
@@ -151,9 +159,22 @@ class Passata:
                 if righe:
                     yield righe
 
-    def _uno(self, lettore, scatto_id: int) -> bool:
+    def _prepara(self, scatto_id: int):
+        if self.fermata:
+            return None, estrattore.Fermato()
         try:
-            immagini, file_id = self._immagini_di(scatto_id)
+            return self._immagini_di(scatto_id), None
+        except Exception as errore:          # noqa: BLE001
+            return None, errore
+
+    def _uno(self, lettore, scatto_id: int, pronto=None) -> bool:
+        if pronto is None:
+            pronto = self._prepara(scatto_id)
+        try:
+            letto, errore = pronto
+            if errore is not None:
+                raise errore
+            immagini, file_id = letto
         except estrattore.Fermato:
             return False
         except DaRifare as errore:

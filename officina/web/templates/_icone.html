@@ -9,7 +9,9 @@
     "calendario": '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
     "cartella": '<path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l2 2h7A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/>',
     "casa": '<path d="M3.5 10.5L12 4l8.5 6.5V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/>',
+    "cavo": '<path d="M9 3v4M15 3v4M7 7h10v3.5a5 5 0 0 1-10 0zM12 15.5V21"/>',
     "cerca": '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>',
+    "cestino": '<path d="M5 7h14M10 7V4.5h4V7M7 7l.8 12.5h8.4L17 7M10.5 10.5v6M13.5 10.5v6"/>',
     "chiave": '<circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H21M18 12v3M15 12v2"/>',
     "chip": '<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 3.5V7M14 3.5V7M10 17v3.5M14 17v3.5M3.5 10H7M3.5 14H7M17 10h3.5M17 14h3.5"/>',
     "coda": '<path d="M4 6.5h16M4 12h16M4 17.5h10"/>',
@@ -25,6 +27,7 @@
     "etichetta": '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.4"/>',
     "ferma": '<rect x="6.5" y="6.5" width="11" height="11" rx="2"/>',
     "filtri": '<path d="M4 6h16M7 12h10M10 18h4"/>',
+    "forbici": '<circle cx="6" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><path d="M8.2 7.6 20 17M8.2 16.4 20 7M12.6 12h0"/>',
     "foto": '<rect x="3" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.8"/>',
     "freccia": '<path d="M5 12h14M13 6l6 6-6 6"/>',
     "fulmine": '<path d="M13 3 5 13.5h6L10.5 21 19 10.5h-6z"/>',
@@ -74,7 +77,7 @@
     "x": '<path d="M7 7l10 10M17 7 7 17"/>'
 } %}
 {% macro icona(nome, taglia=17, classe='') -%}
-<svg class="icona {{ classe }}" width="{{ taglia }}" height="{{ taglia }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ ICONE[nome]|safe }}</svg>
+<svg class="icona {{ classe }}" data-icona="{{ nome }}" width="{{ taglia }}" height="{{ taglia }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ ICONE[nome]|safe }}</svg>
 {%- endmacro %}
 {% macro fotina_sbuca(classe='') -%}
 <svg class="iconcina {{ classe }}" width="30" height="30" viewBox="0 0 200 200" aria-hidden="true"><rect width="200" height="200" fill="#D97757"/><g data-c transform="translate(0 80)"><rect x="34" y="34" width="132" height="132" rx="20" fill="#FAF9F5" stroke="#141413" stroke-width="5"/><path d="M36 166 L86 114 L124 152 L146 132 L164 166 Z" fill="#BEB9AC"/><circle cx="140" cy="62" r="11" fill="#D97757"/><g data-o="78"><ellipse cx="78" cy="90" rx="8.8" ry="11" fill="#141413"/></g><g data-o="112"><ellipse cx="112" cy="90" rx="8.8" ry="11" fill="#141413"/></g></g></svg>

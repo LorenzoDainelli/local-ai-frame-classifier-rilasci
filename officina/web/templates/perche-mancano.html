@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_icone.html" import icona %}
+{% from "_spiega.html" import spiega %}
 {% block titolo %}Perché mancano — Local AI Frame Classifier{% endblock %}
 
 {% set ESITI = {"si_apre": "Adesso si apre", "senza_ritagli": "Si apre, ma non ne esce niente da guardare",
@@ -70,10 +71,14 @@
         </ul>
         <div class="pm-salva">
             <button class="tasto-comando principale" type="button" data-pm-salva disabled>Salva</button>
-            <p class="piccolo tenue" data-pm-detto>Salva sostituisce solo i file con «Sì, hai ragione». Il rotto non si cancella: va nella cartella dei rovinati del programma. Se il rotto è solo nell'Archivio sicuro, il giusto entra nell'archivio e il rotto resta lì accanto, nella cartella «Rovinati»; con l'archivio chiuso aspetta.</p>
+            <p class="piccolo tenue"><span data-pm-detto>Salva sostituisce solo i file con «Sì, hai ragione».</span>{% call spiega("E il file rotto?") %}
+                <p>Il rotto non si cancella: va nella cartella dei rovinati del programma.</p>
+                <p>Se il rotto è solo nell'Archivio sicuro, il giusto entra nell'archivio e il
+                rotto resta lì accanto, nella cartella «Rovinati»; con l'archivio chiuso aspetta.</p>
+            {% endcall %}</p>
         </div>
     </section>
-    <script type="module" src="/statici/js/perche_mancano.js"></script>
+    <script type="module" src="{{ statico('/statici/js/perche_mancano.js') }}"></script>
     <script type="module">
     (function () {
         const tasto = document.getElementById("copia-perche");
@@ -113,7 +118,7 @@
             {% endfor %}
         </ul>
     </section>
-    <script type="module" src="/statici/js/perche_mancano_tolti.js"></script>
+    <script type="module" src="{{ statico('/statici/js/perche_mancano_tolti.js') }}"></script>
     {% endif %}
 </div>
 </main>

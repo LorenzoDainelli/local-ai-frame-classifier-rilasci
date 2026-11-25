@@ -259,6 +259,29 @@ def test_l_icona_si_rifa_da_zero_da_uno_script_che_si_legge(tmp_path):
     assert misure_dentro(rifatta) == misure_dentro(finestra.ICONA)
 
 
+def test_l_icona_dell_iphone_e_quella_del_pc_quadrata_e_piena(tmp_path):
+    import sys
+
+    from PIL import Image, ImageChops
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "strumenti"))
+    try:
+        import fai_icona
+    finally:
+        sys.path.pop(0)
+
+    rifatta = fai_icona.scrivi_iphone(tmp_path / "icona.png")
+    copia = Path(__file__).resolve().parent.parent / "iphone" / "strumenti" / "fai_icona.py"
+    assert copia.read_bytes() == Path(fai_icona.__file__).read_bytes()
+    with Image.open(rifatta) as nuova:
+        assert nuova.size == (1024, 1024)
+        assert nuova.mode == "RGB"
+        assert nuova.getpixel((0, 0)) == fai_icona.ARANCIO[:3]
+        pc = fai_icona.disegna().convert("RGB")
+        dentro = (300, 300, 700, 700)
+        assert ImageChops.difference(nuova.crop(dentro), pc.crop(dentro)).getbbox() is None
+
+
 def test_una_libreria_che_manca_si_dice_col_comando_per_metterla(monkeypatch):
     from officina import riga_di_comando
 

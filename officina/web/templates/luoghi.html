@@ -4,51 +4,6 @@
 {% import "_mappa_luoghi.html" as mappa_luoghi %}
 {% block titolo %}Luoghi — Local AI Frame Classifier{% endblock %}
 
-{% macro scegli_padre(nome_campo, togli=None, vuoto="In cima") %}
-<select class="campo" name="{{ nome_campo }}" aria-label="Dentro quale luogo">
-    <option value="">{{ vuoto }}</option>
-    {% for altro in tutti_i_posti if altro.posto_id != togli %}
-    <option value="{{ altro.posto_id }}">{{ altro.nome }}</option>
-    {% endfor %}
-</select>
-{% endmacro %}
-
-{% macro ramo(voci) %}
-<ul class="lu-ramo">
-    {% for voce in voci %}
-    <li>
-        <details class="lu-voce">
-            <summary>
-                <span class="lu-voce-nome">{{ voce.nome }}</span>
-                <span class="minuscolo tenue numeri">{{ voce.scatti|numero }} scatt{{ 'o' if voce.scatti == 1 else 'i' }}</span>
-                {% if not voce.ha_coordinate %}<span class="minuscolo tenue lu-senza-gps" title="Le coordinate le prende dal luogo che lo contiene, o te le chiede">senza coordinate sue</span>{% endif %}
-            </summary>
-            <div class="lu-voce-dentro">
-                <a class="tasto-comando piccolo" href="/?luogo={{ voce.posto_id }}">{{ icona('foto', 14) }} Guardali</a>
-                <form method="post" action="/luoghi/nuovo" class="in-fila">
-                    <input type="hidden" name="genitore_id" value="{{ voce.posto_id }}">
-                    <input class="campo" type="text" name="nome" maxlength="120" placeholder="Nuovo luogo qui dentro" required aria-label="Nuovo luogo dentro {{ voce.nome }}">
-                    <button class="tasto-comando nudo piccolo" type="submit">Aggiungi</button>
-                </form>
-                <form method="post" action="/luoghi/{{ voce.posto_id }}/nome" class="in-fila">
-                    <input class="campo" type="text" name="nome" maxlength="120" value="{{ voce.nome }}" required aria-label="Nome del luogo">
-                    <button class="tasto-comando nudo piccolo" type="submit">Rinomina</button>
-                </form>
-                <form method="post" action="/luoghi/{{ voce.posto_id }}/sposta" class="in-fila">
-                    {{ scegli_padre('genitore_id', voce.posto_id) }}
-                    <button class="tasto-comando nudo piccolo" type="submit">Sposta</button>
-                </form>
-                <form method="post" action="/luoghi/{{ voce.posto_id }}/cestina">
-                    <button class="tasto-comando nudo piccolo" type="submit" title="Toglie questo luogo e quelli dentro. Gli scatti restano">Togli</button>
-                </form>
-            </div>
-        </details>
-        {% if voce.figli %}{{ ramo(voce.figli) }}{% endif %}
-    </li>
-    {% endfor %}
-</ul>
-{% endmacro %}
-
 {% block corpo %}
 <div class="corpo">
 <main class="zona-principale">
@@ -64,20 +19,123 @@
                 per capire dov'è, e da lì propone il luogo per le foto nuove.
                 Una stanza senza coordinate sue usa quelle della casa che la
                 contiene.</p>
+                <p>Clicca un luogo per vedere quando ci sei stato, le sue foto e cosa
+                puoi farci: rinominarlo, spostarlo, unirlo a un altro, dargli le coordinate.</p>
             {% endcall %}</h1>
             <p class="sottotitolo">Ogni scatto ha bisogno di un luogo, oppure di un «Non so dove». Scatti non ancora finiti: <b class="numeri">{{ non_finiti|numero }}</b>.</p>
         </div>
+        <div class="lu-tasti">
+            <span class="segmenti" role="group" aria-label="Come vedere i luoghi">
+                <button type="button" data-vista="lista" aria-pressed="true">Elenco</button>
+                <button type="button" data-vista="albero" aria-pressed="false">Albero</button>
+            </span>
+            <a class="tasto-comando nudo piccolo" href="/tempo">{{ icona('bussola', 14) }} Tempo e mappa</a>
+            <button class="tasto-comando principale piccolo" type="button" id="lu-apri-nuovo">{{ icona('piu', 14) }} Nuovo luogo</button>
+        </div>
+    </div>
+
+    <div class="lu-numeri" id="lu-numeri" aria-live="polite">
+        <div class="carta lu-numero"><span class="etichetta">Luoghi</span><b class="numeri" data-conto="luoghi">{{ conti.luoghi|numero }}</b></div>
+        <div class="carta lu-numero"><span class="etichetta">Scatti con un luogo</span><b class="numeri" data-conto="con_luogo">{{ conti.con_luogo|numero }}</b></div>
+        <div class="carta lu-numero"><span class="etichetta">«Non so dove»</span><b class="numeri" data-conto="non_so">{{ conti.non_so|numero }}</b></div>
+        <a class="carta lu-numero lu-numero-va" href="#lu-senza"><span class="etichetta">Ancora senza luogo</span><b class="numeri" data-conto="senza">{{ conti.senza|numero }}</b><span class="minuscolo tenue"><span class="numeri" data-conto="senza_col_gps">{{ conti.senza_col_gps|numero }}</span> col GPS</span></a>
+    </div>
+
+    <p class="lu-esito piccolo" id="lu-esito" role="status" aria-live="polite" hidden></p>
+
+    <div class="lu-corpo">
+        <section class="carta lu-elenco-carta" aria-label="Elenco dei luoghi">
+            <div class="lu-barra">
+                <div class="campo-cerca lu-cerca">
+                    <span class="segno">{{ icona('cerca', 15) }}</span>
+                    <input id="lu-cerca" type="search" autocomplete="off" spellcheck="false" placeholder="Cerca un luogo" aria-label="Cerca un luogo">
+                </div>
+                <select class="campo lu-ordine" id="lu-ordine" aria-label="In che ordine">
+                    <option value="albero">Come l'albero</option>
+                    <option value="scatti">Più scatti</option>
+                    <option value="nome">Nome, dalla A</option>
+                    <option value="recenti">Ci sei stato da poco</option>
+                    <option value="vecchi">Ci sei stato per primo</option>
+                </select>
+                <span class="segmenti" role="group" aria-label="Quali luoghi">
+                    <button type="button" data-filtro="tutti" aria-pressed="true">Tutti</button>
+                    <button type="button" data-filtro="senza-gps" aria-pressed="false">Senza coordinate</button>
+                    <button type="button" data-filtro="vuoti" aria-pressed="false">Vuoti</button>
+                </span>
+            </div>
+
+            <form class="lu-nuovo" id="lu-nuovo" hidden>
+                <input class="campo" type="text" name="nome" maxlength="120" placeholder="Nome del nuovo luogo" required aria-label="Nome del nuovo luogo">
+                <input class="campo" type="text" name="dentro" list="lu-tutti" placeholder="Dentro… (vuoto = in cima)" aria-label="Dentro quale luogo">
+                <button class="tasto-comando principale piccolo" type="submit">Aggiungi</button>
+                <button class="tasto-comando nudo piccolo" type="button" data-chiudi>Annulla</button>
+            </form>
+
+            <div class="lu-vista" data-vista-di="lista">
+                <div class="lu-intesta minuscolo tenue" aria-hidden="true">
+                    <span>Luogo</span><span>Quando</span><span>Scatti</span>
+                </div>
+                <div class="lu-elenco" id="lu-elenco" role="listbox" aria-label="I luoghi" tabindex="0"></div>
+                <p class="lu-vuoto piccolo tenue" id="lu-vuoto" hidden></p>
+            </div>
+            {% if albero %}
+            <div class="lu-vista mappa lu-mappa" data-vista-di="albero" hidden>
+                <div class="mappa-testa">{{ mappa_luoghi.testa("pl-") }}</div>
+                {{ mappa_luoghi.corpo("pl-", dati_dei_luoghi, nascosto=False) }}
+            </div>
+            {% else %}
+            <p class="lu-vista piccolo tenue" data-vista-di="albero" hidden>L'albero compare quando hai almeno un luogo.</p>
+            {% endif %}
+        </section>
+
+        <aside class="carta lu-scheda" id="lu-scheda" aria-live="polite">
+            <div class="lu-scheda-vuota" id="lu-scheda-vuota">
+                <span class="lu-scheda-segno">{{ icona('luoghi', 28) }}</span>
+                <p class="piccolo tenue">Clicca un luogo per vedere quando ci sei stato, le sue foto e cosa puoi farci.</p>
+            </div>
+            <div class="lu-scheda-piena" id="lu-scheda-piena" hidden>
+                <nav class="lu-catena minuscolo" id="lu-catena" aria-label="Dentro quali luoghi sta"></nav>
+                <div class="lu-scheda-titolo">
+                    <h2 id="lu-nome"></h2>
+                    <button class="tasto-comando nudo piccolo" type="button" data-azione="rinomina" title="Cambia nome">{{ icona('pennello', 14) }}</button>
+                </div>
+                <div class="lu-mosaico" id="lu-mosaico"></div>
+                <dl class="lu-fatti" id="lu-fatti"></dl>
+                <div class="lu-anni" id="lu-anni" aria-label="Scatti per anno"></div>
+                <div class="lu-dove" id="lu-dove"></div>
+                <div class="lu-figli" id="lu-figli"></div>
+                <div class="lu-unioni" id="lu-unioni" hidden></div>
+                <div class="lu-azioni">
+                    <a class="tasto-comando principale piccolo" id="lu-galleria" href="/">{{ icona('foto', 14) }} Guardali nella Galleria</a>
+                    <a class="tasto-comando piccolo" id="lu-mappa-tempo" href="/tempo" hidden>{{ icona('bussola', 14) }} Sulla mappa</a>
+                    <button class="tasto-comando piccolo" type="button" data-azione="dentro">{{ icona('piu', 14) }} Luogo qui dentro</button>
+                    <button class="tasto-comando nudo piccolo" type="button" data-azione="sposta">Sposta</button>
+                    <button class="tasto-comando nudo piccolo" type="button" data-azione="unisci">Unisci con…</button>
+                    <button class="tasto-comando nudo piccolo" type="button" data-azione="coordinate">Coordinate</button>
+                    <button class="tasto-comando nudo piccolo" type="button" data-azione="togli">{{ icona('cestino', 14) }} Togli</button>
+                </div>
+                <form class="lu-pannello" id="lu-pannello" hidden>
+                    <p class="piccolo" id="lu-pannello-testo"></p>
+                    <div class="lu-pannello-campi">
+                        <input class="campo" type="text" id="lu-pannello-campo" autocomplete="off" maxlength="160">
+                        <button class="tasto-comando principale piccolo" type="submit" id="lu-pannello-si">Fatto</button>
+                        <button class="tasto-comando nudo piccolo" type="button" data-chiudi>Annulla</button>
+                    </div>
+                    <p class="minuscolo tenue" id="lu-pannello-nota"></p>
+                </form>
+            </div>
+        </aside>
     </div>
 
     {% if dove_sono %}
-    <section class="carta lu-dove">
-        <h2>Dov'è questo posto?</h2>
-        <p class="piccolo attenuato">Questi luoghi non hanno abbastanza foto col GPS, e nemmeno il luogo che li contiene ne ha. Aiutami: scegli una foto fatta lì, oppure scrivi le coordinate.</p>
+    <details class="carta lu-dov-e" {% if dove_sono|length <= 6 %}open{% endif %}>
+        <summary><span>Dov'è questo posto?</span> <span class="conto numeri">{{ dove_sono|length }}</span></summary>
+        <p class="piccolo attenuato">Questi luoghi non sanno dove sono. Scegli una foto fatta lì, oppure scrivi le coordinate.</p>
         {% for voce in dove_sono %}
-        <div class="lu-dove-riga">
-            <div class="lu-dove-nome"><b>{{ voce.nome }}</b>{% if voce.percorso %}<span class="minuscolo tenue">{{ voce.percorso }}</span>{% endif %}</div>
+        <div class="lu-dov-e-riga">
+            <div class="lu-dov-e-nome"><b>{{ voce.nome }}</b>{% if voce.percorso %}<span class="minuscolo tenue">{{ voce.percorso }}</span>{% endif %}</div>
             {% if voce.foto %}
-            <div class="lu-dove-foto">
+            <div class="lu-dov-e-foto">
                 {% for foto in voce.foto %}
                 <form method="post" action="/luoghi/{{ voce.posto_id }}/dallo-scatto">
                     <input type="hidden" name="scatto_id" value="{{ foto.scatto_id }}">
@@ -92,37 +150,40 @@
             </form>
         </div>
         {% endfor %}
-    </section>
+    </details>
     {% endif %}
 
-    <section class="carta lu-albero">
-        <div class="lu-albero-testa">
-            <h2>L'albero dei luoghi</h2>
-            <span class="segmenti" role="group" aria-label="Come vedere i luoghi">
-                <button type="button" data-vista="lista" aria-pressed="true">Lista</button>
-                <button type="button" data-vista="albero" aria-pressed="false">Albero</button>
-            </span>
-            <form method="post" action="/luoghi/nuovo" class="in-fila">
-                <input class="campo" type="text" name="nome" maxlength="120" placeholder="Nuovo luogo" required aria-label="Nome del nuovo luogo">
-                {{ scegli_padre('genitore_id') }}
-                <button class="tasto-comando principale piccolo" type="submit">Aggiungi</button>
-            </form>
+    <section class="carta lu-senza" id="lu-senza" aria-labelledby="lu-senza-titolo">
+        <div class="lu-senza-testa">
+            <div>
+                <h2 id="lu-senza-titolo">Scatti ancora senza luogo{% call spiega("Una giornata alla volta") %}
+                    <p>Gli scatti dello stesso giorno di solito sono fatti nello stesso posto.
+                    Qui li vedi raggruppati per giornata, dalla più recente.</p>
+                    <p>Se il GPS o gli scatti vicini nel tempo dicono dove sono stati fatti,
+                    te lo propongo: basta un clic. Altrimenti scegli tu il luogo, oppure «Non so dove».</p>
+                    <p>Cliccando una miniatura la togli dalla scelta: resta senza luogo e la sistemi dopo.</p>
+                    <p>Se più giornate sono nello stesso posto, spunta «Scegli» su ognuna e dai il luogo a tutte in un colpo.</p>
+                    <p>Ogni scelta si può annullare subito dopo.</p>
+                {% endcall %}</h2>
+                <p class="piccolo tenue" id="lu-senza-sotto">Raggruppati per giornata.</p>
+            </div>
         </div>
-        {% if albero %}
-        <div class="lu-vista" data-vista-di="lista">{{ ramo(albero) }}</div>
-        <div class="lu-vista mappa lu-mappa" data-vista-di="albero" hidden>
-            <div class="mappa-testa">{{ mappa_luoghi.testa("pl-") }}</div>
-            {{ mappa_luoghi.corpo("pl-", dati_dei_luoghi, nascosto=False) }}
-        </div>
-        {% else %}
-        <p class="piccolo attenuato">Nessun luogo, ancora. Aggiungine uno qui sopra, oppure trasforma un albero che hai già.</p>
-        {% endif %}
+        <form class="lu-insieme" id="lu-insieme" hidden>
+            <span class="lu-insieme-conto piccolo" id="lu-insieme-conto" aria-live="polite"></span>
+            <input class="campo" type="text" name="luogo" list="lu-tutti" autocomplete="off" placeholder="Il luogo per tutte" aria-label="Il luogo per tutte le giornate scelte">
+            <button class="tasto-comando principale piccolo" type="submit">Metti</button>
+            <button class="tasto-comando nudo piccolo" type="button" data-insieme-non-so>Non so dove</button>
+            <button class="tasto-comando nudo piccolo" type="button" data-insieme-lascia>Lascia</button>
+        </form>
+        <div class="lu-giornate" id="lu-giornate"></div>
+        <p class="piccolo tenue" id="lu-giornate-stato">Cerco gli scatti senza luogo…</p>
+        <button class="tasto-comando nudo piccolo" type="button" id="lu-altre-giornate" hidden>Mostra altre giornate</button>
     </section>
 
     {% if cime %}
     <details class="carta lu-da-ramo" {% if not albero %}open{% endif %}>
         <summary>Usa un albero che hai già come Luoghi</summary>
-        <p class="piccolo attenuato">Il ramo che scegli diventa l'albero dei luoghi, con tutti i suoi rami. Le etichette che ci avevi messo tu diventano il luogo dei loro scatti. Il ramo esce dalle tipologie e va nel cestino dell'albero: da lì lo puoi rimettere.</p>
+        <p class="piccolo attenuato">Il ramo che scegli diventa l'albero dei luoghi. Le etichette che ci avevi messo diventano il luogo dei loro scatti.</p>
         <form method="post" action="/luoghi/da-un-ramo" class="in-fila">
             <select class="campo" name="nodo_id" aria-label="Il ramo da trasformare">
                 {% for cima in cime %}<option value="{{ cima.nodo_id }}">{{ cima.nome }}</option>{% endfor %}
@@ -133,11 +194,13 @@
     </details>
     {% endif %}
 
+    <datalist id="lu-tutti"></datalist>
 </div>
 </main>
 </div>
+<script id="lu-dati" type="application/json">{{ elenco_dei_luoghi|safe }}</script>
 {% endblock %}
 
 {% block coda %}
-<script type="module" src="/statici/js/luoghi.js"></script>
+<script type="module" src="{{ statico('/statici/js/luoghi.js') }}"></script>
 {% endblock %}

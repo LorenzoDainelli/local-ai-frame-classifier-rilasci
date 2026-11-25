@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona %}
+{% block titolo %}Già presenti — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina">
+    <header>
+        <h1 class="titolo-pagina">Già presenti</h1>
+        <p class="sottotitolo">{{ mandata.come_si_chiama }} · {{ mandata.il_giorno }}</p>
+        <p class="piccolo attenuato">C'erano già: niente è andato perso.</p>
+        <p><a class="tasto-comando piccolo" href="/importazione">{{ icona('su', 14) }} Torna ad Aggiungi foto</a></p>
+    </header>
+
+    <section class="carta">
+        {% if file %}
+        <ul class="dc-file gp-file">
+            {% for f in file %}
+            <li>
+                {% if f.miniatura %}<img class="gp-mini" src="/miniatura/{{ f.miniatura }}" alt="" loading="lazy" width="56" height="56">{% else %}<span></span>{% endif %}
+                <span class="dc-nome-e-dove"><span class="nome-di-file">{{ f.nome }}</span>
+                <span class="dc-perche">{{ f.perche }}</span>
+                <span class="dc-perche">Preso da: <span class="nome-di-file">{{ f.cartella }}</span></span></span>
+                {% if f.scatto_id %}
+                <a class="tasto-comando nudo piccolo" href="/scatto/{{ f.scatto_id }}">Guarda quello nell'archivio</a>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="tenue">Per questa importazione l'elenco non c'è: è stata fatta prima che il programma lo ricordasse.</p>
+        {% endif %}
+    </section>
+</div>
+</main>
+</div>
+{% endblock %}

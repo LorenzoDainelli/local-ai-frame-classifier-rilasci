@@ -372,6 +372,37 @@ def test_il_cuore_tolto_sul_pc_arriva_al_telefono(archivio_pieno, telefono,
                "SELECT count(*) AS quanti FROM cuori")["quanti"] == 0
 
 
+def test_il_cuore_rimesso_sul_telefono_dopo_il_pc_torna(archivio_pieno,
+                                                       telefono, tmp_path):
+    dove = tmp_path / "Visore-iPhone"
+    _fai(archivio_pieno, telefono, dove)
+    chiave = formato.Carta.leggi(dove).chiave(PAROLA)
+    impronta = uno(archivio_pieno.connessione,
+                   "SELECT impronta FROM file_media LIMIT 1")["impronta"]
+    _scrivi_ritorno(dove, chiave, tmp_path,
+                    cuori=[(impronta, "2026-08-01T10:00:00Z")])
+    _fai(archivio_pieno, telefono, dove)
+    with archivio_pieno.scrittura() as connessione:
+        ritorno.togli_cuore(connessione, telefono, impronta)
+    tolto = uno(archivio_pieno.connessione,
+                "SELECT tolto_il FROM cuori")["tolto_il"]
+
+    _scrivi_ritorno(dove, chiave, tmp_path,
+                    cuori=[(impronta, "2026-08-01T10:00:00Z")])
+    _fai(archivio_pieno, telefono, dove)
+    assert uno(archivio_pieno.connessione,
+               "SELECT tolto_il FROM cuori")["tolto_il"] == tolto
+
+    _scrivi_ritorno(dove, chiave, tmp_path, cuori=[(impronta, "2999-01-01T00:00:00Z")])
+    esito = _fai(archivio_pieno, telefono, dove)
+    assert esito.tornato.cuori_nuovi == 1
+    cuore = uno(archivio_pieno.connessione, "SELECT * FROM cuori")
+    assert cuore["tolto_il"] is None
+    assert cuore["messo_il"] == "2999-01-01T00:00:00Z"
+    with lettore.apri(dove, PAROLA) as pacchetto:
+        assert not pacchetto.dentro.execute("SELECT * FROM cuori_tolti").fetchall()
+
+
 def test_la_copia_di_scorta_dei_cuori_viaggia_nel_pacchetto(archivio_pieno,
                                                             telefono, tmp_path):
     dove = tmp_path / "Visore-iPhone"

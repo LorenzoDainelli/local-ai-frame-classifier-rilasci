@@ -268,6 +268,7 @@ body.senza-movimento .griglia { scroll-behavior: auto; }
 .bs-schede button:hover { color: var(--ink); }
 .bs-schede button[aria-selected="true"] { background: var(--superficie-alta); color: var(--ink); }
 .bs-avviso { color: var(--male); }
+.bs-avviso.bs-fatto { color: var(--ink); }
 .bs-lascia { margin-left: auto; }
 .bs-tasto { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--linea); background: var(--superficie); color: var(--ink); font: inherit; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; cursor: pointer; }
 .bs-tasto:hover:not(:disabled) { border-color: var(--linea-forte); }
@@ -1155,35 +1156,8 @@ svg.fili { position: absolute; left: 0; top: 0; overflow: visible; pointer-event
     .pe-invito > .tasto-comando { justify-self: start; }
 }
 
-.lu-testa { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
-
-.lu-filtri { display: flex; flex-wrap: wrap; gap: 6px; }
-.lu-carte { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; align-items: start; }
-
-.lu-carta, .lu-scheda { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 10px 10px 14px; min-width: 0; }
-
-.lu-foto { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; }
-.lu-foto > * { width: 100%; height: 100%; object-fit: cover; display: block; background: var(--pozzo); min-height: 0; }
-
 .lu-nome { display: flex; gap: 8px; }
 .lu-nome .campo { flex: 1; min-width: 0; height: 32px; }
-
-.lu-coordinate { display: block; margin-top: 2px; }
-
-.lu-c { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
-.lu-piano { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: radial-gradient(circle at 1px 1px, var(--linea) 1px, transparent 1.5px) 0 0 / 24px 24px, var(--carta); }
-.lu-punto { position: absolute; width: var(--misura); height: var(--misura); transform: translate(-50%, -50%); padding: 0; border-radius: 50%; border: 2px solid var(--carta); background: var(--attenuato); cursor: pointer; transition: transform var(--gesto) var(--uscita), background var(--gesto) var(--uscita), box-shadow var(--gesto) var(--uscita); }
-.lu-punto.senza { background: var(--tenue); }
-
-.lu-punto.scelto { background: var(--accento); box-shadow: 0 0 0 4px var(--alone); z-index: 1; }
-.lu-punto-nome { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); white-space: nowrap; font-size: var(--testo-minore); color: var(--attenuato); pointer-events: none; }
-
-.lu-piano-nota { position: absolute; left: 12px; bottom: 10px; right: 12px; }
-.lu-pannello { position: sticky; top: 12px; display: grid; gap: 12px; }
-@media (max-width: 980px) {
-    .lu-c { grid-template-columns: minmax(0, 1fr); }
-    .lu-pannello { position: static; }
-}
 
 .pillola.persona { padding-left: 4px; text-decoration: none; }
 .pillola.persona:hover { text-decoration: none; }
@@ -1283,47 +1257,10 @@ svg.fili { position: absolute; left: 0; top: 0; overflow: visible; pointer-event
 
 .dentro-il-blocco > .sotto-il-blocco { margin-top: 8px; font: var(--testo-minore)/1.4 var(--sans); color: var(--tenue); }
 
-.fu-testa { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
-
-.fu-carte { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 18px 0 14px; }
-.fu-carta { display: grid; gap: 8px; padding: 14px 16px; align-content: start; color: var(--ink); text-decoration: none; }
-
-.fu-carta-ico { width: 34px; height: 34px; border-radius: 9px; background: var(--laterale); display: grid; place-items: center; }
-.pillola-stato { display: inline-flex; align-items: center; gap: 6px; justify-self: start; font-size: 12px; color: var(--attenuato); }
-
-.pillola-stato.si { color: var(--bene); }
-
-.fu-a { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
-
-.fu-scelte .riquadro, .finestra .riquadro { background: var(--carta); padding: 14px 18px; }
-.fu-scelte .riquadro h2, .finestra .riquadro h2 { margin: 0; font: 400 17px/1.3 var(--serif); }
-.fu-sc { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px 18px; }
-
-.fu-peso { position: sticky; top: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 18px 20px; max-height: calc(100dvh - var(--barra-vera) - 48px); overflow-y: auto; }
-
-.fu-parti > .tasto-comando { justify-self: start; max-width: 100%; height: auto; min-height: var(--altezza-comando); padding-block: 8px; white-space: normal; text-align: left; line-height: 1.3; }
-
-.fu-nuovo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.fu-nuovo .campo { flex: 1; min-width: 160px; }
-
-.fu-vuoto { display: grid; gap: 10px; padding: 16px 18px; }
-
-.fu-b { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
-.fu-dev { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; padding: 18px 20px; min-width: 0; }
-.fu-dev-testa { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--attenuato); }
-
-.fu-righe { display: grid; grid-template-columns: max-content minmax(0, 1fr); margin: 0; font-size: var(--testo-minore); }
-
-.fu-passi { list-style: none; margin: 0; padding: 0; display: grid; }
-.fu-passo { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 18px 0; border-bottom: 0.5px solid var(--linea); }
+.finestra .riquadro { background: var(--carta); padding: 14px 18px; }
+.finestra .riquadro h2 { margin: 0; font: 400 17px/1.3 var(--serif); }
 
 .finestra.larga { width: min(900px, calc(100vw - 32px)); }
-@media (max-width: 900px) {
-    .fu-a, .fu-b, .fu-carte { grid-template-columns: minmax(0, 1fr); }
-    .fu-peso { position: static; max-height: none; }
-    .fu-passo { grid-template-columns: 30px minmax(0, 1fr); }
-    .fu-passo > :last-child:not(div) { grid-column: 2; justify-self: start; }
-}
 
 .pillola.scelta {
     flex: none;
@@ -1878,3 +1815,7 @@ img[data-si-ingrandisce] { cursor: zoom-in; }
     animation: velo-arriva var(--gesto) var(--uscita);
 }
 .velo-ingrandita > img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+.gp-file { max-height: none; }
+.gp-file li { grid-template-columns: 56px minmax(0, 1fr) auto; }
+.gp-mini { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--linea); }

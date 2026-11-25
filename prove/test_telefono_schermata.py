@@ -246,7 +246,8 @@ def test_il_tasto_dice_cosa_fa(cliente, telefono):
     detto = _salva(cliente, telefono, senza_data="1")
     assert detto["tasto"].startswith("Prepara ")
     assert detto["tasto"].endswith("per iPhone")
-    assert detto["tasto"] in cliente.get(f"/fuori?quale={telefono}").text
+    pagina = cliente.get(f"/fuori?quale={telefono}").text
+    assert ">Solo prepara<" in pagina and 'id="tasto-cavo"' in pagina
 
 
 def test_dice_quante_foto_toglie_prima_di_toglierle(cliente, telefono,
@@ -281,12 +282,60 @@ def test_il_pacchetto_fatto_dalla_pagina_si_riapre(cliente, telefono, tmp_path):
         assert pacchetto.verifica().tutto_a_posto
 
 
-def test_senza_cartella_non_parte_e_dice_dove_scriverla(cliente, telefono):
+def test_senza_cartella_si_prepara_in_visore_col_nome_del_telefono(cliente, telefono,
+                                                                    archivio_pieno):
+    from pathlib import Path
+
+    attesa = Path(archivio_pieno.dove.radice).parent / "Visore" / "iPhone"
+    pagina = cliente.get(f"/fuori?quale={telefono}")
+    assert str(attesa) in pagina.text
+
     risposta = cliente.post(f"/telefono/{telefono}/parti",
-                            data={"password": PAROLA, "ancora": PAROLA})
-    assert risposta.status_code == 400
-    assert "in che cartella" in risposta.text
-    assert not telefono_web.in_corso.lavoro.sta_lavorando
+                            data={"password": PAROLA, "ancora": PAROLA},
+                            follow_redirects=False)
+    assert risposta.status_code == 303
+    _aspetta_che_finisca()
+    with archivio_pieno.lettura() as connessione:
+        assert telefoni.per_id(connessione, telefono)["cartella"] == str(attesa)
+    assert (attesa / "visore.json").is_file()
+
+
+def test_una_cartella_con_altre_cose_dentro_non_si_riempie(cliente, telefono, tmp_path):
+    scrivania = tmp_path / "Desktop"
+    scrivania.mkdir()
+    (scrivania / "appunti.txt").write_text("miei", encoding="utf-8")
+    detto = cliente.post(f"/telefono/{telefono}/dove", data={"cartella": str(scrivania)},
+                         headers={"accept": "application/json"}).json()
+    attesa = scrivania / "Visore" / "iPhone"
+    assert detto["cartella"] == str(attesa)
+
+    cliente.post(f"/telefono/{telefono}/parti", data={"password": PAROLA, "ancora": PAROLA})
+    _aspetta_che_finisca()
+    assert (attesa / "visore.json").is_file()
+    assert sorted(p.name for p in scrivania.iterdir()) == ["Visore", "appunti.txt"]
+
+    ancora = cliente.post(f"/telefono/{telefono}/dove", data={"cartella": str(attesa)},
+                          headers={"accept": "application/json"}).json()
+    assert ancora["cartella"] == str(attesa)
+
+
+def test_una_cartella_vuota_si_usa_cosi_com_e(cliente, telefono, tmp_path):
+    vuota = tmp_path / "Pacchetto del telefono"
+    vuota.mkdir()
+    detto = cliente.post(f"/telefono/{telefono}/dove", data={"cartella": str(vuota)},
+                         headers={"accept": "application/json"}).json()
+    assert detto["cartella"] == str(vuota)
+
+
+def test_un_telefono_nuovo_ha_gia_la_sua_cartella(cliente, archivio_pieno):
+    from pathlib import Path
+
+    cliente.post("/telefono/nuovo", data={"nome": "iPhone 15 Pro", "sistema": "ios"},
+                 follow_redirects=False)
+    with archivio_pieno.lettura() as connessione:
+        riga = telefoni.per_nome(connessione, "iPhone 15 Pro")
+    assert riga["cartella"] == str(Path(archivio_pieno.dove.radice).parent
+                                   / "Visore" / "iPhone-15-Pro")
 
 
 def test_due_password_diverse_non_toccano_niente(cliente, telefono, tmp_path):
@@ -429,9 +478,8 @@ def test_le_durate_si_dicono_come_le_direbbe_una_persona(secondi, detto):
 
 def test_il_diario_si_apre_dai_dispositivi(cliente, con_diario):
     pagina = cliente.get(f"/fuori?quale={con_diario}").text
-    assert 'data-apri-finestra="diario"' in pagina
-    assert '<dialog class="finestra larga" id="diario"' in pagina
-    dentro = pagina.split('id="diario"')[1]
+    assert 'aria-controls="pannello-diario"' in pagina
+    dentro = pagina.split('id="pannello-diario"')[1].split('id="pannello-copie"')[0]
     assert "casa della nonna" in dentro
 
 
@@ -444,3 +492,84 @@ def test_il_diario_non_ha_nessun_modo_di_cancellarsi(cliente, con_diario):
     dentro = pagina.split("Il diario")[1]
     for parola in ("cancella", "svuota", "dimentica il diario"):
         assert parola not in dentro.lower()
+
+
+def _pacchetto_sul_desktop(cliente, telefono, archivio_pieno, tmp_path):
+    from officina.archivio.database import esegui
+
+    scrivania = tmp_path / "Desktop"
+    scrivania.mkdir()
+    with archivio_pieno.scrittura() as connessione:
+        esegui(connessione, "UPDATE telefoni SET cartella = ? WHERE id = ?",
+               str(scrivania), telefono)
+    cliente.post(f"/telefono/{telefono}/parti", data={"password": PAROLA, "ancora": PAROLA})
+    _aspetta_che_finisca()
+    assert (scrivania / "visore.json").is_file()
+    (scrivania / "appunti.txt").write_text("miei", encoding="utf-8")
+    (scrivania / "volti").mkdir(exist_ok=True)
+    (scrivania / "foto" / "mia.jpg").write_bytes(b"non del pacchetto")
+    (scrivania / "volti" / "ritratto.png").write_bytes(b"neanche questo")
+    return scrivania
+
+
+def test_rifai_da_zero_toglie_solo_il_pacchetto_e_passa_alla_cartella_sua(
+        cliente, telefono, archivio_pieno, tmp_path):
+    from pathlib import Path
+
+    scrivania = _pacchetto_sul_desktop(cliente, telefono, archivio_pieno, tmp_path)
+    risposta = cliente.post(f"/telefono/{telefono}/da-zero", follow_redirects=False)
+    assert risposta.status_code == 303
+
+    rimasti = sorted(str(p.relative_to(scrivania)) for p in scrivania.rglob("*"))
+    assert rimasti == ["appunti.txt", "foto", "foto/mia.jpg", "volti", "volti/ritratto.png"]
+    attesa = Path(archivio_pieno.dove.radice).parent / "Visore" / "iPhone"
+    with archivio_pieno.lettura() as connessione:
+        assert telefoni.per_id(connessione, telefono)["cartella"] == str(attesa)
+        assert telefoni.peso_del_pacchetto(connessione, telefono) == (0, 0)
+
+    cliente.post(f"/telefono/{telefono}/parti", data={"password": PAROLA, "ancora": PAROLA})
+    _aspetta_che_finisca()
+    with lettore.apri(attesa, PAROLA) as pacchetto:
+        assert pacchetto.completo and pacchetto.verifica().tutto_a_posto
+
+
+def test_dimentica_toglie_anche_i_file_del_pacchetto(cliente, telefono, archivio_pieno,
+                                                     tmp_path):
+    scrivania = _pacchetto_sul_desktop(cliente, telefono, archivio_pieno, tmp_path)
+    cliente.post(f"/telefono/{telefono}/dimentica", follow_redirects=False)
+    assert not (scrivania / "visore.json").exists()
+    assert not (scrivania / "dati.db").exists()
+    assert (scrivania / "appunti.txt").read_text(encoding="utf-8") == "miei"
+    assert (scrivania / "foto" / "mia.jpg").is_file()
+
+
+def test_il_pacchetto_di_un_altro_telefono_non_si_tocca(tmp_path):
+    from officina.telefono import formato, pulizia
+
+    cartella = tmp_path / "altro"
+    formato.Carta(telefono="Un altro", archivio="abc", sale="00", prova="00").scrivi(cartella)
+    (cartella / "dati.db").write_bytes(b"x")
+    esito = pulizia.togli_il_pacchetto(cartella, "abc", "iPhone")
+    assert esito.non_toccata and esito.tolti == 0
+    assert (cartella / "dati.db").is_file() and (cartella / "visore.json").is_file()
+
+
+def test_senza_carta_non_si_toglie_niente(tmp_path):
+    from officina.telefono import pulizia
+
+    cartella = tmp_path / "strana"
+    (cartella / "volti").mkdir(parents=True)
+    (cartella / "volti" / ("a" * 32)).write_bytes(b"x")
+    esito = pulizia.togli_il_pacchetto(cartella, "abc", "iPhone")
+    assert esito.non_toccata and (cartella / "volti" / ("a" * 32)).is_file()
+
+
+def test_la_cartella_vuota_del_pacchetto_sparisce(cliente, telefono, archivio_pieno):
+    from pathlib import Path
+
+    cliente.post(f"/telefono/{telefono}/parti", data={"password": PAROLA, "ancora": PAROLA})
+    _aspetta_che_finisca()
+    attesa = Path(archivio_pieno.dove.radice).parent / "Visore" / "iPhone"
+    assert (attesa / "visore.json").is_file()
+    cliente.post(f"/telefono/{telefono}/dimentica", follow_redirects=False)
+    assert not attesa.exists() and not attesa.parent.exists()

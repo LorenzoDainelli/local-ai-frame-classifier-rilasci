@@ -415,7 +415,8 @@ def api_impronte():
     })
 
 
-@strada.post("/misura/usa-il-migliore", dependencies=[Depends(base.solo_da_questo_computer)])
+@strada.post("/misura/usa-il-migliore",
+             dependencies=[Depends(base.solo_qui_o_dal_portatile)])
 def usa_il_migliore():
     from officina.descrittori import griglia
 

@@ -173,6 +173,12 @@ def _cuori(connessione, telefono_id: int, dentro, esito: Tornato) -> None:
     for impronta, messo_il in arrivate.items():
         vecchio = gia.get(impronta)
         if vecchio and vecchio["tolto_il"]:
+            if messo_il and messo_il > vecchio["tolto_il"]:
+                esegui(connessione,
+                       "UPDATE cuori SET tolto_il = NULL, messo_il = ?, "
+                       "tornato_il = ? WHERE id = ?",
+                       messo_il, adesso(), vecchio["id"])
+                esito.cuori_nuovi += 1
             continue
         if vecchio:
             esito.cuori_gia_visti += 1

@@ -17,7 +17,7 @@ from officina.web.strade import base, comune, importazione
 
 strada = APIRouter()
 
-solo_qui = [Depends(base.solo_da_questo_computer)]
+qui_o_portatile = [Depends(base.solo_qui_o_dal_portatile)]
 
 _detto_della_salute: dict = {}
 
@@ -218,7 +218,7 @@ def _di_nuovo_alla_salute(testo: str, guasti: list[str] | None = None) -> Redire
     return RedirectResponse("/sistemare#rovinati", status_code=303)
 
 
-@strada.post("/elenchi/salute/ripara/{percorso_id}", dependencies=solo_qui)
+@strada.post("/elenchi/salute/ripara/{percorso_id}", dependencies=qui_o_portatile)
 def salute_ripara(percorso_id: int):
     try:
         detto = salute_file.ripara(accesso.aperto(), percorso_id)
@@ -228,7 +228,7 @@ def salute_ripara(percorso_id: int):
     return _di_nuovo_alla_salute(detto)
 
 
-@strada.post("/elenchi/salute/ripara-tutti", dependencies=solo_qui)
+@strada.post("/elenchi/salute/ripara-tutti", dependencies=qui_o_portatile)
 def salute_ripara_tutti():
     riparati, guasti = salute_file.ripara_tutti(accesso.aperto())
     registro.evento("salute.riparati", quanti=riparati, non_riusciti=len(guasti))
@@ -238,7 +238,7 @@ def salute_ripara_tutti():
     return _di_nuovo_alla_salute(testo, guasti[:10])
 
 
-@strada.post("/elenchi/salute/va-bene/{percorso_id}", dependencies=solo_qui)
+@strada.post("/elenchi/salute/va-bene/{percorso_id}", dependencies=qui_o_portatile)
 def salute_va_bene(percorso_id: int):
     try:
         salute_file.accetta(accesso.aperto(), percorso_id)
@@ -248,7 +248,7 @@ def salute_va_bene(percorso_id: int):
         "Va bene: alla prossima importazione il programma lo riprende così com'è adesso.")
 
 
-@strada.post("/elenchi/salute/controlla", dependencies=solo_qui)
+@strada.post("/elenchi/salute/controlla", dependencies=qui_o_portatile)
 def salute_controlla():
     archivio = accesso.aperto()
     rivisti = salute_file.ricontrolla_quelli_da_riparare(archivio)

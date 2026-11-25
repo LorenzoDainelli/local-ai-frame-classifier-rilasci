@@ -110,6 +110,10 @@
     </div>
     <span class="barretta finita" aria-hidden="true"><span style="width: 100%"></span></span>
     {{ conti(ultima.nuovi_scatti, ultima.coppie_live, ultima.gia_presenti, ultima.saltati, false) }}
+    {% if ultima.gia_presenti and ultima.id in con_elenco_dei_gia %}
+    <p><a class="tasto-comando piccolo" href="/importazione/{{ ultima.id }}/gia-presenti">{{
+        'Vedi quale era già presente' if ultima.gia_presenti == 1 else 'Vedi quali erano già presenti' }}</a></p>
+    {% endif %}
     {% if ultima.nuovi_scatti %}
     <div class="ag-arrivo" hidden>
         <h3 class="etichetta">Le ultime arrivate</h3>

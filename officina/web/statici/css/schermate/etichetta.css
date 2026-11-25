@@ -20,8 +20,6 @@
 
 .pe-destra { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; min-width: 0; }
 
-.pagina-luoghi { display: grid; gap: 16px; align-content: start; }
-
 .faccina {
     width: 22px; height: 22px;
     border-radius: 50%;
@@ -246,6 +244,7 @@
 .et-pillola.et-mio { background: var(--accento); color: var(--su-accento); font-weight: 600; }
 .et-pillola.et-mio:hover { text-decoration: line-through; }
 .et-pillola.et-ia { border: 1.5px solid var(--ink); }
+.et-pillola.et-probabile { font-weight: 600; border-width: 2px; }
 .et-pillola.altre { border: 1px solid var(--linea-forte); color: var(--attenuato); background: var(--superficie); }
 .et-pillola .via { opacity: .7; font-weight: 400; }
 .et-pillole .vuote { color: var(--tenue); font-size: 12px; }
@@ -307,3 +306,59 @@ body.et-intero .et-scena:hover .et-bottoni { opacity: 1; }
 .et-fumetto figure { margin: 0; display: grid; gap: 4px; }
 .et-fumetto img { width: 100%; aspect-ratio: 3 / 4; object-fit: contain; border-radius: var(--raggio-piccolo); background: var(--pozzo); }
 .et-fumetto figcaption { font-size: 11.5px; color: var(--tenue); text-align: center; }
+
+.et-pillola.et-sg-tasto { padding: 0 7px; margin-left: -4px; border: 1px dashed var(--linea-forte); color: var(--attenuato); font-size: 13px; }
+.et-pillola.et-sg-tasto:hover { border-color: var(--ink); color: var(--ink); }
+.et-pillola.et-sg-tasto.con { border-style: solid; border-color: var(--accento); color: var(--accento); }
+.et-sg-strato { position: absolute; pointer-events: none; z-index: 4; }
+.et-sg-pezzo { position: absolute; background: rgba(255, 64, 160, .5); mask-size: 100% 100%; -webkit-mask-size: 100% 100%; mask-mode: luminance; }
+
+.sg-velo { z-index: 70; }
+.sg-scheda { background: var(--superficie); border: 1px solid var(--linea-forte); border-radius: var(--raggio-scheda); width: min(1500px, 96vw); height: min(940px, 94vh); display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--ombra); }
+.sg-testa { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--linea); }
+.sg-titolo { font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-facoltativa { font-size: 12px; }
+.sg-chiudi { font: inherit; font-size: 20px; line-height: 1; width: 32px; height: 32px; border-radius: var(--raggio-controllo); border: 1px solid transparent; background: transparent; color: var(--ink); cursor: pointer; }
+.sg-chiudi:hover { border-color: var(--linea-forte); }
+.sg-corpo { flex: 1; min-height: 0; display: flex; }
+.sg-palco { flex: 1; min-width: 0; min-height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--pozzo, #111); padding: 12px; }
+.sg-quadro { position: relative; display: inline-block; line-height: 0; }
+.sg-quadro img { display: block; user-select: none; }
+.sg-quadro canvas { position: absolute; left: 0; top: 0; touch-action: none; cursor: crosshair; }
+.sg-quadro canvas[data-strumento="pennello"], .sg-quadro canvas[data-strumento="gomma"] { cursor: cell; }
+.sg-lato { width: 260px; flex: none; border-left: 1px solid var(--linea); padding: 14px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+.sg-gruppo { display: flex; flex-direction: column; gap: 8px; }
+.sg-etichetta { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--attenuato); }
+.sg-strumenti { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sg-strumenti button, .sg-fila button, .sg-piede button { font: inherit; font-size: 13px; height: 32px; border-radius: var(--raggio-controllo); border: 1px solid var(--linea-forte); background: var(--superficie); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; }
+.sg-strumenti button.acceso { background: var(--accento); color: var(--su-accento); border-color: var(--accento); font-weight: 600; }
+.sg-strumenti kbd { font-family: var(--mono); font-size: 10px; opacity: .65; }
+.sg-fila { display: flex; gap: 6px; }
+.sg-fila button { flex: 1; }
+.sg-misura, .sg-spunta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--attenuato); }
+.sg-misura input { flex: 1; min-width: 0; }
+.sg-aiuto { font-size: 12px; margin: 0; line-height: 1.4; }
+.sg-stato { font-size: 12px; margin: 0; min-height: 3.2em; line-height: 1.4; }
+.sg-stato.male { color: var(--male); }
+.sg-piede { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+.sg-piede .primario { background: var(--accento); color: var(--su-accento); border-color: var(--accento); font-weight: 600; }
+.sg-piede .sg-togli { color: var(--male); }
+.sg-sinistra { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sg-video { flex: none; border-top: 1px solid var(--linea); padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.sg-video-riga { display: flex; align-items: center; gap: 8px; font-size: 12px; min-height: 30px; }
+.sg-video-riga button { font: inherit; font-size: 12px; height: 28px; padding: 0 10px; border-radius: var(--raggio-controllo); border: 1px solid var(--linea-forte); background: var(--superficie); color: var(--ink); cursor: pointer; }
+.sg-video-riga button.acceso { background: var(--accento); color: var(--su-accento); border-color: var(--accento); }
+.sg-video-riga button:disabled { opacity: .5; cursor: default; }
+.sg-qui { font-variant-numeric: tabular-nums; min-width: 150px; }
+.sg-spazio { flex: 1; }
+.sg-striscia { display: flex; gap: 1px; overflow-x: auto; padding: 2px 0; }
+.sg-fg { flex: 1 0 6px; min-width: 6px; height: 22px; border: 0; padding: 0; border-radius: 2px; background: var(--linea); cursor: pointer; }
+.sg-fg.utente, .sg-legenda .utente { background: var(--accento); }
+.sg-fg.sicura, .sg-legenda .sicura { background: var(--bene); }
+.sg-fg.dubbia, .sg-legenda .dubbia { background: var(--attenzione); }
+.sg-fg.nonbuona, .sg-legenda .nonbuona { background: repeating-linear-gradient(45deg, var(--linea-forte) 0 3px, transparent 3px 6px); }
+.sg-fg.persa, .sg-legenda .persa { background: var(--male); }
+.sg-fg.qui { outline: 2px solid var(--ink); outline-offset: 1px; }
+.sg-legenda { font-size: 11px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sg-legenda span:not(:empty), .sg-legenda span[class] { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-left: 6px; }
+.sg-scheda [hidden] { display: none !important; }

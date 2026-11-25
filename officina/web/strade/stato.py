@@ -160,7 +160,8 @@ def _dati_della_salute() -> dict:
         in_breve = {
             "foto": conto("SELECT count(*) AS q FROM scatti WHERE fuori_archivio = 0 AND genere != 'video'"),
             "video": conto("SELECT count(*) AS q FROM scatti WHERE fuori_archivio = 0 AND genere = 'video'"),
-            "cartelle": conto("SELECT count(*) AS q FROM cartelle_sorgente WHERE attiva = 1"),
+            "cartelle": conto("SELECT count(*) AS q FROM cartelle_sorgente "
+                              "WHERE attiva = 1 OR conclusa_da IS NOT NULL"),
             "con_impronta": conto("SELECT count(DISTINCT i.scatto_id) AS q FROM impronte i "
                                   "JOIN scatti s ON s.id = i.scatto_id WHERE s.fuori_archivio = 0"),
         }

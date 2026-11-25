@@ -2,6 +2,7 @@ import { chiedi, mandaModulo, leggiDatiIncorporati, qualcosaSopraLaPagina,
          siStaScrivendo }
     from "/statici/js/comune.js";
 import { disegnaRitocchi, leggiRitocchi, vediSotto } from "/statici/js/ritocchi.js";
+import { apriSagoma } from "/statici/js/sagoma.js";
 
 const dati = leggiDatiIncorporati("dati-officina") || {};
 const $ = (nome) => document.getElementById(nome);
@@ -447,8 +448,15 @@ function partiTrovate() {
     return ((st.pezzo && st.pezzo.parti) || []).map((parte, indice) => {
         const quante = parte.zone.length > 1 ? ` ×${parte.zone.length}` : "";
         const dove = `<span class="via">· ${scampa(parte.nome.toLowerCase())}${quante}</span>`;
-        if (parte.nodo_id && !viste.has(parte.nodo_id) && !proposti.has(parte.nodo_id)) {
-            return `<button type="button" class="et-pillola et-ia" data-pia="${parte.nodo_id}" data-di="0" data-zone="${indice}" title="Parte trovata nella foto: clic per mettere l'etichetta">${scampa(parte.nodo_nome)} ${dove}</button>`;
+        const nodi = (parte.nodi || []).filter((voce) => !viste.has(voce.nodo_id) && !proposti.has(voce.nodo_id));
+        if (nodi.length) {
+            return nodi.map((voce) => {
+                const probabile = voce.nodo_id === parte.probabile;
+                const titolo = probabile
+                    ? "Parte trovata nella foto. Secondo le tue etichette è la più probabile: clic per metterla"
+                    : "Parte trovata nella foto: clic per mettere l'etichetta";
+                return `<button type="button" class="et-pillola et-ia${probabile ? " et-probabile" : ""}" data-pia="${voce.nodo_id}" data-di="0" data-zone="${indice}" title="${titolo}">${scampa(voce.nome)} ${dove}</button>`;
+            }).join("");
         }
         return `<span class="et-pillola et-zona" data-zone="${indice}" title="Parte trovata nella foto: passa sopra per vedere dove">${scampa(parte.nome.toLowerCase())}${quante}</span>`;
     }).join("");
@@ -479,10 +487,72 @@ function mostraZone(indice) {
     quadro.appendChild(strato);
 }
 
+const siDisegna = () => !!(st.pezzo && st.pezzo.scatto && st.pezzo.scatto.principale !== null);
+const nelVideo = () => !!(st.pezzo && st.pezzo.scatto && st.pezzo.scatto.genere === "video");
+
+function sagomaDi(id) {
+    const principale = st.pezzo && st.pezzo.scatto.principale;
+    const video = nelVideo();
+    return ((st.pezzo && st.pezzo.sagome) || []).find((voce) => voce.nodo_id === id && voce.file_id === principale && (video ? voce.fotogramma >= 0 : voce.fotogramma === -1)) || null;
+}
+
+function tastoSagoma(id) {
+    if (!siDisegna()) return "";
+    const fatta = sagomaDi(id);
+    const titolo = fatta
+        ? (nelVideo() ? "Sagoma nel video: clic per vedere dove l'IA la segue e correggerla"
+            : "Sagoma disegnata: passa sopra per vederla, clic per correggerla o toglierla")
+        : (nelVideo() ? "Disegna la sagoma su un fotogramma (facoltativa): l'IA la segue nel video"
+            : "Disegna la sagoma di questa etichetta (facoltativa): un clic e SAM la contorna, oppure a mano");
+    return `<button type="button" class="et-pillola et-sg-tasto${fatta ? " con" : ""}" data-disegna="${id}" aria-label="${fatta ? "Correggi la sagoma" : "Disegna la sagoma"}" title="${titolo}">${fatta ? "◉" : "◌"}</button>`;
+}
+
+function disegnaSagoma(id) {
+    if (!siDisegna()) return;
+    const n = nodo(id);
+    const voce = (st.pezzo.confermate || []).find((x) => x.nodo_id === id);
+    const fermo = (st.pezzo.striscia || []).find((q) => q.numero === st.fotogramma);
+    apriSagoma({
+        scatto: st.pezzo.scatto.id, nodo: id, foto: st.pezzo.scatto.principale,
+        video: nelVideo(), istante: fermo ? fermo.istante : 0,
+        nome: n ? nomeCorto(id).join(" › ") : (voce ? voce.nome : ""),
+        sagoma: sagomaDi(id),
+        quandoCambia: (sagome) => {
+            if (!st.pezzo) return;
+            st.pezzo.sagome = sagome;
+            disegnaPillole();
+        },
+    });
+}
+
+function mostraSagoma(id) {
+    const quadro = $("quadro");
+    const media = $("media");
+    if (!quadro) return;
+    quadro.querySelector(".et-sg-strato")?.remove();
+    const fatta = id === null ? null : sagomaDi(id);
+    if (!fatta || !media || media.tagName !== "IMG") return;
+    const strato = document.createElement("div");
+    strato.className = "et-sg-strato";
+    Object.assign(strato.style, {
+        left: `${media.offsetLeft}px`, top: `${media.offsetTop}px`,
+        width: `${media.offsetWidth}px`, height: `${media.offsetHeight}px`,
+    });
+    const pezzo = document.createElement("div");
+    pezzo.className = "et-sg-pezzo";
+    const via = `url("/api/sagome/${fatta.id}/maschera?v=${encodeURIComponent(fatta.id + "-" + fatta.area)}")`;
+    Object.assign(pezzo.style, {
+        left: `${fatta.x * 100}%`, top: `${fatta.y * 100}%`, width: `${fatta.w * 100}%`, height: `${fatta.h * 100}%`,
+        maskImage: via, webkitMaskImage: via,
+    });
+    strato.appendChild(pezzo);
+    quadro.appendChild(strato);
+}
+
 function elencoPillole() {
     const confermate = st.pezzo ? st.pezzo.confermate || [] : [];
     const voceDi = (id) => confermate.find((voce) => voce.nodo_id === id);
-    return mie(0).map((id) => `<button type="button" class="et-pillola et-mio" data-pmio="${id}" data-di="0" title="Clic per togliere">${testoTipo(id, voceDi(id))}</button>`).join("") +
+    return mie(0).map((id) => `<button type="button" class="et-pillola et-mio" data-pmio="${id}" data-di="0" title="Clic per togliere">${testoTipo(id, voceDi(id))}</button>` + tastoSagoma(id)).join("") +
         proposte(0).map((voce) => `<button type="button" class="et-pillola et-ia" data-pia="${voce.nodo_id}" data-di="0" title="Proposta dell'IA: clic per confermare">${testoTipo(voce.nodo_id, voce)}</button>`).join("") +
         partiTrovate();
 }
@@ -1404,7 +1474,7 @@ function scampa(testo) {
 let trascinato = false;
 
 document.addEventListener("click", (evento) => {
-    const t = evento.target.closest("[data-nodo],[data-piu],[data-recente],[data-pmio],[data-pia],[data-altre],[data-ris],[data-quadro],[data-persona],[data-togli-persona],[data-ripasso],[data-parte],[data-gente],[data-nessuna],[data-nonso],[data-corpo]");
+    const t = evento.target.closest("[data-nodo],[data-piu],[data-recente],[data-pmio],[data-pia],[data-altre],[data-ris],[data-quadro],[data-persona],[data-togli-persona],[data-ripasso],[data-parte],[data-gente],[data-nessuna],[data-nonso],[data-corpo],[data-disegna]");
     if (!t) return;
     if (trascinato && t.closest("#tela")) return;
     const d = t.dataset;
@@ -1417,6 +1487,7 @@ document.addEventListener("click", (evento) => {
         else aCursore(n.id);
     } else if (d.piu) nuovoNodo(Number(d.piu));
     else if (d.recente) { const id = Number(d.recente); apriFinoA(id); metti(id); }
+    else if (d.disegna) disegnaSagoma(Number(d.disegna));
     else if (d.pmio) togli(Number(d.pmio), d.di !== undefined ? Number(d.di) : st.parte);
     else if (d.pia) metti(Number(d.pia), d.di !== undefined ? Number(d.di) : st.parte);
     else if (d.parte !== undefined) cambiaParte(Number(d.parte));
@@ -1443,6 +1514,9 @@ document.addEventListener("mouseover", (evento) => {
     const zona = evento.target.closest("[data-zone]");
     if (zona) mostraZone(Number(zona.dataset.zone));
     else if (document.querySelector(".et-zone")) mostraZone(null);
+    const disegnata = evento.target.closest("[data-disegna]");
+    if (disegnata) mostraSagoma(Number(disegnata.dataset.disegna));
+    else if (document.querySelector(".et-sg-strato")) mostraSagoma(null);
     const voce = evento.target.closest("[data-pia]");
     const sulNodo = evento.target.closest(".et-nodo[data-nodo]");
     if (voce) mostraPerche(proposta(Number(voce.dataset.pia)));

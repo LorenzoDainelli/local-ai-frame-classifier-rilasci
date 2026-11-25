@@ -8,8 +8,9 @@ from officina import registro
 from officina.archivio import accesso
 from officina.archivio.database import tutti, uno
 from officina.errori import ErroreOfficina
-from officina.modello import aiuti, luoghi, posti, stanze
+from officina.modello import aiuti, luoghi, mosse_dei_luoghi, posti, stanze
 
+from officina.immagini import consegna
 from officina.web import vista
 from officina.web.strade import base
 
@@ -34,6 +35,8 @@ def pagina_luoghi(richiesta: Request):
             "ORDER BY nome COLLATE NOCASE")]
         non_finiti = posti.quanti_non_finiti(connessione)
         forma = forma_dei_luoghi(connessione)
+        elenco = posti.riepilogo(connessione)
+        conti = posti.conti(connessione)
     return base.pagine.TemplateResponse(richiesta, "luoghi.html", {
         **base.comune(richiesta, "luoghi"),
         "albero": albero,
@@ -41,8 +44,134 @@ def pagina_luoghi(richiesta: Request):
         "tutti_i_posti": tutti_i_posti,
         "cime": cime,
         "non_finiti": non_finiti,
+        "conti": conti,
         "dati_dei_luoghi": vista.json_per_la_pagina({"nodi": forma}),
+        "elenco_dei_luoghi": vista.json_per_la_pagina({"luoghi": elenco, "conti": conti}),
     })
+
+
+@strada.get("/api/luoghi/elenco")
+def api_elenco_dei_luoghi():
+    with accesso.aperto().lettura() as connessione:
+        return {"luoghi": posti.riepilogo(connessione), "conti": posti.conti(connessione)}
+
+
+@strada.get("/api/luoghi/senza-luogo")
+def api_senza_luogo(da: int = 0):
+    with accesso.aperto().lettura() as connessione:
+        return posti.giornate_senza_luogo(connessione, max(0, min(da, 10 ** 7)))
+
+
+def _giorno(testo: str) -> str | None:
+    from officina.modello import mappa
+
+    if not testo.strip():
+        return None
+    giorno = mappa.giorno_valido(testo)
+    if giorno is None:
+        raise ErroreOfficina("Non ho capito di che giorno si tratta.")
+    return giorno
+
+
+def _solo(testo: str) -> list[int] | None:
+    if not testo.strip():
+        return None
+    try:
+        return [int(pezzo) for pezzo in testo.split(",") if pezzo.strip()]
+    except ValueError as errore:
+        raise ErroreOfficina("Non ho capito quali scatti.") from errore
+
+
+def _metti(connessione, numeri: list[int], posto_id: str, non_so: int) -> dict:
+    if non_so:
+        return mosse_dei_luoghi.non_so_tanti(connessione, numeri)
+    if posto_id.strip().isdecimal():
+        return mosse_dei_luoghi.metti_tanti(connessione, numeri, int(posto_id))
+    raise ErroreOfficina("Scegli un luogo, oppure «Non so dove».")
+
+
+@strada.post("/api/luoghi/giornata")
+def api_metti_la_giornata(giorno: str = Form(""), posto_id: str = Form(""),
+                          non_so: int = Form(0), solo: str = Form("")):
+    quando = _giorno(giorno)
+    scelti = _solo(solo)
+    with accesso.aperto().scrittura() as connessione:
+        numeri = posti._scatti_della_giornata(connessione, quando, scelti)
+        esito = _metti(connessione, numeri, posto_id, non_so) if numeri else {
+            "messi": 0, "mossa": None}
+    registro.evento("luoghi.giornata", scatti=esito["messi"], non_so=bool(non_so))
+    return esito
+
+
+@strada.post("/api/luoghi/scatti")
+async def api_metti_gli_scatti(richiesta: Request):
+    try:
+        dati = await richiesta.json()
+    except ValueError:
+        dati = {}
+    if not isinstance(dati, dict):
+        dati = {}
+    return await consegna.subito(_metti_gli_scatti, dati)
+
+
+def _scatti_scelti(dati: dict) -> list[int]:
+    from officina.web.strade import galleria
+
+    if dati.get("scatti") or dati.get("tutti_i_risultati"):
+        return galleria._quali_scatti(dati)
+    return []
+
+
+def _numeri_scelti(connessione, dati: dict, numeri: list[int]) -> list[int]:
+    giorni = dati.get("giorni") or []
+    if not isinstance(giorni, list):
+        raise ErroreOfficina("Non ho capito quali giornate.")
+    for giorno in giorni:
+        if giorno is not None and not isinstance(giorno, str):
+            raise ErroreOfficina("Non ho capito quali giornate.")
+        numeri.extend(posti._scatti_della_giornata(
+            connessione, _giorno(giorno) if giorno else None, None))
+    if not numeri:
+        raise ErroreOfficina("Non hai selezionato niente.")
+    return numeri
+
+
+def _metti_gli_scatti(dati: dict) -> dict:
+    posto_id = str(dati.get("posto_id") or "")
+    non_so = 1 if dati.get("non_so") else 0
+    scelti = _scatti_scelti(dati)
+    with accesso.aperto().scrittura() as connessione:
+        numeri = _numeri_scelti(connessione, dati, list(scelti))
+        esito = _metti(connessione, numeri, posto_id, non_so)
+        if not non_so:
+            esito["percorso"] = posti.percorso(connessione, int(posto_id))
+    registro.evento("luoghi.scatti", scatti=esito["messi"], non_so=bool(non_so))
+    return esito
+
+
+@strada.post("/api/luoghi/unisci")
+def api_unisci_luoghi(da: int = Form(...), verso: int = Form(...)):
+    with accesso.aperto().scrittura() as connessione:
+        esito = mosse_dei_luoghi.unisci(connessione, da, verso)
+        percorso = posti.percorso(connessione, verso)
+    registro.evento("luoghi.uniti", scatti=esito["scatti"])
+    return {"fatto": True, "scatti": esito["scatti"], "verso": verso, "percorso": percorso,
+            "mossa": esito["mossa"]}
+
+
+@strada.post("/api/luoghi/annulla")
+def api_annulla_una_mossa(mossa: int = Form(...)):
+    with accesso.aperto().scrittura() as connessione:
+        esito = mosse_dei_luoghi.annulla(connessione, mossa)
+    registro.evento("luoghi.annullata", genere=esito["genere"], rimessi=esito["rimessi"],
+                    rimasti=esito["rimasti"])
+    return esito
+
+
+@strada.get("/api/luoghi/mosse")
+def api_ultime_mosse():
+    with accesso.aperto().lettura() as connessione:
+        return {"mosse": mosse_dei_luoghi.ultime(connessione)}
 
 
 @strada.post("/luoghi/nuovo")
@@ -147,40 +276,34 @@ def api_albero_dei_luoghi():
 def api_luogo(posto_id: int):
     with accesso.aperto().lettura() as connessione:
         riga = _vivo(connessione, posto_id)
-        vivi = [x for x in posti.discendenti(connessione, posto_id)[1:]
-                if posti.per_id(connessione, x)["stato"] == "attivo"]
-        scatti = uno(connessione,
-                     "WITH RECURSIVE ramo(id) AS (SELECT id FROM posti WHERE id = ? "
-                     "UNION ALL SELECT p.id FROM posti p JOIN ramo r ON p.genitore_id = r.id "
-                     "WHERE p.stato = 'attivo') "
-                     "SELECT count(DISTINCT n.scatto_id) AS q FROM posti_negli_scatti n "
-                     "JOIN scatti s ON s.id = n.scatto_id "
-                     "WHERE s.fuori_archivio = 0 AND n.posto_id IN (SELECT id FROM ramo)", posto_id)
+        numeri = posti.numeri_del_ramo(connessione, posto_id)
         propri = uno(connessione,
                      "SELECT count(*) AS q FROM posti_negli_scatti n "
                      "JOIN scatti s ON s.id = n.scatto_id "
                      "WHERE s.fuori_archivio = 0 AND n.posto_id = ?", posto_id)
-        ultimi = [{"scatto_id": r["scatto_id"], "file_id": r["file_id"]} for r in tutti(
+        figli = [{"id": r["id"], "nome": r["nome"]} for r in tutti(
             connessione,
-            "WITH RECURSIVE ramo(id) AS (SELECT id FROM posti WHERE id = ? "
-            "UNION ALL SELECT p.id FROM posti p JOIN ramo r ON p.genitore_id = r.id "
-            "WHERE p.stato = 'attivo') "
-            "SELECT n.scatto_id, f.id AS file_id FROM posti_negli_scatti n "
-            "JOIN scatti s ON s.id = n.scatto_id AND s.fuori_archivio = 0 "
-            "JOIN file_media f ON f.scatto_id = n.scatto_id AND f.ruolo = 'principale' "
-            "WHERE n.posto_id IN (SELECT id FROM ramo) ORDER BY n.scatto_id DESC LIMIT 8",
-            posto_id)]
+            "SELECT id, nome FROM posti WHERE genitore_id = ? AND stato = 'attivo' "
+            "ORDER BY nome COLLATE NOCASE", posto_id)]
+        catena = [{"id": x, "nome": posti.per_id(connessione, x)["nome"]}
+                  for x in reversed(posti.antenati(connessione, posto_id))]
         return {
             "posto_id": posto_id,
             "nome": riga["nome"],
             "percorso": posti.percorso_del_padre(connessione, posto_id),
-            "scatti": scatti["q"] if scatti else 0,
+            "scatti": numeri["scatti"],
             "propri": propri["q"] if propri else 0,
-            "figli_sotto": len(vivi),
+            "figli_sotto": len(numeri["ramo"]) - 1,
             "coordinate": posti.coordinate(connessione, posto_id),
             "corsia": _corsia(connessione, posto_id),
-            "ultimi": ultimi,
+            "ultimi": numeri["ultimi"],
+            "dal": numeri["dal"],
+            "al": numeri["al"],
+            "anni": numeri["anni"],
+            "figli": figli,
+            "catena": catena,
             "stanza": _la_stanza(connessione, posto_id),
+            "unioni": mosse_dei_luoghi.unioni_qui(connessione, posto_id),
         }
 
 

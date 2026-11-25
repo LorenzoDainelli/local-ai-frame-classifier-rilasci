@@ -110,6 +110,12 @@ salvato, e fra sei mesi si ritrova com'era (regola 385). Sopra il tasto stanno t
 *tolgo 1.204 foto*, *questo telefono ha ancora la password precedente*. E il
 tasto dice cosa fa: «Prepara 28.740 scatti (41 GB) per iPhone».
 
+Con **«Mostra gli scatti»**, il tasto arancio in «Quanto pesa», si vedono uno
+per uno tutti gli scatti che entrano, dal più pesante al più leggero, tutti
+scelti. Si toglie la spunta a quelli che non servono sul telefono, anche tanti
+insieme trascinando sul vuoto, e si salva. I tolti restano fuori anche se poi
+si cambia periodo o rami, finché non si rimettono (regola 609).
+
 Il travaso dura ore la prima volta. Si può cambiare schermata e continuare a
 lavorare: va avanti da solo, con un segno in alto che lo dice (regola 191). Si
 può fermare e riprende da dove era. Alla fine **rilegge tutto e confronta le

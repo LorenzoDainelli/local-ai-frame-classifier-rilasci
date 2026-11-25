@@ -172,3 +172,26 @@ def test_le_due_letture_col_ritorno_alla_tabella_sono_chiuse():
                      "WHERE stato = 'si' GROUP BY nodo_id")
     assert "COVERING INDEX etichette_per_nodo" in galleria, (
         f"«quante per nodo» ha perso il suo indice: {galleria}")
+
+
+def test_ogni_legame_ha_il_suo_indice(archivio_pieno):
+    with archivio_pieno.scrittura() as connessione:
+        mancanti = migrazioni.indici_dei_legami(connessione)
+    assert mancanti == [], (
+        "ogni colonna che punta a un'altra tabella vuole un indice, se no cancellare "
+        "uno scatto rilegge la tabella intera")
+
+
+def test_annullare_una_cartella_e_svelto(archivio_pieno):
+    import time
+
+    from officina.importazione import annulla
+
+    with archivio_pieno.scrittura() as connessione:
+        cartella = connessione.execute("SELECT id FROM cartelle_sorgente LIMIT 1").fetchone()[0]
+        piano = connessione.execute(
+            "EXPLAIN QUERY PLAN SELECT 1 FROM impronte WHERE file_id = 1").fetchall()
+        assert any("INDEX" in str(riga[3]).upper() for riga in piano)
+        inizio = time.monotonic()
+        annulla.annulla(connessione, cartella)
+        assert time.monotonic() - inizio < 5

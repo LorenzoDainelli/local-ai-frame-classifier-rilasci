@@ -447,10 +447,22 @@ def test_uno_scatto_senza_etichetta_aspetta(piena):
     connessione = piena.connessione
     scatto = _uno_scatto(connessione)
     connessione.execute("DELETE FROM etichette WHERE scatto_id = ?", (scatto,))
-    assert scatto not in selezione.numeri(connessione, selezione.Selezione())
-    conto = selezione.stima(connessione, selezione.Selezione())
+    solo_etichettate = selezione.Selezione(non_etichettate=False)
+    assert scatto not in selezione.numeri(connessione, solo_etichettate)
+    conto = selezione.stima(connessione, solo_etichettate)
     assert conto.in_attesa >= 1
     assert "non ancora pronti" in conto.a_parole()
+    assert "solo quelle già etichettate" in solo_etichettate.a_parole()
+
+
+def test_di_solito_vanno_anche_quelle_senza_etichetta(piena):
+    connessione = piena.connessione
+    scatto = _uno_scatto(connessione)
+    connessione.execute("DELETE FROM etichette WHERE scatto_id = ?", (scatto,))
+    assert selezione.Selezione().non_etichettate
+    assert scatto in selezione.numeri(connessione, selezione.Selezione())
+    assert selezione.Selezione().e_tutto
+    assert not selezione.Selezione(non_etichettate=False).e_tutto
 
 
 @pytest.mark.parametrize("stato, entra", [
@@ -484,3 +496,41 @@ def test_l_ia_conta_solo_se_i_suoi_modelli_ci_sono(piena):
 
 def test_senza_modelli_non_si_aspetta_nessuna_ia(tmp_path):
     assert selezione.ia_in_casa(tmp_path) == ()
+
+
+def test_si_dice_perche_restano_fuori(piena):
+    from officina.volti import rilevatore
+
+    connessione = piena.connessione
+    scatti = [r["id"] for r in tutti(
+        connessione, "SELECT id FROM scatti WHERE fuori_archivio = 0 "
+        "AND sembra_schermata = 0 ORDER BY id LIMIT 3")]
+    connessione.execute("UPDATE scatti SET sembra_schermata = 1 WHERE id = ?", (scatti[0],))
+    file_id = uno(connessione, "SELECT id FROM file_media WHERE scatto_id = ?", scatti[1])["id"]
+    connessione.execute(
+        "INSERT INTO migliorie (file_id, scatto_id, stato, impronta_originale, "
+        "percorso_originale, messa_il) VALUES (?, ?, 'in_coda', 'x', 'x', 'adesso')",
+        (file_id, scatti[1]))
+    connessione.execute(
+        "INSERT OR IGNORE INTO volti_guardati (scatto_id, modello, versione, guardato_il) "
+        "SELECT id, ?, ?, 'adesso' FROM scatti", (rilevatore.NOME, rilevatore.VERSIONE))
+    connessione.execute("DELETE FROM volti_guardati WHERE scatto_id = ?", (scatti[2],))
+    connessione.execute("DELETE FROM segnalazioni WHERE scatto_id = ?", (scatti[2],))
+
+    scelta = selezione.Selezione()
+    totale, pezzi = selezione.perche_fuori(connessione, scelta, ("volti",))
+    dentro = selezione.stima(connessione, scelta, ("volti",)).quanti_scatti
+    dove = dict(pezzi)
+    assert totale == uno(connessione, "SELECT count(*) AS q FROM scatti "
+                         "WHERE fuori_archivio = 0")["q"]
+    assert totale - sum(dove.values()) == dentro
+    assert dove["schermate"] >= 1
+    assert dove["ancora in miglioramento"] >= 1
+    assert dove["ancora da guardare per i volti"] >= 1
+    detto = selezione.fuori_a_parole(totale, pezzi)
+    assert f"ne restano fuori {selezione.a_numero(totale - dentro)}" in detto
+    assert "schermate" in detto
+
+
+def test_quando_entra_tutto_lo_dice():
+    assert selezione.fuori_a_parole(926, []) == "Entrano tutti gli scatti dell'archivio (926)."

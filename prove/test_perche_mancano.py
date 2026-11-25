@@ -114,6 +114,22 @@ def test_la_pagina_mostra_l_elenco_e_il_tasto(archivio_misurabile):
     assert 'href="/intelligenza/perche-mancano"' in _cliente().get("/intelligenza").text
 
 
+def test_il_tasto_c_e_anche_mentre_lavora_un_altro_modello(archivio_misurabile, monkeypatch):
+    from officina.web.strade import comune
+
+    [scatto] = _foto(archivio_misurabile, 1)
+    _togli_le_impronte(archivio_misurabile, [scatto])
+    monkeypatch.setitem(comune.fila_ia, "adesso", "volti")
+    monkeypatch.setitem(comune.fila_ia, "scelti", ["impronte", "volti"])
+    comune.lavoro_ia.rifletti({"sta_lavorando": True})
+    try:
+        pagina = _cliente().get("/intelligenza").text
+        assert "Mancano 1 scatto" in pagina
+        assert 'href="/intelligenza/perche-mancano"' in pagina
+    finally:
+        comune.lavoro_ia.riflesso = None
+
+
 def test_senza_mancanti_la_carta_non_ha_il_collegamento(archivio_misurabile):
     assert "perche-mancano" not in _cliente().get("/intelligenza").text
     assert "Non manca nessuna impronta" in _cliente().get(

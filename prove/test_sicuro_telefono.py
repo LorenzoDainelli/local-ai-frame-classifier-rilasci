@@ -258,6 +258,56 @@ def test_il_volto_non_si_ritaglia_da_una_versione_diversa(sul_telefono):
         assert travaso._volti(connessione, {pronta.scatto_id}, {}, set()) == []
 
 
+def test_il_volto_preso_da_un_video_si_ritaglia_dal_suo_fotogramma(sul_telefono,
+                                                                     monkeypatch):
+    from officina.immagini import fotogrammi, lettura
+
+    pronta = sul_telefono
+    _con_un_volto(pronta)
+    with pronta.archivio.scrittura() as connessione:
+        connessione.execute("UPDATE file_media SET genere = 'video' WHERE id = ?",
+                            (pronta.file_id,))
+        connessione.execute("UPDATE volti SET fotogramma = 3 WHERE file_id = ?",
+                            (pronta.file_id,))
+    chiesti = []
+
+    def un_fotogramma(percorso, numero, istante=None, lato=None):
+        chiesti.append(numero)
+        return Image.new("RGB", (640, 360), (120, 90, 60))
+
+    def mai(*_argomenti, **_resto):
+        raise AssertionError("un video non si apre come una foto")
+
+    monkeypatch.setattr(fotogrammi, "uno", un_fotogramma)
+    monkeypatch.setattr(lettura, "copia_di_lavoro", mai)
+    travaso = _travaso(pronta)
+    with pronta.archivio.lettura() as connessione:
+        compito, = travaso._volti(connessione, {pronta.scatto_id}, {}, set())
+    assert compito.e_video and compito.fotogramma == 3
+
+    with Image.open(io.BytesIO(travaso._volto(compito))) as immagine:
+        assert immagine.size == (costruzione.LATO_VOLTO, costruzione.LATO_VOLTO)
+    assert chiesti == [3]
+
+
+def test_un_video_senza_fotogrammi_lascia_la_persona_senza_faccina(sul_telefono,
+                                                                    monkeypatch):
+    from officina.errori import FileNonLeggibile
+    from officina.immagini import fotogrammi
+
+    pronta = sul_telefono
+    _con_un_volto(pronta)
+    with pronta.archivio.scrittura() as connessione:
+        connessione.execute("UPDATE file_media SET genere = 'video' WHERE id = ?",
+                            (pronta.file_id,))
+    monkeypatch.setattr(fotogrammi, "uno", lambda *_a, **_r: None)
+    travaso = _travaso(pronta)
+    with pronta.archivio.lettura() as connessione:
+        compito, = travaso._volti(connessione, {pronta.scatto_id}, {}, set())
+    with pytest.raises(FileNonLeggibile, match="fotogramma del volto"):
+        travaso._volto(compito)
+
+
 def test_la_stima_conta_le_foto_solo_nell_archivio(sul_telefono, monkeypatch):
     pronta = sul_telefono
     assert _conti(_stima(pronta)) == (1, 0, 0, 0)

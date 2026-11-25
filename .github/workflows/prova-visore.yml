@@ -1,0 +1,92 @@
+name: Pacchetto di prova del Visore con foto libere
+
+on:
+  push:
+    branches: [claude/local-ai-frame-classifier-plan-4now5w]
+    paths:
+      - "strumenti/prova_visore.py"
+      - ".github/workflows/prova-visore.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prova-visore
+  cancel-in-progress: true
+
+jobs:
+  scelta:
+    name: La scelta degli scatti liberi
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Le librerie
+        run: |
+          grep -iE "^(av|onnxruntime|huggingface-hub)==" requirements-modelli.txt | cut -d" " -f1 > prova-librerie.txt
+          cat prova-librerie.txt
+          python -m pip install -r requirements.txt -r prova-librerie.txt
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: gia
+        with:
+          key: scelta-prova-visore-${{ github.sha }}
+          path: ${{ runner.temp }}/scelta/scelta.json
+          lookup-only: true
+      - name: La scelta
+        if: steps.gia.outputs.cache-hit != 'true'
+        run: python strumenti/prova_visore.py --fase scelta --lavoro "$RUNNER_TEMP/lavoro" --uscita "$RUNNER_TEMP/scelta"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.gia.outputs.cache-hit != 'true'
+        with:
+          key: scelta-prova-visore-${{ github.sha }}
+          path: ${{ runner.temp }}/scelta/scelta.json
+
+  pacchetto:
+    name: Cento scatti liberi da Wikimedia Commons
+    needs: scelta
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Le librerie
+        run: |
+          grep -iE "^(av|onnxruntime|huggingface-hub)==" requirements-modelli.txt | cut -d" " -f1 > prova-librerie.txt
+          cat prova-librerie.txt
+          python -m pip install -r requirements.txt -r prova-librerie.txt
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: scelta-prova-visore-${{ github.sha }}
+          path: ${{ runner.temp }}/scelta/scelta.json
+          fail-on-cache-miss: true
+      - name: Il pacchetto
+        run: python strumenti/prova_visore.py --fase pacchetto --scelta "$RUNNER_TEMP/scelta/scelta.json" --lavoro "$RUNNER_TEMP/lavoro" --uscita "$RUNNER_TEMP/fuori"
+      - name: Nel ramo prova-visore
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd "$RUNNER_TEMP/fuori"
+          cat conti.json
+          git init -q -b prova-visore
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Pacchetto di prova del Visore: scatti liberi da Wikimedia Commons"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" prova-visore
+          du -sh Visore-iPhone

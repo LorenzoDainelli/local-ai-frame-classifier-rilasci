@@ -78,9 +78,9 @@
         </div>
     </dialog>
     {% endfor %}
-    {% if si_puo_sfogliare %}
+    {% if si_puo_sfogliare or sfoglia_nella_pagina %}
     <button class="tasto-comando cn-sfoglia {{ '' if cartelle else 'principale' }}" type="button"
-            data-sfoglia hidden title="Apre la finestra di Windows per scegliere la cartella.">
+            data-sfoglia hidden {% if sfoglia_nella_pagina %}data-esplora{% endif %} title="Apre la finestra per scegliere la cartella.">
         <span class="gira-poco" data-gira hidden></span>
         <span data-icona>{{ icona('piu' if cartelle else 'cartella', 16) }}</span>
         <span data-scritta>{{ "Scegli un'altra cartella…" if cartelle else "Scegli una cartella…" }}</span>
@@ -106,10 +106,10 @@
         <p class="cn-nota">Tutto resta nello stesso archivio. Il gruppo serve a vederle anche da sole, con il filtro «Gruppi» della galleria.</p>
     </div>
     {% endif %}
-    {% if not da_questo_computer %}
+    {% if not comanda %}
     <p class="cn-nota">Le cartelle si aggiungono dal computer dove gira il programma.</p>
     {% endif %}
-    <form method="post" action="/importazione/cartella" class="cn-scrivi" id="cn-modulo" data-cartella-nuova{% if not da_questo_computer %} hidden{% endif %}>
+    <form method="post" action="/importazione/cartella" class="cn-scrivi" id="cn-modulo" data-cartella-nuova{% if not comanda %} hidden{% endif %}>
         {% if dove_torno %}
         <input type="hidden" name="dove_torno" value="{{ dove_torno }}">
         {% endif %}
@@ -128,4 +128,4 @@
     <p class="cn-errore" data-errore role="alert" hidden></p>
     <p class="cn-nota" data-a-mano>In Esplora risorse il percorso si copia dalla barra in cima alla finestra.</p>
 </div>
-<script type="module" src="/statici/js/cartella_nuova.js"></script>
+<script type="module" src="{{ statico('/statici/js/cartella_nuova.js') }}"></script>

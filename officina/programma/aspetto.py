@@ -12,7 +12,6 @@ SCELTE: dict[str, tuple[str, ...]] = {
     "impostazioni": ("A", "B", "C"),
     "foto": ("A", "C"),
     "persone": ("A", "C"),
-    "collegamenti": ("A", "B", "C"),
     "doppioni": ("A", "B"),
     "miglioramento": ("A", "B"),
     "impronte": ("A", "C"),
@@ -48,7 +47,6 @@ PARTENZA: dict[str, str] = {
     "impostazioni": "A",
     "foto": "A",
     "persone": "A",
-    "collegamenti": "A",
     "doppioni": "A",
     "miglioramento": "A",
     "impronte": "A",
@@ -288,7 +286,7 @@ MOVIMENTI: dict[str, dict] = {
 }
 
 VERSIONI = ("navigazione", "stato", "lavoro", "impostazioni", "foto", "persone",
-            "collegamenti", "doppioni", "miglioramento", "qualita", "impronte", "misura",
+            "doppioni", "miglioramento", "qualita", "impronte", "misura",
             *MOVIMENTI)
 
 PRONTE = VERSIONI
@@ -394,24 +392,6 @@ VOCI: dict[str, dict] = {
                   "A sinistra c'è sempre una faccia da nominare, con il campo per "
                   "il nome; a destra chi ha già un nome.",
                   "Il mazzo sta lì anche quando non hai voglia di dare nomi."),
-        },
-    },
-    "collegamenti": {
-        "titolo": "Dispositivi",
-        "dove": "/fuori",
-        "versioni": {
-            "A": ("Scegli e guarda il peso", "peso",
-                  "Una pagina sola: in cima scegli dove mandare, a sinistra cosa "
-                  "ci va, a destra quanto pesa e il tasto.",
-                  "Il diario e quello che è tornato stanno dietro tre tasti in fondo."),
-            "B": ("Due carte affiancate", "due",
-                  "Una carta per il telefono e una per l'altro computer, ognuna "
-                  "con lo stato e quattro righe di riassunto.",
-                  "Per scegliere rami e persone serve un passaggio in più."),
-            "C": ("Una lista di passi", "passi",
-                  "Quattro passi in fila: quello da fare adesso è acceso, quelli "
-                  "fatti restano scritti con «Cambia».",
-                  "Il peso si legge solo nel passo della copia."),
         },
     },
     "doppioni": {

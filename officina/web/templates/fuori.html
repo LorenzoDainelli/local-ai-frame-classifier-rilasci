@@ -10,51 +10,80 @@
 </dialog>
 {%- endmacro %}
 
-{% macro nuovo_telefono() %}
-<form method="post" action="/telefono/nuovo" class="fu-nuovo">
-    <input class="campo" name="nome" placeholder="iPhone" required aria-label="Il nome del telefono">
-    <select class="campo" name="sistema" aria-label="Il sistema">
-        <option value="android">Android</option>
-        <option value="ios">iOS</option>
-    </select>
-    <button class="tasto-comando principale" type="submit">Aggiungi un telefono</button>
-</form>
-<p class="minuscolo tenue">Il nome serve a sapere per chi è un pacchetto, e diventa anche il nome della cartella: «iPhone» fa <span class="numeri">Visore-iPhone</span>.</p>
-{% endmacro %}
-
-{% macro il_dove() %}
-{% if not da_questo_computer %}
-<p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
-{% else %}
-<form method="post" action="/telefono/{{ telefono.id }}/dove" class="fu-dove">
-    <label class="piccolo attenuato">La cartella dove costruisco
-        <input class="campo" name="cartella" value="{{ cartella }}" placeholder="D:\Visore-{{ telefono.nome }}">
-    </label>
-    <label class="piccolo attenuato">Spazio libero, in GB
-        <input class="campo" name="spazio" value="{{ spazio }}" placeholder="128" inputmode="decimal">
-    </label>
-    <button class="tasto-comando piccolo" type="submit">Ricorda questi due</button>
-</form>
-{% endif %}
-<p class="minuscolo tenue">Lo spazio me lo dici tu: da qui non lo so vedere. La cartella è quella da cui poi copi col cavo: il programma non tocca il telefono.</p>
-{% endmacro %}
-
-{% macro la_partenza() %}
-{% if not da_questo_computer %}
-<p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
-{% else %}
-<form method="post" action="/telefono/{{ telefono.id }}/parti" class="fu-parti">
-    {% if serve_password %}
-    <input class="campo" type="password" name="password" placeholder="Password del pacchetto" required autocomplete="new-password">
-    <input class="campo" type="password" name="ancora" placeholder="Scrivila di nuovo" required autocomplete="new-password">
-    <p class="minuscolo tenue">Il pacchetto si cifra comunque: il telefono esce di casa. È la password che l'app ti chiede a ogni apertura.</p>
-    {% else %}
-    <p class="minuscolo tenue">Si cifra con la password del forziere. Non te la richiedo.</p>
+{% macro carta_dispositivo(chiave, ico, nome, sotto, stato, tinta, dove, accesa, via, conseguenza) %}
+<div class="carta fu-dev {{ 'scelta' if accesa }}" data-dispositivo="{{ chiave }}">
+    <a class="fu-dev-va" href="{{ dove }}" {% if accesa %}aria-current="page"{% endif %}>
+        <span class="fu-dev-ico">{{ icona(ico, 19) }}</span>
+        <span class="fu-dev-testo">
+            <b class="fu-dev-nome">{{ nome }}</b>
+            <span class="fu-dev-sotto">{{ sotto }}</span>
+        </span>
+    </a>
+    <span class="fu-stato {{ tinta }}">{{ stato }}</span>
+    {% if via %}
+    <button class="fu-cestino" type="button" data-cestino aria-label="Elimina {{ nome }}" title="Elimina">{{ icona('cestino', 16) }}</button>
+    <div class="fu-chiedi" data-chiedi>
+        <p><b>Eliminare {{ nome }}?</b></p>
+        <div class="in-fila">
+            <button class="tasto-comando piccolo" type="button" data-no>Annulla</button>
+            <button class="tasto-comando piccolo fu-rosso" type="button" data-apri-finestra="via-{{ chiave }}">Elimina…</button>
+        </div>
+    </div>
+    {% call finestra("via-" ~ chiave, "Eliminare davvero " ~ nome ~ "?") %}
+        <p class="attenuato">{{ conseguenza }}</p>
+        <form method="post" action="{{ via }}" class="fu-via" data-nome="{{ nome }}">
+            <label class="piccolo attenuato">Per conferma, scrivi il nome: <b>{{ nome }}</b>
+                <input class="campo" name="conferma" autocomplete="off" spellcheck="false" data-conferma>
+            </label>
+            <div class="fu-fondo">
+                <button class="tasto-comando" type="button" data-chiudi-finestra>No, tienilo</button>
+                <button class="tasto-comando fu-rosso" type="submit" disabled data-elimina>Sì, elimina</button>
+            </div>
+        </form>
+    {% endcall %}
     {% endif %}
-    <button class="tasto-comando accento" type="submit" id="tasto-parti" {{ 'disabled' if in_corso.sta_lavorando }}>{{ conto.tasto }}</button>
-    {% if a_meta %}<p class="minuscolo tenue">C'è un travaso lasciato a metà: riprende da dov'era, non ricomincia.</p>{% endif %}
-</form>
-{% endif %}
+</div>
+{% endmacro %}
+
+{% macro i_dispositivi() %}
+{% set quanti_portatili = portatili|length if portatili else 1 %}
+{% set quante = quanti_portatili + telefoni|length + 2 %}
+{% set colonne = {1: 1, 2: 2, 3: 3, 4: 2, 5: 3, 6: 3, 7: 3, 8: 3, 9: 3}.get(quante, 4) %}
+<div class="fu-griglia" style="--colonne: {{ colonne }}" aria-label="I dispositivi">
+    {% if portatili %}
+    {% for voce in portatili %}
+    {% set adesso = portatile_collegato and portatile_collegato.id == voce.id %}
+    {{ carta_dispositivo("portatile-" ~ loop.index, "portatile", voce.nome or "Portatile",
+        "Lo stai usando adesso" if dal_portatile and adesso else ("Ultima volta " ~ voce.ultima_volta if voce.ultima_volta else "Abbinato il " ~ voce.abbinato_il),
+        "collegato adesso" if adesso else "non collegato", "bene" if adesso else "",
+        "/fuori?dove=portatile", dove == 'portatile',
+        "/schermo/dimentica/" ~ voce.id if da_questo_computer else "",
+        "Si stacca, e per ricollegarlo servirà di nuovo il codice di sei cifre. L'archivio non si tocca.") }}
+    {% endfor %}
+    {% else %}
+    {{ carta_dispositivo("portatile", "portatile", "Portatile",
+        "Lo schermo di questo computer, da un'altra stanza",
+        "porta aperta, aspetto il codice" if porta_aperta else "mai collegato",
+        "attesa" if porta_aperta else "", "/fuori?dove=portatile", dove == 'portatile', "", "") }}
+    {% endif %}
+    {% for uno in telefoni %}
+    {% set copia_ora = in_corso.sta_lavorando and in_corso.telefono_id == uno.id %}
+    {{ carta_dispositivo("telefono-" ~ uno.id, "telefono", uno.nome,
+        ("iPhone" if uno.sistema == 'ios' else "Android") ~ (" · " ~ uno.quanti_file|numero ~ " file, " ~ uno.peso if uno.quanti_file else ""),
+        "sta copiando" if copia_ora else ("ultima copia " ~ uno.ultimo if uno.ultimo_travaso_il else "mai copiato"),
+        "bene" if copia_ora or uno.ultimo_travaso_il else "attesa",
+        "/fuori?quale=" ~ uno.id, dove == 'telefono' and telefono and telefono.id == uno.id,
+        "/telefono/" ~ uno.id ~ "/dimentica" if qui_o_portatile else "",
+        "Il programma dimentica il telefono, le sue scelte, il diario e le copie di prima, e toglie dal fisso i file del suo pacchetto. Le foto dell'archivio non si toccano, e nemmeno il Visore sul telefono.") }}
+    {% endfor %}
+    {{ carta_dispositivo("computer", "computer", "Altro computer", "Due archivi uguali, con una chiavetta",
+        "al lavoro" if in_sincronia.sta_lavorando else ((da_aprire|length) ~ " da aprire" if da_aprire else "niente di nuovo"),
+        "bene" if in_sincronia.sta_lavorando else ("attesa" if da_aprire else ""),
+        "/fuori?dove=computer", dove == 'computer', "", "") }}
+    <button class="carta fu-dev fu-aggiungi" type="button" data-apri-finestra="aggiungi">
+        {{ icona('piu', 20) }}<span>Aggiungi un dispositivo</span>
+    </button>
+</div>
 {% endmacro %}
 
 {% macro il_travaso() %}
@@ -69,48 +98,168 @@
 {% if in_corso.riepilogo and not in_corso.sta_lavorando %}
 <div class="avviso {{ 'forte' if in_corso.guasti else '' }}">{{ in_corso.riepilogo }}</div>
 {% if in_corso.tornato %}<p class="piccolo attenuato">Dal telefono è tornato: {{ in_corso.tornato }}.</p>{% endif %}
+{% if in_corso.cavo %}<div class="avviso {{ '' if in_corso.cavo_completo else 'forte' }}">{{ in_corso.cavo }}</div>{% endif %}
 {% endif %}
 {% endmacro %}
 
-{% macro gli_avvisi() %}
-<div class="in-colonna" id="avvisi">
-    {% for avviso in conto.avvisi %}<div class="avviso {{ 'forte' if avviso.forte }}">{{ avviso.testo }}</div>{% endfor %}
-</div>
+{% macro la_partenza() %}
+{% if not qui_o_portatile %}
+<p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
+{% else %}
+<form method="post" action="/telefono/{{ telefono.id }}/parti" class="fu-parti">
+    {% if serve_password %}
+    <div class="fu-password">
+        <input class="campo" type="password" name="password" placeholder="Password del pacchetto" required autocomplete="new-password" aria-label="Password del pacchetto">
+        <input class="campo" type="password" name="ancora" placeholder="Scrivila di nuovo" required autocomplete="new-password" aria-label="Scrivila di nuovo">
+    </div>
+    {% endif %}
+    <div class="fu-tasti">
+        <button class="tasto-comando {{ '' if telefono.sistema == 'ios' else 'accento' }} fu-grande" type="submit" id="tasto-parti" data-sistema="{{ telefono.sistema }}" {{ 'disabled' if in_corso.sta_lavorando }}>{{ "Solo prepara" if telefono.sistema == 'ios' else conto.tasto }}</button>
+        {% if telefono.sistema == 'ios' %}
+        <button class="tasto-comando accento fu-grande" type="submit" name="cavo" value="1" id="tasto-cavo" {{ 'disabled' if in_corso.sta_lavorando }}>{{ icona('cavo', 17) }}Prepara e copia col cavo</button>
+        {% endif %}
+    </div>
+    <p class="minuscolo tenue">{% if serve_password %}La password è quella che il Visore chiede a ogni apertura.{% else %}Si cifra con la password del forziere: non te la richiedo.{% endif %}
+        {% if a_meta %}C'è una copia lasciata a metà: riprende da dov'era.{% endif %}
+        {% if telefono.sistema == 'ios' %}{% call spiega("Come funziona il cavo") %}
+            <p>Prima prendo preferiti, raccolte e diario dall'iPhone, poi preparo il pacchetto e copio sull'iPhone solo i file nuovi, rileggendoli uno per uno.</p>
+            {% if dal_portatile %}<p>Dal portatile: il fisso manda i file già cifrati, uno alla volta, nel collegamento cifrato. Sul portatile ognuno resta solo finché non è sull'iPhone, poi si cancella.</p>{% endif %}
+            <p>Tieni l'iPhone sbloccato fino alla fine: finché la copia non è finita, il Visore resta chiuso.</p>
+        {% endcall %}{% endif %}</p>
+</form>
+{% endif %}
+{% endmacro %}
+
+{% macro il_prossimo_del_telefono() %}
+{% set ha_cartella = (telefono.cartella or '')|trim %}
+<section class="carta fu-prossimo">
+    {% if in_corso.sta_lavorando and in_corso.telefono_id == telefono.id %}
+    <div class="fu-prossimo-testo">
+        <span class="fu-etichetta">Sto lavorando</span>
+        <h2>Preparo e copio per {{ telefono.nome }}</h2>
+    </div>
+    {% elif in_corso.sta_lavorando %}
+    <div class="fu-prossimo-testo">
+        <span class="fu-etichetta">Aspetta</span>
+        <h2>C'è già una copia in corso per un altro telefono</h2>
+        <p>Se ne fa una alla volta. Quando finisce, si parte da qui.</p>
+    </div>
+    {% elif not ha_cartella %}
+    <div class="fu-prossimo-testo">
+        <span class="fu-etichetta">Il prossimo passo</span>
+        <h2>Scegli dove preparare il pacchetto</h2>
+        <p>Una cartella del fisso con tanto spazio.{% if telefono.sistema == 'ios' %} Da lì il pacchetto va sull'iPhone col cavo.{% else %} Da lì lo copi tu sul telefono.{% endif %}</p>
+    </div>
+    {% if qui_o_portatile %}<button class="tasto-comando accento fu-grande" type="button" data-sfoglia>{{ icona('cartella', 17) }}Sfoglia…</button>
+    {% else %}<p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>{% endif %}
+    {% else %}
+    <div class="fu-prossimo-testo">
+        <span class="fu-etichetta">{{ "Pronto" if conto.quanti_scatti else "Il prossimo passo" }}</span>
+        <h2>{% if telefono.sistema == 'ios' %}Attacca l'iPhone e copia{% else %}Prepara il pacchetto{% endif %}</h2>
+        <p>{% if telefono.sistema == 'ios' %}iPhone sbloccato, Visore chiuso, blocco automatico su «Mai». {% endif %}Va avanti anche se chiudi la finestra. La prima volta porta tutto, poi solo quello che cambia.</p>
+    </div>
+    {{ la_partenza() }}
+    {% endif %}
+    <div class="fu-prossimo-vivo">{{ il_travaso() }}</div>
+</section>
+{% endmacro %}
+
+{% macro cosa_ci_va() %}
+<section class="carta fu-passo fatto">
+    <div class="fu-passo-testa"><span class="fu-n">{{ icona('spunta', 13) }}</span><h3>Cosa ci va</h3></div>
+    <p class="fu-grosso"><span class="numeri" id="quanti-scatti">{{ conto.scatti }}</span> <span class="piccolo tenue">scatti, di cui <span class="numeri" id="quanti-video">{{ conto.video }}</span> video</span></p>
+    <form id="selezione" data-telefono="{{ telefono.id }}" method="post" action="/telefono/{{ telefono.id }}/selezione" class="fu-scelta">
+        <label class="interruttore fu-inter">
+            <input type="checkbox" name="non_etichettate" value="1" id="non-etichettate" {% if scelta.non_etichettate %}checked{% endif %}>
+            <span class="binario"></span>
+            <span><b>Anche quelle non ancora etichettate</b>
+                <small id="senza-etichetta">{% if conto.senza_etichetta != '0' %}{{ conto.senza_etichetta }} scatti che ancora non stanno in nessun ramo.{% else %}Adesso sono tutte etichettate.{% endif %}</small></span>
+        </label>
+        <label class="interruttore fu-inter">
+            <input type="checkbox" name="senza_data" value="1" id="senza-data" {% if scelta.senza_data %}checked{% endif %}>
+            <span class="binario"></span>
+            <span><b>Anche quelle senza data</b><small>Vanno in fondo, con scritto che la data non c'è.</small></span>
+        </label>
+        <button class="tasto-comando" type="button" data-apri-finestra="scelte">{{ icona('filtri', 16) }}Periodo, rami e persone…</button>
+        {% call finestra("scelte", "Periodo, rami e persone", True) %}{% include "_telefono_scelte.html" %}{% endcall %}
+        <noscript><button class="tasto-comando principale" type="submit">Salva e rifai il conto</button></noscript>
+    </form>
+    <p class="minuscolo tenue"><span id="scelta-a-parole">{{ conto.scelta_a_parole|capitalize }}</span>. Le schermate restano sempre fuori.</p>
+    <p class="minuscolo tenue" id="restano-fuori">{{ conto.fuori }}</p>
+</section>
+{% endmacro %}
+
+{% macro dove_si_prepara() %}
+{% set ha_cartella = (telefono.cartella or '')|trim %}
+<section class="carta fu-passo {{ 'fatto' if ha_cartella else 'qui' }}" id="fu-dove">
+    <div class="fu-passo-testa"><span class="fu-n">{% if ha_cartella %}{{ icona('spunta', 13) }}{% else %}2{% endif %}</span><h3>Dove si prepara</h3></div>
+    {% if qui_o_portatile %}
+    <form method="post" action="/telefono/{{ telefono.id }}/dove" class="fu-dove" id="fu-dove-modulo">
+        <input type="hidden" name="cartella" value="{{ telefono.cartella or '' }}" id="fu-cartella">
+        <div class="fu-scritto" id="fu-cartella-vista" {{ 'hidden' if not ha_cartella }}>
+            <span class="fu-etichetta">Sul fisso</span>
+            <span class="nome-di-file" id="fu-cartella-testo">{{ telefono.cartella or '' }}</span>
+        </div>
+        <p class="piccolo attenuato" id="fu-cartella-manca" {{ 'hidden' if ha_cartella }}>Una cartella del fisso con tanto spazio, per esempio <span class="nome-di-file">D:\{{ cartella }}</span>.</p>
+        <button class="tasto-comando {{ '' if ha_cartella else 'accento' }}" type="button" data-sfoglia>{{ icona('cartella', 16) }}<span>{{ "Cambia cartella…" if ha_cartella else "Sfoglia…" }}</span></button>
+        <label class="fu-spazio">
+            <span class="fu-etichetta">Spazio libero sul telefono</span>
+            <span class="fu-spazio-campo"><input class="campo numeri" name="spazio" value="{{ spazio }}" placeholder="es. 180" inputmode="decimal" id="fu-spazio" autocomplete="off"><span class="piccolo tenue">GB</span></span>
+        </label>
+        <p class="minuscolo tenue">{% if telefono.sistema == 'ios' %}Sull'iPhone: Impostazioni → Generali → Spazio iPhone.{% else %}Sul telefono: Impostazioni → Memoria.{% endif %}</p>
+        <noscript><button class="tasto-comando piccolo" type="submit">Ricorda</button></noscript>
+    </form>
+    {% if telefono.quanti_file %}
+    <details class="fu-da-zero">
+        <summary class="piccolo tenue">Rifai il pacchetto da zero</summary>
+        <p class="piccolo attenuato">Toglie dal fisso tutti i file del pacchetto di prima, solo quelli: il resto della cartella non si tocca. Poi il pacchetto nuovo si prepara in una cartella sua: <span class="nome-di-file">{{ telefono.cartella_standard }}</span>. La scelta delle foto resta. Sull'iPhone non serve togliere niente: il pacchetto nuovo prende il posto del vecchio.</p>
+        <form method="post" action="/telefono/{{ telefono.id }}/da-zero">
+            <button class="tasto-comando piccolo fu-rosso" type="submit" {{ 'disabled' if in_corso.sta_lavorando }}>Sì, rifallo da zero</button>
+        </form>
+    </details>
+    {% endif %}
+    {% else %}
+    {% if ha_cartella %}<span class="nome-di-file">{{ telefono.cartella }}</span>{% endif %}
+    <p class="piccolo tenue">Questa scelta si fa dal fisso o dal portatile collegato.</p>
+    {% endif %}
+</section>
 {% endmacro %}
 
 {% macro quanto_pesa() %}
-<h2>Quanto pesa</h2>
-<span class="fu-num numeri" id="peso-totale">{{ conto.peso }}</span>
-<p class="piccolo attenuato"><span class="numeri" id="quanti-scatti">{{ conto.scatti }}</span> scatti · <span class="numeri" id="quanti-video">{{ conto.video }}</span> video, <span class="numeri" id="peso-video">{{ conto.peso_video }}</span></p>
-<p class="minuscolo tenue" id="periodo">{% if conto.dal %}{{ conto.dal }} — {{ conto.al }}{% else %}—{% endif %}</p>
-<p class="minuscolo tenue" id="scelta-a-parole">{{ conto.scelta_a_parole }}</p>
-{{ gli_avvisi() }}
-<p class="minuscolo tenue">{% if cartella %}Cartella: <span class="nome-di-file">{{ cartella }}</span>{% else %}Manca la cartella dove costruirlo.{% endif %}</p>
-{{ la_partenza() }}
-{{ il_travaso() }}
+{% set pieno = (conto.peso_byte * 100 / conto.spazio_byte)|round(1) if conto.spazio_byte else 0 %}
+<section class="carta fu-passo" id="fu-peso">
+    <div class="fu-passo-testa"><span class="fu-n">3</span><h3>Quanto pesa</h3></div>
+    <p class="fu-grosso"><span class="numeri" id="peso-totale">{{ conto.peso }}</span></p>
+    <span class="fu-barra {{ 'troppo' if pieno > 100 }}" id="fu-barra" aria-hidden="true"><span style="width: {{ [pieno, 100]|min }}%"></span></span>
+    <p class="piccolo attenuato" id="fu-ci-sta">{% if not conto.spazio_byte %}Scrivi lo spazio libero e ti dico se ci sta.{% elif pieno > 100 %}<b class="fu-male">Non ci sta.</b> Togli un periodo, i video o le non etichettate, oppure i singoli scatti più pesanti.{% else %}<b class="fu-bene">Ci sta.</b>{% endif %}</p>
+    {% if telefono and conto.quanti_scatti %}<button class="ms-tasto" type="button" id="mostra-scatti" data-telefono="{{ telefono.id }}" aria-haspopup="dialog" title="Tutti gli scatti del pacchetto, dal più pesante al più leggero"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><path d="M13.5 17.2h7.5M17.2 13.5v7.5"/></svg><span>Mostra gli scatti</span><span class="ms-conto numeri">{{ conto.scatti }}</span></button>{% endif %}
+    <p class="minuscolo tenue"><span class="numeri" id="peso-video">{{ conto.peso_video }}</span> sono video. <span id="periodo">{% if conto.dal %}Dal {{ conto.dal }} al {{ conto.al }}.{% endif %}</span></p>
+    <div class="in-colonna fu-avvisi" id="avvisi">
+        {% for avviso in conto.avvisi %}<div class="avviso {{ 'forte' if avviso.forte }}">{{ avviso.testo }}</div>{% endfor %}
+    </div>
+</section>
 {% endmacro %}
 
 {% macro il_tornato() %}
-<p class="piccolo attenuato">Preferiti e raccolte sono l'unica cosa che il telefono possiede. Tornano da soli all'inizio di ogni travaso, dentro il pacchetto.</p>
-<dl class="ag-numeri">
-    <dt>Preferiti</dt><dd class="numeri">{{ tornato.cuori|numero }}</dd>
-    <dt>Raccolte</dt><dd class="numeri">{{ tornato.raccolte | length|numero }}</dd>
-</dl>
+<div class="fu-dati">
+    <div class="fu-dato"><b class="numeri">{{ tornato.cuori|numero }}</b><span>preferiti tornati</span></div>
+    <div class="fu-dato"><b class="numeri">{{ tornato.raccolte|length|numero }}</b><span>raccolte</span></div>
+    <div class="fu-dato"><b>{{ telefono.ultimo if telefono.ultimo_travaso_il else "—" }}</b><span>l'ultima volta</span></div>
+</div>
 {% if tornato.raccolte %}
 <ul class="ag-cartelle">
     {% for raccolta in tornato.raccolte %}<li><span>{{ raccolta.nome }}</span><span class="numeri tenue">{{ raccolta.quante|numero }}</span></li>{% endfor %}
 </ul>
 {% endif %}
 {% if tornato.tolti_da_applicare %}
-<div class="avviso">{{ tornato.tolti_da_applicare }} preferiti li hai tolti da qui e il telefono non lo sa ancora. Il pacchetto se li porta dietro nell'elenco dei tolti finché non li applica.</div>
+<div class="avviso">{{ tornato.tolti_da_applicare }} preferiti li hai tolti da qui e il telefono non lo sa ancora. Il pacchetto se li porta dietro finché non li applica.</div>
 {% endif %}
-{% if not tornato.cuori and not tornato.raccolte %}<p class="piccolo tenue">Questo telefono non ha ancora raccontato niente.</p>{% endif %}
+<p class="minuscolo tenue">Preferiti e raccolte fatti sul telefono tornano qui da soli all'inizio di ogni copia.</p>
 {% endmacro %}
 
 {% macro il_diario() %}
-<p class="piccolo attenuato">Dove, quando, per quanto e su quante foto hai usato il Visore. Vive dentro il pacchetto cifrato, non esce mai dal telefono, e torna qui insieme ai preferiti.</p>
 {% if diario.righe %}
-<p class="minuscolo tenue">{{ diario.quante_in_tutto|numero }} aperture dal {{ diario.dal }}, {{ diario.durata_in_tutto }} in tutto, {{ diario.foto_in_tutto }} foto guardate.</p>
+<p class="piccolo attenuato">{{ diario.quante_in_tutto|numero }} aperture dal {{ diario.dal }}, {{ diario.durata_in_tutto }} in tutto, {{ diario.foto_in_tutto }} foto guardate.</p>
 <div class="fu-tabella">
 <table class="tabella">
     <thead><tr><th>Quando</th><th>Per quanto</th><th>Foto</th><th>Dove</th></tr></thead>
@@ -128,20 +277,20 @@
 </div>
 {% if diario.non_mostrate %}<p class="minuscolo tenue">E altre {{ diario.non_mostrate }} più vecchie.</p>{% endif %}
 {% else %}
-<p class="piccolo tenue">Niente, ancora. Se il permesso della posizione viene rifiutato, e si può rifiutare, il diario segna soltanto quando e quanto.</p>
+<p class="piccolo tenue">Ancora niente. Il diario segna quando, quanto e dove hai aperto il Visore. Vive cifrato nel pacchetto e torna qui con i preferiti.</p>
 {% endif %}
 {% endmacro %}
 
-{% macro i_travasi() %}
+{% macro le_copie() %}
 {% if travasi %}
 <div class="fu-tabella">
 <table class="tabella">
-    <thead><tr><th>Quando</th><th>Com'è finito</th><th>Scritti</th><th>Tolti</th><th>Peso</th></tr></thead>
+    <thead><tr><th>Quando</th><th>Com'è finita</th><th>Scritti</th><th>Tolti</th><th>Peso</th></tr></thead>
     <tbody>
         {% for riga in travasi %}
         <tr>
             <td>{{ riga.quando }}</td>
-            <td class="piccolo">{% if riga.stato == 'finito' %}completo{% if riga.verificato %}, riletto e verificato{% endif %}{% elif riga.stato == 'in_corso' %}lasciato a metà{% else %}interrotto{% endif %}{% if riga.saltati %} <span class="tenue">· {{ riga.saltati }} non entrati</span>{% endif %}</td>
+            <td class="piccolo">{% if riga.stato == 'finito' %}completa{% if riga.verificato %}, riletta e verificata{% endif %}{% elif riga.stato == 'in_corso' %}lasciata a metà{% else %}interrotta{% endif %}{% if riga.saltati %} <span class="tenue">· {{ riga.saltati }} non entrati</span>{% endif %}</td>
             <td class="numeri">{{ riga.scritti|numero }}</td>
             <td class="numeri">{{ riga.tolti|numero }}</td>
             <td class="numeri">{{ riga.peso }}</td>
@@ -155,8 +304,56 @@
 {% endif %}
 {% endmacro %}
 
+{% macro il_telefono() %}
+{{ il_prossimo_del_telefono() }}
+<div class="fu-passi">
+    {{ cosa_ci_va() }}
+    {{ dove_si_prepara() }}
+    {{ quanto_pesa() }}
+</div>
+<div class="fu-schede" role="tablist" aria-label="La storia del telefono">
+    <button class="fu-scheda" type="button" role="tab" id="scheda-tornato" aria-controls="pannello-tornato" aria-selected="true">Cosa ha riportato · {{ tornato.cuori|numero }}</button>
+    <button class="fu-scheda" type="button" role="tab" id="scheda-diario" aria-controls="pannello-diario" aria-selected="false">Il diario · {{ diario.quante_in_tutto|numero }}</button>
+    <button class="fu-scheda" type="button" role="tab" id="scheda-copie" aria-controls="pannello-copie" aria-selected="false">Le copie di prima · {{ travasi|length }}</button>
+</div>
+<div class="fu-pannello" role="tabpanel" id="pannello-tornato" aria-labelledby="scheda-tornato">{{ il_tornato() }}</div>
+<div class="fu-pannello" role="tabpanel" id="pannello-diario" aria-labelledby="scheda-diario" hidden>{{ il_diario() }}</div>
+<div class="fu-pannello" role="tabpanel" id="pannello-copie" aria-labelledby="scheda-copie" hidden>{{ le_copie() }}</div>
+{% endmacro %}
+
+{% macro il_portatile() %}
+{% if dal_portatile %}
+<section class="carta fu-prossimo">
+    <div class="fu-prossimo-testo">
+        <span class="fu-etichetta">Collegato</span>
+        <h2>Stai usando il fisso da questo portatile</h2>
+        <p>Il fisso resta il motore e il portatile comanda. Tutto passa cifrato, solo nella rete di casa, e sul portatile non resta niente.</p>
+    </div>
+</section>
+{% else %}
+<section class="carta fu-prossimo">
+    <div class="fu-prossimo-testo">
+        {% if portatile_collegato %}
+        <span class="fu-etichetta">Collegato</span>
+        <h2>{{ portatile_collegato.nome|capitalize }} sta usando questo computer</h2>
+        <p>Lo puoi staccare quando vuoi. Per tornare gli basta collegarsi di nuovo.</p>
+        {% elif porta_aperta %}
+        <span class="fu-etichetta">Il prossimo passo</span>
+        <h2>Scrivi il codice sul portatile</h2>
+        <p>La porta è aperta. Sul portatile apri il programma e collegati al fisso.</p>
+        {% else %}
+        <span class="fu-etichetta">Il prossimo passo</span>
+        <h2>Apri la porta e abbina il portatile</h2>
+        <p>Il portatile diventa lo schermo di questo computer e da lì puoi fare tutto. Si abbina una volta, con un codice di sei cifre.</p>
+        {% endif %}
+    </div>
+</section>
+{% include "_portatile.html" %}
+{% endif %}
+{% endmacro %}
+
 {% macro questo_computer() %}
-<p>Si chiama <b>{{ computer.io }}</b>, e da quando tiene il registro ha segnato <span class="numeri">{{ computer.scritti|numero }}</span> cose che hai deciso tu.</p>
+<p class="piccolo attenuato">Si chiama <b>{{ computer.io }}</b>, e da quando tiene il registro ha segnato <span class="numeri">{{ computer.scritti|numero }}</span> cose che hai deciso tu.</p>
 {% if computer.altre %}
 <div class="fu-tabella">
 <table class="tabella">
@@ -169,24 +366,26 @@
 </table>
 </div>
 {% else %}
-<p class="piccolo attenuato">Non conosco ancora nessun'altra macchina: il primo pacchetto è quello grosso, perché le deve portare tutto. Quelli dopo portano solo la differenza.</p>
+<p class="piccolo tenue">Non conosco ancora nessun altro computer.</p>
 {% endif %}
 {% endmacro %}
 
 {% macro la_cartella_dei_pacchetti() %}
-{% if da_questo_computer %}
+{% if cartella_pacchetti %}<span class="nome-di-file">{{ cartella_pacchetti }}</span>{% endif %}
+{% if comanda %}
 <form method="post" action="/sincronia/dove" class="fu-nuovo">
-    <input class="campo" name="cartella" value="{{ cartella_pacchetti }}" placeholder="D:\pacchetti" aria-label="La cartella dei pacchetti">
-    <button class="tasto-comando piccolo" type="submit">Ricorda questa</button>
+    <input class="campo" name="cartella" id="fu-pacchetti" value="{{ cartella_pacchetti }}" placeholder="D:\pacchetti" aria-label="La cartella dei pacchetti">
+    <button class="tasto-comando piccolo" type="button" data-esplora-campo="fu-pacchetti" data-esplora-titolo="La cartella dei pacchetti" data-esplora-manda>{{ icona('cartella', 15) }}Sfoglia…</button>
+    <button class="tasto-comando piccolo" type="submit">Ricorda</button>
 </form>
 {% else %}
 <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
 {% endif %}
-<p class="minuscolo tenue">È la cartella dove nascono quelli che fai tu, e dove cerco quelli arrivati dall'altro computer. La stessa per tutti e due i versi.</p>
+<p class="minuscolo tenue">Una chiavetta, la stessa per tutti e due i versi.</p>
 {% endmacro %}
 
 {% macro farne_uno() %}
-{% if not da_questo_computer %}
+{% if not comanda %}
 <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
 {% else %}
 <form method="post" action="/sincronia/costruisci" class="fu-parti">
@@ -199,13 +398,12 @@
     </label>
     {% endif %}
     {% if serve_password %}
-    <input class="campo" type="password" name="password" placeholder="Password del pacchetto" autocomplete="new-password">
-    <input class="campo" type="password" name="ancora" placeholder="Scrivila di nuovo" autocomplete="new-password">
-    <p class="minuscolo tenue">Il pacchetto si cifra lo stesso: esce di casa. Un refuso si scopre solo il giorno che non si apre più, quindi si scrive due volte.</p>
+    <input class="campo" type="password" name="password" placeholder="Password del pacchetto" autocomplete="new-password" aria-label="Password del pacchetto">
+    <input class="campo" type="password" name="ancora" placeholder="Scrivila di nuovo" autocomplete="new-password" aria-label="Scrivila di nuovo">
     {% else %}
-    <p class="minuscolo tenue">Si cifra con la password del forziere. Non te la richiedo.</p>
+    <p class="minuscolo tenue">Si cifra con la password del forziere.</p>
     {% endif %}
-    <button class="tasto-comando accento" type="submit" {{ 'disabled' if in_sincronia.sta_lavorando }}>Fai il pacchetto</button>
+    <div class="fu-tasti"><button class="tasto-comando accento" type="submit" {{ 'disabled' if in_sincronia.sta_lavorando }}>Fai il pacchetto</button></div>
 </form>
 {% endif %}
 {% endmacro %}
@@ -215,14 +413,14 @@
 <div class="fu-arrivato">
     <div>
         <b>da {{ uno.da }}</b> <span class="tenue piccolo">· {{ uno.fatto_il|ora_di_qui }}</span>
-        <div class="minuscolo tenue">cambiamenti dal {{ uno.dal }} al {{ uno.al }} · {{ uno.quanti_file }} file · archivio «{{ uno.archivio }}»</div>
+        <div class="minuscolo tenue">dal {{ uno.dal }} al {{ uno.al }} · {{ uno.quanti_file }} file · archivio «{{ uno.archivio }}»</div>
         {% if uno.vecchio %}<div class="minuscolo avviso">Fatto da una versione precedente del programma, che lasciava fuori dalla cassaforte alcune informazioni: va rifatto sull'altro computer, dopo averlo aggiornato.</div>
         {% elif not uno.intero %}<div class="minuscolo avviso">Incompleto: chi lo ha scritto non ha finito, oppure la copia si è interrotta. Va rifatto.</div>{% endif %}
     </div>
-    {% if uno.intero and not uno.vecchio and uno.archivio == archivio_nome and da_questo_computer %}
+    {% if uno.intero and not uno.vecchio and uno.archivio == archivio_nome and comanda %}
     <form method="post" action="/sincronia/applica" class="in-fila">
         <input type="hidden" name="quale" value="{{ uno.cartella }}">
-        {% if serve_password %}<input class="campo" type="password" name="password" placeholder="password del pacchetto" autocomplete="off">{% endif %}
+        {% if serve_password %}<input class="campo" type="password" name="password" placeholder="password del pacchetto" autocomplete="off" aria-label="Password del pacchetto">{% endif %}
         <button class="tasto-comando piccolo" type="submit" {{ 'disabled' if in_sincronia.sta_lavorando }}>Applicalo</button>
     </form>
     {% elif uno.archivio != archivio_nome %}
@@ -230,9 +428,8 @@
     {% endif %}
 </div>
 {% else %}
-<p class="piccolo attenuato">In quella cartella non c'è nessun pacchetto. Copiaci dentro quello che hai fatto sull'altro computer e ricarica la pagina.</p>
+<p class="piccolo tenue">Nessun pacchetto nella cartella. Copiaci dentro quello fatto sull'altro computer e ricarica la pagina.</p>
 {% endfor %}
-{% if pacchetti %}<p class="minuscolo tenue">Applicarne uno due volte non fa danni: la seconda volta non c'è più niente da fare.</p>{% endif %}
 {% endmacro %}
 
 {% macro la_sincronia() %}
@@ -244,268 +441,110 @@
 <pre class="righe-lavoro" id="righe-sincronia" {{ 'hidden' if not in_sincronia.righe }}>{{ in_sincronia.righe | join('\n') }}</pre>
 {% if in_sincronia.guasto %}<div class="avviso forte">{{ in_sincronia.guasto }}</div>{% endif %}
 {% if in_sincronia.numeri and in_sincronia.numeri.persone_da_guardare %}
-<div class="avviso">{{ in_sincronia.numeri.persone_da_guardare }} coppie di persone sono da guardare: sull'altro computer sono una persona sola, qui sono divise. Non le unisco io: le trovi affiancate in <a href="/persone/cassetto">Forse la stessa persona</a>.</div>
+<div class="avviso">{{ in_sincronia.numeri.persone_da_guardare }} coppie di persone sono da guardare: sull'altro computer sono una persona sola, qui sono divise. Le trovi affiancate in <a href="/persone/cassetto">Forse la stessa persona</a>.</div>
 {% endif %}
 {% endmacro %}
 
-{% macro le_carte() %}
-<div class="fu-carte" aria-label="Con cosa sei collegato">
-    <a class="carta fu-carta {{ 'scelta' if dove == 'portatile' }}" href="/fuori?dove=portatile" {% if dove == 'portatile' %}aria-current="page"{% endif %}>
-        <span class="fu-carta-ico">{{ icona('portatile', 18) }}</span>
-        <h2>Il portatile</h2>
-        {% if dal_portatile %}<span class="pillola-stato si">lo stai usando adesso</span>
-        {% elif portatile_collegato %}<span class="pillola-stato si">collegato adesso · {{ portatile_collegato.nome }}</span>
-        {% elif porta_aperta %}<span class="pillola-stato attesa">porta aperta, aspetto il codice</span>
-        {% elif portatili %}<span class="pillola-stato">{{ portatili|length }} abbinat{{ 'o' if portatili|length == 1 else 'i' }}, non collegat{{ 'o' if portatili|length == 1 else 'i' }}</span>
-        {% else %}<span class="pillola-stato">mai collegato</span>{% endif %}
-        <p class="piccolo tenue">Usa il portatile come schermo di questo computer. Tutto cifrato.</p>
-        <span class="tasto-comando piccolo {{ 'accento' if not portatile_collegato and not dal_portatile }}">{% if dal_portatile %}Guarda{% elif portatile_collegato %}Stacca o guarda{% elif porta_aperta %}Mostra il codice{% else %}Collega{% endif %}</span>
-    </a>
-    <a class="carta fu-carta {{ 'scelta' if dove == 'telefono' }}" href="{{ '/fuori?quale=' ~ telefono.id if telefono else '/fuori?dove=telefono' }}" {% if dove == 'telefono' %}aria-current="page"{% endif %}>
-        <span class="fu-carta-ico">{{ icona('telefono', 18) }}</span>
-        <h2>{{ telefono.nome if telefono else 'Il telefono' }}</h2>
-        {% if in_corso.sta_lavorando %}<span class="pillola-stato si">sta preparando il pacchetto</span>
-        {% elif telefono and telefono.ultimo_travaso_il %}<span class="pillola-stato si">ultimo pacchetto {{ telefono.ultimo }}</span>
-        {% elif telefono %}<span class="pillola-stato attesa">mai preparato</span>
-        {% else %}<span class="pillola-stato">nessun telefono</span>{% endif %}
-        <p class="piccolo tenue">{% if telefono and tornato %}{{ tornato.cuori|numero }} preferiti tornati · {{ tornato.raccolte|length|numero }} raccolte{% else %}Le foto in tasca, senza rete.{% endif %}</p>
-        <span class="tasto-comando piccolo">{{ 'Prepara il pacchetto' if telefono else 'Aggiungi un telefono' }}</span>
-    </a>
-    <a class="carta fu-carta {{ 'scelta' if dove == 'computer' }}" href="/fuori?dove=computer" {% if dove == 'computer' %}aria-current="page"{% endif %}>
-        <span class="fu-carta-ico">{{ icona('computer', 18) }}</span>
-        <h2>Un altro computer</h2>
-        {% if in_sincronia.sta_lavorando %}<span class="pillola-stato si">al lavoro</span>
-        {% elif da_aprire %}<span class="pillola-stato attesa">{{ da_aprire|length }} pacchett{{ 'o' if da_aprire|length == 1 else 'i' }} da aprire</span>
-        {% elif pacchetti %}<span class="pillola-stato si">niente di nuovo</span>
-        {% else %}<span class="pillola-stato">nessun pacchetto arrivato</span>{% endif %}
-        <p class="piccolo tenue">Per tenere due archivi uguali con una chiavetta.</p>
-        <span class="tasto-comando piccolo">{{ 'Apri il pacchetto' if da_aprire else 'Fanne uno' }}</span>
-    </a>
+{% macro il_computer() %}
+<section class="carta fu-prossimo">
+    <div class="fu-prossimo-testo">
+        {% if da_aprire %}
+        <span class="fu-etichetta">Il prossimo passo</span>
+        <h2>{{ "È arrivato un pacchetto" if da_aprire|length == 1 else "Sono arrivati " ~ da_aprire|length ~ " pacchetti" }}</h2>
+        <p>Aprilo e questo archivio diventa uguale a quello dell'altro computer.</p>
+        {% else %}
+        <span class="fu-etichetta">Altro computer</span>
+        <h2>Tieni due archivi uguali con una chiavetta</h2>
+        <p>Fai un pacchetto qui e aprilo di là. Il primo porta tutto, quelli dopo solo la differenza.</p>
+        {% endif %}
+    </div>
+    {% if da_aprire and comanda %}
+    <form method="post" action="/sincronia/applica" class="fu-tasti">
+        <input type="hidden" name="quale" value="{{ da_aprire[0].cartella }}">
+        {% if serve_password %}<input class="campo" type="password" name="password" placeholder="password del pacchetto" autocomplete="off" aria-label="Password del pacchetto">{% endif %}
+        <button class="tasto-comando accento fu-grande" type="submit" {{ 'disabled' if in_sincronia.sta_lavorando }}>Apri il pacchetto</button>
+    </form>
+    {% endif %}
+    <div class="fu-prossimo-vivo">{{ la_sincronia() }}</div>
+</section>
+<div class="fu-passi">
+    <section class="carta fu-passo {{ 'fatto' if cartella_pacchetti else 'qui' }}">
+        <div class="fu-passo-testa"><span class="fu-n">{% if cartella_pacchetti %}{{ icona('spunta', 13) }}{% else %}1{% endif %}</span><h3>Dove stanno i pacchetti</h3></div>
+        {{ la_cartella_dei_pacchetti() }}
+    </section>
+    <section class="carta fu-passo">
+        <div class="fu-passo-testa"><span class="fu-n">2</span><h3>Farne uno da portare di là</h3></div>
+        {{ farne_uno() }}
+    </section>
+    <section class="carta fu-passo {{ 'qui' if da_aprire }}">
+        <div class="fu-passo-testa"><span class="fu-n">3</span><h3>Quelli arrivati · {{ pacchetti|length|numero }}</h3></div>
+        {{ gli_arrivati() }}
+    </section>
 </div>
-{% if telefoni|length > 1 and dove == 'telefono' %}
-<nav class="in-fila fu-altri" aria-label="Quale telefono">
-    {% for uno in telefoni %}<a class="pillola {{ 'piena' if telefono and uno.id == telefono.id }}" href="/fuori?quale={{ uno.id }}">{{ icona('telefono', 13) }} {{ uno.nome }}</a>{% endfor %}
-    <button class="pillola" type="button" data-apri-finestra="nuovo-telefono">+ Aggiungi</button>
-</nav>
-{% elif dove == 'telefono' and telefono %}
-<button class="tasto-comando nudo piccolo fu-aggiungi" type="button" data-apri-finestra="nuovo-telefono">+ Aggiungi un altro telefono</button>
-{% endif %}
+<section class="carta fu-sotto">
+    <h3>Questo computer</h3>
+    {{ questo_computer() }}
+</section>
 {% endmacro %}
 
-{% macro il_portatile() %}
-{% if dal_portatile %}
-<div class="carta fu-vuoto"><p>Stai usando il programma dal portatile. Per staccarlo o abbinarne un altro, fallo dal fisso.</p></div>
-{% else %}
-{% include "_portatile.html" %}
-{% endif %}
+{% macro nuovo_telefono(sistema) %}
+<form method="post" action="/telefono/nuovo" class="fu-nuovo">
+    <input type="hidden" name="sistema" value="{{ sistema }}">
+    <input class="campo" name="nome" placeholder="{{ 'iPhone' if sistema == 'ios' else 'Telefono' }}" required aria-label="Il nome del telefono">
+    <button class="tasto-comando accento" type="submit">Aggiungi</button>
+</form>
 {% endmacro %}
 
 {% block corpo %}
-{% set versione = aspetto.collegamenti %}
 <div class="corpo">
 <main class="zona-principale">
-<div class="pagina pagina-fuori fuori-{{ versione|lower }}">
+<div class="pagina pagina-fuori">
 
     <div class="fu-testa">
-        <div>
-            <h1 class="titolo-pagina">Dispositivi{% call spiega("Chi porta il pacchetto") %}
-                <p>Il programma scrive il pacchetto cifrato in una cartella sul
-                disco. <b>A portarlo sei tu</b>: il cavo del telefono, una
-                chiavetta, un disco esterno, la rete di casa.</p>
-                <p>Il programma non tocca il telefono, non parla con nessuno e
-                non c'è nessun account da fare.</p>
-            {% endcall %}</h1>
-            <p class="sottotitolo">Con cosa sei collegato, e cosa puoi fare adesso. Senza internet.</p>
-        </div>
+        <h1 class="titolo-pagina">Dispositivi{% call spiega("Chi porta il pacchetto") %}
+            <p>Il programma scrive il pacchetto cifrato in una cartella sul disco. Sull'iPhone
+            lo copia anche col cavo; sugli altri lo porti tu, con il cavo, una chiavetta o un
+            disco esterno.</p>
+            <p>Il programma non parla con nessuno e non c'è nessun account da fare.</p>
+        {% endcall %}</h1>
+        <p class="sottotitolo">Con cosa sei collegato, e cosa puoi fare adesso. Senza internet.</p>
     </div>
-    {% if versione != 'B' %}{{ le_carte() }}{% endif %}
 
-    {% if dove == 'portatile' and versione != 'B' %}
+    {{ i_dispositivi() }}
 
+    <div class="fu-dettaglio">
+    {% if dove == 'portatile' %}
     {{ il_portatile() }}
-
-    {% elif versione == 'B' %}
-
-    <div class="fu-b">
-        <section class="carta fu-dev">
-            <div class="fu-dev-testa">
-                {{ icona('portatile', 22) }}
-                <h2>Il portatile</h2>
-            </div>
-            {{ il_portatile() }}
-        </section>
-        <section class="carta fu-dev">
-            <div class="fu-dev-testa">
-                {{ icona('telefono', 22) }}
-                <h2>{{ telefono.nome if telefono else 'Telefono' }}</h2>
-                {% if in_corso.sta_lavorando %}<span class="bollino bene">sta copiando</span>
-                {% elif telefono and telefono.ultimo_travaso_il %}<span class="bollino bene">ultima copia {{ telefono.ultimo }}</span>
-                {% elif telefono %}<span class="bollino attenzione">mai copiato</span>{% endif %}
-            </div>
-            {% if telefoni|length > 1 %}
-            <div class="in-fila">{% for uno in telefoni %}<a class="pillola {{ 'piena' if uno.id == telefono.id }}" href="/fuori?quale={{ uno.id }}">{{ uno.nome }}</a>{% endfor %}</div>
-            {% endif %}
-            {% if telefono %}
-            <dl class="fu-righe">
-                <dt>Cosa ci va</dt><dd id="scelta-a-parole">{{ conto.scelta_a_parole }}</dd>
-                <dt>Quanto pesa</dt><dd class="numeri"><span id="peso-totale">{{ conto.peso }}</span> · <span id="quanti-scatti">{{ conto.scatti }}</span> scatti</dd>
-                <dt>Dove</dt><dd class="nome-di-file">{{ cartella or 'da scegliere' }}</dd>
-                <dt>Ha riportato</dt><dd>{{ tornato.cuori|numero }} preferiti · {{ tornato.raccolte|length|numero }} raccolte</dd>
-            </dl>
-            {{ gli_avvisi() }}
-            {{ la_partenza() }}
-            <div class="in-fila">
-                <button class="tasto-comando piccolo" type="button" data-apri-finestra="scelte">Cambia cosa ci va</button>
-                <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="dove-telefono">Dove</button>
-                <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="diario">Il diario</button>
-            </div>
-            {{ il_travaso() }}
-            {% else %}
-            <p class="piccolo attenuato">Non c'è ancora nessun telefono.</p>
-            {{ nuovo_telefono() }}
-            {% endif %}
-        </section>
-
-        <section class="carta fu-dev">
-            <div class="fu-dev-testa">
-                {{ icona('computer', 22) }}
-                <h2>Altro computer</h2>
-                {% if in_sincronia.sta_lavorando %}<span class="bollino bene">al lavoro</span>
-                {% elif da_aprire %}<span class="bollino attenzione">{{ da_aprire|length }} da aprire</span>
-                {% else %}<span class="bollino">niente di nuovo</span>{% endif %}
-            </div>
-            <dl class="fu-righe">
-                <dt>Questo computer</dt><dd>{{ computer.io }}</dd>
-                <dt>I pacchetti stanno</dt><dd class="nome-di-file">{{ cartella_pacchetti or 'da scegliere' }}</dd>
-                <dt>Arrivati</dt><dd>{{ pacchetti|length|numero }}{% if da_aprire %}, {{ da_aprire|length }} da aprire{% endif %}</dd>
-                <dt>Conosciuti</dt><dd>{{ computer.altre|length|numero if computer.altre else 'nessuno, ancora' }}</dd>
-            </dl>
-            <div class="in-fila">
-                {% if da_aprire and da_questo_computer %}
-                <form method="post" action="/sincronia/applica" class="in-fila">
-                    <input type="hidden" name="quale" value="{{ da_aprire[0].cartella }}">
-                    {% if serve_password %}<input class="campo" type="password" name="password" placeholder="password del pacchetto" autocomplete="off">{% endif %}
-                    <button class="tasto-comando principale piccolo" type="submit" {{ 'disabled' if in_sincronia.sta_lavorando }}>Apri il pacchetto</button>
-                </form>
-                {% endif %}
-                <button class="tasto-comando piccolo" type="button" data-apri-finestra="farne-uno">Fanne uno</button>
-                <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="cartella-pacchetti">Cartella</button>
-                <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="arrivati">Tutti gli arrivati</button>
-            </div>
-            {{ la_sincronia() }}
-        </section>
-    </div>
-    <button class="tasto-comando nudo piccolo fu-aggiungi" type="button" data-apri-finestra="nuovo-telefono">Aggiungi un telefono</button>
-
-    {% call finestra("farne-uno", "Farne uno da portare di là") %}{{ farne_uno() }}{% endcall %}
-    {% call finestra("cartella-pacchetti", "Dove stanno i pacchetti") %}{{ la_cartella_dei_pacchetti() }}{% endcall %}
-    {% call finestra("arrivati", "Quelli arrivati") %}{{ gli_arrivati() }}{% endcall %}
-    {% if telefono %}
-    {% call finestra("scelte", "Cosa va su " ~ telefono.nome, True) %}{% include "_telefono_scelte.html" %}{% endcall %}
-    {% call finestra("dove-telefono", "Dove, e quanto ci sta") %}{{ il_dove() }}{% endcall %}
-    {% call finestra("diario", "Il diario", True) %}{{ il_diario() }}{% endcall %}
-    {% endif %}
-
-    {% elif versione == 'C' %}
-
-    {% if dove == 'computer' %}
-    <ol class="fu-passi">
-        <li class="fu-passo {{ 'fatto' if cartella_pacchetti else 'qui' }}">
-            <b>{{ icona('spunta', 13) if cartella_pacchetti else '1' }}</b>
-            <div><h3>Dove stanno i pacchetti</h3><span class="piccolo tenue nome-di-file">{{ cartella_pacchetti or 'Una chiavetta, o una cartella condivisa: la stessa per tutti e due i versi.' }}</span></div>
-            <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="cartella-pacchetti">{{ 'Cambia' if cartella_pacchetti else 'Scegli' }}</button>
-        </li>
-        <li class="fu-passo {{ 'qui' if cartella_pacchetti and not da_aprire }}">
-            <b>2</b>
-            <div><h3>Farne uno da portare di là</h3><span class="piccolo tenue">{{ 'Il primo porta tutto; quelli dopo solo la differenza.' if not computer.altre else computer.altre|length ~ ' computer conosciuti' }}</span>
-                <div class="fu-passo-dentro">{{ farne_uno() }}</div></div>
-            <span></span>
-        </li>
-        <li class="fu-passo {{ 'qui' if da_aprire }}">
-            <b>3</b>
-            <div><h3>Quelli arrivati · {{ pacchetti|length|numero }}</h3>
-                <div class="fu-passo-dentro">{{ gli_arrivati() }}</div></div>
-            <span></span>
-        </li>
-    </ol>
-    {{ la_sincronia() }}
-    {% call finestra("cartella-pacchetti", "Dove stanno i pacchetti") %}{{ la_cartella_dei_pacchetti() }}{% endcall %}
+    {% elif dove == 'computer' %}
+    {{ il_computer() }}
     {% elif telefono %}
-    <ol class="fu-passi">
-        <li class="fu-passo fatto">
-            <b>{{ icona('spunta', 13) }}</b>
-            <div><h3>Cosa ci va</h3><span class="piccolo tenue" id="scelta-a-parole">{{ conto.scelta_a_parole }}</span></div>
-            <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="scelte">Cambia</button>
-        </li>
-        <li class="fu-passo {{ 'fatto' if cartella else 'qui' }}">
-            <b>{{ icona('spunta', 13) if cartella else '2' }}</b>
-            <div><h3>Dove va</h3><span class="piccolo tenue nome-di-file">{% if cartella %}{{ cartella }}{% if spazio %} · {{ spazio }} GB liberi{% endif %}{% else %}La cartella da cui poi copi col cavo.{% endif %}</span></div>
-            <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="dove-telefono">{{ 'Cambia' if cartella else 'Scegli' }}</button>
-        </li>
-        <li class="fu-passo {{ 'qui' if cartella }}">
-            <b>3</b>
-            <div><h3>Prepara il pacchetto · <span class="numeri" id="peso-totale">{{ conto.peso }}</span></h3>
-                <span class="piccolo tenue"><span class="numeri" id="quanti-scatti">{{ conto.scatti }}</span> scatti. Va avanti anche se chiudi la finestra.</span>
-                <div class="fu-passo-dentro">{{ gli_avvisi() }}{{ la_partenza() }}{{ il_travaso() }}</div></div>
-            <span></span>
-        </li>
-        <li class="fu-passo">
-            <b>4</b>
-            <div><h3>Cosa ha riportato</h3><span class="piccolo tenue">{{ tornato.cuori|numero }} preferiti · {{ tornato.raccolte|length|numero }} raccolte</span></div>
-            <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="tornato">Guarda</button>
-        </li>
-    </ol>
-    <div class="in-fila fu-sotto">
-        <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="diario">Il diario</button>
-        <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="travasi">I travasi di prima</button>
-    </div>
-    {% call finestra("scelte", "Cosa va su " ~ telefono.nome, True) %}{% include "_telefono_scelte.html" %}{% endcall %}
-    {% call finestra("dove-telefono", "Dove, e quanto ci sta") %}{{ il_dove() }}{% endcall %}
-    {% call finestra("tornato", "Quello che " ~ telefono.nome ~ " ha riportato") %}{{ il_tornato() }}{% endcall %}
-    {% call finestra("diario", "Il diario", True) %}{{ il_diario() }}{% endcall %}
-    {% call finestra("travasi", "I travasi di prima", True) %}{{ i_travasi() }}{% endcall %}
+    {{ il_telefono() }}
     {% else %}
-    <div class="carta fu-vuoto">{{ nuovo_telefono() }}</div>
-    {% endif %}
-
-    {% else %}
-
-    {% if dove == 'computer' %}
-    <div class="fu-a">
-        <div class="fu-scelte">
-            <section class="carta fu-sc"><h3>Questo computer</h3><div>{{ questo_computer() }}</div></section>
-            <section class="carta fu-sc"><h3>Dove stanno i pacchetti</h3><div>{{ la_cartella_dei_pacchetti() }}</div></section>
-            <section class="carta fu-sc"><h3>Quelli arrivati</h3><div>{{ gli_arrivati() }}</div></section>
+    <section class="carta fu-prossimo">
+        <div class="fu-prossimo-testo">
+            <span class="fu-etichetta">Il prossimo passo</span>
+            <h2>Aggiungi il tuo telefono</h2>
+            <p>Così ti porti le foto in tasca, cifrate e senza rete.</p>
         </div>
-        <aside class="carta fu-peso">
-            <h2>Farne uno da portare di là</h2>
-            {{ farne_uno() }}
-            {{ la_sincronia() }}
-        </aside>
+        <button class="tasto-comando accento fu-grande" type="button" data-apri-finestra="aggiungi">{{ icona('piu', 17) }}Aggiungi un telefono</button>
+    </section>
+    {% endif %}
     </div>
-    {% elif telefono %}
-    <div class="fu-a">
-        <div class="fu-scelte">
-            {% include "_telefono_scelte.html" %}
-            <section class="carta fu-sc"><h3>Dove, e quanto ci sta</h3><div>{{ il_dove() }}</div></section>
-            <div class="in-fila fu-sotto">
-                <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="tornato">Quello che {{ telefono.nome }} ha riportato · {{ tornato.cuori|numero }}</button>
-                <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="diario">Il diario · {{ diario.quante_in_tutto|numero }}</button>
-                <button class="tasto-comando nudo piccolo" type="button" data-apri-finestra="travasi">I travasi di prima · {{ travasi|length }}</button>
-            </div>
+
+    {% call finestra("aggiungi", "Aggiungi un dispositivo") %}
+        <div class="fu-scegli">
+            <details class="carta fu-scegli-voce" name="aggiungi" open>
+                <summary><span class="fu-dev-ico">{{ icona('telefono', 19) }}</span><span class="fu-dev-testo"><b>Un iPhone</b><small>Per il Visore. Si copia col cavo.</small></span></summary>
+                {{ nuovo_telefono('ios') }}
+            </details>
+            <details class="carta fu-scegli-voce" name="aggiungi">
+                <summary><span class="fu-dev-ico">{{ icona('telefono', 19) }}</span><span class="fu-dev-testo"><b>Un Android</b><small>Il programma prepara la cartella, la copi tu.</small></span></summary>
+                {{ nuovo_telefono('android') }}
+            </details>
+            <a class="carta fu-scegli-voce fu-scegli-va" href="/fuori?dove=portatile"><span class="fu-dev-ico">{{ icona('portatile', 19) }}</span><span class="fu-dev-testo"><b>Un portatile</b><small>Diventa lo schermo di questo computer.</small></span></a>
         </div>
-        <aside class="carta fu-peso">{{ quanto_pesa() }}</aside>
-    </div>
-    {% call finestra("tornato", "Quello che " ~ telefono.nome ~ " ha riportato") %}{{ il_tornato() }}{% endcall %}
-    {% call finestra("diario", "Il diario", True) %}{{ il_diario() }}{% endcall %}
-    {% call finestra("travasi", "I travasi di prima", True) %}{{ i_travasi() }}{% endcall %}
-    {% else %}
-    <div class="carta fu-vuoto">{{ nuovo_telefono() }}</div>
-    {% endif %}
-
-    {% endif %}
-
-    {% call finestra("nuovo-telefono", "Aggiungi un telefono") %}{{ nuovo_telefono() }}{% endcall %}
+        <p class="minuscolo tenue">Il nome serve a riconoscerlo e diventa il nome della cartella: «iPhone» fa <span class="numeri">Visore-iPhone</span>.</p>
+    {% endcall %}
 
 </div>
 </main>
@@ -513,9 +552,11 @@
 {% endblock %}
 
 {% block coda %}
-{% if telefono %}
-<script type="module" src="/statici/js/telefono_scelte.js"></script>
-<script type="module" src="/statici/js/travaso.js"></script>
+<script type="module" src="{{ statico('/statici/js/fuori.js') }}"></script>
+{% if telefono and dove == 'telefono' %}
+<script type="module" src="{{ statico('/statici/js/telefono_scelte.js') }}"></script>
 {% endif %}
-<script type="module" src="/statici/js/sincronia_viva.js"></script>
+{% if telefono %}<script type="module" src="{{ statico('/statici/js/travaso.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/scatti_pacchetto.js') }}"></script>{% endif %}
+<script type="module" src="{{ statico('/statici/js/sincronia_viva.js') }}"></script>
 {% endblock %}

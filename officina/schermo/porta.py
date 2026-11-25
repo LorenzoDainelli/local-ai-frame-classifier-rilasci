@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import secrets
 import socket
@@ -15,6 +16,8 @@ from officina.schermo import (AGGIORNA, CHIUSO, DOMANDA, INTESTAZIONE, PORTA_TCP
                               certificato, patto, segna_dal_portatile, smetti)
 
 DURATA_DEL_CODICE = 300.0
+TIENI_APERTA = 120
+STATICI = "/statici/"
 TENTATIVI_PER_CODICE = 5
 TENTATIVI_IN_TUTTO = 20
 DURATA_DI_UN_ABBINAMENTO = 60.0
@@ -135,7 +138,8 @@ class Porta:
         self._servitore = Servitore(app=app_della_porta, host="0.0.0.0",
                                     porta=self.porta_tcp,
                                     certificato=self.certificato.certificato,
-                                    chiave=self.certificato.chiave)
+                                    chiave=self.certificato.chiave,
+                                    tieni_aperta=TIENI_APERTA)
         self._servitore.parti()
 
     def _accendi_l_ascolto(self) -> None:
@@ -434,8 +438,10 @@ async def app_della_porta(scope, receive, send) -> None:
     dentro["headers"] = [(chiave, valore) for chiave, valore in scope["headers"]
                          if chiave.lower() != INTESTAZIONE.encode()]
 
+    codice_del_programma = scope["path"].startswith(STATICI)
+
     async def manda(messaggio):
-        if messaggio["type"] == "http.response.start":
+        if messaggio["type"] == "http.response.start" and not codice_del_programma:
             intestazioni = [(chiave, valore) for chiave, valore in messaggio.get("headers", [])
                             if chiave.lower() != b"cache-control"]
             intestazioni.append((b"cache-control", b"no-store"))
@@ -444,6 +450,16 @@ async def app_della_porta(scope, receive, send) -> None:
 
     segno = segna_dal_portatile(True)
     try:
-        await app(dentro, receive, manda)
+        if codice_del_programma:
+            await _compresso(app)(dentro, receive, manda)
+        else:
+            await app(dentro, receive, manda)
     finally:
         smetti(segno)
+
+
+@functools.lru_cache(maxsize=2)
+def _compresso(app):
+    from starlette.middleware.gzip import GZipMiddleware
+
+    return GZipMiddleware(app, minimum_size=1024)

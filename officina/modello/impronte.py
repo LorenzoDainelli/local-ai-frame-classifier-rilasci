@@ -76,7 +76,7 @@ def scatti_da_fare(connessione: sqlite3.Connection, descrittore: str,
               WHERE i.scatto_id = s.id AND i.descrittore = ?
                 AND i.versione = ?
           )
-        ORDER BY s.istante_utc DESC, s.id DESC
+        ORDER BY s.per_ordinare DESC, s.id DESC
         LIMIT ?
         """,
         *parametri,

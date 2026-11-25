@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from officina.importazione import gruppi
-from officina import registro
+from officina import anticipo, registro
 from officina.archivio.accesso import Archivio
 from officina.archivio.database import adesso, leggi_impostazione, tutti, uno
 from officina.descrittori import torcia, vettori
@@ -88,21 +88,32 @@ class Passata:
         import time
 
         memoria = torcia.ContoDellaMemoria()
+        letture = anticipo.Letture(da_fare, self._leggi, lambda: self.fermata, "volti-legge")
         try:
             for scatto_id in da_fare:
                 if self.fermata:
                     break
                 partito = time.monotonic()
+                pezzi = letture.di(scatto_id)
                 try:
-                    self._guarda_uno(scatto_id)
+                    principale, trovati = None, []
+                    for principale, (numero, quadro) in pezzi:
+                        trovati.extend((numero, faccia)
+                                       for faccia in self.rilevatore.guarda(quadro))
+                    self._salva(scatto_id, principale, trovati)
                     self.avanzamento.fatti += 1
                     for pesante in memoria.riuscito():
                         self._segnala(pesante, ErroreOfficina(torcia.TROPPO_PER_LA_MEMORIA))
+                except anticipo.Esaurite:
+                    break
                 except DaRifare as errore:
+                    letture.scarta(scatto_id, pezzi)
                     self._rimanda(errore.codice)
                 except ErroreOfficina as errore:
+                    letture.scarta(scatto_id, pezzi)
                     self._segnala(scatto_id, errore)
                 except Exception as guasto:          # noqa: BLE001
+                    letture.scarta(scatto_id, pezzi)
                     if torcia.memoria_finita(guasto):
                         memoria.finita(scatto_id, guasto)
                     else:
@@ -114,12 +125,20 @@ class Passata:
                     al_passo(self.avanzamento)
                 freno.riposa(time.monotonic() - partito)
         finally:
+            letture.close()
             self.rilevatore.spegni()
         registro.evento("volti.passata", fatti=self.avanzamento.fatti,
                         volti=self.avanzamento.volti)
         return self.avanzamento
 
     def _guarda_uno(self, scatto_id: int) -> None:
+        principale, quadri = self._leggi(scatto_id)
+        trovati: list[tuple[int, object]] = []
+        for numero, quadro in quadri:
+            trovati.extend((numero, faccia) for faccia in self.rilevatore.guarda(quadro))
+        self._salva(scatto_id, principale, trovati)
+
+    def _leggi(self, scatto_id: int):
         with self.archivio.lettura() as connessione:
             righe = file_media.di_scatto(connessione, scatto_id)
             principale = file_media.quello_da_guardare(righe)
@@ -138,22 +157,20 @@ class Passata:
             raise DaRifare("Aspetto le impronte di questo video.",
                            codice="aspetta_le_impronte")
 
-        trovati: list[tuple[int, object]] = []
-        persi = 0
-        with dall_archivio.attento(percorso):
-            if principale["genere"] == "immagine":
-                immagine = lettura.copia_di_lavoro(percorso, LATO_DI_LAVORO)
-                trovati = [(0, faccia) for faccia in self.rilevatore.guarda(immagine)]
-            else:
+        def quadri():
+            with dall_archivio.attento(percorso):
+                if principale["genere"] == "immagine":
+                    yield 0, lettura.copia_di_lavoro(percorso, LATO_DI_LAVORO)
+                    return
                 from officina.immagini import fotogrammi as estrattore
 
+                persi = 0
                 for numero, istante in fotogrammi:
                     quadro = estrattore.uno(percorso, numero, istante, LATO_DI_LAVORO)
                     if quadro is None:
                         persi += 1
                         continue
-                    trovati.extend((numero, faccia)
-                                   for faccia in self.rilevatore.guarda(quadro))
+                    yield numero, quadro
                 if persi == len(fotogrammi):
                     raise ErroreOfficina("Il video non ha dato nessun fotogramma.",
                                          codice="video_senza_immagini")
@@ -161,6 +178,9 @@ class Passata:
                     registro.avviso("volti.fotogrammi_persi", scatto=scatto_id,
                                     persi=persi, su=len(fotogrammi))
 
+        return principale, quadri()
+
+    def _salva(self, scatto_id: int, principale, trovati: list) -> None:
         with self.archivio.scrittura() as connessione:
             chi = (scatto_id, self._modello(), self._versione())
             if uno(connessione, "SELECT 1 FROM volti_guardati WHERE scatto_id = ? "

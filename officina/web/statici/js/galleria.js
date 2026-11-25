@@ -1,4 +1,4 @@
-import { chiedi, comeSiScorre, manda, mandaInBlocco, numeroAParole,
+import { chiedi, comeSiScorre, manda, mandaInBlocco, mandaModulo, numeroAParole,
          scattiAParole } from "./comune.js";
 import { copiaDa, incolla, quandoCambiano, quantiCopiati } from "./appunti_nodi.js";
 import { avvia } from "./griglia.js";
@@ -61,8 +61,73 @@ async function agisci(azione, griglia, tuttiIRisultati, extra = {}, prima = null
 function scriviAvviso(testo) {
     const avviso = document.getElementById("avviso-blocco");
     if (!avviso) return;
+    avviso.classList.remove("bs-fatto");
     avviso.textContent = testo;
     avviso.hidden = !testo;
+}
+
+const DOPO_IL_LUOGO = "galleria-dopo-il-luogo";
+
+function ricaricaDicendo(griglia, zona, testo, mossa = null) {
+    try {
+        sessionStorage.setItem(DOPO_IL_LUOGO, JSON.stringify({
+            testo, mossa, scelti: [...griglia.selezione],
+            tutti: zona.dataset.tuttiIRisultati === "1",
+        }));
+    } catch (errore) {
+        avvisaConAnnulla(griglia, zona, testo, mossa);
+        return;
+    }
+    window.location.reload();
+}
+
+function avvisoDopoIlLuogo(griglia, zona, totaleRisultati) {
+    let salvato = null;
+    try {
+        salvato = JSON.parse(sessionStorage.getItem(DOPO_IL_LUOGO) || "null");
+        sessionStorage.removeItem(DOPO_IL_LUOGO);
+    } catch (errore) {
+        salvato = null;
+    }
+    if (!salvato || !salvato.testo) return;
+    const scelti = (salvato.scelti || []).map(Number).filter(Number.isFinite);
+    if (scelti.length) {
+        griglia.selezione = new Set(scelti);
+        griglia._aggiornaSegni();
+        if (salvato.tutti) {
+            zona.dataset.tuttiIRisultati = "1";
+            mostraSelezione(griglia, griglia.selezione, totaleRisultati);
+        }
+        zona.querySelector('[data-scheda="scatto"]')?.click();
+    }
+    avvisaConAnnulla(griglia, zona, salvato.testo, salvato.mossa);
+}
+
+function avvisaConAnnulla(griglia, zona, testo, mossa) {
+    const avviso = document.getElementById("avviso-blocco");
+    if (!avviso) return;
+    avviso.replaceChildren(document.createTextNode(testo));
+    avviso.classList.add("bs-fatto");
+    avviso.hidden = false;
+    if (!mossa) return;
+    const tasto = document.createElement("button");
+    tasto.type = "button";
+    tasto.className = "bs-link";
+    tasto.textContent = "Annulla";
+    tasto.addEventListener("click", async () => {
+        tasto.disabled = true;
+        try {
+            const esito = await mandaModulo("/api/luoghi/annulla", { mossa });
+            const rimasti = esito.rimasti
+                ? ` ${scattiAParole(esito.rimasti)} nel frattempo ${esito.rimasti === 1 ? "è stato cambiato e resta" : "sono stati cambiati e restano"} com'è ora.`
+                : "";
+            ricaricaDicendo(griglia, zona, `Annullato: ${scattiAParole(esito.rimessi)} ${esito.rimessi === 1 ? "è tornato" : "sono tornati"} com'erano.${rimasti}`);
+        } catch (errore) {
+            avviso.classList.remove("bs-fatto");
+            avviso.replaceChildren(document.createTextNode(errore.message));
+        }
+    });
+    avviso.append(" ", tasto);
 }
 
 function schede(zona) {
@@ -112,9 +177,10 @@ function offriIlRitorno(griglia) {
     setTimeout(() => tasto.remove(), 8000);
 }
 
-function scegliNodo(zona, quandoCambia) {
-    const campo = zona.querySelector("[data-nodo-cerca]");
-    const elenco = zona.querySelector("[data-nodo-trovati]");
+function scegliNodo(zona, quandoCambia, come = {}) {
+    const campo = zona.querySelector(come.campo || "[data-nodo-cerca]");
+    const elenco = zona.querySelector(come.elenco || "[data-nodo-trovati]");
+    const indirizzo = come.indirizzo || "/api/nodi?cerca=";
     if (!campo) return;
     let scelto = null;
     let attesa = null;
@@ -150,7 +216,7 @@ function scegliNodo(zona, quandoCambia) {
         if (attesa) clearTimeout(attesa);
         attesa = setTimeout(async () => {
             const risposta = await chiedi(
-                `/api/nodi?cerca=${encodeURIComponent(campo.value.trim())}`);
+                `${indirizzo}${encodeURIComponent(campo.value.trim())}`);
             disegna(risposta.trovati || []);
         }, 90);
     });
@@ -269,6 +335,33 @@ export function avviaGalleria(totaleRisultati) {
                        { nodo_id: voce.nodo_id });
             }
         });
+
+        const mettiLuogo = zona.querySelector("[data-metti-luogo]");
+        const luogo = scegliNodo(zona, (voce) => {
+            mettiLuogo.disabled = !voce;
+            mettiLuogo.textContent = voce ? `Metti in ${voce.nome}` : "Metti in questo luogo";
+        }, { campo: "[data-luogo-cerca]", elenco: "[data-luogo-trovati]",
+             indirizzo: "/api/luoghi/cerca?cerca=" });
+        mettiLuogo.addEventListener("click", async () => {
+            const voce = luogo();
+            if (!voce) return;
+            mettiLuogo.disabled = true;
+            try {
+                const esito = await manda("/api/luoghi/scatti", {
+                    scatti: [...griglia.selezione],
+                    tutti_i_risultati: zona.dataset.tuttiIRisultati === "1",
+                    filtro: Object.fromEntries(new URLSearchParams(window.location.search)),
+                    posto_id: voce.posto_id,
+                });
+                ricaricaDicendo(griglia, zona, `${scattiAParole(esito.messi)} ${esito.messi === 1 ? "messo" : "messi"} in «${esito.percorso}».`, esito.mossa);
+            } catch (errore) {
+                scriviAvviso(errore.message);
+            } finally {
+                mettiLuogo.disabled = false;
+            }
+        });
+
+        avvisoDopoIlLuogo(griglia, zona, totaleRisultati);
 
         zona.querySelector("[data-lascia]").addEventListener("click", () => {
             griglia.deseleziona();

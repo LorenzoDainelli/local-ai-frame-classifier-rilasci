@@ -8,6 +8,7 @@ DOMANDA = b"OFFICINA-CERCA-1"
 INTESTAZIONE = "x-schermo-sessione"
 CHIUSO = "x-schermo-chiuso"
 AGGIORNA = "x-schermo-aggiorna"
+CAVO = "x-schermo-cavo"
 
 _dal_portatile: ContextVar[bool] = ContextVar("dal_portatile", default=False)
 

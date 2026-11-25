@@ -31,7 +31,7 @@
     </div>
 
     {% call finestra("raccolta", "Tutte in una cartella sola") %}
-        {% if not da_questo_computer %}
+        {% if not comanda %}
         <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
         {% else %}
         <p class="piccolo attenuato">
@@ -49,9 +49,9 @@
             <input class="campo" name="dove" placeholder="D:\Le mie foto"
                    value="{{ impostazioni.cartella_raccolta or '' }}" required>
             <div class="in-fila">
-                {% if si_puo_sfogliare %}
-                <button class="tasto-comando" type="button" data-sfoglia hidden
-                        title="Apre la finestra di Windows per scegliere la cartella.">
+                {% if si_puo_sfogliare or sfoglia_nella_pagina %}
+                <button class="tasto-comando" type="button" data-sfoglia hidden {% if sfoglia_nella_pagina %}data-esplora{% endif %}
+                        title="Apre la finestra per scegliere la cartella.">
                     Sfoglia...
                 </button>
                 {% endif %}
@@ -101,5 +101,5 @@
 {% endblock %}
 
 {% block coda %}
-<script type="module" src="/statici/js/aggiungi_foto.js"></script>
+<script type="module" src="{{ statico('/statici/js/aggiungi_foto.js') }}"></script>
 {% endblock %}

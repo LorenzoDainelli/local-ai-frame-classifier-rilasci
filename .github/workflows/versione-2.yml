@@ -47,10 +47,16 @@ concurrency:
 
 jobs:
   prove:
-    name: Prove su Linux
+    name: Prove su Linux, pezzo ${{ matrix.pezzo }} di 4
     if: github.event_name == 'push' || inputs.linux != 'no'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        pezzo: [1, 2, 3, 4]
+    env:
+      OFFICINA_PEZZO: ${{ matrix.pezzo }}/4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -250,6 +256,7 @@ jobs:
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           key: installatore-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: installatore-${{ github.run_id }}-
           enableCrossOsArchive: true
           fail-on-cache-miss: true
           path: |
@@ -297,6 +304,7 @@ jobs:
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           key: installatore-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: installatore-${{ github.run_id }}-
           enableCrossOsArchive: true
           fail-on-cache-miss: true
           path: |
@@ -343,7 +351,8 @@ jobs:
           if [ "$DEPOSITO_RILASCI" != "$GITHUB_REPOSITORY" ]; then
             gh release create "v$VERSIONE" uscita/*.exe uscita/*.sha256 uscita/*.firma $SEGNO \
               --target "$GITHUB_SHA" --title "Local AI Frame Classifier $VERSIONE" \
-              --notes-file note.txt
+              --notes-file note.txt \
+              || echo "::warning::la copia di riserva nel progetto principale è stata rifiutata, si pubblica lo stesso nei rilasci"
           fi
           PESO=$(wc -c < "uscita/local-ai-frame-classifier-$VERSIONE.exe")
           python3 strumenti/vetrina.py --deposito "$DEPOSITO_RILASCI" --versione "$VERSIONE" \

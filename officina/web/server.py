@@ -17,14 +17,16 @@ from officina.archivio import accesso
 from officina.errori import ErroreOfficina
 from officina.modello import dispositivi
 from officina.web import blocco, origine
-from officina.web import in_prova
+from officina.web import in_prova, statici_timbrati
 
-from officina.web.strade import (albero, aspetto, base, benvenuto, copia_esterna, doppioni,
+from officina.web.strade import (albero, aspetto, base, benvenuto, chiavi, copia_esterna,
+                                 doppioni,
                                  etichetta, galleria, generale, impostazioni, importazione, in3d, intelligenza, lavoro,
                                  luoghi, miglioramento, misura, modelli, persone, ritocco,
                                  ritocco_pagina, ritocco_video, scatto, schermo,
-                                 senza_data, sincronia, sistemare, stato, telefono, tempo,
-                                 gara120, gara_pelle, prova_veloce, stampa)
+                                 senza_data, sincronia, sistemare, stato, taglio, telefono,
+                                 tempo, gara120, gara_pelle, prova_veloce, stampa)
+from officina.web.strade import sagome as sagome_strade
 
 app = FastAPI(title="Local AI Frame Classifier", version=VERSIONE, openapi_url=None,
               docs_url=None, redoc_url=None)
@@ -95,7 +97,11 @@ class StaticiDaRichiedereSempre(StaticFiles):
 
     def file_response(self, *argomenti, **parole):
         risposta = super().file_response(*argomenti, **parole)
-        risposta.headers["cache-control"] = "no-cache"
+        domanda = parole.get("scope") or (argomenti[2] if len(argomenti) > 2 else {})
+        risposta.headers["cache-control"] = (
+            statici_timbrati.PER_SEMPRE
+            if statici_timbrati.e_timbrato(domanda.get("query_string", b""))
+            else "no-cache")
         return risposta
 
 
@@ -423,7 +429,8 @@ ZONE = (importazione, galleria, scatto, etichetta, sistemare, doppioni, albero, 
         luoghi, stato, lavoro, aspetto, misura, schermo, impostazioni, modelli,
         intelligenza, generale, senza_data, telefono, miglioramento, sincronia, benvenuto, in3d,
         tempo, copia_esterna, ritocco, ritocco_video, ritocco_pagina, gara120,
-        gara_pelle, prova_veloce, stampa)
+        gara_pelle, prova_veloce, stampa, chiavi, taglio,
+        sagome_strade)
 
 app.include_router(entrate)
 for zona in ZONE:

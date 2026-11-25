@@ -1,4 +1,8 @@
+import { acceso } from "/statici/js/movimenti.js";
+
+const LINEA_DOPO = 120;
 const OSSATURA_DOPO = 350;
+const RICORDO_LINEA = "officina-linea";
 const UN_ATTIMO_DOPO = 1000;
 const PIU_DEL_SOLITO_DOPO = 5000;
 const SE_NON_ARRIVA = 20000;
@@ -16,7 +20,7 @@ function smetti() {
     contenuto?.querySelector(".ossatura")?.remove();
     if (attimo) attimo.hidden = true;
     if (detto) detto.textContent = "Un attimo…";
-    if (linea) linea.classList.remove("parte", "arriva");
+    if (linea) linea.classList.remove("parte", "finisce");
 }
 
 function ossatura(indirizzo) {
@@ -34,10 +38,13 @@ function ossatura(indirizzo) {
 export function staArrivando(indirizzo = "") {
     smetti();
     if (!linea) return;
-    void linea.offsetWidth;
-    linea.classList.add("parte");
+    linea.classList.remove("arriva");
     orologi.push(setTimeout(() => {
+        void linea.offsetWidth;
+        linea.classList.add("parte");
         document.body.classList.add("sta-andando");
+    }, LINEA_DOPO));
+    orologi.push(setTimeout(() => {
         if (contenuto && indirizzo) contenuto.append(ossatura(indirizzo));
     }, OSSATURA_DOPO));
     orologi.push(setTimeout(() => { if (attimo) attimo.hidden = false; }, UN_ATTIMO_DOPO));
@@ -72,8 +79,34 @@ document.addEventListener("submit", (evento) => {
     setTimeout(() => { if (!evento.defaultPrevented) staArrivando(""); }, 0);
 });
 
+function ricorda() {
+    orologi.forEach(clearTimeout);
+    if (!linea || !linea.classList.contains("parte") || !linea.offsetParent) return;
+    const quanto = linea.getBoundingClientRect().width / linea.offsetParent.getBoundingClientRect().width;
+    try { sessionStorage.setItem(RICORDO_LINEA, String(Math.min(Math.max(quanto, 0), 1))); } catch { }
+}
+
+function finisci() {
+    let quanto = null;
+    try {
+        quanto = sessionStorage.getItem(RICORDO_LINEA);
+        sessionStorage.removeItem(RICORDO_LINEA);
+    } catch { }
+    if (!linea || quanto === null || !acceso()) return;
+    linea.style.width = `${Number(quanto) * 100}%`;
+    linea.classList.add("finisce");
+    void linea.offsetWidth;
+    linea.style.removeProperty("width");
+    linea.classList.remove("finisce");
+    linea.classList.add("arriva");
+    linea.addEventListener("transitionend", (evento) => {
+        if (evento.propertyName === "opacity") linea.classList.remove("arriva");
+    });
+}
+
+finisci();
 window.addEventListener("pageshow", smetti);
-window.addEventListener("pagehide", () => orologi.forEach(clearTimeout));
+window.addEventListener("pagehide", ricorda);
 document.addEventListener("keydown", (evento) => { if (evento.key === "Escape" && orologi.length) smetti(); });
 
 

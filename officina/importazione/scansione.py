@@ -148,7 +148,8 @@ def aggiungi_cartella(connessione: sqlite3.Connection, percorso: Path,
     )
     if esistente:
         connessione.execute(
-            "UPDATE cartelle_sorgente SET attiva = 1, tolta_il = NULL WHERE id = ?",
+            "UPDATE cartelle_sorgente SET attiva = 1, tolta_il = NULL, conclusa_da = NULL "
+            "WHERE id = ?",
             (esistente["id"],)
         )
         if cambia_gruppo:
@@ -170,9 +171,28 @@ def togli_cartella(connessione: sqlite3.Connection, cartella_id: int) -> None:
     )
 
 
+def concludi_cartelle(connessione: sqlite3.Connection, importazione_id: int) -> list[int]:
+    concluse = []
+    for riga in tutti(connessione,
+                      "SELECT c.id, c.percorso FROM cartelle_importazione ci "
+                      "JOIN cartelle_sorgente c ON c.id = ci.cartella_id "
+                      "WHERE ci.importazione_id = ? AND c.attiva = 1", importazione_id):
+        try:
+            presente = Path(riga["percorso"]).is_dir()
+        except OSError:
+            presente = False
+        if not presente:
+            continue
+        connessione.execute(
+            "UPDATE cartelle_sorgente SET attiva = 0, conclusa_da = ? WHERE id = ? AND attiva = 1",
+            (importazione_id, riga["id"]))
+        concluse.append(riga["id"])
+    return concluse
+
+
 def rimetti_cartella(connessione: sqlite3.Connection, cartella_id: int) -> bool:
     cambiate = connessione.execute(
-        "UPDATE cartelle_sorgente SET attiva = 1, tolta_il = NULL "
+        "UPDATE cartelle_sorgente SET attiva = 1, tolta_il = NULL, conclusa_da = NULL "
         "WHERE id = ? AND attiva = 0",
         (cartella_id,)
     ).rowcount

@@ -109,6 +109,14 @@
                 <span class="separatore"></span>
                 <input class="campo bs-campo bs-data" type="date" data-giorno aria-label="Giorno">
                 <button class="bs-tasto" type="button" data-data>Dai questa data</button>
+                <span class="separatore"></span>
+                <span class="scegli-nodo">
+                    <input class="campo bs-campo" type="text" data-luogo-cerca autocomplete="off"
+                           spellcheck="false" placeholder="Cerca un luogo…" aria-label="Il luogo da dare">
+                    <div class="trovati" data-luogo-trovati hidden></div>
+                </span>
+                <button class="bs-tasto" type="button" data-metti-luogo disabled
+                        title="Tutti gli scatti scelti prendono questo luogo, anche se sono di giorni diversi">Metti in questo luogo</button>
             </div>
             <div class="bs-sotto" data-pannello="lavoro" hidden>
                 <button class="bs-tasto" type="button" data-migliora
@@ -129,7 +137,7 @@
 
 {% block coda %}
 
-<script type="module" src="/statici/js/filtri.js"></script>
+<script type="module" src="{{ statico('/statici/js/filtri.js') }}"></script>
 <script type="module">
     import { avviaGalleria } from "/statici/js/galleria.js";
     import { avviaConteggi } from "/statici/js/conteggi.js";

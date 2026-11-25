@@ -217,9 +217,9 @@
 {% endblock %}
 
 {% block coda %}
-<script type="module" src="/statici/js/unisci_persone.js"></script>
+<script type="module" src="{{ statico('/statici/js/unisci_persone.js') }}"></script>
 {% if aspetto.persone == 'C' and gruppo %}
-<script type="module" src="/statici/js/mazzo.js"></script>
+<script type="module" src="{{ statico('/statici/js/mazzo.js') }}"></script>
 {% endif %}
 <script type="module">
     const casella = document.getElementById("pe-cerca");

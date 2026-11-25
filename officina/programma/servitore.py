@@ -53,8 +53,10 @@ def per_la_rete(cartella: Path, preferita: int = PORTA_DELLA_RETE) -> tuple[Serv
 class Servitore:
 
     def __init__(self, app="officina.web.server:app", host: str = "127.0.0.1",
-                 porta: int | None = None, certificato=None, chiave=None):
+                 porta: int | None = None, certificato=None, chiave=None,
+                 tieni_aperta: int = 5):
         self.app = app
+        self.tieni_aperta = tieni_aperta
         self.certificato = certificato
         self.chiave = chiave
         self.host = host
@@ -79,6 +81,7 @@ class Servitore:
                                         log_level="warning", access_log=False,
                                         log_config=None, lifespan="off",
                                         timeout_graceful_shutdown=1,
+                                        timeout_keep_alive=self.tieni_aperta,
                                         ssl_certfile=(str(self.certificato)
                                                       if self.certificato else None),
                                         ssl_keyfile=str(self.chiave) if self.chiave else None)

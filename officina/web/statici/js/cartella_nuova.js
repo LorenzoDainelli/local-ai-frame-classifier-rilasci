@@ -1,3 +1,4 @@
+import { chiediLaCartella } from "./esplora.js";
 import { sceltaDelGruppo, ultimoPezzo } from "./scelta_gruppo.js";
 
 const riquadri = document.querySelectorAll("[data-cartella-nuova-riquadro]");
@@ -157,25 +158,18 @@ for (const riquadro of riquadri) {
         function aspetta(si) {
             sfoglia.disabled = si;
             sfoglia.setAttribute("aria-busy", String(si));
-            scritta.textContent = si ? "Scegli nella finestra di Windows…" : prima;
+            scritta.textContent = si ? "Scegli nella finestra…" : prima;
             icona.hidden = si;
             gira.hidden = !si;
-            if (finestraAperta) finestraAperta.hidden = !si;
+            if (finestraAperta) finestraAperta.hidden = !si || sfoglia.hasAttribute("data-esplora");
         }
 
         sfoglia.addEventListener("click", async () => {
             calma();
             aspetta(true);
             try {
-                const dati = new FormData();
-                dati.append("da_dove", campo.value.trim());
-                const risposta = await fetch("/api/sfoglia-cartella", {
-                    method: "POST",
-                    body: dati,
-                    headers: { Accept: "application/json" },
-                });
-                const detto = await risposta.json();
-                if (!risposta.ok) {
+                const { ok, detto } = await chiediLaCartella(sfoglia, campo.value.trim());
+                if (!ok) {
                     sgrida(detto.messaggio || "La finestra non si è potuta aprire.");
                     return;
                 }

@@ -1,25 +1,6 @@
-                <form class="in-colonna" id="selezione"
-                      data-telefono="{{ telefono.id }}"
-                      method="post" action="/telefono/{{ telefono.id }}/selezione">
-
-                    <div class="riquadro">
-                        <div class="riga-fra">
-                            <h2>Cosa va su {{ telefono.nome }}</h2>
-                            <button class="tasto-comando nudo" type="button" id="rimetti-tutto"
-                                    title="Riporta la selezione a tutto l'archivio">
-                                rimetti tutto
-                            </button>
-                        </div>
-                        <p class="piccolo attenuato" style="margin-top:var(--s2)">
-                            Di partenza c'è <strong>tutto l'archivio</strong>, e si
-                            toglie. È il verso in cui si ragiona:
-                            «tutto tranne i video del 2015», non «aggiungi il 2019,
-                            aggiungi il 2020, aggiungi...».
-                        </p>
-                        <p class="minuscolo tenue" style="margin-top:var(--s2)">
-                            Non si salva niente a mano: quello che spunti è già
-                            salvato, e fra sei mesi lo ritrovi com'era.
-                        </p>
+                    <div class="riga-fra">
+                        <p class="piccolo attenuato">Di partenza c'è <strong>tutto l'archivio</strong>, e si toglie. Quello che spunti è già salvato.</p>
+                        <button class="tasto-comando nudo piccolo" type="button" id="rimetti-tutto">Rimetti tutto</button>
                     </div>
 
                     <div class="riquadro">
@@ -41,17 +22,6 @@
                             <button class="pillola" type="button" data-anni="0">tutto il tempo</button>
                         </div>
 
-                        <label class="interruttore" style="margin-top:var(--s4)">
-                            <input type="checkbox" name="senza_data" value="1"
-                                   id="senza-data"
-                                   {% if scelta.senza_data %}checked{% endif %}>
-                            <span class="binario"></span>
-                            <span class="piccolo">
-                                porta anche gli scatti senza data
-                                <span class="tenue">— vanno in fondo, con scritto
-                                    che una data non ce l'hanno</span>
-                            </span>
-                        </label>
                     </div>
 
                     <div class="riquadro">
@@ -141,10 +111,3 @@
                             {% endfor %}
                         </div>
                     </div>
-
-                    <noscript>
-                        <button class="tasto-comando principale" type="submit">
-                            Salva la selezione e rifai il conto
-                        </button>
-                    </noscript>
-                </form>

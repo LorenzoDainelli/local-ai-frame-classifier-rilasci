@@ -21,7 +21,7 @@ from officina.modello import etichette, scatti, segnalazioni
 from officina.web import giro, sfoglia
 from officina.web import telefono as telefono_web
 from officina.modello.scatti import Filtro
-from officina.web import in_prova, vista
+from officina.web import in_prova, statici_timbrati, vista
 from officina import istruzioni
 from officina.programma import aspetto, novita
 
@@ -64,6 +64,8 @@ FOGLI_DELLE_SCHERMATE = (
 )
 pagine.env.globals["fogli_delle_schermate"] = FOGLI_DELLE_SCHERMATE
 pagine.env.globals["istruzioni_motori"] = istruzioni.motori_in_una_riga
+pagine.env.globals["statico"] = statici_timbrati.statico
+pagine.env.globals["mappa_dei_moduli"] = statici_timbrati.mappa_dei_moduli
 _novita_aperte = threading.Event()
 
 
@@ -104,6 +106,8 @@ def comune(richiesta: Request, qui: str = "") -> dict:
         "travaso": (telefono_web.in_corso.come_va()
                     if telefono_web.in_corso.lavoro.sta_lavorando else None),
         "da_questo_computer": e_questo_computer(richiesta),
+        "comanda": qui_o_dal_portatile(richiesta),
+        "sfoglia_nella_pagina": dal_portatile(),
         "si_puo_sfogliare": (
             bool(richiesta.client)
             and ipaddress.ip_address(richiesta.client.host).is_loopback
@@ -310,6 +314,16 @@ def e_questo_computer(richiesta: Request) -> bool:
 
 def solo_da_questo_computer(richiesta: Request) -> None:
     if not e_questo_computer(richiesta):
+        registro.avviso("web.scelta_non_da_questo_computer")
+        raise HTTPException(status_code=403, detail=NON_DA_QUI)
+
+
+def qui_o_dal_portatile(richiesta: Request) -> bool:
+    return e_questo_computer(richiesta) or dal_portatile()
+
+
+def solo_qui_o_dal_portatile(richiesta: Request) -> None:
+    if not qui_o_dal_portatile(richiesta):
         registro.avviso("web.scelta_non_da_questo_computer")
         raise HTTPException(status_code=403, detail=NON_DA_QUI)
 

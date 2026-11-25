@@ -1,4 +1,5 @@
 import { comeSiScorre, numeroAParole } from "./comune.js";
+import { chiediLaCartella } from "./esplora.js";
 import { sceltaDelGruppo } from "./scelta_gruppo.js";
 import { disponi, tagliaPer } from "./tessere.js";
 import "./cartella_nuova.js";
@@ -85,6 +86,30 @@ for (const modulo of document.querySelectorAll("form[data-senza-ricarica]")) {
         } catch (e) {
             dilloSopra("Il programma non risponde. Riprova tra poco.");
         }
+    });
+}
+
+for (const modulo of document.querySelectorAll('dialog form[action$="/annulla"]')) {
+    modulo.addEventListener("submit", (evento) => {
+        if (modulo.dataset.parte) {
+            evento.preventDefault();
+            return;
+        }
+        modulo.dataset.parte = "1";
+        const finestra = modulo.closest("dialog");
+        finestra.addEventListener("cancel", (e) => e.preventDefault());
+        finestra.querySelector("[data-chiudi-finestra]")?.setAttribute("disabled", "");
+        const tasto = modulo.querySelector('button[type="submit"]');
+        setTimeout(() => {
+            for (const altro of modulo.querySelectorAll("button")) altro.disabled = true;
+            tasto.textContent = "Sto annullando…";
+            tasto.setAttribute("aria-busy", "true");
+            const riga = document.createElement("p");
+            riga.className = "piccolo attenuato";
+            riga.setAttribute("role", "status");
+            riga.textContent = "Tolgo gli scatti dall'app. Lascia aperta questa pagina: quando ho finito si aggiorna da sola.";
+            modulo.before(riga);
+        }, 0);
     });
 }
 
@@ -245,15 +270,8 @@ if (sfogliaRaccolta) {
         sfogliaRaccolta.disabled = true;
         sfogliaRaccolta.setAttribute("aria-busy", "true");
         try {
-            const dati = new FormData();
-            dati.append("da_dove", campo.value.trim());
-            const risposta = await fetch("/api/sfoglia-cartella", {
-                method: "POST",
-                body: dati,
-                headers: { Accept: "application/json" },
-            });
-            const detto = await risposta.json().catch(() => ({}));
-            if (!risposta.ok) {
+            const { ok, detto } = await chiediLaCartella(sfogliaRaccolta, campo.value.trim());
+            if (!ok) {
                 errore.textContent = detto.messaggio
                     || "La finestra non si è potuta aprire.";
                 errore.hidden = false;

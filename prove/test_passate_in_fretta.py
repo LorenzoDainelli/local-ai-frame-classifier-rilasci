@@ -76,7 +76,7 @@ def _scritte(archivio, monkeypatch) -> tuple[int, list[int]]:
     spia = [0]
     fatti: list[int] = []
 
-    def uno(self, lettore, scatto_id):
+    def uno(self, lettore, scatto_id, pronto=None):
         with archivio.scrittura() as c:
             magazzino.segna_letto(c, scatto_id, motore.SCHEDA.nome, motore.SCHEDA.versione, 0)
         fatti.append(scatto_id)

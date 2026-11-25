@@ -54,6 +54,26 @@ const firma = pagina ? firmaDi({
     impronte_da_sole: pagina.dataset.daSole === "1", aspetta_la_scheda: pagina.dataset.aspetta,
 }) : "";
 
+function rigaDelModello(m) {
+    const riga = document.createElement("li");
+    riga.dataset.modello = m.nome;
+    const nome = document.createElement("span");
+    nome.className = "piccolo";
+    nome.textContent = m.titolo;
+    const barretta = document.createElement("span");
+    barretta.className = "barretta luce";
+    const barra = document.createElement("span");
+    barra.dataset.barraModello = "";
+    barretta.append(barra);
+    const quanto = document.createElement("span");
+    quanto.className = "piccolo numeri";
+    const pct = document.createElement("span");
+    pct.dataset.pctModello = "";
+    quanto.append(pct, "%");
+    riga.append(nome, barretta, quanto);
+    return riga;
+}
+
 function mettiNumeri(dati, chiave) {
     const vivo = dati.lavori[chiave] || {};
     const carta = pagina.querySelector(`[data-lavoro="${chiave}"]`);
@@ -66,7 +86,15 @@ function mettiNumeri(dati, chiave) {
     metti("[data-manca]", vivo.quanto_manca ? ` · ${vivo.quanto_manca}` : "");
     const barra = carta.querySelector("[data-barra]");
     if (barra) barra.style.width = `${pct}%`;
-    (vivo.modelli || []).forEach((m) => {
+    const elenco = carta.querySelector("[data-modelli]");
+    const modelli = vivo.modelli || [];
+    if (elenco) {
+        const voluti = modelli.map((m) => m.nome).join("|");
+        const presenti = [...elenco.querySelectorAll("[data-modello]")].map((r) => r.dataset.modello).join("|");
+        if (voluti !== presenti) elenco.replaceChildren(...modelli.map(rigaDelModello));
+        elenco.hidden = modelli.length < 2;
+    }
+    modelli.forEach((m) => {
         const riga = carta.querySelector(`[data-modello="${m.nome}"]`);
         if (!riga) return;
         riga.classList.toggle("ora", !!m.adesso);

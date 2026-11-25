@@ -379,3 +379,25 @@ def test_il_nodo_lo_sceglie_chi_usa_il_programma(archivio):
     assert consigli[0]["nodo_nome"] == "Un nodo"
     assert consigli[0]["zone"][0]["riquadro"] == [0.1, 0.1, 0.2, 0.2]
     assert [c["nodo_id"] for c in senza] == [None, None]
+
+
+def test_la_prova_cambia_foto_ogni_volta_e_ne_mette_anche_di_difficili(monkeypatch):
+    import sqlite3
+
+    from officina.corpi import parti as lavoro
+
+    connessione = sqlite3.connect(":memory:")
+    connessione.row_factory = sqlite3.Row
+    connessione.execute("CREATE TABLE scatti (id INTEGER PRIMARY KEY, genere TEXT)")
+    connessione.execute("CREATE TABLE corpi (scatto_id INTEGER, area REAL)")
+    for scatto_id in range(1, 1001):
+        connessione.execute("INSERT INTO scatti VALUES (?, ?)",
+                            (scatto_id, "video" if scatto_id % 50 == 0 else "foto"))
+        connessione.execute("INSERT INTO corpi VALUES (?, ?)", (scatto_id, scatto_id / 1000))
+    monkeypatch.setattr(lavoro, "PROVA_TRA_I_GRANDI", 100)
+    viste = [lavoro._da_provare(connessione, 12) for _ in range(5)]
+    assert all(len(scelti) == 12 == len(set(scelti)) for scelti in viste)
+    assert len({tuple(scelti) for scelti in viste}) > 1
+    assert all(scatto_id % 50 for scelti in viste for scatto_id in scelti)
+    assert all(sum(scatto_id >= 898 for scatto_id in scelti) >= 8 for scelti in viste)
+    assert any(scatto_id < 898 for scelti in viste for scatto_id in scelti)

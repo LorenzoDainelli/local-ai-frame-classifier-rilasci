@@ -99,7 +99,8 @@ def tessere(connessione: sqlite3.Connection, oggi=None) -> list[Tessera]:
 
 def tolte(connessione: sqlite3.Connection, oggi=None) -> list[Tolta]:
     righe = tutti(connessione,
-                  "SELECT id, percorso, tolta_il FROM cartelle_sorgente WHERE attiva = 0 "
+                  "SELECT id, percorso, tolta_il FROM cartelle_sorgente "
+                  "WHERE attiva = 0 AND conclusa_da IS NULL "
                   "ORDER BY tolta_il IS NULL, tolta_il DESC, id DESC")
     elenco = []
     for riga in righe:
@@ -111,6 +112,21 @@ def tolte(connessione: sqlite3.Connection, oggi=None) -> list[Tolta]:
             nome=storico.nome_corto(riga["percorso"]),
             quando=storico.giorno_corto(riga["tolta_il"], oggi), conto=conto))
     return elenco
+
+
+def concluse(connessione: sqlite3.Connection) -> dict[int, list[Tolta]]:
+    righe = tutti(connessione,
+                  "SELECT id, percorso, conclusa_da FROM cartelle_sorgente "
+                  "WHERE attiva = 0 AND conclusa_da IS NOT NULL ORDER BY id")
+    per_importazione: dict[int, list[Tolta]] = {}
+    for riga in righe:
+        conto = annulla.conta(connessione, riga["id"])
+        if conto is None:
+            continue
+        per_importazione.setdefault(riga["conclusa_da"], []).append(Tolta(
+            id=riga["id"], percorso=riga["percorso"],
+            nome=storico.nome_corto(riga["percorso"]), quando="", conto=conto))
+    return per_importazione
 
 
 def momento(*, cartelle: int, piano: dict | None, sta_lavorando: bool,
@@ -127,6 +143,10 @@ def momento(*, cartelle: int, piano: dict | None, sta_lavorando: bool,
     if stato == "finita" and _da_poco(finita_il, adesso):
         return "finita"
     return "pronta"
+
+
+def da_poco(istante: str | None, adesso: datetime | None = None) -> bool:
+    return _da_poco(istante, adesso)
 
 
 def _da_poco(istante: str | None, adesso: datetime | None) -> bool:

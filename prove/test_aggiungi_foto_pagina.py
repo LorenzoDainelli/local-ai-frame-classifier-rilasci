@@ -266,10 +266,18 @@ def _importa(cartelle) -> None:
     motore.esegui()
 
 
+def _riaggiungi(archivio) -> None:
+    with archivio.scrittura() as connessione:
+        for riga in connessione.execute(
+                "SELECT id FROM cartelle_sorgente WHERE conclusa_da IS NOT NULL").fetchall():
+            scansione.rimetti_cartella(connessione, riga["id"])
+
+
 def test_le_tessere_dicono_come_sta_ogni_cartella(cliente, archivio, foto, tmp_path):
     cliente.post("/importazione/cartella", data={"percorso": str(foto), "gruppo": "nuovo",
                                                  "gruppo_nuovo": "Snap"})
     _importa([foto])
+    _riaggiungi(archivio)
     nuova, sparita = _aggiungi(cliente, tmp_path, "Nuova", "Sparita")
     (tmp_path / "Sparita").rmdir()
     with archivio.scrittura() as connessione:
@@ -298,6 +306,7 @@ def test_le_scritte_delle_tessere_sulla_pagina(cliente, archivio, foto, tmp_path
     [vuota] = _aggiungi(cliente, tmp_path, "Vuota")
     cliente.post("/importazione/cartella", data={"percorso": str(foto), "gruppo": ""})
     _importa([tmp_path / "Vuota", foto])
+    _riaggiungi(archivio)
     [nuova] = _aggiungi(cliente, tmp_path, "Nuova")
     with archivio.scrittura() as connessione:
         connessione.execute("UPDATE cartelle_sorgente SET aggiunta_il = "
@@ -518,6 +527,7 @@ def test_la_tessera_porta_quello_che_serve_a_cambiare_gruppo(cliente, archivio, 
 def test_le_finestre_per_togliere_e_annullare(cliente, archivio, foto, tmp_path):
     cliente.post("/importazione/cartella", data={"percorso": str(foto), "gruppo": ""})
     _importa([foto])
+    _riaggiungi(archivio)
     [vuota] = _aggiungi(cliente, tmp_path, "Vuota")
     with archivio.lettura() as connessione:
         piena = scansione.cartella_di(connessione, foto)
@@ -564,27 +574,30 @@ def test_senza_cartelle_la_pagina_invita_a_sceglierne_una(cliente):
     assert "ag-aggiungi primo" in testo and "data-autofocus" in riquadro
 
 
-def test_finita_da_poco_poi_pronta(cliente, archivio, foto):
+def test_finita_la_cartella_passa_nello_storico_poi_pronta(cliente, archivio, foto):
     cliente.post("/importazione/cartella", data={"percorso": str(foto), "gruppo": ""})
     _importa([foto])
     testo = _pagina(cliente)
-    assert 'data-momento="finita"' in testo and "Le ultime arrivate" in testo
     motore = importazione.motore_attuale()
-    assert f'href="/?importazione={motore.importazione_id}"' in testo
-    assert f"Apri i {_scatti(archivio)} scatti nuovi" in testo
-    assert 'href="/stato#misura"' in testo
-    assert '<span class="ag-bollo verde">Finita</span>' in testo
-    _mandata(archivio, "interrotta", "2026-03-20T11:00:00Z", nuovi=7777)
-    sempre = _pagina(cliente)
-    assert 'data-momento="finita"' in sempre
-    assert "7777" not in sempre.split('id="storico"')[0]
-    assert f"Apri i {_scatti(archivio)} scatti nuovi" in sempre
-    with archivio.scrittura() as connessione:
-        connessione.execute("DELETE FROM importazioni WHERE nuovi_scatti = 7777")
+    with archivio.lettura() as connessione:
+        piena = connessione.execute("SELECT id, attiva, conclusa_da FROM cartelle_sorgente").fetchone()
+    assert (piena["attiva"], piena["conclusa_da"]) == (0, motore.importazione_id)
+    assert 'data-momento="vuota"' in testo
+    assert f'data-cartella="{piena["id"]}"' not in testo
+    storia = _tra(testo, 'id="storico"', "</section>")
+    assert '<div class="ag-evento nuova">' in storia
+    assert (f'class="tasto-comando piccolo principale" href="/?importazione='
+            f'{motore.importazione_id}"') in storia
+    assert f'action="/importazione/cartella/{piena["id"]}/rimetti"' in storia
+    assert f'data-apri-finestra="annulla-{piena["id"]}"' in storia
+    assert f'id="annulla-{piena["id"]}"' in testo
+    assert "Cartelle tolte <b class=\"numeri\">0</b>" in storia
+    cliente.post(f'/importazione/cartella/{piena["id"]}/rimetti')
     with archivio.scrittura() as connessione:
         connessione.execute("UPDATE importazioni SET finita_il = '2026-01-10T12:00:00Z'")
     dopo = _pagina(cliente)
     assert 'data-momento="pronta"' in dopo and "Pronta a partire" in dopo
+    assert '<div class="ag-evento nuova">' not in dopo
     scatti = _scatti(archivio)
     assert re.search(rf"L'ultima volta, il 10 gennaio( \d{{4}})?: {scatti} scatti nuovi\.",
                      dopo)
@@ -594,6 +607,28 @@ def test_finita_da_poco_poi_pronta(cliente, archivio, foto):
     assert 'data-momento="pronta"' in ancora
     assert re.search(rf"L'ultima volta, il 10 gennaio( \d{{4}})?: {scatti} scatti nuovi\.",
                      ancora)
+
+
+def test_una_cartella_staccata_non_passa_nello_storico(cliente, archivio, tmp_path):
+    [cartella_id] = _aggiungi(cliente, tmp_path, "Sparita")
+    motore = importazione.motore_attuale()
+    motore.prepara([tmp_path / "Sparita"])
+    (tmp_path / "Sparita").rmdir()
+    motore.esegui()
+    with archivio.lettura() as connessione:
+        riga = connessione.execute("SELECT attiva, conclusa_da FROM cartelle_sorgente "
+                                   "WHERE id = ?", (cartella_id,)).fetchone()
+    assert (riga["attiva"], riga["conclusa_da"]) == (1, None)
+
+
+def test_riaggiunta_a_mano_torna_nell_elenco(cliente, archivio, foto):
+    cliente.post("/importazione/cartella", data={"percorso": str(foto), "gruppo": ""})
+    _importa([foto])
+    cliente.post("/importazione/cartella", data={"percorso": str(foto)})
+    with archivio.lettura() as connessione:
+        riga = connessione.execute("SELECT attiva, conclusa_da FROM cartelle_sorgente").fetchone()
+    assert (riga["attiva"], riga["conclusa_da"]) == (1, None)
+    assert 'data-cartella="' in _pagina(cliente)
 
 
 def _piano(monkeypatch, file: int, basta: bool) -> None:
@@ -696,6 +731,6 @@ def test_lo_storico_con_le_importazioni_di_prima(cliente, archivio, foto):
     assert "Cartelle tolte <b class=\"numeri\">0</b>" in storia
     assert "hidden" not in _tra(storia, 'id="ag-importazioni"', ">")
     assert "hidden" in _tra(storia, 'id="ag-tolte"', ">")
-    assert storia.count('<div class="ag-evento">') == 2
+    assert len(re.findall(r'<div class="ag-evento( nuova)?">', storia)) == 2
     assert "Nessuna cartella tolta." in storia
     assert f"Apri {_scatti(archivio)}</a>" in storia

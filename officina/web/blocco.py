@@ -10,7 +10,7 @@ from officina import forziere, registro
 NON_E_ATTIVITA = ("/api/lavori", "/api/coda", "/api/importazione",
                   "/api/telefono", "/statici/", "/miniatura/")
 
-PASSA_COMUNQUE = ("/blocco", "/statici/")
+PASSA_COMUNQUE = ("/blocco", "/statici/", "/api/telefono/cavo/")
 
 
 @dataclass

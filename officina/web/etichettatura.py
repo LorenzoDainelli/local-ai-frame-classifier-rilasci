@@ -6,6 +6,7 @@ from pathlib import PureWindowsPath
 
 from officina.corpi import chi_e
 from officina.modello import posti
+from officina.modello import sagome as sagome_fatte
 from officina.modello import etichette as magazzino
 from officina.modello import (file_media, fotocamere, indizi_persone, nodi, nomi, parti,
                               scatti)
@@ -92,17 +93,32 @@ def stato_dello_scatto(connessione: sqlite3.Connection, bottega, scatto_id: int,
         "confermate": confermate,
         "proposte": elenco_proposte,
         "persone": _chi_c_e(connessione, scatto_id),
-        "parti": parti.consigli(connessione, scatto_id),
+        "parti": _parti_in_ordine(connessione, bottega, scatto_id, gia),
         "luoghi": posti.di_scatto(connessione, scatto_id),
         "proposta_luogo": (None if posti.di_scatto(connessione, scatto_id)
                            else posti.proposta(connessione, scatto_id, bottega)),
         "tre": posti.stato_delle_tre(connessione, scatto_id),
         "dettagli": _dettagli(connessione, scatto_id, principale),
         "striscia": striscia,
+        "sagome": [{**voce, "da_controllare": bool(voce["da_controllare"]),
+                    "buona": bool(voce["buona"])}
+                   for voce in sagome_fatte.di_scatto(connessione, scatto_id)],
         "vicini": intorno,
         "descrittore": bottega.descrittore,
         "senza_proposte": _perche_niente_proposte(connessione, bottega),
     }
+
+
+def _parti_in_ordine(connessione: sqlite3.Connection, bottega, scatto_id: int,
+                     gia: set[int]) -> list[dict]:
+    trovate = parti.consigli(connessione, scatto_id)
+    for parte in trovate:
+        candidati = [voce for voce in parte["nodi"] if voce["nodo_id"] not in gia]
+        probabile = bottega.piu_probabile(connessione, scatto_id, candidati)
+        parte["probabile"] = probabile
+        if probabile is not None:
+            parte["nodi"].sort(key=lambda voce: voce["nodo_id"] != probabile)
+    return trovate
 
 
 def _perche_niente_proposte(connessione: sqlite3.Connection, bottega) -> str:

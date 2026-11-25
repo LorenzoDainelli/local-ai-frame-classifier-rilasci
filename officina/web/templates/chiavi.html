@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% from "_icone.html" import icona %}
+{% from "_spiega.html" import spiega %}
+{% block titolo %}Le chiavi — Local AI Frame Classifier{% endblock %}
+
+{% block corpo %}
+<div class="corpo">
+<main class="zona-principale">
+<div class="pagina ia">
+    <header class="ia-testa">
+        <h1 class="titolo-pagina">Le chiavi</h1>
+        <p class="sottotitolo">Chiavi e codici da tenere al sicuro, per copiarli quando servono. Stanno nel forziere, chiuse una seconda volta con la sua password.</p>
+        <p><a class="tasto-comando piccolo" href="/impostazioni#c6">{{ icona('su', 14) }} Torna alle impostazioni</a></p>
+    </header>
+
+    {% if messaggio %}
+    <p class="avviso" role="status" data-chiavi-messaggio>{{ messaggio }}</p>
+    {% endif %}
+
+    {% if not forziere_acceso %}
+    <section class="carta">
+        <p>Le chiavi si tengono solo dentro il forziere, e su questo archivio il forziere è spento. Si accende da Impostazioni.</p>
+        {% if ci_sono %}<p class="piccolo tenue">Le chiavi di prima ci sono ancora, chiuse con la password che aveva il forziere: riaccendilo e le ritrovi.</p>{% endif %}
+    </section>
+
+    {% elif altra_password %}
+    <section class="carta in-colonna" style="gap:var(--s3)">
+        <h2>Le chiavi hanno la password di prima</h2>
+        <p class="piccolo" style="max-width:62ch">Il forziere ha cambiato password, le chiavi no. Scrivi tutte e due: le richiudo con quella di oggi.</p>
+        <form method="post" action="/chiavi/rinnova" class="in-colonna" style="gap:var(--s3);max-width:420px">
+            <label class="in-colonna" style="gap:var(--s1)"><span class="maiuscoletto">La password di oggi</span>
+                <input class="campo" type="password" name="password" required autocomplete="current-password"></label>
+            <label class="in-colonna" style="gap:var(--s1)"><span class="maiuscoletto">La password di prima</span>
+                <input class="campo" type="password" name="vecchia" required autocomplete="off"></label>
+            <div><button class="tasto-comando principale" type="submit">Richiudi le chiavi</button></div>
+        </form>
+    </section>
+
+    {% elif voci is none %}
+    <section class="carta in-colonna" style="gap:var(--s3)">
+        <p class="piccolo" style="max-width:62ch">Scrivi la password del forziere. Le chiavi si vedono solo in questa pagina e spariscono appena la lasci.</p>
+        <form method="post" action="/chiavi" class="in-fila" style="max-width:520px">
+            <input class="campo" type="password" name="password" required autofocus
+                   autocomplete="current-password" placeholder="la password del forziere">
+            <button class="tasto-comando principale" type="submit">Mostra le chiavi</button>
+        </form>
+    </section>
+
+    {% else %}
+    <section class="carta in-colonna" style="gap:var(--s4)" data-chiavi-elenco>
+        {% if not voci %}
+        <p>Non c'è ancora nessuna chiave.</p>
+        {% endif %}
+        {% for v in voci %}
+        <div class="in-colonna" style="gap:var(--s2)" data-chiave>
+            <div class="riga-fra"><b>{{ v.nome }}</b><span class="minuscolo tenue">{{ v.quando }}</span></div>
+            <pre class="ia-dettaglio" data-chiave-testo style="user-select:all;white-space:pre-wrap;word-break:break-all">{{ v.testo }}</pre>
+            <div><button class="tasto-comando piccolo" type="button" data-copia>Copia</button></div>
+        </div>
+        {% endfor %}
+    </section>
+
+    {% if voci|length < massime %}
+    <section class="carta in-colonna" style="gap:var(--s3)">
+        <h2>Aggiungi una chiave</h2>
+        <form method="post" action="/chiavi/aggiungi" class="in-colonna" style="gap:var(--s3)">
+            <label class="in-colonna" style="gap:var(--s1)"><span class="maiuscoletto">Nome</span>
+                <input class="campo" type="text" name="nome" required maxlength="80" autocomplete="off"
+                       style="max-width:420px" placeholder="per esempio: Chiave firma aggiornamenti"></label>
+            <label class="in-colonna" style="gap:var(--s1)"><span class="maiuscoletto">La chiave</span>
+                <textarea class="campo" name="testo" required rows="6" spellcheck="false" autocomplete="off"
+                          style="font-family:ui-monospace,monospace"></textarea></label>
+            <label class="in-colonna" style="gap:var(--s1)"><span class="maiuscoletto">La password del forziere</span>
+                <input class="campo" type="password" name="password" required autocomplete="current-password"
+                       style="max-width:340px"></label>
+            <div><button class="tasto-comando principale" type="submit">Salva nel forziere</button></div>
+        </form>
+    </section>
+    {% endif %}
+
+    {% if voci %}
+    <section class="carta in-colonna" style="gap:var(--s3)">
+        <h2>Togli una chiave</h2>
+        <form method="post" action="/chiavi/togli" class="in-colonna" style="gap:var(--s3);max-width:420px">
+            <select class="campo" name="nome" required>
+                {% for v in voci %}<option value="{{ v.nome }}">{{ v.nome }}</option>{% endfor %}
+            </select>
+            <input class="campo" type="password" name="password" required
+                   autocomplete="current-password" placeholder="la password del forziere">
+            <div><button class="tasto-comando" type="submit">Togli per sempre</button></div>
+        </form>
+    </section>
+    {% endif %}
+
+    <p><a class="tasto-comando nudo" href="/chiavi">Nascondi le chiavi</a></p>
+    <script type="module">
+    (function () {
+        for (const scatola of document.querySelectorAll("[data-chiave]")) {
+            const tasto = scatola.querySelector("[data-copia]");
+            const testo = scatola.querySelector("[data-chiave-testo]");
+            tasto.addEventListener("click", async function () {
+                try {
+                    await navigator.clipboard.writeText(testo.textContent);
+                    tasto.textContent = "Copiata";
+                } catch (errore) {
+                    const scelta = window.getSelection();
+                    const pezzo = document.createRange();
+                    pezzo.selectNodeContents(testo);
+                    scelta.removeAllRanges();
+                    scelta.addRange(pezzo);
+                    tasto.textContent = "Selezionata: Ctrl+C";
+                }
+                setTimeout(function () { tasto.textContent = "Copia"; }, 2500);
+            });
+        }
+    })();
+    </script>
+    {% endif %}
+</div>
+</main>
+</div>
+{% endblock %}

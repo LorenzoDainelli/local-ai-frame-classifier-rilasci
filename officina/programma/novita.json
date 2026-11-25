@@ -10,6 +10,10 @@
     ],
     "semplice": [
       [
+        "telefono",
+        "Per l'iPhone c'è «Prepara e copia col cavo»: porta al PC preferiti e diario, prepara il pacchetto e lo copia sul Visore, rileggendo ogni file. Va col fisso o col portatile: dal portatile i file arrivano già cifrati e lì non restano."
+      ],
+      [
         "controlla",
         "Più solidità: la scorciatoia sul desktop non può più restare appesa, un guasto nel controllo della chiavetta ora si vede invece di sparire, e dal portatile il segno della prova dell'aspetto viaggia solo cifrato."
       ],
@@ -396,9 +400,18 @@
       [
         "volto",
         "Meno volti falsi, soprattutto nelle foto con rumore: un volto visto solo dalla misura grande ora deve essere molto sicuro. Il collaudo su 1076 foto pubbliche li ha dimezzati. I volti già trovati restano"
+      ],
+      [
+        "controlla",
+        "In Impostazioni, sotto il forziere, c'è «Le chiavi nel forziere»: ci tieni chiavi e codici da copiare quando servono, chiusi una seconda volta con la password del forziere, che si riscrive ogni volta."
+      ],
+      [
+        "forbici",
+        "Nella pagina di un video c'è «Taglia»: scegli uno o più pezzi e diventano un video solo, accanto all'originale, con la sua data, il suo luogo e i tuoi nodi. Si copia senza ricomprimere: niente qualità persa. L'originale resta com'è"
       ]
     ],
     "tecnico": [
+      "Cavo: <code>officina/telefono/cavo.py</code> con pymobiledevice3 (AFC nei Documenti del Visore). Dal portatile il fisso guida e il portatile esegue: <code>cavo_lontano.Banco</code> mette in coda i comandi, il portatile li prende da <code>/api/telefono/cavo/prendi</code> nel collegamento cifrato, scarica ogni file in una cartella temporanea, lo copia, lo cancella e risponde; le impronte si confrontano sul fisso.",
       "Stampa veloce: nel confronto zoom e spostamento si calcolano sulla misura d'arrivo, e ogni versione si scala di <code>arrivo / larghezza vera</code>; prima l'originale piccolo e le versioni a 4096 si vedevano di misure diverse.",
       "<code>cerca_gli_aggiornamenti_adesso</code> fa una ricerca in un filo a parte (<code>cerca</code> e <code>cercato_alle</code> nello stato); la stessa serratura del giro ogni 5 minuti evita due ricerche insieme; azione <code>cerca_aggiornamenti</code> anche dal portatile.",
       "Chiusura di colpo: <code>aperto.segno</code> (pid e ora di accensione) messo all'apertura e tolto alla chiusura; se resta, <code>chiusura.controlla</code> fa <code>integrity_check</code> e <code>foreign_key_check</code>, toglie i <code>.tmp</code> nelle cartelle del programma e scrive l'esito per la striscia.",

@@ -20,3 +20,24 @@ winrt-windows-security-credentials==3.2.1 ; sys_platform == "win32"
 winrt-windows-security-cryptography==3.2.1 ; sys_platform == "win32"
 winrt-windows-storage-streams==3.2.1 ; sys_platform == "win32"
 winrt-windows-system==3.2.1 ; sys_platform == "win32"
+
+# La copia col cavo sull'iPhone (regola 602). pymobiledevice3 si installa senza
+# le sue dipendenze: qui sotto ci sono solo quelle che servono davvero a
+# usbmux, lockdown, installation_proxy e house_arrest.
+pymobiledevice3==11.60.0
+arrow==1.4.0
+bytestruct==0.2.0
+certifi==2026.10.23
+ifaddr==0.2.0
+opack2==0.2.0
+packaging==26.3
+prompt-toolkit==3.0.53
+psutil==7.2.2
+pygments==2.21.0
+pygnuutils==0.1.1
+python-dateutil==4.0.0
+questionary==2.1.1
+requests==2.34.2
+rich==15.0.0
+urllib3==2.8.0
+wcwidth==0.9.4

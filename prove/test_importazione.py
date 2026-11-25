@@ -105,3 +105,27 @@ def test_le_schermate_vengono_segnalate_non_nascoste(archivio_pieno):
                    "SELECT count(*) AS q FROM scatti WHERE sembra_schermata = 1 "
                    "AND fuori_archivio = 1")
     assert fuori == 0, "il programma non deve decidere da solo cosa è una fotografia"
+
+
+def test_le_vecchie_schermate_senza_prove_tornano_foto(archivio_pieno):
+    from officina.archivio import migrazioni
+
+    with archivio_pieno.scrittura() as connessione:
+        jpeg = connessione.execute(
+            "SELECT scatto_id FROM file_media WHERE formato = 'jpeg' AND ruolo = 'principale' "
+            "AND scatto_id IN (SELECT scatto_id FROM percorsi p JOIN file_media f "
+            "ON f.id = p.file_id GROUP BY scatto_id) LIMIT 1").fetchone()[0]
+        connessione.execute("UPDATE scatti SET sembra_schermata = 1 WHERE id = ?", (jpeg,))
+        connessione.execute(
+            "INSERT INTO segnalazioni (tipo, scatto_id, dettaglio, creata_il) "
+            "VALUES ('schermata', ?, 'x', '2024-01-01T00:00:00Z')", (jpeg,))
+        vere = [r[0] for r in connessione.execute(
+            "SELECT id FROM scatti WHERE sembra_schermata = 1 AND id != ?", (jpeg,))]
+        migrazioni._versione_85(connessione)
+        assert _conto(connessione, "SELECT sembra_schermata AS q FROM scatti WHERE id = %d"
+                      % jpeg) == 0
+        assert _conto(connessione, "SELECT count(*) AS q FROM segnalazioni WHERE "
+                      "tipo = 'schermata' AND risolta = 0 AND scatto_id = %d" % jpeg) == 0
+        rimaste = [r[0] for r in connessione.execute(
+            "SELECT id FROM scatti WHERE sembra_schermata = 1")]
+        assert rimaste == vere and vere

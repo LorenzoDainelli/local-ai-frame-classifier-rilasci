@@ -40,6 +40,7 @@ lavoro_fps = lavori.Lavoro("gli FPS dei video da leggere")
 fps_basta = threading.Event()
 passata_volti = None
 passata_corpi = None
+passi_corpi = None
 
 gia_ripreso = False
 

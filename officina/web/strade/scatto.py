@@ -16,7 +16,7 @@ from officina.immagini import compatibile, consegna
 from officina.importazione import miniature, quicktime
 from officina.modello import file_media, scatti, segnalazioni
 from officina.miglioria import misura as miglioria_misura
-from officina.ritocco import elenco as elenco_ritocchi
+from officina.ritocco import elenco as elenco_ritocchi, tagli, taglio
 from officina.sicuro import cache_cifrata, dall_archivio
 from officina.sicuro.dall_archivio import DallArchivio
 from officina.web import miglioramento as miglioramento_web
@@ -127,6 +127,8 @@ def uno_scatto(richiesta: Request, scatto_id: int):
         miglioria = miglioramento_web.dello_scatto(connessione, scatto_id)
         ritocchi = elenco_ritocchi.quanti_fatti(
             connessione, principale["id"] if principale else None)
+        tagliato_da = tagli.da_dove(connessione, scatto_id)
+        tagliati = tagli.tagliati_da(connessione, scatto_id)
 
         volti_visti = []
         if scatto["genere"] != "video" and principale is not None:
@@ -196,6 +198,10 @@ def uno_scatto(richiesta: Request, scatto_id: int):
         "corpi_visti": corpi_visti,
         "in3d": in3d,
         "ritocchi": ritocchi,
+        "tagliato_da": tagliato_da,
+        "tagliati": tagliati,
+        "si_taglia": bool(scatto["genere"] == "video" and principale is not None
+                          and not non_si_apre and taglio.si_puo_tagliare(principale)),
         "si_puo_migliorare": bool(
             miglioria is None and scatto["larghezza"] and scatto["altezza"]
             and (not miglioria_misura.e_gia_grande(

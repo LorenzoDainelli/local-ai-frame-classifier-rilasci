@@ -1386,6 +1386,11 @@ document.addEventListener("albero-aperto", () => {
     [400, 1200].forEach((dopo) => setTimeout(controllaCheCiSia, dopo));
 });
 
+document.addEventListener("luoghi-cambiati", async () => {
+    if (!LUOGHI) return;
+    try { await ricarica(); disegna(); } catch (errore) {  }
+});
+
 stato.archiviati = false;
 try { disegna(); } catch (errore) { console.error(errore); }
 rimettiAFuoco(false, false);

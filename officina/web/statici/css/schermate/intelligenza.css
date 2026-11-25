@@ -52,3 +52,48 @@ li.pm-sistemato [data-pm-via-detto] { font-weight: 600; }
 .pm-carta { display: grid; gap: 10px; padding: 16px 20px; }
 .pm-carta > h2, .pm-carta > p { margin: 0; }
 .pm-carta [hidden] { display: none !important; }
+
+.pdc-indietro { margin-left: calc(var(--s3) * -1); }
+.pdc-pagina { display: grid; gap: 14px; min-width: 0; }
+.pdc-pagina [hidden] { display: none !important; }
+.pdc-carta { display: grid; gap: 14px; padding: 18px; min-width: 0; }
+.pdc-carta > p { margin: 0; }
+.pdc-carta h2 { margin: 0; font: 400 19px/1.25 var(--serif); }
+.pdc-carta-t { display: flex; align-items: center; gap: 14px; }
+.pdc-carta-dice { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.pdc-carta-dice p { margin: 0; }
+.pdc-vuoto { padding: 18px; border-radius: var(--raggio-controllo); background: var(--pozzo); text-align: center; }
+.pdc-griglia { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) 104px 132px 36px; gap: 8px; align-items: center; }
+.pdc-testata { padding: 0 2px; }
+.pdc-elenco { list-style: none; margin: 0; padding: 0; display: grid; }
+.pdc-elenco li { padding: 8px 0; border-top: 0.5px solid var(--linea); }
+.pdc-elenco li:last-child { border-bottom: 0.5px solid var(--linea); }
+.pdc-dentro { display: contents; }
+.pdc-trovate { min-width: 0; white-space: nowrap; }
+.pdc-trovate .tasto-comando { padding: 0 var(--s2); }
+.pdc-tasti { display: flex; justify-content: flex-end; gap: 8px; }
+.tasto-comando.pdc-togli { width: 36px; padding: 0; justify-content: center; }
+.tasto-comando.pdc-togli:hover { color: var(--male); }
+.pdc-togli svg { flex: none; }
+.pdc-nuova { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) auto; gap: 8px; align-items: end; }
+.pdc-campo { display: grid; gap: 4px; min-width: 0; }
+.pdc-imparata { display: grid; gap: 6px; }
+.pdc-imparata-t { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.pdc-voti { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.pdc-avviso { margin: 0; padding-left: 10px; border-left: 2px solid var(--attenzione); }
+.pdc-punti { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.pdc-punti li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; color: var(--attenuato); font-size: var(--testo-comando); line-height: 1.45; }
+.pdc-punti svg { margin-top: 2px; color: var(--tenue); }
+.pdc-foto { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.pdc-quadro { position: relative; line-height: 0; }
+.pdc-quadro img { width: 100%; height: auto; border-radius: var(--raggio-controllo); }
+.pdc-segno { position: absolute; border: 2px solid var(--accento); border-radius: 3px; box-shadow: 0 0 0 1px rgb(0 0 0 / .6); pointer-events: none; }
+@media (max-width: 1180px) {
+    .pdc-punti { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+    .pdc-testata { display: none; }
+    .pdc-griglia { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; }
+    .pdc-griglia select, .pdc-griglia .pdc-tasti { grid-column: 1 / 3; }
+    .pdc-nuova { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}

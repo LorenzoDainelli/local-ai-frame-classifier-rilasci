@@ -16,7 +16,7 @@ from officina.web.strade import base, comune, importazione, misura, modelli
 
 strada = APIRouter()
 
-solo_qui = [Depends(base.solo_da_questo_computer)]
+qui_o_portatile = [Depends(base.solo_qui_o_dal_portatile)]
 
 
 @strada.get("/benvenuto", response_class=HTMLResponse)
@@ -57,7 +57,7 @@ def benvenuto_modelli(richiesta: Request):
     })
 
 
-@strada.post("/giro/parti", dependencies=solo_qui)
+@strada.post("/giro/parti", dependencies=qui_o_portatile)
 def giro_parti():
 
     if comune.lavoro is not None and comune.lavoro.sta_lavorando:

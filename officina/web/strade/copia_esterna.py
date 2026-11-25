@@ -13,7 +13,7 @@ from officina.web.strade import base
 
 strada = APIRouter()
 
-solo_qui = [Depends(base.solo_da_questo_computer)]
+qui_o_portatile = [Depends(base.solo_qui_o_dal_portatile)]
 
 
 def _originali(archivio) -> list[str]:
@@ -38,7 +38,7 @@ def com_e() -> dict:
     }
 
 
-@strada.post("/copia-esterna/cartella", dependencies=solo_qui)
+@strada.post("/copia-esterna/cartella", dependencies=qui_o_portatile)
 def scegli_la_cartella(percorso: str = Form("")):
     archivio = accesso.aperto()
     dove = riserva.controlla_la_cartella(percorso, _originali(archivio), archivio.dove.radice)
@@ -46,7 +46,7 @@ def scegli_la_cartella(percorso: str = Form("")):
     return JSONResponse(com_e())
 
 
-@strada.post("/copia-esterna/parti", dependencies=solo_qui)
+@strada.post("/copia-esterna/parti", dependencies=qui_o_portatile)
 def fai_la_copia(ricontrolla: bool = Form(False)):
     archivio = accesso.aperto()
     dove = scelta()
@@ -57,12 +57,12 @@ def fai_la_copia(ricontrolla: bool = Form(False)):
     return JSONResponse(com_e())
 
 
-@strada.get("/copia-esterna", dependencies=solo_qui)
+@strada.get("/copia-esterna", dependencies=qui_o_portatile)
 def a_che_punto():
     return JSONResponse(com_e())
 
 
-@strada.post("/copia-esterna/ferma", dependencies=solo_qui)
+@strada.post("/copia-esterna/ferma", dependencies=qui_o_portatile)
 def ferma():
     riserva.ferma()
     return JSONResponse(com_e())

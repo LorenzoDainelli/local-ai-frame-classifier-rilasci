@@ -5,10 +5,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Local AI Frame Classifier</title>
-    <link rel="stylesheet" href="/statici/css/fondamenta.css">
-    <link rel="stylesheet" href="/statici/css/componenti.css">
+    {{ mappa_dei_moduli() }}
+    <link rel="stylesheet" href="{{ statico('/statici/css/fondamenta.css') }}">
+    <link rel="stylesheet" href="{{ statico('/statici/css/componenti.css') }}">
     {% for foglio in fogli_delle_schermate %}
-    <link rel="stylesheet" href="/statici/css/schermate/{{ foglio }}.css">
+    <link rel="stylesheet" href="{{ statico('/statici/css/schermate/' ~ foglio ~ '.css') }}">
     {% endfor %}
 </head>
 <body class="{% if not impostazioni.movimento %}senza-movimento{% endif %}"

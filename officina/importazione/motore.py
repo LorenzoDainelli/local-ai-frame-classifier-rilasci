@@ -79,8 +79,8 @@ class Motore:
         spazio = scansione.controlla_spazio(trovati.byte, self.archivio.dove.radice)
 
         with self.archivio.scrittura() as connessione:
-            for cartella in cartelle:
-                scansione.aggiungi_cartella(connessione, Path(cartella))
+            guardate = [scansione.aggiungi_cartella(connessione, Path(cartella))
+                        for cartella in cartelle]
 
             connessione.execute(
                 "UPDATE importazioni SET stato = 'interrotta' WHERE stato = 'in_corso'")
@@ -98,6 +98,11 @@ class Motore:
                 "(importazione_id, percorso, dimensione) VALUES (?, ?, ?)",
                 [(self.importazione_id, str(p), trovati.dimensioni.get(str(p), 0))
                  for p in trovati.file],
+            )
+            connessione.executemany(
+                "INSERT OR IGNORE INTO cartelle_importazione (importazione_id, cartella_id) "
+                "VALUES (?, ?)",
+                [(self.importazione_id, cartella_id) for cartella_id in dict.fromkeys(guardate)],
             )
 
         self._misure = []
@@ -207,6 +212,8 @@ class Motore:
                 (stato, adesso() if stato == "finita" else None,
                  self._media_misurata(), self.importazione_id),
             )
+            if stato == "finita":
+                scansione.concludi_cartelle(connessione, self.importazione_id)
         with self.archivio.scrittura() as connessione:
             esito = luoghi.raggruppa(connessione)
         if esito["sistemati"]:
@@ -293,17 +300,32 @@ class Motore:
         registro.avviso("importazione.file_saltato",
                         motivo=registro.Parola(motivo))
 
+    def _gia(self, connessione, percorso: Path, motivo: str,
+             file_id: int | None = None, scatto_id: int | None = None) -> None:
+        connessione.execute(
+            "UPDATE importazioni SET gia_presenti = gia_presenti + 1 WHERE id = ?",
+            (self.importazione_id,),
+        )
+        connessione.execute(
+            "INSERT OR IGNORE INTO gia_presenti "
+            "(importazione_id, percorso, motivo, file_id, scatto_id) VALUES (?, ?, ?, ?, ?)",
+            (self.importazione_id, str(percorso), motivo, file_id, scatto_id),
+        )
+
     def _importa(self, percorso: Path, pronto: Preparato | None = None) -> None:
         segno = pronto.segno if pronto else impronta_file.del_file(percorso)
 
         with self.archivio.scrittura() as connessione:
-            if (miglioria_coda.di_impronta_migliorata(connessione, segno)
-                    or ritocchi.ritoccata_di_impronta(connessione, segno)
-                    or tolti.e_tolto(connessione, segno)):
-                connessione.execute(
-                    "UPDATE importazioni SET gia_presenti = gia_presenti + 1 WHERE id = ?",
-                    (self.importazione_id,),
-                )
+            migliorata = miglioria_coda.di_impronta_migliorata(connessione, segno)
+            if migliorata is not None:
+                self._gia(connessione, percorso, "migliorata",
+                          file_id=migliorata["file_id"], scatto_id=migliorata["scatto_id"])
+                return
+            if ritocchi.ritoccata_di_impronta(connessione, segno) is not None:
+                self._gia(connessione, percorso, "ritoccata")
+                return
+            if tolti.e_tolto(connessione, segno):
+                self._gia(connessione, percorso, "tolto")
                 return
             gia = file_media.per_impronta(connessione, segno)
             if gia is not None:
@@ -319,16 +341,11 @@ class Motore:
                          "Lo stesso file si trova in due cartelle: è un solo scatto "
                          "con due percorsi.", adesso()),
                     )
-                connessione.execute(
-                    "UPDATE importazioni SET gia_presenti = gia_presenti + 1 WHERE id = ?",
-                    (self.importazione_id,),
-                )
+                self._gia(connessione, percorso, "nell_archivio",
+                          file_id=gia["id"], scatto_id=gia["scatto_id"])
                 return
             if salute_file.si_e_rovinato(connessione, percorso, segno):
-                connessione.execute(
-                    "UPDATE importazioni SET gia_presenti = gia_presenti + 1 WHERE id = ?",
-                    (self.importazione_id,),
-                )
+                self._gia(connessione, percorso, "rovinato")
                 return
 
         dati = pronto.dati if pronto and pronto.dati else metadati.leggi(percorso)
@@ -413,7 +430,8 @@ class Motore:
                 "INSERT INTO segnalazioni (tipo, scatto_id, file_id, dettaglio, creata_il) "
                 "VALUES ('schermata', ?, ?, ?, ?)",
                 (scatto_id, riga_file["id"],
-                 "Ha la misura esatta di uno schermo e nessun dato di scatto.", adesso()),
+                 "Ha la misura di uno schermo, nessun dato di scatto e il formato "
+                 "o il nome di una schermata.", adesso()),
             )
         if not dati.ha_data:
             connessione.execute(

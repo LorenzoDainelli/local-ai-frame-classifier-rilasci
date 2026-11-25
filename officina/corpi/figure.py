@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from officina import istruzioni, registro
+from officina import anticipo, istruzioni, registro
 from officina.archivio.database import adesso, tutti, uno
 from officina.corpi import Interrotta, corpo3d, maschere, obiettivo
 from officina.corpi import rilevatore as rilevatore_mod
@@ -241,28 +241,45 @@ class Passata:
             da_fare = da_fare[:quanti]
         self.avanzamento.totale = len(da_fare)
         self._memoria = torcia.ContoDellaMemoria()
+        turni = [da_fare[inizio:inizio + SCATTI_A_TURNO]
+                 for inizio in range(0, len(da_fare), SCATTI_A_TURNO)]
+        letti_prima = anticipo.avanti((self._leggi_il_gruppo(turno) for turno in turni),
+                                      "figure-legge")
         try:
-            for inizio in range(0, len(da_fare), SCATTI_A_TURNO):
+            for letture in letti_prima:
                 if self.fermata:
                     break
                 try:
-                    self._fai_il_gruppo(da_fare[inizio:inizio + SCATTI_A_TURNO])
+                    self._fai_il_gruppo(letture)
                 except Interrotta:
                     break
                 if al_passo:
                     al_passo(self.avanzamento)
         finally:
+            letti_prima.close()
             self.figure.spegni()
         registro.evento("figure.passata", fatti=self.avanzamento.fatti, figure=self.avanzamento.figure)
         return self.avanzamento
 
-    def _fai_il_gruppo(self, gruppo: list[int]) -> None:
-        letti = []
+    def _leggi_il_gruppo(self, gruppo: list[int]) -> list:
+        letture = []
         for scatto_id in gruppo:
+            if self.fermata:
+                break
+            try:
+                letture.append((scatto_id, self._leggi(scatto_id), None))
+            except Exception as errore:          # noqa: BLE001
+                letture.append((scatto_id, None, errore))
+        return letture
+
+    def _fai_il_gruppo(self, letture: list) -> None:
+        letti = []
+        for scatto_id, letto, errore in letture:
             if self.fermata:
                 raise Interrotta()
             try:
-                letto = self._leggi(scatto_id)
+                if errore is not None:
+                    raise errore
             except DaRifare as errore:
                 self._rimanda(errore.codice)
                 continue

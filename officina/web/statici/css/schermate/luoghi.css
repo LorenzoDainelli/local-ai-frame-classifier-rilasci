@@ -1,32 +1,157 @@
-.lu-testa > div { display: grid; gap: 4px; }
+.pagina-luoghi { display: grid; gap: 16px; align-content: start; max-width: 1480px; }
+.pagina-luoghi [hidden] { display: none !important; }
+
+.lu-testa { display: flex; gap: 16px; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; }
+.lu-testa > div:first-child { display: grid; gap: 4px; min-width: 0; flex: 1 1 420px; }
 .lu-testa h1, .lu-testa p { margin: 0; }
-.lu-dove, .lu-albero, .lu-da-ramo { display: grid; gap: 10px; padding: 14px 16px; }
-.lu-dove h2, .lu-albero h2 { margin: 0; font-size: 16px; }
-.lu-dove p, .lu-da-ramo p { margin: 0; }
-.lu-dove-riga { display: grid; gap: 8px; padding-block: 10px; border-top: 1px solid var(--linea); }
-.lu-dove-nome { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.lu-dove-foto { display: flex; gap: 6px; flex-wrap: wrap; }
-.lu-dove-foto button { padding: 0; border: 2px solid transparent; border-radius: 8px; background: none; cursor: pointer; }
-.lu-dove-foto button:hover { border-color: var(--accento); }
-.lu-dove-foto img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; display: block; }
-.lu-albero-testa { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-.lu-ramo { list-style: none; margin: 0; padding-left: 18px; display: grid; gap: 2px; border-left: 1px solid var(--linea); }
-.lu-vista > .lu-ramo { padding-left: 0; border-left: 0; }
-.lu-voce summary { display: flex; gap: 10px; align-items: baseline; padding: 5px 8px; border-radius: 7px; cursor: pointer; list-style: none; flex-wrap: wrap; }
-.lu-voce summary::-webkit-details-marker { display: none; }
-.lu-voce summary:hover { background: var(--superficie-alta); }
-.lu-voce-nome { font-weight: 600; }
-.lu-voce-dentro { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 6px 8px 10px; }
-.lu-voce:not([open]) .lu-voce-dentro { display: none; }
-.lu-da-ramo summary { cursor: pointer; font-weight: 600; }
+.lu-tasti { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.lu-numeri { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.lu-numero { display: grid; gap: 2px; align-content: start; padding: 12px 16px; color: var(--ink); text-decoration: none; min-width: 0; }
+.lu-numero b { font: 400 26px/1.15 var(--serif); }
+.lu-numero .etichetta { color: var(--attenuato); }
+.lu-numero-va { transition: border-color var(--gesto) var(--uscita), box-shadow var(--gesto) var(--uscita); }
+.lu-numero-va:hover { text-decoration: none; border-color: var(--accento); box-shadow: 0 0 0 3px var(--alone); }
+
+.lu-esito { margin: 0; padding: 8px 12px; border-radius: var(--raggio-controllo); background: var(--superficie-alta); border: 0.5px solid var(--linea); }
+.lu-esito.male { border-color: var(--male); color: var(--ink); }
+.lu-esito:not([hidden]) { display: flex; gap: 4px 12px; align-items: center; flex-wrap: wrap; }
+.lu-esito .lu-annulla { margin-left: auto; }
+
+.lu-unioni { display: grid; gap: 6px; padding-top: 10px; border-top: 0.5px solid var(--linea); }
+.lu-unione { display: flex; gap: 8px; align-items: center; justify-content: space-between; min-width: 0; }
+.lu-unione-testo { display: grid; gap: 1px; min-width: 0; }
+.lu-unione-testo > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lu-unione .tasto-comando { flex: none; }
+
+.lu-corpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 400px); gap: 16px; align-items: start; }
+
+.lu-elenco-carta { display: grid; gap: 10px; padding: 12px 14px; min-width: 0; }
+.lu-barra { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lu-cerca { flex: 1 1 200px; width: auto; max-width: 320px; }
+.lu-ordine.campo { width: auto; max-width: 220px; height: 32px; font-size: var(--testo-comando); }
+.lu-spazio { flex: 1; }
+
+.lu-nuovo { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 10px; border-radius: var(--raggio-controllo); background: var(--pozzo); }
+.lu-nuovo .campo { width: auto; flex: 1 1 200px; max-width: 320px; }
+
+.lu-intesta, .lu-riga { display: grid; grid-template-columns: 20px 40px minmax(0, 1fr) 96px 14px 64px; gap: 10px; align-items: center; }
+.lu-intesta { padding: 0 10px; }
+.lu-intesta span:first-child { grid-column: 1 / 4; padding-left: 70px; }
+.lu-intesta span:last-child { grid-column: 5 / 7; text-align: right; }
+
+.lu-elenco { position: relative; display: grid; gap: 1px; max-height: calc(100vh - 300px); min-height: 220px; overflow: auto; outline: none; padding: 2px; border-radius: var(--raggio-controllo); }
+.lu-elenco:focus-visible { box-shadow: 0 0 0 2px var(--alone); }
+.lu-riga { padding: 5px 10px 5px calc(10px + var(--prof, 0) * 22px); border-radius: 8px; cursor: pointer; min-height: 50px; }
+.lu-riga:hover { background: var(--superficie-alta); }
+.lu-riga[aria-selected="true"] { background: var(--superficie-alta); box-shadow: inset 3px 0 0 var(--accento); }
+.lu-freccia { width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--tenue); cursor: pointer; display: grid; place-items: center; }
+.lu-freccia::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin-top: -3px; transition: transform var(--gesto) var(--uscita); }
+.lu-freccia[aria-expanded="false"]::before { transform: rotate(-45deg); margin-top: 0; margin-left: -3px; }
+.lu-freccia:hover:not(:disabled) { color: var(--ink); background: var(--pozzo); }
+.lu-freccia.vuota { cursor: default; }
+.lu-freccia.vuota::before { display: none; }
+.lu-copertina { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; background: var(--pozzo); border: 0.5px solid var(--linea); }
+.lu-copertina img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lu-nomi { display: grid; gap: 1px; min-width: 0; }
+.lu-nomi b, .lu-nomi span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lu-nomi b { font-weight: 500; }
+.lu-quando { text-align: right; white-space: nowrap; }
+.lu-gps { justify-self: center; font-size: 0; gap: 0; }
+.lu-quanti { text-align: right; font-weight: 500; }
+.lu-vuoto { margin: 8px 10px; }
+
+.lu-scheda { position: sticky; top: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px; max-height: calc(100vh - 32px); overflow: auto; min-width: 0; }
+.lu-scheda-vuota { display: grid; justify-items: center; gap: 8px; padding: 32px 8px; text-align: center; color: var(--tenue); }
+.lu-scheda-vuota p { margin: 0; max-width: 30ch; }
+.lu-scheda-piena { display: grid; gap: 12px; min-width: 0; }
+.lu-catena { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.lu-salto { border: 0; background: none; padding: 0; color: var(--attenuato); cursor: pointer; font: inherit; }
+.lu-salto:hover { color: var(--accento); text-decoration: underline; }
+.lu-figli .lu-salto { padding: 3px 10px; border: 0.5px solid var(--linea-forte); border-radius: var(--raggio-pillola); color: var(--ink); font-size: var(--testo-minore); background: var(--superficie); }
+.lu-figli .lu-salto:hover { border-color: var(--accento); text-decoration: none; }
+.lu-scheda-titolo { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.lu-scheda-titolo h2 { margin: 0; font: 400 24px/1.2 var(--serif); overflow-wrap: anywhere; text-wrap: balance; }
+.lu-mosaico { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; border-radius: var(--raggio-controllo); overflow: hidden; }
+.lu-mosaico a { display: block; aspect-ratio: 1; background: var(--pozzo); }
+.lu-mosaico img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter var(--gesto) var(--uscita); }
+.lu-mosaico a:hover img { filter: brightness(0.85); }
+.lu-fatti { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 0; }
+.lu-fatti dt { margin: 0; }
+.lu-fatti dd { margin: 0; font-weight: 500; }
+.lu-anni { display: grid; gap: 4px; }
+.lu-anni-barre { display: flex; gap: 2px; align-items: flex-end; height: 48px; }
+.lu-anno { flex: 1; height: 100%; display: flex; align-items: flex-end; border-radius: 3px; }
+.lu-anno span { display: block; width: 100%; border-radius: 3px 3px 1px 1px; background: var(--accento); opacity: 0.8; }
+.lu-anno span.zero { background: var(--linea); opacity: 1; }
+.lu-anno:hover span { opacity: 1; }
+.lu-anni-righello { display: flex; justify-content: space-between; }
+.lu-dove { display: grid; gap: 2px; }
+.lu-figli { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lu-azioni { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 4px; border-top: 0.5px solid var(--linea); padding-block-start: 12px; }
+.lu-azioni [aria-pressed="true"] { background: var(--superficie-alta); color: var(--ink); }
+.tasto-comando.disattivo { opacity: 0.5; pointer-events: none; }
+.lu-pannello { display: grid; gap: 8px; padding: 12px; border-radius: var(--raggio-controllo); background: var(--pozzo); border: 0.5px solid var(--linea); }
+.lu-pannello p { margin: 0; }
+.lu-pannello-campi { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lu-pannello-campi .campo { flex: 1 1 200px; width: auto; }
+.lu-pannello-campi .campo[hidden] { display: none; }
+.tasto-comando.pericolo { background: var(--male); border-color: var(--male); color: var(--su-accento); }
+
+.lu-dov-e, .lu-senza, .lu-da-ramo { display: grid; gap: 10px; padding: 14px 16px; }
+.lu-dov-e > summary, .lu-da-ramo > summary { cursor: pointer; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.lu-dov-e p, .lu-da-ramo p { margin: 0; }
+.lu-dov-e-riga { display: grid; gap: 8px; padding-block: 10px; border-top: 1px solid var(--linea); }
+.lu-dov-e-nome { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.lu-dov-e-foto { display: flex; gap: 6px; flex-wrap: wrap; }
+.lu-dov-e-foto button { padding: 0; border: 2px solid transparent; border-radius: 8px; background: none; cursor: pointer; }
+.lu-dov-e-foto button:hover { border-color: var(--accento); }
+.lu-dov-e-foto img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; display: block; }
+.lu-dov-e-riga form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.lu-dov-e-riga form .campo { width: auto; max-width: 240px; }
 .lu-da-ramo form { flex-wrap: wrap; }
-.in-fila select.campo { max-width: 260px; }
-.lu-dove-riga form .campo, .lu-voce-dentro form .campo { width: auto; max-width: 240px; }
-.lu-dove-riga form, .lu-voce-dentro form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.lu-albero-testa form .campo { width: auto; max-width: 220px; }
-.lu-albero-testa form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.lu-voce summary::before { content: "⋯"; color: var(--tenue); order: 9; margin-left: auto; }
+.lu-da-ramo select.campo { max-width: 260px; }
+
+.lu-senza-testa h2 { margin: 0; font-size: 16px; }
+.lu-senza-testa p { margin: 2px 0 0; }
+.lu-giornate { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); gap: 12px; }
+.lu-giornata { display: grid; gap: 10px; align-content: start; padding: 12px; border-radius: var(--raggio-controllo); border: 0.5px solid var(--linea); background: var(--superficie); transition: opacity var(--scena) var(--uscita), transform var(--scena) var(--uscita); min-width: 0; }
+.lu-giornata.fatta { opacity: 0; transform: scale(0.98); }
+.lu-giornata.scelta { border-color: var(--accento); box-shadow: 0 0 0 3px var(--alone); }
+.lu-giornata-destra { display: flex; gap: 8px; align-items: center; flex: none; }
+.lu-prendi { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border: 0.5px solid var(--linea-forte); border-radius: var(--raggio-pillola); color: var(--ink); cursor: pointer; user-select: none; }
+.lu-prendi:hover { border-color: var(--accento); }
+.lu-prendi input { margin: 0; accent-color: var(--accento); }
+.lu-insieme { position: sticky; bottom: 12px; z-index: 5; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: var(--raggio-controllo); border: 0.5px solid var(--accento); background: var(--superficie-alta); box-shadow: var(--ombra); }
+.lu-insieme-conto { font-weight: 600; margin-right: 4px; }
+.lu-insieme .campo { flex: 1 1 240px; width: auto; }
+.lu-giornata-testa { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.lu-giornata-testa > div { display: grid; gap: 1px; min-width: 0; }
+.lu-giornata-testa b::first-letter { text-transform: uppercase; }
+.lu-giornata-foto { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.lu-giornata-scatto { position: relative; padding: 0; border: 0; background: var(--pozzo); width: 56px; height: 56px; border-radius: 6px; overflow: hidden; cursor: pointer; }
+.lu-giornata-scatto img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter var(--gesto) var(--uscita), opacity var(--gesto) var(--uscita); }
+.lu-giornata-scatto[aria-pressed="false"] img { filter: grayscale(1); opacity: 0.35; }
+.lu-giornata-scatto[aria-pressed="false"]::after { content: ""; position: absolute; inset: 0; border: 2px dashed var(--tenue); border-radius: 6px; }
+.lu-giornata-altre { padding: 0 6px; }
+.lu-giornata-scelte { display: grid; gap: 8px; }
+.lu-proposta { display: flex; gap: 4px 10px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border-radius: var(--raggio-controllo); background: var(--superficie-alta); }
+.lu-proposta > span.minuscolo { flex: 1 1 160px; }
+.lu-giornata-riga { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lu-giornata-riga .campo { flex: 1 1 200px; width: auto; }
 
 .lu-mappa { height: min(72vh, 760px); min-height: 420px; border: 0.5px solid var(--linea); border-radius: var(--raggio-controllo); overflow: hidden; }
 .lu-mappa .mappa-testa .campo-cerca { width: 240px; max-width: 100%; }
-.lu-mappa[hidden] { display: none; }
+.lu-mappa[hidden], .lu-vista[hidden] { display: none; }
+
+@media (max-width: 1180px) {
+    .lu-corpo { grid-template-columns: minmax(0, 1fr); }
+    .lu-scheda { position: static; max-height: none; }
+    .lu-numeri { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+    .lu-intesta { display: none; }
+    .lu-riga { grid-template-columns: 20px 40px minmax(0, 1fr) 14px 56px; }
+    .lu-quando { display: none; }
+}

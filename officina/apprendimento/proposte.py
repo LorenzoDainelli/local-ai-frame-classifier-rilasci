@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from officina.archivio import memoria
 from officina.apprendimento import classificatore, esempi as esempi_mod
+from officina.apprendimento import pezzi as pezzi_mod
 from officina.archivio.database import leggi_impostazione, tutti, uno
 from officina.descrittori import vettori
 from officina.descrittori import griglia
@@ -23,6 +24,10 @@ MASSIMA_SPINTA = 1.0
 MINIMO_NEL_LUOGO = 3
 
 ATTRITO = 4.0
+
+DISTACCO = 0.15
+
+PEZZI_PER_SCATTO = 2
 
 
 @dataclass
@@ -79,6 +84,9 @@ class Bottega:
         self.quante: int = 0
         self.pronta = False
         self.impronte: tuple | None = None
+        self.pezzi: tuple | None = None
+        self.pezzi_di: dict[int, tuple[int, ...]] = {}
+        self._usati_di: dict[int, tuple] = {}
         self._tenuta = memoria.Ricordo("la firma delle etichette")
         self._lucchetto = threading.Lock()
 
@@ -99,7 +107,9 @@ class Bottega:
         if self.il_luogo_aiuta != bool(
                 leggi_impostazione(connessione, "luogo_aiuta", True)):
             return True
-        return self._firma(connessione) != (self.quante, self.quando)
+        if self._firma(connessione) != (self.quante, self.quando):
+            return True
+        return pezzi_mod.firma(connessione, self.descrittore, self.versione) != self.pezzi
 
     def assicura(self, connessione: sqlite3.Connection) -> None:
         if self.scaduta(connessione):
@@ -116,11 +126,15 @@ class Bottega:
         firma = self._firma(connessione)
         descrittore, versione = scegli_descrittore(connessione, self.descrittore)
         impronte = _firma_delle_impronte(connessione, descrittore, versione) if descrittore else None
+        firma_dei_pezzi = pezzi_mod.firma(connessione, descrittore, versione)
         if (self.pronta and (descrittore, versione, impronte)
                 == (self.descrittore, self.versione, self.impronte)):
             prima_modelli, prima_esempi = self.modelli, self.esempi_di
+            prima_pezzi = self._usati_di
         else:
-            prima_modelli, prima_esempi = {}, {}
+            prima_modelli, prima_esempi, prima_pezzi = {}, {}, {}
+        pezzi_di: dict[int, tuple[int, ...]] = {}
+        usati_di: dict[int, tuple] = {}
         il_luogo_aiuta = bool(leggi_impostazione(connessione, "luogo_aiuta", True))
         modelli: dict[int, classificatore.Modello] = {}
         esempi_di: dict[int, esempi_mod.Esempi] = {}
@@ -132,10 +146,20 @@ class Bottega:
                     connessione, minimo=MINIMO_ESEMPI):
                 esempi_di[nodo_id] = gli_esempi
                 luoghi_di[nodo_id] = _dove_stanno(connessione, gli_esempi)
-                if prima_esempi.get(nodo_id) == gli_esempi:
+                pezzi, contrari = _pezzi_di(connessione, nodo_id, gli_esempi, descrittore,
+                                            versione)
+                pezzi_di[nodo_id] = tuple(sagoma_id for sagoma_id, _ in pezzi)
+                usati = (pezzi_di[nodo_id], tuple(sagoma_id for sagoma_id, _ in contrari))
+                if (prima_esempi.get(nodo_id) == gli_esempi
+                        and prima_pezzi.get(nodo_id) == usati):
                     modello = prima_modelli.get(nodo_id)
                 else:
-                    modello = _addestra_uno(connessione, gli_esempi, descrittore, versione)
+                    modello = (_addestra_uno(connessione, gli_esempi, descrittore, versione,
+                                             [valori for _, valori in pezzi],
+                                             [valori for _, valori in contrari]) if pezzi
+                               else _addestra_uno(connessione, gli_esempi, descrittore,
+                                                  versione))
+                usati_di[nodo_id] = usati
                 if modello is None:
                     saltati += 1
                 else:
@@ -144,6 +168,7 @@ class Bottega:
         self.descrittore, self.versione, self.impronte = descrittore, versione, impronte
         self.il_luogo_aiuta = il_luogo_aiuta
         self.esempi_di, self.luoghi_di, self.modelli = esempi_di, luoghi_di, modelli
+        self.pezzi, self.pezzi_di, self._usati_di = firma_dei_pezzi, pezzi_di, usati_di
         self.quante, self.quando = firma
         self.pronta = True
         return {"descrittore": descrittore, "nodi": len(modelli), "saltati": saltati}
@@ -176,10 +201,7 @@ class Bottega:
             riga = nodi.per_id(connessione, nodo_id)
             if riga is None or riga["stato"] != "attivo":
                 continue
-            punteggio = modello.punteggio_di(impronta)
-            if caselle:
-                punteggio = griglia.combina(
-                    [punteggio] + [modello.punteggio_di(c) for c in caselle], come)
+            punteggio = _punteggio(modello, impronta, caselle, come)
             gli_esempi = esempi_di.get(nodo_id)
             proposta = Proposta(
                 nodo_id=nodo_id,
@@ -203,6 +225,48 @@ class Bottega:
                 connessione, scatto_id, proposta.nodo_id, impronta)
         return fuori
 
+    def piu_probabile(self, connessione: sqlite3.Connection, scatto_id: int,
+                      candidati: list[dict]) -> int | None:
+        if len(candidati) < 2:
+            return None
+        self.assicura(connessione)
+        modelli, descrittore, versione = self.modelli, self.descrittore, self.versione
+        if not modelli or not descrittore:
+            return None
+        con_modello = [voce for voce in candidati if voce["nodo_id"] in modelli]
+        if not con_modello:
+            return None
+        impronta = _impronta_di(connessione, scatto_id, descrittore, versione)
+        if impronta is None:
+            return None
+        caselle = _caselle_di(connessione, scatto_id, descrittore, versione)
+        come = str(leggi_impostazione(connessione, "griglia_come_si_somma",
+                                      griglia.MASSIMO))
+        margini: dict[int, float] = {}
+        for voce in con_modello:
+            riga = nodi.per_id(connessione, voce["nodo_id"])
+            if riga is None or riga["stato"] != "attivo":
+                continue
+            punteggio = _punteggio(modelli[voce["nodo_id"]], impronta, caselle, come)
+            margini[voce["nodo_id"]] = punteggio - float(riga["soglia"])
+        creduti = {nodo_id for nodo_id, margine in margini.items() if margine >= 0}
+        if not creduti:
+            return None
+        genitore = {voce["nodo_id"]: voce.get("genitore_id") for voce in candidati}
+        sopra = set()
+        for nodo_id in creduti:
+            su = genitore.get(nodo_id)
+            while su is not None and su not in sopra:
+                sopra.add(su)
+                su = genitore.get(su)
+        piu_precisi = sorted(creduti - sopra, key=lambda nodo_id: -margini[nodo_id])
+        if len(piu_precisi) == 1:
+            return piu_precisi[0]
+        primo, secondo = piu_precisi[0], piu_precisi[1]
+        if margini[primo] - margini[secondo] >= DISTACCO:
+            return primo
+        return None
+
     def simili_confermati(self, connessione: sqlite3.Connection, scatto_id: int,
                           nodo_id: int, impronta: bytes | None = None,
                           quanti: int = 5) -> list[int]:
@@ -225,6 +289,15 @@ class Bottega:
                                     quante=quanti)
         return [elenco[indice] for indice, punteggio in vicini
                 if punteggio >= VICINO]
+
+
+def _punteggio(modello: classificatore.Modello, impronta: bytes, caselle: list[bytes],
+               come: str) -> float:
+    punteggio = modello.punteggio_di(impronta)
+    if caselle:
+        punteggio = griglia.combina(
+            [punteggio] + [modello.punteggio_di(c) for c in caselle], come)
+    return punteggio
 
 
 def scegli_descrittore(connessione: sqlite3.Connection,
@@ -270,8 +343,31 @@ def _firma_delle_impronte(connessione: sqlite3.Connection, descrittore: str,
     return (riga["quante"], riga["quando"]) if riga else (0, None)
 
 
+def _a_passo(trovati: list, al_massimo: int) -> list:
+    if len(trovati) <= al_massimo:
+        return trovati
+    passo = len(trovati) / al_massimo
+    return [trovati[int(i * passo)] for i in range(al_massimo)]
+
+
+def _pezzi_di(connessione: sqlite3.Connection, nodo_id: int, gli_esempi: esempi_mod.Esempi,
+              descrittore: str, versione: str
+              ) -> tuple[list[tuple[int, bytes]], list[tuple[int, bytes]]]:
+    ramo = nodi.discendenti(connessione, nodo_id)
+    trovati = pezzi_mod.del_nodo(connessione, ramo, set(gli_esempi.si), descrittore, versione)
+    if len(trovati) < MINIMO_ESEMPI:
+        return [], []
+    trovati = _a_passo(trovati, max(MINIMO_ESEMPI, PEZZI_PER_SCATTO * len(gli_esempi.si)))
+    vicini = set(ramo) | set(nodi.antenati(connessione, nodo_id))
+    contrari = pezzi_mod.contrari(connessione, vicini, set(gli_esempi.si), descrittore,
+                                  versione)
+    return trovati, _a_passo(contrari, len(trovati))
+
+
 def _addestra_uno(connessione: sqlite3.Connection, gli_esempi: esempi_mod.Esempi,
-                  descrittore: str, versione: str) -> classificatore.Modello | None:
+                  descrittore: str, versione: str,
+                  pezzi: list[bytes] | None = None,
+                  contrari: list[bytes] | None = None) -> classificatore.Modello | None:
     elenco, dati = impronte_mod.passata(
         connessione, descrittore, versione, "intera",
         solo_scatti=gli_esempi.scatti)
@@ -288,6 +384,12 @@ def _addestra_uno(connessione: sqlite3.Connection, gli_esempi: esempi_mod.Esempi
 
     if len(scelte) < MINIMO_ESEMPI or not any(risposte) or all(risposte):
         return None
+    for valori in pezzi or []:
+        scelte.append(valori)
+        risposte.append(1)
+    for valori in contrari or []:
+        scelte.append(valori)
+        risposte.append(0)
     return classificatore.addestra(vettori.matrice(scelte), risposte)
 
 

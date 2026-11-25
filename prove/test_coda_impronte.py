@@ -167,3 +167,20 @@ def test_il_perche_dei_salti_si_dice_in_italiano():
     detto = _perche_saltati({"un_codice_nuovo": 1})
     assert "un_codice_nuovo" not in detto
     assert "1" in detto
+
+
+def test_un_modello_gia_finito_non_si_carica(archivio_pieno, monkeypatch):
+    from officina.impronte import motore
+
+    Coda(archivio_pieno, ["disegnato"], fotogrammi_per_video=4).esegui()
+    aperti = []
+    vero = motore.apri_descrittore
+    monkeypatch.setattr(motore, "apri_descrittore",
+                        lambda *a, **k: aperti.append(a) or vero(*a, **k))
+
+    coda = Coda(archivio_pieno, ["disegnato"], fotogrammi_per_video=4)
+    assert coda.totale == 0
+    coda.esegui()
+
+    assert aperti == []
+    assert coda.percentuale == 100.0

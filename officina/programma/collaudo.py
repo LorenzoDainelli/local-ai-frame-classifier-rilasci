@@ -13,7 +13,7 @@ from pathlib import Path
 SERVONO = ("webview", "fastapi", "uvicorn", "jinja2", "PIL", "pillow_heif", "numpy",
            "cryptography", "multipart", "pynvml", "pip")
 
-SOLO_WINDOWS = ("clr_loader", "pythonnet")
+SOLO_WINDOWS = ("clr_loader", "pythonnet", "pymobiledevice3")
 
 
 def _prova(nome: str, funzione) -> dict:
@@ -35,6 +35,19 @@ def _librerie() -> dict:
         modulo = importlib.import_module(nome)
         trovate[nome] = getattr(modulo, "__version__", "si")
     return trovate
+
+
+def _cavo() -> dict:
+    from officina.errori import ErroreOfficina
+    from officina.telefono import cavo
+
+    try:
+        cavo.collega().chiudi()
+    except ErroreOfficina as detto:
+        if detto.codice not in ("cavo_nessuno", "cavo_fidati", "cavo_senza_app"):
+            raise
+        return {"risposta": detto.codice}
+    return {"risposta": "collegato"}
 
 
 def _scheda() -> dict:
@@ -452,6 +465,8 @@ def esegui(dove_scrivere: Path, con_la_finestra: bool = False, entro: float = 12
         _prova("aggiornamenti", _aggiornamenti),
         _prova("server", _server),
     ]
+    if sys.platform == "win32":
+        risultati.append(_prova("cavo", _cavo))
     if con_la_finestra:
         os.environ.pop("OFFICINA_ARCHIVIO", None)
         risultati.append(_prova("finestra", lambda: _finestra(entro)))

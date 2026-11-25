@@ -9,7 +9,7 @@ from pathlib import Path
 
 from officina import VERSIONE, registro
 from officina.archivio.accesso import Archivio
-from officina.archivio.database import tutti
+from officina.archivio.database import tutti, uno
 from officina.errori import DaRifare, ErroreOfficina, FileNonLeggibile, SpazioInsufficiente
 from officina.modello import file_media, persone, telefoni
 from officina.sicuro import dall_archivio
@@ -41,6 +41,8 @@ class Compito:
     riquadro: str = ""
     e_video: bool = False
     identita: str = ""
+    fotogramma: int = 0
+    istante: int | None = None
 
 
 @dataclass
@@ -283,6 +285,17 @@ class Travaso:
                 continue
             riquadro = json.dumps(copertina["riquadro"])
             impronta = f"volto:{riga['id']}:{copertina['id']}:{mostrata or ''}:{riquadro}"
+            fotogramma = copertina["fotogramma"] or 0
+            genere = uno(connessione, "SELECT genere FROM file_media WHERE id = ?",
+                         copertina["file_id"])
+            e_video = genere is not None and genere["genere"] == "video"
+            istante = None
+            if e_video:
+                trovato = uno(connessione,
+                              "SELECT istante_ms FROM impronte WHERE scatto_id = ? "
+                              "AND fotogramma = ? AND istante_ms IS NOT NULL LIMIT 1",
+                              copertina["scatto_id"], fotogramma)
+                istante = trovato["istante_ms"] if trovato else None
             compiti.append(Compito(
                 posto=_posto(riuso, presi, _per_il_riuso("volto", impronta),
                              formato.posto_del_volto),
@@ -290,7 +303,8 @@ class Travaso:
                 impronta=impronta,
                 riquadro=riquadro,
                 dimensione=30 * 1024, sorgente=percorso,
-                persona_id=riga["id"], scatto_id=copertina["scatto_id"]))
+                persona_id=riga["id"], scatto_id=copertina["scatto_id"],
+                e_video=e_video, fotogramma=fotogramma, istante=istante))
         return compiti
 
 
@@ -470,10 +484,18 @@ class Travaso:
     def _volto(self, compito: Compito) -> bytes:
         from PIL import Image
 
-        from officina.immagini import lettura
+        from officina.immagini import fotogrammi, lettura
 
         riquadro = json.loads(compito.riquadro)
-        immagine = lettura.copia_di_lavoro(compito.sorgente)
+        if compito.e_video:
+            immagine = fotogrammi.uno(compito.sorgente, compito.fotogramma, compito.istante)
+            if immagine is None:
+                raise FileNonLeggibile(
+                    "Da questo video non si riesce a tirare fuori il fotogramma del "
+                    "volto: nel pacchetto la persona va senza faccina.",
+                    codice="volto_impossibile")
+        else:
+            immagine = lettura.copia_di_lavoro(compito.sorgente)
         larghezza, altezza = immagine.size
         x, y, larga, alta = riquadro
         centro_x = (x + larga / 2) * larghezza

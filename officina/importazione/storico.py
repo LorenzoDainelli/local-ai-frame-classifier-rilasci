@@ -185,3 +185,36 @@ def _come(testo: str) -> str:
     for carattere in ("\\", "%", "_"):
         testo = testo.replace(carattere, "\\" + carattere)
     return testo
+
+
+MOTIVI_GIA = {
+    "nell_archivio": "È già nell'archivio: lo stesso file, bit per bit.",
+    "migliorata": "È la versione di prima di una foto che hai migliorato nell'app.",
+    "ritoccata": "È una foto ritoccata nell'app: c'è già.",
+    "tolto": "L'avevi tolto dal programma: non torna da solo.",
+    "rovinato": "È una copia rovinata di un file che è già nell'archivio sano.",
+}
+
+
+def gia_presenti(connessione: sqlite3.Connection, importazione_id: int) -> list[dict]:
+    righe = tutti(
+        connessione,
+        "SELECT g.percorso, g.motivo, g.file_id, "
+        "(SELECT s.id FROM scatti s WHERE s.id = g.scatto_id) AS scatto_id, "
+        "(SELECT f.id FROM file_media f WHERE f.id = g.file_id) AS miniatura "
+        "FROM gia_presenti g WHERE g.importazione_id = ? ORDER BY g.id",
+        importazione_id)
+    uscita = []
+    for riga in righe:
+        testo = riga["percorso"].replace("\\", "/")
+        nome = testo.rsplit("/", 1)[-1]
+        cartella = riga["percorso"][: max(0, len(riga["percorso"]) - len(nome) - 1)]
+        uscita.append({"nome": nome, "cartella": cartella, "percorso": riga["percorso"],
+                       "perche": MOTIVI_GIA.get(riga["motivo"], riga["motivo"]),
+                       "scatto_id": riga["scatto_id"], "miniatura": riga["miniatura"]})
+    return uscita
+
+
+def con_elenco_dei_gia(connessione: sqlite3.Connection) -> set[int]:
+    return {riga[0] for riga in tutti(
+        connessione, "SELECT DISTINCT importazione_id FROM gia_presenti")}

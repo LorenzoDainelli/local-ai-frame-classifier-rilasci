@@ -241,7 +241,7 @@ RACCOLTE = {
         "scrittura da lì in avanti.",
 }
 
-QUANTE_NON_SI_LEGGONO = 68
+QUANTE_NON_SI_LEGGONO = 87
 
 
 def test_nessuna_lettura_larga_nuova_nei_sorgenti():

@@ -95,6 +95,7 @@ def _quante_insieme(monkeypatch, prima=None) -> dict:
     lucchetto = threading.Lock()
     vera = motore.lettura.copia_di_lavoro
     tutti_e_due = threading.Barrier(2, timeout=5)
+    primo_pronto = threading.Event()
 
     def foto(*argomenti, **chiavi):
         with lucchetto:
@@ -108,8 +109,12 @@ def _quante_insieme(monkeypatch, prima=None) -> dict:
                     tutti_e_due.wait()
                 except threading.BrokenBarrierError:
                     pass
+            if chiamata != 1:
+                primo_pronto.wait(5)
             if prima is not None:
                 prima(chiamata)
+            if chiamata == 1:
+                primo_pronto.set()
             return vera(*argomenti, **chiavi)
         finally:
             with lucchetto:

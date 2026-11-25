@@ -244,13 +244,35 @@ class Sceglitore:
     def _dove(self) -> str:
         return PROCESSORE if self._dispositivo == "cpu" else SCHEDA
 
-    def scegli(self, chiave: str, percorso: Path, punti: list[Punto],
-               riquadro: Riquadro | None, sulla_scheda: bool,
-               fotogramma: int | None = None) -> Scelta:
+    def scegli_su(self, segno: str, immagine, punti: list[Punto],
+                  riquadro: Riquadro | None, sulla_scheda: bool) -> Scelta:
         import torch
 
         self.accendi(sulla_scheda)
+        if segno not in self._guardate:
+            larga, alta = immagine.size
+            ingresso = self._preparatore(images=immagine, return_tensors="pt")
+            pixel = ingresso["pixel_values"].to(self._dispositivo, dtype=self._tipo)
+            with torch.inference_mode():
+                guardata = self._modello.get_image_embeddings(pixel)
+            self._guardate[segno] = (guardata, larga, alta)
+            while len(self._guardate) > QUANTE_GUARDATE:
+                self._guardate.popitem(last=False)
+        self._guardate.move_to_end(segno)
+        guardata, larga, alta = self._guardate[segno]
+        return self._rispondi(guardata, larga, alta, punti, riquadro)
+
+    def scegli(self, chiave: str, percorso: Path, punti: list[Punto],
+               riquadro: Riquadro | None, sulla_scheda: bool,
+               fotogramma: int | None = None) -> Scelta:
+        self.accendi(sulla_scheda)
         guardata, larga, alta = self._guardata(chiave, percorso, fotogramma)
+        return self._rispondi(guardata, larga, alta, punti, riquadro)
+
+    def _rispondi(self, guardata, larga: int, alta: int, punti: list[Punto],
+                  riquadro: Riquadro | None) -> Scelta:
+        import torch
+
         coordinate, etichette, scatola = in_pixel(punti, riquadro, larga, alta)
         richiesta = {}
         if coordinate:

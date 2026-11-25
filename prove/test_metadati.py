@@ -3,6 +3,8 @@ from __future__ import annotations
 import struct
 from datetime import datetime
 
+from PIL import Image
+
 from officina.finto import contenitore_video, generatore, immagini
 from officina.importazione import metadati, quicktime
 
@@ -54,6 +56,28 @@ def test_le_schermate_si_riconoscono(tmp_path):
                                         "iPhone 13", None, None),
     )
     assert not metadati.leggi(fotografia).sembra_schermata
+
+
+def test_le_foto_salvate_dalle_app_non_sono_schermate(tmp_path):
+    snap = tmp_path / "Snapchat-1234567.jpg"
+    immagini.disegna("tema_e", 6, (1080, 1920)).save(snap, "JPEG")
+    assert not metadati.leggi(snap).sembra_schermata
+
+    anonima = tmp_path / "foto_senza_nome.jpg"
+    immagini.disegna("tema_e", 7, (1170, 2532)).save(anonima, "JPEG")
+    assert not metadati.leggi(anonima).sembra_schermata
+
+
+def test_la_schermata_in_jpeg_si_riconosce_dal_nome_o_dal_commento(tmp_path):
+    android = tmp_path / "Screenshot_20240501-090000.jpg"
+    immagini.disegna("tema_e", 8, (1080, 1920)).save(android, "JPEG")
+    assert metadati.leggi(android).sembra_schermata
+
+    commentata = tmp_path / "IMG_0001.jpg"
+    exif = Image.Exif()
+    exif.get_ifd(metadati.IFD_EXIF)[metadati.COMMENTO] = b"ASCII\x00\x00\x00Screenshot"
+    immagini.disegna("tema_e", 9, (1170, 2532)).save(commentata, "JPEG", exif=exif)
+    assert metadati.leggi(commentata).sembra_schermata
 
 
 def test_il_video_dice_durata_data_e_identificatore(tmp_path):

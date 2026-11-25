@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import functools
 import http.client
 import json
+import re
 import secrets
 import socket
 import ssl
 import threading
 import time
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -14,8 +17,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from officina import registro
 from officina.errori import ErroreOfficina
 from officina.programma import NOME, carta, segreti
-from officina.schermo import (AGGIORNA, CHIUSO, DOMANDA, INTESTAZIONE, PORTA_TCP, PORTA_UDP,
-                              certificato, patto)
+from officina.schermo import (AGGIORNA, CAVO, CHIUSO, DOMANDA, INTESTAZIONE, PORTA_TCP,
+                              PORTA_UDP, certificato, patto)
 from officina.schermo import rete as rete_di_casa
 
 GETTONE = f"{NOME}/portatile"
@@ -27,7 +30,14 @@ AVVISO_DOPO = 120.0
 SCELTA_DOPO = 210.0
 ATTESA_TRA_I_TENTATIVI = 2.0
 OGNI_QUANTO_GUARDO = 1.0
+RIPOSO_MASSIMO = 90.0
+TENUTE_AL_MASSIMO = 8
 GUARDO_AL_MASSIMO = 3600.0
+MINIATURA = re.compile(r"/miniatura/\d+", re.ASCII)
+MINIATURE_AL_MASSIMO = 64 * 1024 * 1024
+MINIATURA_AL_MASSIMO = 2 * 1024 * 1024
+MINIATURA_DURA = 600.0
+FISSO_SENTITO_DA = 30.0
 
 NON_RAGGIUNGO = ("Non riesco a raggiungere il fisso. Controlla che sia acceso, "
                  "che il programma sia aperto con la porta aperta, e che i due "
@@ -158,6 +168,7 @@ def leggi_l_indirizzo(scritto: str) -> tuple[str, int]:
     return scritto, porta
 
 
+@functools.lru_cache(maxsize=4)
 def _contesto(pem: str | None) -> ssl.SSLContext:
     contesto = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     contesto.minimum_version = ssl.TLSVersion.TLSv1_2
@@ -394,12 +405,19 @@ class Ponte:
         self.ultima_pagina = "/"
         self._lucchetto = threading.Lock()
         self._locale = threading.local()
+        self._tenute: list[tuple[http.client.HTTPSConnection, float]] = []
+        self._lucchetto_tenute = threading.Lock()
         self._server: ThreadingHTTPServer | None = None
         self._filo: threading.Thread | None = None
         self.chiuso = False
         self._fermo = threading.Event()
         self._guardo = False
         self._chiave = secrets.token_urlsafe(32)
+        self._mani: threading.Thread | None = None
+        self._miniature: OrderedDict[str, tuple[float, int, str, list, bytes]] = OrderedDict()
+        self._peso_miniature = 0
+        self._lucchetto_miniature = threading.Lock()
+        self._sentito = 0.0
 
     @property
     def porta_locale(self) -> int:
@@ -439,13 +457,51 @@ class Ponte:
         return True
 
     def _verso_il_fisso(self) -> http.client.HTTPSConnection:
+        adesso = time.monotonic()
         connessione = getattr(self._locale, "connessione", None)
+        if connessione is not None and adesso - self._locale.usata > RIPOSO_MASSIMO:
+            self._butta_la_connessione()
+            connessione = None
+        if connessione is None:
+            connessione = self._una_tenuta(adesso)
         if connessione is None:
             connessione = _connessione(self.fisso.indirizzo, self.fisso.porta,
                                        self.fisso.pem, self.fisso.impronta,
                                        attesa=ATTESA_RICHIESTE)
-            self._locale.connessione = connessione
+        self._locale.connessione = connessione
+        self._locale.usata = adesso
         return connessione
+
+    def _una_tenuta(self, adesso: float) -> http.client.HTTPSConnection | None:
+        vecchie = []
+        trovata = None
+        with self._lucchetto_tenute:
+            while self._tenute:
+                connessione, usata = self._tenute.pop()
+                if adesso - usata <= RIPOSO_MASSIMO:
+                    trovata = connessione
+                    break
+                vecchie.append(connessione)
+        for connessione in vecchie:
+            connessione.close()
+        return trovata
+
+    def _riponi_la_connessione(self) -> None:
+        connessione = getattr(self._locale, "connessione", None)
+        self._locale.connessione = None
+        if connessione is None:
+            return
+        with self._lucchetto_tenute:
+            if not self.chiuso and len(self._tenute) < TENUTE_AL_MASSIMO:
+                self._tenute.append((connessione, self._locale.usata))
+                return
+        connessione.close()
+
+    def _svuota_le_tenute(self) -> None:
+        with self._lucchetto_tenute:
+            tenute, self._tenute = self._tenute, []
+        for connessione, _ in tenute:
+            connessione.close()
 
     def _butta_la_connessione(self) -> None:
         connessione = getattr(self._locale, "connessione", None)
@@ -458,12 +514,19 @@ class Ponte:
 
         class Gestore(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
+            disable_nagle_algorithm = True
 
             def log_message(self, *argomenti):
                 return
 
             def _tutto(self):
                 ponte.passa(self)
+
+            def finish(self):
+                try:
+                    super().finish()
+                finally:
+                    ponte._riponi_la_connessione()
 
             do_GET = do_POST = do_PUT = do_DELETE = do_HEAD = do_PATCH = _tutto
 
@@ -478,6 +541,53 @@ class Ponte:
         if self._server is not None:
             self._server.shutdown()
             self._server.server_close()
+        self._svuota_le_tenute()
+        self._dimentica_le_miniature()
+
+    def _dimentica_le_miniature(self) -> None:
+        with self._lucchetto_miniature:
+            self._miniature.clear()
+            self._peso_miniature = 0
+            self._sentito = 0.0
+
+    def _miniatura_tenuta(self, percorso: str) -> tuple | None:
+        adesso = time.monotonic()
+        with self._lucchetto_miniature:
+            if self.chiuso or adesso - self._sentito > FISSO_SENTITO_DA:
+                return None
+            tenuta = self._miniature.get(percorso)
+            if tenuta is None:
+                return None
+            if adesso - tenuta[0] > MINIATURA_DURA:
+                del self._miniature[percorso]
+                self._peso_miniature -= len(tenuta[4])
+                return None
+            self._miniature.move_to_end(percorso)
+            return tenuta
+
+    def _tieni_la_miniatura(self, percorso: str, stato: int, ragione: str,
+                            intestazioni: list, corpo: bytes) -> None:
+        with self._lucchetto_miniature:
+            if self.chiuso:
+                return
+            vecchia = self._miniature.pop(percorso, None)
+            if vecchia is not None:
+                self._peso_miniature -= len(vecchia[4])
+            self._miniature[percorso] = (time.monotonic(), stato, ragione, intestazioni, corpo)
+            self._peso_miniature += len(corpo)
+            while self._peso_miniature > MINIATURE_AL_MASSIMO and self._miniature:
+                _, uscita = self._miniature.popitem(last=False)
+                self._peso_miniature -= len(uscita[4])
+
+    def _manda_la_miniatura(self, gestore: BaseHTTPRequestHandler, tenuta: tuple) -> None:
+        _, stato, ragione, intestazioni, corpo = tenuta
+        gestore.send_response_only(stato, ragione)
+        for chiave, valore in intestazioni:
+            gestore.send_header(chiave, valore)
+        gestore.send_header("content-length", str(len(corpo)))
+        gestore.end_headers()
+        if gestore.command != "HEAD":
+            gestore.wfile.write(corpo)
 
     def _chiuso(self, gestore: BaseHTTPRequestHandler) -> None:
         corpo = PAGINA_CHIUSA.encode()
@@ -491,6 +601,7 @@ class Ponte:
         self._segna_chiuso()
 
     def _segna_chiuso(self) -> None:
+        self._dimentica_le_miniature()
         if not self.chiuso:
             self.chiuso = True
             self.quando_chiuso()
@@ -564,6 +675,46 @@ class Ponte:
             with self._lucchetto:
                 self._guardo = False
 
+    def accendi_le_mani(self) -> None:
+        with self._lucchetto:
+            if self._mani is not None and self._mani.is_alive():
+                return
+            self._mani = threading.Thread(target=self._col_cavo, name="schermo-cavo",
+                                          daemon=True)
+            self._mani.start()
+
+    def _col_cavo(self) -> None:
+        from officina.telefono import cavo_lontano
+
+        try:
+            cavo_lontano.Mani(self.al_fisso).lavora(self._fermo)
+        except Exception as guasto:
+            registro.errore("schermo.cavo_rotto", **registro.dove_si_e_rotto(guasto))
+
+    def al_fisso(self, metodo: str, percorso: str, corpo: bytes | None = None,
+                 tipo: str | None = None, in_file=None) -> tuple[int, bytes]:
+        intestazioni = {"host": "127.0.0.1", INTESTAZIONE: self.sessione}
+        if tipo:
+            intestazioni["content-type"] = tipo
+        for prova in range(2):
+            try:
+                connessione = self._verso_il_fisso()
+                connessione.request(metodo, percorso, body=corpo, headers=intestazioni)
+                risposta = connessione.getresponse()
+                if in_file is None or risposta.status != 200:
+                    return risposta.status, risposta.read()
+                with open(in_file, "wb") as uscita:
+                    while pezzo := risposta.read(PEZZO):
+                        uscita.write(pezzo)
+                return risposta.status, b""
+            except NoDalFisso:
+                raise
+            except (OSError, http.client.HTTPException, ssl.SSLError):
+                self._butta_la_connessione()
+                if prova:
+                    raise
+        return 0, b""
+
     def _rientra(self) -> bool:
         try:
             fisso = ritrova(self.fisso)
@@ -572,6 +723,7 @@ class Ponte:
             return False
         self.fisso, self.sessione = fisso, sessione
         self._butta_la_connessione()
+        self._svuota_le_tenute()
         return True
 
     def stato_dell_aggiornamento(self, subito: bool = False) -> dict:
@@ -633,6 +785,14 @@ class Ponte:
             else:
                 gestore.send_error(503, "Il fisso si sta aggiornando.")
             return
+        if gestore.command not in ("GET", "HEAD"):
+            self._dimentica_le_miniature()
+        miniatura = gestore.command == "GET" and MINIATURA.fullmatch(gestore.path) is not None
+        if miniatura:
+            tenuta = self._miniatura_tenuta(gestore.path)
+            if tenuta is not None:
+                self._manda_la_miniatura(gestore, tenuta)
+                return
         lunghezza = int(gestore.headers.get("content-length") or 0)
         corpo = gestore.rfile.read(lunghezza) if lunghezza else None
         intestazioni = {chiave: valore for chiave, valore in gestore.headers.items()
@@ -658,6 +818,8 @@ class Ponte:
                 break
             except (OSError, http.client.HTTPException, ssl.SSLError):
                 self._butta_la_connessione()
+        if risposta is not None and risposta.getheader(CAVO):
+            self.accendi_le_mani()
         if risposta is not None and risposta.status == 503 and risposta.getheader(AGGIORNA):
             risposta.read()
             self._parte_l_aggiornamento()
@@ -684,10 +846,36 @@ class Ponte:
                 self._in_json(gestore, 503, FISSO_CHIUSO)
                 self._segna_chiuso()
             return
+        if risposta.status in (401, 403):
+            self._dimentica_le_miniature()
+        elif risposta.status < 400:
+            with self._lucchetto_miniature:
+                self._sentito = time.monotonic()
         try:
+            if miniatura and risposta.status == 200 and self._da_tenere(risposta):
+                corpo_letto = risposta.read()
+                intestazioni_tenute = [(chiave, valore) for chiave, valore in risposta.getheaders()
+                                       if chiave.lower() not in INTESTAZIONI_DI_PASSAGGIO
+                                       and chiave.lower() not in ("content-length", "set-cookie")]
+                tenuta = (time.monotonic(), risposta.status, risposta.reason,
+                          intestazioni_tenute, corpo_letto)
+                self._tieni_la_miniatura(gestore.path, *tenuta[1:])
+                self._manda_la_miniatura(gestore, tenuta)
+                return
             self._rimanda(gestore, risposta)
         except (OSError, http.client.HTTPException, ssl.SSLError):
             self._butta_la_connessione()
+
+    @staticmethod
+    def _da_tenere(risposta) -> bool:
+        lunghezza = risposta.getheader("content-length")
+        if lunghezza is None or not lunghezza.isdigit():
+            return False
+        if int(lunghezza) > MINIATURA_AL_MASSIMO:
+            return False
+        if risposta.getheader("content-encoding") or risposta.getheader("set-cookie"):
+            return False
+        return (risposta.getheader("content-type") or "").startswith("image/")
 
     def _rimanda(self, gestore: BaseHTTPRequestHandler, risposta) -> None:
         gestore.send_response_only(risposta.status, risposta.reason)

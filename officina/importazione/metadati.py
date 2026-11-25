@@ -27,6 +27,10 @@ MISURE_SCHERMO = {
 }
 MISURE_SCHERMO |= {(alta, larga) for larga, alta in MISURE_SCHERMO}
 
+FORMATI_SCHERMATA = {"png", "heic", "heif"}
+NOME_SCHERMATA = re.compile(r"^(screenshot|schermata|screen shot|screen_recording|"
+                            r"registrazione schermo)", re.IGNORECASE)
+
 
 @dataclass
 class Metadati:
@@ -77,6 +81,7 @@ FUSO_ORIGINALE = 0x9011
 FUSO_DIGITALIZZATO = 0x9012
 NOTA_COSTRUTTORE = 0x927C
 OBIETTIVO = 0xA434
+COMMENTO = 0x9286
 
 DIMENSIONE_TIPO = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
 
@@ -249,10 +254,8 @@ def _leggi_immagine(immagine) -> Metadati:
     if nota:
         dati.identificatore_ios = _identificatore_apple(nota)
 
-    dati.sembra_schermata = (
-        not dati.marca
-        and not dati.modello
-        and (dati.larghezza, dati.altezza) in MISURE_SCHERMO
+    dati.sembra_schermata = misura_di_schermo(dati) and (
+        dati.formato in FORMATI_SCHERMATA or _dice_schermata(esteso.get(COMMENTO))
     )
 
     return dati
@@ -342,8 +345,25 @@ def _metti_la_data_di_ripiego(dati: Metadati, percorso: Path) -> Metadati:
     return dati
 
 
+def misura_di_schermo(dati: Metadati) -> bool:
+    return (dati.genere == "immagine" and not dati.marca and not dati.modello
+            and (dati.larghezza, dati.altezza) in MISURE_SCHERMO)
+
+
+def _dice_schermata(commento) -> bool:
+    if isinstance(commento, str):
+        commento = commento.encode("utf-8", "ignore")
+    if not isinstance(commento, (bytes, bytearray)):
+        return False
+    return b"screenshot" in bytes(commento).replace(b"\x00", b"").lower()
+
+
 def leggi(percorso: Path) -> Metadati:
-    return _metti_la_data_di_ripiego(_leggi_dentro(percorso), percorso)
+    dati = _leggi_dentro(percorso)
+    if not dati.sembra_schermata and misura_di_schermo(dati) \
+            and NOME_SCHERMATA.match(Path(percorso).name):
+        dati.sembra_schermata = True
+    return _metti_la_data_di_ripiego(dati, percorso)
 
 
 def _leggi_dentro(percorso: Path) -> Metadati:

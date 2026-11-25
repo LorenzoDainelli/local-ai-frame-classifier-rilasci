@@ -1,7 +1,7 @@
 @view-transition { navigation: auto; }
 ::view-transition-group(foto-aperta) { animation-duration: 520ms; animation-timing-function: cubic-bezier(.2,.9,.3,1.06); z-index: 5; }
 ::view-transition-old(foto-aperta), ::view-transition-new(foto-aperta) { height: 100%; object-fit: cover; }
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: 160ms; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--gesto); animation-timing-function: var(--uscita); }
 .nav-a, .nav-b, .nav-c { view-transition-name: barra; }
 ::view-transition-group(barra) { animation: none; }
 ::view-transition-old(barra) { display: none; }

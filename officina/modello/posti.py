@@ -315,7 +315,8 @@ def _dal_gps(connessione: sqlite3.Connection, scatto) -> dict | None:
     if voti:
         posto_id, quante = voti.most_common(1)[0]
         return {"posto_id": posto_id, "da": "gps",
-                "perche": f"il GPS è vicino a {quante} scatti che hai messo qui"}
+                "perche": (f"il GPS è vicino a {quante} scatti che hai messo qui" if quante > 1
+                           else "il GPS è vicino a uno scatto che hai messo qui")}
     migliore, distanza = None, None
     for riga in attivi(connessione):
         if riga["latitudine"] is None:
@@ -531,3 +532,304 @@ def quanti_non_finiti(connessione: sqlite3.Connection) -> int:
         return riga["q"] if riga else 0
 
     return _non_finiti.prendi(connessione, conta)
+
+
+SENZA_LUOGO = """
+    s.fuori_archivio = 0 AND s.posto_non_so = 0 AND NOT EXISTS (
+        SELECT 1 FROM posti_negli_scatti q JOIN posti p ON p.id = q.posto_id
+        WHERE q.scatto_id = s.id AND p.stato = 'attivo')
+"""
+
+GIORNATE_PER_VOLTA = 12
+
+FOTO_PER_GIORNATA = 8
+
+
+def riepilogo(connessione: sqlite3.Connection) -> list[dict]:
+    righe = attivi(connessione)
+    vivi = {r["id"]: r for r in righe}
+    padri = {r["id"]: (r["genitore_id"] if r["genitore_id"] in vivi else None) for r in righe}
+    dentro: dict[int, set[int]] = {}
+    propri: Counter = Counter()
+    dal: dict[int, str] = {}
+    al: dict[int, str] = {}
+    copertina: dict[int, tuple[str, int]] = {}
+    cursore = connessione.cursor()
+    cursore.row_factory = None
+    for posto_id, scatto_id, giorno in cursore.execute(
+            "SELECT n.posto_id, s.id, s.giorno FROM posti_negli_scatti n "
+            "JOIN scatti s ON s.id = n.scatto_id WHERE s.fuori_archivio = 0").fetchall():
+        if posto_id not in vivi:
+            continue
+        propri[posto_id] += 1
+        quale, visti = posto_id, set()
+        while quale is not None and quale not in visti:
+            visti.add(quale)
+            dentro.setdefault(quale, set()).add(scatto_id)
+            if giorno:
+                if quale not in dal or giorno < dal[quale]:
+                    dal[quale] = giorno
+                if quale not in al or giorno > al[quale]:
+                    al[quale] = giorno
+            chiave = (giorno or "", scatto_id)
+            if quale not in copertina or chiave > copertina[quale]:
+                copertina[quale] = chiave
+            quale = padri[quale]
+    file_di: dict[int, int] = {}
+    scelti = sorted({c[1] for c in copertina.values()})
+    for inizio in range(0, len(scelti), 500):
+        pezzo = scelti[inizio:inizio + 500]
+        for scatto_id, file_id in cursore.execute(
+                f"SELECT scatto_id, min(id) FROM file_media WHERE ruolo = 'principale' "
+                f"AND scatto_id IN ({','.join('?' * len(pezzo))}) GROUP BY scatto_id",
+                pezzo).fetchall():
+            file_di[scatto_id] = file_id
+    figli: dict[int | None, list[int]] = {}
+    for posto_id in sorted(vivi, key=lambda x: vivi[x]["nome"].casefold()):
+        figli.setdefault(padri[posto_id], []).append(posto_id)
+    fuori: list[dict] = []
+
+    def coordinate_di(posto_id: int) -> dict | None:
+        quale, visti = posto_id, set()
+        while quale is not None and quale not in visti:
+            visti.add(quale)
+            riga = vivi[quale]
+            if riga["latitudine"] is not None:
+                return {"latitudine": riga["latitudine"], "longitudine": riga["longitudine"],
+                        "raggio_metri": riga["raggio_metri"] or 0,
+                        "da": riga["coordinate_da"] if quale == posto_id else "padre",
+                        "padre": None if quale == posto_id else riga["nome"]}
+            quale = padri[quale]
+        return None
+
+    def scendi(padre: int | None, profondita: int, strada: list[str]) -> None:
+        for posto_id in figli.get(padre, []):
+            riga = vivi[posto_id]
+            copia = copertina.get(posto_id)
+            fuori.append({
+                "id": posto_id, "genitore": padre, "nome": riga["nome"],
+                "percorso": SEPARATORE.join(strada), "profondita": profondita,
+                "scatti": len(dentro.get(posto_id, ())), "propri": propri[posto_id],
+                "figli": len(figli.get(posto_id, [])),
+                "dal": dal.get(posto_id), "al": al.get(posto_id),
+                "copertina": file_di.get(copia[1]) if copia else None,
+                "coordinate": coordinate_di(posto_id),
+            })
+            scendi(posto_id, profondita + 1, [*strada, riga["nome"]])
+
+    scendi(None, 0, [])
+    return fuori
+
+
+_conti = memoria.Ricordo("conti dei luoghi")
+
+
+def conti(connessione: sqlite3.Connection) -> dict:
+    return dict(_conti.prendi(connessione, lambda: _conta_i_luoghi(connessione)))
+
+
+def _conta_i_luoghi(connessione: sqlite3.Connection) -> dict:
+    riga = uno(
+        connessione,
+        """
+        SELECT
+          (SELECT count(*) FROM posti WHERE stato = 'attivo') AS luoghi,
+          (SELECT count(DISTINCT q.scatto_id) FROM posti_negli_scatti q
+             JOIN posti p ON p.id = q.posto_id JOIN scatti s ON s.id = q.scatto_id
+             WHERE p.stato = 'attivo' AND s.fuori_archivio = 0) AS con_luogo,
+          coalesce(sum(t.posto_non_so = 1 AND NOT t.ha_luogo), 0) AS non_so,
+          coalesce(sum(t.posto_non_so = 0 AND NOT t.ha_luogo), 0) AS senza,
+          coalesce(sum(t.posto_non_so = 0 AND NOT t.ha_luogo AND t.col_gps), 0) AS senza_col_gps
+        FROM (SELECT s.posto_non_so, s.latitudine IS NOT NULL AS col_gps,
+                     EXISTS (SELECT 1 FROM posti_negli_scatti q JOIN posti p ON p.id = q.posto_id
+                             WHERE q.scatto_id = s.id AND p.stato = 'attivo') AS ha_luogo
+                FROM scatti s WHERE s.fuori_archivio = 0) AS t
+        """)
+    return dict(riga) if riga else {"luoghi": 0, "con_luogo": 0, "non_so": 0,
+                                   "senza": 0, "senza_col_gps": 0}
+
+
+def _proposta_della_giornata(connessione: sqlite3.Connection,
+                             scatti_del_giorno: list[int]) -> dict | None:
+    voti: Counter = Counter()
+    perche: dict[int, str] = {}
+    for scatto_id in scatti_del_giorno:
+        trovata = proposta(connessione, scatto_id)
+        if trovata:
+            voti[trovata["posto_id"]] += 1
+            perche.setdefault(trovata["posto_id"], trovata["perche"])
+    if not voti:
+        return None
+    posto_id, quante = voti.most_common(1)[0]
+    riga = per_id(connessione, posto_id)
+    if riga is None or riga["stato"] != "attivo":
+        return None
+    return {"posto_id": posto_id, "nome": riga["nome"],
+            "percorso": percorso_del_padre(connessione, posto_id),
+            "perche": perche[posto_id], "voti": quante, "provati": len(scatti_del_giorno)}
+
+
+def giornate_senza_luogo(connessione: sqlite3.Connection, da: int = 0,
+                         quante: int = GIORNATE_PER_VOLTA) -> dict:
+    tutte = uno(connessione,
+                f"SELECT count(DISTINCT ifnull(s.giorno, '')) AS q FROM scatti s "
+                f"WHERE {SENZA_LUOGO}")
+    giorni = tutti(
+        connessione,
+        f"SELECT s.giorno, count(*) AS quanti, count(s.latitudine) AS col_gps "
+        f"FROM scatti s WHERE {SENZA_LUOGO} GROUP BY s.giorno "
+        f"ORDER BY s.giorno IS NULL, s.giorno DESC LIMIT ? OFFSET ?",
+        max(1, min(quante, 60)), max(0, da))
+    fuori = []
+    for giorno in giorni:
+        foto = [dict(r) for r in tutti(
+            connessione,
+            f"SELECT s.id AS scatto_id, f.id AS file_id, s.genere, "
+            f"s.latitudine IS NOT NULL AS col_gps FROM scatti s "
+            f"JOIN file_media f ON f.scatto_id = s.id AND f.ruolo = 'principale' "
+            f"WHERE {SENZA_LUOGO} AND s.giorno IS ? "
+            f"ORDER BY s.istante_utc, s.id LIMIT ?",
+            giorno["giorno"], FOTO_PER_GIORNATA)]
+        da_provare = [f["scatto_id"] for f in foto if f["col_gps"]][:3]
+        if not da_provare:
+            da_provare = [f["scatto_id"] for f in foto][:2]
+        fuori.append({"giorno": giorno["giorno"], "quanti": giorno["quanti"],
+                      "col_gps": giorno["col_gps"], "foto": foto,
+                      "proposta": _proposta_della_giornata(connessione, da_provare)})
+    return {"giornate": fuori, "tutte": tutte["q"] if tutte else 0, "da": da}
+
+
+def _scatti_della_giornata(connessione: sqlite3.Connection, giorno: str | None,
+                           solo: list[int] | None) -> list[int]:
+    ids = [r["id"] for r in tutti(
+        connessione, f"SELECT s.id FROM scatti s WHERE {SENZA_LUOGO} AND s.giorno IS ?",
+        giorno)]
+    if solo is not None:
+        tenuti = set(solo)
+        ids = [x for x in ids if x in tenuti]
+    return ids
+
+
+def metti_la_giornata(connessione: sqlite3.Connection, giorno: str | None,
+                      posto_id: int, solo: list[int] | None = None) -> int:
+    riga = per_id(connessione, posto_id)
+    if riga is None or riga["stato"] != "attivo":
+        raise OperazioneNonPermessa("Questo luogo non c'è più.")
+    ids = _scatti_della_giornata(connessione, giorno, solo)
+    quando = adesso()
+    connessione.executemany(
+        "INSERT OR IGNORE INTO posti_negli_scatti (scatto_id, posto_id, messo_il) "
+        "VALUES (?, ?, ?)", [(x, posto_id, quando) for x in ids])
+    connessione.executemany("UPDATE scatti SET posto_non_so = 0 WHERE id = ?",
+                            [(x,) for x in ids])
+    ricalcola_coordinate(connessione, posto_id)
+    return len(ids)
+
+
+def non_so_la_giornata(connessione: sqlite3.Connection, giorno: str | None,
+                       solo: list[int] | None = None) -> int:
+    ids = _scatti_della_giornata(connessione, giorno, solo)
+    connessione.executemany("UPDATE scatti SET posto_non_so = 1 WHERE id = ?",
+                            [(x,) for x in ids])
+    return len(ids)
+
+
+def _figlio_di_nome(connessione: sqlite3.Connection, padre: int, nome: str,
+                    tranne: int) -> int | None:
+    for riga in tutti(connessione,
+                      "SELECT id, nome FROM posti WHERE genitore_id = ? AND stato = 'attivo' "
+                      "AND id != ?", padre, tranne):
+        if riga["nome"].casefold() == nome.casefold():
+            return riga["id"]
+    return None
+
+
+def _versa(connessione: sqlite3.Connection, da_id: int, verso_id: int,
+           toccati: set[int]) -> None:
+    scatti_qui = [r["scatto_id"] for r in tutti(
+        connessione, "SELECT scatto_id FROM posti_negli_scatti WHERE posto_id = ?", da_id)]
+    quando = adesso()
+    connessione.executemany(
+        "INSERT OR IGNORE INTO posti_negli_scatti (scatto_id, posto_id, messo_il) "
+        "VALUES (?, ?, ?)", [(x, verso_id, quando) for x in scatti_qui])
+    connessione.execute("DELETE FROM posti_negli_scatti WHERE posto_id = ?", (da_id,))
+    toccati.update(scatti_qui)
+    for figlio in tutti(connessione,
+                        "SELECT id, nome FROM posti WHERE genitore_id = ? AND stato = 'attivo'",
+                        da_id):
+        gemello = _figlio_di_nome(connessione, verso_id, figlio["nome"], figlio["id"])
+        if gemello is None:
+            sposta(connessione, figlio["id"], verso_id)
+        else:
+            _versa(connessione, figlio["id"], gemello, toccati)
+    da = per_id(connessione, da_id)
+    verso = per_id(connessione, verso_id)
+    if (verso["latitudine"] is None and da["latitudine"] is not None
+            and da["coordinate_da"] in ("a_mano", "scatto")):
+        metti_coordinate(connessione, verso_id, da["latitudine"], da["longitudine"],
+                         da["coordinate_da"])
+    esegui(connessione, "UPDATE posti SET stato = 'cestino' WHERE id = ?", da_id)
+    ricalcola_coordinate(connessione, verso_id)
+
+
+def unisci(connessione: sqlite3.Connection, da_id: int, verso_id: int) -> dict:
+    if da_id == verso_id:
+        raise OperazioneNonPermessa("Scegli un altro luogo: è lo stesso.")
+    for quale in (da_id, verso_id):
+        riga = per_id(connessione, quale)
+        if riga is None or riga["stato"] != "attivo":
+            raise OperazioneNonPermessa("Questo luogo non c'è più.")
+    if verso_id in discendenti(connessione, da_id):
+        raise OperazioneNonPermessa(
+            "Non si può unire un luogo con uno che sta dentro di lui. "
+            "Fai il contrario, oppure spostalo prima.")
+    toccati: set[int] = set()
+    _versa(connessione, da_id, verso_id, toccati)
+    for scatto_id in toccati:
+        _tieni_i_piu_precisi(connessione, scatto_id)
+    return {"scatti": len(toccati)}
+
+
+def ramo_vivo(connessione: sqlite3.Connection, posto_id: int) -> list[int]:
+    figli: dict[int, list[int]] = {}
+    for riga in tutti(connessione, "SELECT id, genitore_id FROM posti WHERE stato = 'attivo'"):
+        figli.setdefault(riga["genitore_id"], []).append(riga["id"])
+    ramo, coda = [], [posto_id]
+    while coda:
+        x = coda.pop()
+        ramo.append(x)
+        coda.extend(figli.get(x, ()))
+    return ramo
+
+
+def numeri_del_ramo(connessione: sqlite3.Connection, posto_id: int, ultimi: int = 12) -> dict:
+    ramo = ramo_vivo(connessione, posto_id)
+    giorni: dict[int, str | None] = {}
+    for blocco in range(0, len(ramo), 500):
+        pezzo = ramo[blocco:blocco + 500]
+        for riga in connessione.execute(
+                "SELECT n.scatto_id, s.giorno FROM posti_negli_scatti n "
+                "JOIN scatti s ON s.id = n.scatto_id "
+                f"WHERE s.fuori_archivio = 0 AND n.posto_id IN ({','.join('?' * len(pezzo))})", pezzo):
+            giorni[riga[0]] = riga[1]
+    datati = [g for g in giorni.values() if g]
+    per_anno = Counter(g[:4] for g in datati)
+    ordinati = sorted(giorni, key=lambda x: (giorni[x] is not None, giorni[x] or "", x), reverse=True)
+    scelti, copertine = [], {}
+    for blocco in range(0, len(ordinati), 200):
+        pezzo = ordinati[blocco:blocco + 200]
+        for riga in connessione.execute(
+                "SELECT scatto_id, min(id) FROM file_media WHERE ruolo = 'principale' "
+                f"AND scatto_id IN ({','.join('?' * len(pezzo))}) GROUP BY scatto_id", pezzo):
+            copertine[riga[0]] = riga[1]
+        scelti = [{"scatto_id": x, "file_id": copertine[x]} for x in ordinati[:blocco + 200] if x in copertine]
+        if len(scelti) >= ultimi:
+            break
+    return {
+        "ramo": ramo,
+        "scatti": len(giorni),
+        "dal": min(datati) if datati else None,
+        "al": max(datati) if datati else None,
+        "anni": [{"anno": a, "quanti": per_anno[a]} for a in sorted(per_anno)],
+        "ultimi": scelti[:ultimi],
+    }

@@ -9,7 +9,8 @@ from officina.importazione import annulla, pagina, storico
 from officina.importazione.motore import Avanzamento
 from officina.web.strade import base
 
-PIENO = {"da_questo_computer": True, "si_puo_sfogliare": False, "gruppi": [],
+PIENO = {"da_questo_computer": True, "comanda": True, "si_puo_sfogliare": False,
+         "gruppi": [],
          "gruppo_ultimo": None, "aggiunta": None, "appena_tolta": None, "tessere": [],
          "tolte": [], "mandate": [], "momento": "pronta", "piano": None, "stato": None,
          "perche_e_ferma": None, "ultima": None, "finita_prima": None}
@@ -167,7 +168,7 @@ def test_la_finestra_del_gruppo_solo_con_le_tessere():
 @pytest.mark.parametrize("vicino", [True, False])
 def test_l_avviso_della_tolta(vicino):
     tolta = _tolta(9)
-    testo = _scrivi("_ag_finestre.html", appena_tolta=tolta, da_questo_computer=vicino)
+    testo = _scrivi("_ag_finestre.html", appena_tolta=tolta, comanda=vicino)
     avviso = testo.split("data-avviso-tolta", 1)[1]
     assert "<b>Hai tolto «C9» dall'elenco</b>" in avviso
     assert ('action="/importazione/cartella/9/rimetti"' in avviso) is vicino
@@ -239,8 +240,8 @@ def test_la_tolta_dice_i_suoi_scatti(spariscono, restano, scritta):
 
 
 @pytest.mark.parametrize("vicino", [True, False])
-def test_rimetti_nello_storico_solo_da_qui(vicino):
-    testo = _scrivi("_ag_storico.html", tolte=[_tolta(7)], da_questo_computer=vicino)
+def test_rimetti_nello_storico_solo_da_chi_comanda(vicino):
+    testo = _scrivi("_ag_storico.html", tolte=[_tolta(7)], comanda=vicino)
     assert ('action="/importazione/cartella/7/rimetti"' in testo) is vicino
 
 

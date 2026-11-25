@@ -8,6 +8,8 @@ from officina import registro
 from officina.archivio.database import ora_di_qui, tutti, uno
 from officina.errori import ErroreOfficina, PasswordSbagliata
 from officina.modello import luoghi, nodi, persone, scatti, telefoni
+from officina.telefono import cavo as cavo_iphone
+from officina.telefono import cavo_lontano
 from officina.telefono import costruzione, formato, selezione
 from officina.web import lavori
 
@@ -46,6 +48,8 @@ def leggi_la_scelta(campi) -> selezione.Selezione:
         persone=numeri("persone"),
         persone_escluse=numeri("persone_escluse"),
         senza_data=acceso("senza_data"),
+        non_etichettate=acceso("non_etichettate"),
+        scatti_tolti=numeri("scatti_tolti"),
     )
 
 
@@ -53,6 +57,46 @@ def salva_la_scelta(archivio, telefono_id: int,
                     scelta: selezione.Selezione) -> None:
     with archivio.scrittura() as connessione:
         telefoni.salva_selezione(connessione, telefono_id, scelta.a_json())
+
+
+def tolti_di_prima(archivio, telefono_id: int) -> list[int]:
+    with archivio.lettura() as connessione:
+        telefono = telefoni.per_id(connessione, telefono_id)
+    return scelta_di(telefono).scatti_tolti if telefono is not None else []
+
+
+def salva_i_tolti(archivio, telefono_id: int, elenco: list) -> None:
+    tolti = sorted({int(x) for x in elenco
+                    if (isinstance(x, int) and not isinstance(x, bool) and x > 0)
+                    or (isinstance(x, str) and x.isascii() and x.isdecimal()
+                        and int(x) > 0)})
+    with archivio.scrittura() as connessione:
+        telefono = telefoni.per_id(connessione, telefono_id)
+        if telefono is None:
+            raise ErroreOfficina("Questo telefono non c'è più.")
+        scelta = scelta_di(telefono)
+        scelta.scatti_tolti = tolti
+        telefoni.salva_selezione(connessione, telefono_id, scelta.a_json())
+    registro.evento("visore.scatti_tolti", quanti=len(tolti))
+
+
+def scatti_del_pacchetto(archivio, telefono_id: int) -> dict:
+    ia = selezione.ia_in_casa(archivio.dove.modelli)
+    with archivio.lettura() as connessione:
+        telefono = telefoni.per_id(connessione, telefono_id)
+        if telefono is None:
+            raise ErroreOfficina("Questo telefono non c'è più.")
+        scelta = scelta_di(telefono)
+        voci = selezione.scatti_uno_per_uno(connessione, scelta, ia)
+    for voce in voci:
+        voce["data"] = scatti.giorno_a_parole(voce["giorno"]) if voce["giorno"] else ""
+    presenti = {voce["id"] for voce in voci}
+    return {
+        "scatti": voci,
+        "tolti": [x for x in scelta.scatti_tolti if x in presenti],
+        "spazio": telefono["spazio"] or 0,
+        "telefono": telefono["nome"],
+    }
 
 
 def voci_dei_nodi(connessione, scelta: selezione.Selezione) -> list[dict]:
@@ -111,6 +155,16 @@ def quante_se_ne_vanno(connessione, telefono_id: int,
         f"AND (p.scatto_id IS NULL OR p.scatto_id NOT IN "
         f"     (SELECT s.id FROM scatti s WHERE {dove}))",
         telefono_id, *parametri)
+    return riga["quanti"] if riga else 0
+
+
+def quante_senza_etichetta(connessione, scelta: selezione.Selezione,
+                           ia: tuple[str, ...] = ()) -> int:
+    con = selezione.Selezione(**{**scelta.__dict__, "non_etichettate": True})
+    dove, parametri = selezione.condizioni(connessione, con, ia)
+    riga = uno(connessione,
+               f"SELECT count(*) AS quanti FROM scatti s WHERE {dove} "
+               f"AND NOT {selezione.ETICHETTATA}", *parametri)
     return riga["quanti"] if riga else 0
 
 
@@ -258,6 +312,8 @@ def conto(archivio, telefono_id: int) -> dict:
             raise ErroreOfficina("Questo telefono non c'è più.")
         scelta = scelta_di(telefono)
         stima = selezione.stima(connessione, scelta, ia)
+        senza_etichetta = quante_senza_etichetta(connessione, scelta, ia)
+        totale, fuori = selezione.perche_fuori(connessione, scelta, ia)
         se_ne_vanno = quante_se_ne_vanno(connessione, telefono_id, scelta, ia)
         identificativo = telefoni.identificativo_se_c_e(connessione)
         detti = avvisi(connessione, telefono, stima, se_ne_vanno,
@@ -275,6 +331,10 @@ def conto(archivio, telefono_id: int) -> dict:
         "a_parole": stima.a_parole(),
         "tasto": stima.sul_tasto(telefono["nome"]),
         "se_ne_vanno": se_ne_vanno,
+        "senza_etichetta": selezione.a_numero(senza_etichetta),
+        "fuori": selezione.fuori_a_parole(totale, fuori),
+        "peso_byte": stima.peso,
+        "spazio_byte": telefono["spazio"] or 0,
         "avvisi": detti,
     }
 
@@ -291,10 +351,13 @@ class InCorso:
         self.fatti = 0
         self.quanti = 0
         self.esito: costruzione.Esito | None = None
+        self.col_cavo = False
+        self.lontano = False
+        self.cavo: cavo_iphone.EsitoCavo | None = None
 
 
     def parti(self, archivio, telefono_id: int, cartella: Path,
-              password: str) -> bool:
+              password: str, col_cavo: bool = False, lontano: bool = False) -> bool:
         if self.lavoro.sta_lavorando:
             return False
 
@@ -310,6 +373,9 @@ class InCorso:
         self.fatti = 0
         self.quanti = 0
         self.esito = None
+        self.col_cavo = col_cavo
+        self.lontano = col_cavo and lontano
+        self.cavo = None
         dimentica_la_cartella(cartella)
 
         travaso = costruzione.Travaso(archivio, telefono_id, cartella, password,
@@ -317,6 +383,39 @@ class InCorso:
         self.travaso = travaso
 
         def fallo() -> None:
+            if not col_cavo:
+                travasa()
+                return
+            self.fase = "collego"
+            if self.lontano:
+                iphone = cavo_lontano.collega()
+                self.lavoro.di(f"Collegato col cavo, dal portatile, a «{iphone.nome}».")
+            else:
+                iphone = cavo_iphone.collega()
+                self.lavoro.di(f"Collegato col cavo a «{iphone.nome}».")
+            try:
+                cavo_iphone.controlla(iphone, cartella)
+                preso = cavo_iphone.prendi_il_ritorno(iphone, cartella)
+                self.lavoro.di(DAL_CAVO[preso])
+                travasa()
+                if not (self.esito and self.esito.completo):
+                    self.lavoro.di("Il travaso non è finito: sull'iPhone non copio "
+                                   "niente.")
+                    return
+                self.fase = "copio"
+                aiuto = iphone.aiuto() if self.lontano else cavo_iphone.collega
+                self.cavo = cavo_iphone.manda(iphone, cartella, self._a_che_punto,
+                                              travaso.fermati, aiuto)
+                self.fase = "finito" if self.cavo.completo else "interrotto"
+                self.lavoro.di(self.cavo.a_parole())
+                for guasto in self.cavo.guasti[:20]:
+                    self.lavoro.di(f"NON TORNA SULL'IPHONE — {guasto}")
+                registro.evento("visore.cavo", mandati=self.cavo.mandati,
+                                tolti=self.cavo.tolti, completo=self.cavo.completo)
+            finally:
+                iphone.chiudi()
+
+        def travasa() -> None:
             piano = travaso.prepara()
             self.lavoro.di(f"Selezione: {piano.scelta.a_parole()}")
             self.lavoro.di(piano.stima.a_parole())
@@ -343,7 +442,12 @@ class InCorso:
                             scritti=esito.scritti, tolti=esito.tolti,
                             completo=esito.completo)
 
-        return self.lavoro.parti(fallo, nome="travaso")
+        if self.lontano:
+            cavo_lontano.prepara()
+        partito = self.lavoro.parti(fallo, nome="travaso")
+        if self.lontano and not partito:
+            cavo_lontano.banco.chiudi()
+        return partito
 
     def ferma(self) -> None:
         if self.travaso is not None:
@@ -385,10 +489,23 @@ class InCorso:
             "quanti_saltati": len(esito.saltati) if esito else 0,
             "tornato": esito.tornato.a_parole() if esito else "",
             "riepilogo": esito.a_parole() if esito else "",
+            "col_cavo": self.col_cavo,
+            "cavo_lontano": self.lontano,
+            "cavo": self.cavo.a_parole() if self.cavo else "",
+            "cavo_completo": bool(self.cavo and self.cavo.completo),
         }
 
 
 in_corso = InCorso()
+
+DAL_CAVO = {
+    "preso": "Preso dall'iPhone il file di preferiti, raccolte e diario.",
+    "nessuno": "Sull'iPhone non ci sono ancora preferiti né diario da riportare.",
+    "senza_pacchetto": "Sull'iPhone non c'è ancora un pacchetto: questo è il primo.",
+    "altra_chiave": ("Il pacchetto sull'iPhone ha un'altra password: preferiti e diario "
+                     "nuovi di lassù non li so leggere. Restano sull'iPhone, messi da "
+                     "parte."),
+}
 
 
 def quello_che_e_tornato(connessione, telefono_id: int) -> dict:
@@ -511,6 +628,30 @@ def travasi_passati(connessione, telefono_id: int,
 
 def cartella_di(telefono: sqlite3.Row) -> str:
     return telefono["cartella"] or formato.nome_cartella(telefono["nome"])
+
+
+def _nome_della_cartella(nome: str) -> str:
+    return "-".join(formato.nome_utile(nome).split()) or "telefono"
+
+
+def cartella_predefinita(archivio, nome: str) -> Path:
+    return Path(archivio.dove.radice).parent / "Visore" / _nome_della_cartella(nome)
+
+
+def cartella_del_pacchetto(scelta: str, nome: str) -> str:
+    scelta = (scelta or "").strip()
+    if not scelta:
+        return ""
+    dove = Path(scelta)
+    try:
+        con_altro = dove.is_dir() and any(dove.iterdir())
+    except OSError:
+        con_altro = False
+    if not con_altro or (dove / formato.CARTA).is_file():
+        return scelta
+    if dove.name == "Visore":
+        return str(dove / _nome_della_cartella(nome))
+    return str(dove / "Visore" / _nome_della_cartella(nome))
 
 
 def spazio_in_gb(byte: int | None) -> str:

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from officina import registro
+from officina import anticipo, registro
 from officina.archivio.database import tutti
 from officina.corpi import rilevatore as rilevatore_mod
 from officina.descrittori import torcia
@@ -133,10 +133,18 @@ class Passata:
                               for parte in elenco.elenco(connessione)}
                 if not gruppo:
                     break
-                for scatto_id, parte_id in gruppo:
-                    if self.fermata:
-                        break
-                    self._fai(scatto_id, [p for p in parte_id if p in parole], parole)
+                letture = anticipo.Letture(
+                    [scatto_id for scatto_id, _ in gruppo],
+                    lambda scatto_id: quadri_di(self.archivio, scatto_id),
+                    lambda: self.fermata, "parti-legge")
+                try:
+                    for scatto_id, parte_id in gruppo:
+                        if self.fermata:
+                            break
+                        self._fai(scatto_id, [p for p in parte_id if p in parole], parole,
+                                  letture)
+                finally:
+                    letture.close()
                 if al_passo:
                     al_passo(self.avanzamento)
         finally:
@@ -145,17 +153,26 @@ class Passata:
                         parti=self.avanzamento.parti, saltati=self.avanzamento.saltati)
         return self.avanzamento
 
-    def _fai(self, scatto_id: int, da_cercare: list[int], parole: dict[int, str]) -> None:
+    def _fai(self, scatto_id: int, da_cercare: list[int], parole: dict[int, str],
+             letture: anticipo.Letture) -> None:
+        pezzi = letture.di(scatto_id)
         try:
-            file_id, trovate = self._cerca(scatto_id, da_cercare, parole)
+            trovate = self._cerca(da_cercare, parole, pezzi)
+            file_id = letture.testa
+        except anticipo.Esaurite:
+            self._salta(scatto_id, "fermato")
+            return
         except DaRifare as errore:
+            letture.scarta(scatto_id, pezzi)
             self._salta(scatto_id, errore.codice)
             return
         except ErroreOfficina as errore:
+            letture.scarta(scatto_id, pezzi)
             self._salta(scatto_id, errore.codice or "non_letto")
             self._segna_non_letto(scatto_id, da_cercare)
             return
         except Exception as guasto:          # noqa: BLE001
+            letture.scarta(scatto_id, pezzi)
             if torcia.memoria_finita(guasto):
                 self._salta(scatto_id, "memoria_finita")
                 torcia.libera()
@@ -174,17 +191,16 @@ class Passata:
                     MODELLO, VERSIONE)
         self.avanzamento.fatti += 1
 
-    def _cerca(self, scatto_id: int, da_cercare: list[int], parole: dict[int, str]):
-        file_id, quadri = quadri_di(self.archivio, scatto_id)
+    def _cerca(self, da_cercare: list[int], parole: dict[int, str], pezzi):
         trovate: dict[int, list] = {parte_id: [] for parte_id in da_cercare}
-        for numero, immagine in quadri:
+        for _, (numero, immagine) in pezzi:
             if self.fermata:
                 raise DaRifare("Fermato a metà.", codice="fermato")
             esito = self.cercatore.cerca(immagine, [parole[p] for p in da_cercare])
             for parte_id in da_cercare:
                 for riquadro, sicurezza in esito.get(parole[parte_id], []):
                     trovate[parte_id].append((numero, riquadro, sicurezza))
-        return file_id, trovate
+        return trovate
 
     def _salta(self, scatto_id: int, codice: str) -> None:
         self._saltati.add(scatto_id)
@@ -204,14 +220,33 @@ class Passata:
                     (scatto_id, parte_id, MODELLO, VERSIONE, NON_LETTO, adesso()))
 
 
+PROVA_TRA_I_GRANDI = 400
+
+
+def _da_provare(connessione, quanti: int) -> list[int]:
+    grandi = max(1, quanti * 2 // 3)
+    scelti = [riga["scatto_id"] for riga in tutti(
+        connessione,
+        "SELECT scatto_id FROM (SELECT c.scatto_id FROM corpi c "
+        "JOIN scatti s ON s.id = c.scatto_id WHERE s.genere != 'video' "
+        "GROUP BY c.scatto_id ORDER BY max(c.area) DESC LIMIT ?) ORDER BY random() LIMIT ?",
+        PROVA_TRA_I_GRANDI, grandi)]
+    altri = [riga["scatto_id"] for riga in tutti(
+        connessione,
+        "SELECT DISTINCT c.scatto_id FROM corpi c JOIN scatti s ON s.id = c.scatto_id "
+        "WHERE s.genere != 'video' ORDER BY random() LIMIT ?", quanti * 3)]
+    for scatto_id in altri:
+        if len(scelti) >= quanti:
+            break
+        if scatto_id not in scelti:
+            scelti.append(scatto_id)
+    return scelti
+
+
 def prova(archivio, parola: str, quanti: int = 12, cercatore=None) -> list[dict]:
     _nome, parola = elenco.controlla("prova", parola)
     with archivio.lettura() as connessione:
-        scatti = [riga["scatto_id"] for riga in tutti(
-            connessione,
-            "SELECT c.scatto_id FROM corpi c JOIN scatti s ON s.id = c.scatto_id "
-            "WHERE s.genere != 'video' GROUP BY c.scatto_id "
-            "ORDER BY max(c.area) DESC, c.scatto_id DESC LIMIT ?", quanti)]
+        scatti = _da_provare(connessione, quanti)
     mio = cercatore is None
     cercatore = cercatore if cercatore is not None else apri_il_cercatore(
         archivio.dove.modelli)

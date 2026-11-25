@@ -59,13 +59,13 @@
             </div>
         </article>
         {% endfor %}
-        {{ aggiungi(false, da_questo_computer, si_puo_sfogliare, gruppi, gruppo_ultimo) }}
+        {{ aggiungi(false, comanda, si_puo_sfogliare or sfoglia_nella_pagina, gruppi, gruppo_ultimo, sfoglia_nella_pagina) }}
     </div>
     {% else %}
     <div class="ag-vuoto">
         <span class="ag-icona grande">{{ icona('cartella', 26) }}</span>
         <p>Ancora nessuna cartella. Scegli dove stanno le tue foto: anche più di una, anche su dischi diversi.</p>
-        {{ aggiungi(true, da_questo_computer, si_puo_sfogliare, gruppi, gruppo_ultimo) }}
+        {{ aggiungi(true, comanda, si_puo_sfogliare or sfoglia_nella_pagina, gruppi, gruppo_ultimo, sfoglia_nella_pagina) }}
     </div>
     {% endif %}
 </section>

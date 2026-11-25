@@ -67,15 +67,11 @@ def portatile(porta_finta, archivio_pieno):
     return _Portatile(porta_finta)
 
 
-DA_FARE_SOLO_QUI = [
-    ("post", "/impostazioni/azzera-addestramento", {}),
-    ("post", "/impostazioni/riporta-i-valori", {}),
+SOLO_DAL_FISSO = [
     ("post", "/impostazioni/dispositivo/1", {"stato": "approvato"}),
-    ("post", "/impostazioni", {"accesso_dalla_rete": "on"}),
     ("post", "/api/impostazione", {"chiave": "accesso_dalla_rete", "valore": "1"}),
     ("post", "/api/impostazione", {"chiave": "porta_del_portatile", "valore": "1"}),
     ("post", "/api/impostazione", {"chiave": "blocco_dopo_minuti", "valore": "0"}),
-    ("post", "/api/impostazione", {"chiave": "cartella_raccolta", "valore": "/tmp/fuori"}),
     ("post", "/forziere/accendi", {"password": "a" * 12, "ancora": "a" * 12, "su_carta": "1"}),
     ("post", "/schermo/apri", {}),
     ("post", "/schermo/chiudi-porta", {}),
@@ -84,17 +80,25 @@ DA_FARE_SOLO_QUI = [
     ("get", "/schermo/porta", None),
     ("get", "/schermo/coperta", None),
     ("get", "/api/schermo", None),
+]
+
+ANCHE_DAL_PORTATILE = [
+    ("post", "/impostazioni/azzera-addestramento", {}),
+    ("post", "/impostazioni/riporta-i-valori", {}),
+    ("post", "/impostazioni", {"accesso_dalla_rete": "on"}),
+    ("post", "/api/impostazione", {"chiave": "cartella_raccolta", "valore": "/tmp/fuori"}),
     ("post", "/importazione/cartella", {"percorso": "/tmp/una-cartella-finta"}),
     ("post", "/raccolta/conta", {"dove": "/tmp/una-cartella-finta"}),
     ("post", "/raccolta/parti", {}),
     ("post", "/sincronia/dove", {"cartella": "/tmp/una-cartella-finta"}),
     ("post", "/sincronia/costruisci", {"password": "x", "ancora": "x"}),
     ("post", "/sincronia/applica", {"quale": "/tmp/una-cartella-finta"}),
-    ("post", "/telefono/1/dove", {"cartella": "/tmp/una-cartella-finta"}),
     ("post", "/telefono/1/parti", {}),
     ("post", "/persone/1/insegna", {"cartella": "/tmp/una-cartella-finta"}),
     ("post", "/giro/parti", {}),
 ]
+
+DA_FARE_SOLO_QUI = SOLO_DAL_FISSO + ANCHE_DAL_PORTATILE
 
 
 def _chiama(cliente, metodo, dove, dati):
@@ -111,8 +115,34 @@ def test_un_dispositivo_approvato_non_comanda_il_programma(remoto, metodo, dove,
     assert risposta.json()["messaggio"] == QUESTO_COMPUTER
 
 
-@pytest.mark.parametrize("metodo,dove,dati", DA_FARE_SOLO_QUI)
-def test_il_portatile_usato_come_schermo_non_comanda_il_programma(portatile, metodo, dove, dati):
+DAL_FISSO_O_DAL_PORTATILE = [
+    ("post", "/telefono/1/dove", {"cartella": "/tmp/una-cartella-finta"}),
+    ("get", "/api/cartelle?dove=", None),
+    ("post", "/api/cartelle/nuova", {"dove": "/tmp", "nome": "da-fuori"}),
+    ("post", "/telefono/1/dimentica", {}),
+]
+
+
+@pytest.mark.parametrize("metodo,dove,dati", DAL_FISSO_O_DAL_PORTATILE)
+def test_le_cartelle_del_fisso_non_si_sfogliano_da_un_altro_dispositivo(remoto, metodo, dove,
+                                                                         dati):
+    risposta = _chiama(remoto, metodo, dove, dati)
+    assert risposta.status_code == 403, (dove, risposta.text[:200])
+    assert risposta.json()["messaggio"] == QUESTO_COMPUTER
+
+
+@pytest.mark.parametrize("metodo,dove,dati", DAL_FISSO_O_DAL_PORTATILE[:2])
+def test_il_portatile_collegato_sceglie_la_cartella_del_telefono(portatile, metodo, dove,
+                                                                 dati):
+    if metodo == "get":
+        risposta = portatile.get(dove, headers={"accept": "application/json"})
+    else:
+        risposta = portatile.post(dove, data=dati, headers={"accept": "application/json"})
+    assert risposta.status_code != 403, (dove, risposta.text[:200])
+
+
+@pytest.mark.parametrize("metodo,dove,dati", SOLO_DAL_FISSO)
+def test_il_portatile_non_tocca_la_sicurezza_del_fisso(portatile, metodo, dove, dati):
     if metodo == "get":
         risposta = portatile.get(dove, headers={"accept": "application/json"},
                                  follow_redirects=False)
@@ -266,10 +296,11 @@ def test_il_dispositivo_approvato_non_vede_i_tasti_che_non_puo_premere(remoto, a
     assert "Le cartelle si aggiungono dal computer dove gira il programma." in importazione
 
 
-def test_il_computer_stesso_vede_tutti_i_tasti(locale, archivio_pieno):
+def test_il_computer_stesso_vede_tutti_i_tasti(locale, archivio_pieno, tmp_path):
     with archivio_pieno.scrittura() as connessione:
         numero = telefoni.crea(connessione, "Pippo", "android")
         dispositivi.registra_contatto(connessione, "192.168.1.99")
+    locale.post(f"/telefono/{numero}/dove", data={"cartella": str(tmp_path)})
     pagina = _pagine(locale, "/impostazioni")
     for traccia in ("/impostazioni/dispositivo/", "/forziere/accendi",
                     "/impostazioni/azzera-addestramento", "/impostazioni/riporta-i-valori",
@@ -289,6 +320,52 @@ def test_il_computer_stesso_vede_tutti_i_tasti(locale, archivio_pieno):
     assert 'action="/importazione/cartella" class="cn-scrivi" data-cartella-nuova>' \
         in importazione
     assert "Le cartelle si aggiungono dal computer" not in importazione
+
+
+STRADE_DEL_PORTATILE = [
+    "/impostazioni/azzera-addestramento", "/impostazioni/riporta-i-valori", "/impostazioni",
+    "/importazione/cartella", "/importazione/cartella/{cartella_id}/rimetti",
+    "/raccolta/conta", "/raccolta/parti", "/sincronia/dove", "/sincronia/costruisci",
+    "/sincronia/applica", "/persone/{persona_id}/insegna", "/giro/parti",
+    "/copia-esterna/cartella", "/copia-esterna/parti", "/copia-esterna",
+    "/copia-esterna/ferma",
+    "/impostazioni/copia/rimetti", "/impostazioni/copia/disdici",
+    "/elenchi/salute/ripara/{percorso_id}", "/elenchi/salute/ripara-tutti",
+    "/elenchi/salute/va-bene/{percorso_id}", "/elenchi/salute/controlla",
+    "/misura/usa-il-migliore", "/telefono/{telefono_id}/dove", "/api/cartelle",
+    "/api/cartelle/nuova",
+]
+
+
+def test_le_strade_aperte_al_portatile_restano_chiuse_agli_altri():
+    from officina.web.server import tutte_le_strade
+    from officina.web.strade import base
+
+    guardie: dict[str, set] = {}
+    for strada in tutte_le_strade():
+        dentro = getattr(strada, "dependant", None)
+        if dentro is not None:
+            guardie.setdefault(strada.path, set()).update(
+                d.call for d in dentro.dependencies)
+    for dove in STRADE_DEL_PORTATILE:
+        assert dove in guardie, dove
+        assert base.solo_qui_o_dal_portatile in guardie[dove], dove
+        assert base.solo_da_questo_computer not in guardie[dove], dove
+
+
+def test_il_portatile_sceglie_dove_vanno_le_raccolte(portatile, archivio_pieno):
+    risposta = portatile.post("/api/impostazione",
+                              data={"chiave": "cartella_raccolta", "valore": "D:\\raccolta"},
+                              headers={"accept": "application/json"})
+    assert risposta.status_code == 200, risposta.text[:200]
+    assert archivio_pieno.impostazione("cartella_raccolta") == "D:\\raccolta"
+
+
+def test_dal_portatile_le_impostazioni_non_aprono_la_rete(portatile, archivio_pieno):
+    archivio_pieno.imposta("accesso_dalla_rete", False)
+    portatile.post("/impostazioni", data={"accesso_dalla_rete": "on", "movimento": "on"})
+    assert archivio_pieno.impostazione("accesso_dalla_rete") is False
+    assert archivio_pieno.impostazione("movimento") is True
 
 
 def test_il_portatile_non_vede_i_tasti_del_fisso(portatile):

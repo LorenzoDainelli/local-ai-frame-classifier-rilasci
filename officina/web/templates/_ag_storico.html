@@ -1,4 +1,5 @@
 {% from "_icone.html" import icona %}
+{% from "_spiega.html" import spiega %}
 {% from "_ag_pezzi.html" import menu, scatti_a_parole %}
 {% if mandate or tolte %}
 {% set prima_le_tolte = not mandate %}
@@ -19,7 +20,8 @@
         {% if mandate %}
         <div class="ag-storia">
             {% for mandata in mandate %}
-            <div class="ag-evento">
+            {% set sue = (concluse or {}).get(mandata.id, []) %}
+            <div class="ag-evento{{ ' nuova' if mandata.id == appena_finita }}">
                 <span class="ag-quando numeri" title="{{ mandata.quando }}">{{ mandata.giorno }}</span>
                 <span class="ag-segno arancio">{{ icona('scarica', 14) }}</span>
                 <div class="ag-cosa">
@@ -31,15 +33,43 @@
                         {%- if mandata.stato != 'finita' %} · {{ mandata.come_e_finita }}{% endif %}</span>
                 </div>
                 <span class="ag-azioni">
+                    {% if mandata.gia_presenti and mandata.id in con_elenco_dei_gia %}
+                    <a class="tasto-comando nudo piccolo" href="/importazione/{{ mandata.id }}/gia-presenti"
+                       title="Mostra quali file erano già nell'archivio e perché.">Vedi i già presenti</a>
+                    {% endif %}
                     {% if mandata.quanti_scatti %}
-                    <a class="tasto-comando piccolo" href="/?importazione={{ mandata.id }}"
+                    <a class="tasto-comando piccolo{{ ' principale' if mandata.id == appena_finita }}" href="/?importazione={{ mandata.id }}"
                        title="Apre nella galleria solo gli scatti arrivati con questa importazione.">Apri {{ mandata.quanti_scatti|numero }}</a>
                     {% endif %}
+                    {% for conclusa in sue %}
+                    {% call menu("Altro per «" ~ conclusa.nome ~ "»") %}
+                        {% if comanda %}
+                        <form method="post" action="/importazione/cartella/{{ conclusa.id }}/rimetti">
+                            <button type="submit">{{ icona('annulla', 15) }} Riaggiungi «{{ conclusa.nome }}»
+                                <small>Alla prossima importazione prende solo i file nuovi</small></button>
+                        </form>
+                        {% endif %}
+                        {% if conclusa.conto.file %}
+                        <hr>
+                        <button type="button" class="ag-rosso" data-apri-finestra="annulla-{{ conclusa.id }}">
+                            <b>Annulla importazione…</b>
+                            <small>{% if conclusa.conto.spariscono %}Toglie dall'app anche {{
+                                'lo scatto arrivato' if conclusa.conto.spariscono == 1
+                                else 'i ' ~ conclusa.conto.spariscono|numero ~ ' scatti arrivati'
+                            }} da «{{ conclusa.nome }}»{% else %}Gli scatti restano: sono anche in un'altra cartella
+                            {%- endif %}</small>
+                        </button>
+                        {% endif %}
+                    {% endcall %}
+                    {% endfor %}
                 </span>
             </div>
             {% endfor %}
         </div>
-        <p class="piccolo tenue">I doppioni sono contati sull'archivio intero, non sulla singola cartella.</p>
+        <p class="piccolo tenue">Queste cartelle non vengono più rilette.{% call spiega("Se ci metti foto nuove") %}
+            <p>Quando un'importazione finisce, le sue cartelle passano qui e non vengono più rilette. Se ci metti foto nuove, riaggiungi la cartella dal menu della riga.</p>
+            <p>I doppioni sono contati sull'archivio intero, non sulla singola cartella.</p>
+        {% endcall %}</p>
         {% else %}
         <p class="piccolo tenue">Ancora nessuna importazione finita.</p>
         {% endif %}
@@ -62,7 +92,7 @@
                         {%- endif %}</span>
                 </div>
                 <span class="ag-azioni">
-                    {% if da_questo_computer %}
+                    {% if comanda %}
                     <form method="post" action="/importazione/cartella/{{ tolta.id }}/rimetti">
                         <button class="tasto-comando piccolo" type="submit">{{ icona('annulla', 14) }} Rimetti nell'elenco</button>
                     </form>

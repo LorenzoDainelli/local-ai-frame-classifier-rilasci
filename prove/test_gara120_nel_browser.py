@@ -150,6 +150,7 @@ def test_il_guasto_si_vede_con_i_suoi_passi_e_si_copia(apri):
     pagina = apri("/gara-120")
     assert pagina.locator("[data-g1-dettaglio]").is_visible()
     pagina.locator("[data-g1-dettaglio] summary").click()
+    pagina.locator("[data-g1-passi]", has_text="riga 12").wait_for()
     testo = pagina.locator("[data-g1-passi]").inner_text()
     assert "Gara dei 120 FPS" in testo and "ldfvfi · avanti · riga 12" in testo
     pagina.locator("[data-g1-copia]").click()

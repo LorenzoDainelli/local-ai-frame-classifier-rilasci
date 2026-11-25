@@ -15,6 +15,7 @@ if (modulo) {
             dal: document.getElementById("dal").value,
             al: document.getElementById("al").value,
             senza_data: document.getElementById("senza-data").checked ? "1" : "",
+            non_etichettate: document.getElementById("non-etichettate")?.checked ? "1" : "",
         };
         gruppi.forEach((nome) => { campi[nome] = spuntate(nome).join(","); });
         return campi;
@@ -63,18 +64,22 @@ if (modulo) {
         scrivi("quanti-video", conto.video);
         scrivi("peso-video", conto.peso_video);
         scrivi("periodo", conto.dal ? `${conto.dal} — ${conto.al}` : "—");
-        scrivi("scelta-a-parole", conto.scelta_a_parole);
-        scrivi("tasto-parti", conto.tasto);
+        const parole = conto.scelta_a_parole || "";
+        scrivi("scelta-a-parole", parole.charAt(0).toUpperCase() + parole.slice(1));
+        const tasto = document.getElementById("tasto-parti");
+        if (tasto && tasto.dataset.sistema !== "ios" && conto.tasto) tasto.textContent = conto.tasto;
 
         const dove = document.getElementById("avvisi");
-        if (!dove) return;
-        dove.textContent = "";
-        (conto.avvisi || []).forEach((avviso) => {
-            const riga = document.createElement("div");
-            riga.className = avviso.forte ? "avviso forte" : "avviso";
-            riga.textContent = avviso.testo;
-            dove.append(riga);
-        });
+        if (dove) {
+            dove.textContent = "";
+            (conto.avvisi || []).forEach((avviso) => {
+                const riga = document.createElement("div");
+                riga.className = avviso.forte ? "avviso forte" : "avviso";
+                riga.textContent = avviso.testo;
+                dove.append(riga);
+            });
+        }
+        document.dispatchEvent(new CustomEvent("conto", { detail: conto }));
     }
 
     const salva = quandoSiFerma(async () => {
@@ -120,7 +125,7 @@ if (modulo) {
 
     document.getElementById("rimetti-tutto")?.addEventListener("click", () => {
         modulo.querySelectorAll("input[type=checkbox]").forEach((casella) => {
-            casella.checked = casella.id === "senza-data";
+            casella.checked = casella.id === "senza-data" || casella.id === "non-etichettate";
             casella.disabled = false;
         });
         document.getElementById("dal").value = "";

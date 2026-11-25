@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from officina.miglioria import catena, fluido, motori, pezzi, veloce, video
+from officina.miglioria import catena, da_guardare, fluido, motori, pezzi, veloce, video
 from prove.test_miglioria_centoventi import FluidoFinto
 from prove.test_miglioria_pezzi import _filmato, _lavoro, piccolo
 
@@ -23,6 +23,8 @@ def x264_sempre_uguale(monkeypatch):
                          "x264-params": "mbtree=0"})
     monkeypatch.setitem(video.OPZIONI, video.HEVC,
                         {**video.OPZIONI[video.HEVC], "threads": "1"})
+    monkeypatch.setattr(da_guardare, "OPZIONI",
+                        {**da_guardare.OPZIONI, "threads": "1", "x264-params": "mbtree=0"})
 
 
 def _impronta(percorso: Path) -> str:

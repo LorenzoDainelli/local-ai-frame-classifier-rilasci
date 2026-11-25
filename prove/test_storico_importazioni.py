@@ -148,3 +148,36 @@ def test_la_pagina_mostra_le_mandate_di_prima_e_non_i_percorsi(archivio, tmp_pat
     assert "vacanze" in storico_in_pagina
     assert str(tmp_path) not in storico_in_pagina, (
         "regola 106: il percorso non ha ragione di comparire nello storico")
+
+
+def test_si_ricorda_quali_erano_gia_presenti_e_si_vedono(archivio, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from officina.web import server
+    from officina.web.strade import comune
+
+    dove = _cartella(tmp_path, quanti=3)
+    motore = Motore(archivio)
+    motore.prepara([dove])
+    motore.esegui()
+    motore.prepara([dove])
+    motore.esegui()
+
+    recente, prima = _mandate(archivio)
+    with archivio.lettura() as connessione:
+        gia = storico.gia_presenti(connessione, recente.id)
+        gia_prima = storico.gia_presenti(connessione, prima.id)
+        con_elenco = storico.con_elenco_dei_gia(connessione)
+    assert len(gia) == recente.gia_presenti
+    assert len(gia_prima) == prima.gia_presenti
+    assert recente.id in con_elenco
+    assert all(f["scatto_id"] and f["perche"].startswith("È già nell'archivio") for f in gia)
+
+    monkeypatch.setattr(comune, "piano_pronto", None)
+    monkeypatch.setattr(comune, "lavoro", None)
+    cliente = TestClient(server.app, client=("127.0.0.1", 51000))
+    pagina = cliente.get("/importazione")
+    assert f"/importazione/{recente.id}/gia-presenti" in pagina.text
+    elenco = cliente.get(f"/importazione/{recente.id}/gia-presenti")
+    assert elenco.status_code == 200
+    assert gia[0]["nome"] in elenco.text
+    assert f"/scatto/{gia[0]['scatto_id']}" in elenco.text

@@ -24,10 +24,12 @@ from officina.web.strade import base, comune, copia_esterna, schermo, tentativi
 strada = APIRouter()
 
 solo_qui = [Depends(base.solo_da_questo_computer)]
+qui_o_portatile = [Depends(base.solo_qui_o_dal_portatile)]
 
 IMPOSTAZIONI_DEL_COMPUTER = frozenset({
-    "accesso_dalla_rete", "porta_del_portatile", "blocco_dopo_minuti",
-    "cartella_raccolta"})
+    "accesso_dalla_rete", "porta_del_portatile", "blocco_dopo_minuti"})
+
+IMPOSTAZIONI_ANCHE_DAL_PORTATILE = frozenset({"cartella_raccolta"})
 
 
 @strada.get("/impostazioni", response_class=HTMLResponse)
@@ -148,7 +150,7 @@ def ripristina_fotografia(numero: int = Form(...)):
         f"/impostazioni?rimesso={fatto['tornano_al_posto']}", status_code=303)
 
 
-@strada.post("/impostazioni/azzera-addestramento", dependencies=solo_qui)
+@strada.post("/impostazioni/azzera-addestramento", dependencies=qui_o_portatile)
 def azzera_addestramento():
     comune.bottega = proposte.Bottega()
     comune.pagella_pronta.dimentica()
@@ -163,7 +165,7 @@ def azzera_addestramento():
     return RedirectResponse("/impostazioni?azzerato=1", status_code=303)
 
 
-@strada.post("/impostazioni/riporta-i-valori", dependencies=solo_qui)
+@strada.post("/impostazioni/riporta-i-valori", dependencies=qui_o_portatile)
 def riporta_i_valori():
     archivio = accesso.aperto()
     with archivio.scrittura() as connessione:
@@ -191,7 +193,7 @@ def _numero(valore, predefinito: int, minimo: int, massimo: int) -> int:
     return min(max(numero, minimo), massimo)
 
 
-@strada.post("/impostazioni", dependencies=solo_qui)
+@strada.post("/impostazioni", dependencies=qui_o_portatile)
 async def salva_impostazioni(richiesta: Request):
     modulo = await richiesta.form()
     archivio = accesso.aperto()
@@ -202,7 +204,8 @@ async def salva_impostazioni(richiesta: Request):
     archivio.imposta("griglia_mosaico", "griglia_mosaico" in modulo)
     archivio.imposta("movimento", "movimento" in modulo)
     archivio.imposta("miniatura_lato", _numero(modulo.get("miniatura_lato"), 640, 128, 2048))
-    archivio.imposta("accesso_dalla_rete", "accesso_dalla_rete" in modulo)
+    if base.e_questo_computer(richiesta):
+        archivio.imposta("accesso_dalla_rete", "accesso_dalla_rete" in modulo)
     return RedirectResponse("/impostazioni", status_code=303)
 
 
@@ -213,6 +216,8 @@ def api_una_impostazione(richiesta: Request, chiave: str = Form(...),
         raise ErroreOfficina(f"«{chiave}» non è un'impostazione di questo programma.")
     if chiave in IMPOSTAZIONI_DEL_COMPUTER:
         base.solo_da_questo_computer(richiesta)
+    if chiave in IMPOSTAZIONI_ANCHE_DAL_PORTATILE:
+        base.solo_qui_o_dal_portatile(richiesta)
 
     predefinito = PREDEFINITE[chiave]
     if isinstance(predefinito, bool):
@@ -250,14 +255,14 @@ def copia_adesso():
     return RedirectResponse("/stato#salute", status_code=303)
 
 
-@strada.post("/impostazioni/copia/rimetti", dependencies=solo_qui)
+@strada.post("/impostazioni/copia/rimetti", dependencies=qui_o_portatile)
 def rimetti_copia(nome: str = Form(...)):
     from officina.archivio import copie
     copie.prenota(accesso.aperto().dove, nome)
     return RedirectResponse("/stato#archivio", status_code=303)
 
 
-@strada.post("/impostazioni/copia/disdici", dependencies=solo_qui)
+@strada.post("/impostazioni/copia/disdici", dependencies=qui_o_portatile)
 def disdici_copia():
     from officina.archivio import copie
     copie.disdici(accesso.aperto().dove)

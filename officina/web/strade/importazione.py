@@ -20,6 +20,7 @@ from officina.web.strade import base, comune, doppioni
 strada = APIRouter()
 
 solo_qui = [Depends(base.solo_da_questo_computer)]
+qui_o_portatile = [Depends(base.solo_qui_o_dal_portatile)]
 
 FERMATA_DA_TE = "importazione_fermata_da_te"
 
@@ -133,6 +134,23 @@ def _perche_e_ferma(archivio, rimasta: dict) -> str | None:
     return _perche_non_riparte(archivio, rimasta)
 
 
+@strada.get("/importazione/{importazione_id}/gia-presenti", response_class=HTMLResponse)
+def gia_presenti(richiesta: Request, importazione_id: int):
+    from officina.importazione import storico
+
+    with accesso.aperto().lettura() as connessione:
+        mandata = next((m for m in storico.mandate(connessione, quante=10_000)
+                        if m.id == importazione_id), None)
+        if mandata is None:
+            raise ErroreOfficina("Questa importazione non c'è più.")
+        file = storico.gia_presenti(connessione, importazione_id)
+    return base.pagine.TemplateResponse(richiesta, "gia-presenti.html", {
+        **base.comune(richiesta, "importazione"),
+        "mandata": mandata,
+        "file": file,
+    })
+
+
 @strada.get("/importazione", response_class=HTMLResponse)
 def pagina_importazione(richiesta: Request, aggiunta: int | None = None,
                         tolta: int | None = None):
@@ -142,9 +160,11 @@ def pagina_importazione(richiesta: Request, aggiunta: int | None = None,
     with accesso.aperto().lettura() as connessione:
         tessere = pagina.tessere(connessione)
         tolte = pagina.tolte(connessione)
+        concluse = pagina.concluse(connessione)
         elenco_gruppi = gruppi.elenco(connessione)
         gruppo_ultimo = gruppi.ultimo(connessione)
         tutte = storico.mandate(connessione)
+        con_elenco = storico.con_elenco_dei_gia(connessione)
 
     piano_mostrato = piano_a_parole()
     sta_lavorando = comune.lavoro is not None and comune.lavoro.sta_lavorando
@@ -164,6 +184,9 @@ def pagina_importazione(richiesta: Request, aggiunta: int | None = None,
         **base.comune(richiesta, "importazione"),
         "tessere": tessere,
         "tolte": tolte,
+        "concluse": concluse,
+        "appena_finita": ultima.id if ultima and momento != "finita" and ultima.stato == "finita"
+        and pagina.da_poco(ultima.finita_il) else None,
         "gruppi": elenco_gruppi,
         "gruppo_ultimo": gruppo_ultimo,
         "piano": piano_mostrato,
@@ -174,13 +197,14 @@ def pagina_importazione(richiesta: Request, aggiunta: int | None = None,
         "ultima": ultima,
         "finita_prima": finita_prima,
         "mandate": mandate,
+        "con_elenco_dei_gia": con_elenco,
         "aggiunta": aggiunta,
         "appena_tolta": next((t for t in tolte if t.id == tolta), None),
         "piano_raccolta": comune.piano_raccolta,
     })
 
 
-@strada.post("/importazione/cartella", dependencies=solo_qui)
+@strada.post("/importazione/cartella", dependencies=qui_o_portatile)
 def aggiungi_cartella(percorso: str = Form(...), dove_torno: str = Form(""),
                       gruppo: str | None = Form(None), gruppo_nuovo: str = Form("")):
     from officina.importazione import gruppi, scansione
@@ -231,7 +255,7 @@ def togli_cartella(cartella_id: int, dove_torno: str = Form("")):
         status_code=303)
 
 
-@strada.post("/importazione/cartella/{cartella_id}/rimetti", dependencies=solo_qui)
+@strada.post("/importazione/cartella/{cartella_id}/rimetti", dependencies=qui_o_portatile)
 def rimetti_cartella(cartella_id: int):
     from officina.importazione import scansione
 
@@ -296,7 +320,7 @@ def _dove_si_raccoglie(scritto: str = "") -> Path:
     return Path(dove)
 
 
-@strada.post("/raccolta/conta", dependencies=solo_qui)
+@strada.post("/raccolta/conta", dependencies=qui_o_portatile)
 def raccolta_conta(dove: str = Form("")):
     from officina.importazione import raccolta
 
@@ -316,7 +340,7 @@ def raccolta_conta(dove: str = Form("")):
     return RedirectResponse("/importazione#raccolta", status_code=303)
 
 
-@strada.post("/raccolta/parti", dependencies=solo_qui)
+@strada.post("/raccolta/parti", dependencies=qui_o_portatile)
 def raccolta_parti():
     from officina.importazione import raccolta
 

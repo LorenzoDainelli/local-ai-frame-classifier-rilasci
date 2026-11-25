@@ -26,6 +26,7 @@
 {% set da_annullare = [] %}
 {% for tessera in tessere if tessera.conto.file %}{% set _ = da_annullare.append(tessera.conto) %}{% endfor %}
 {% for tolta in tolte if tolta.conto.file %}{% set _ = da_annullare.append(tolta.conto) %}{% endfor %}
+{% for gruppo_di_concluse in (concluse or {}).values() %}{% for conclusa in gruppo_di_concluse if conclusa.conto.file %}{% set _ = da_annullare.append(conclusa.conto) %}{% endfor %}{% endfor %}
 {% for conto in da_annullare %}
 <dialog class="finestra" id="annulla-{{ conto.cartella_id }}" aria-label="Annulla importazione">
     <header><h2>Annulla importazione</h2>{{ chiudi() }}</header>
@@ -65,7 +66,7 @@
         <b>Hai tolto «{{ appena_tolta.nome }}» dall'elenco</b>
         <span class="piccolo tenue">La ritrovi in <button type="button" class="ag-collegamento" data-vai-alle-tolte>«Cartelle tolte»</button>.</span>
     </div>
-    {% if da_questo_computer %}
+    {% if comanda %}
     <form method="post" action="/importazione/cartella/{{ appena_tolta.id }}/rimetti">
         <button class="tasto-comando principale piccolo" type="submit">{{ icona('annulla', 14) }} Rimetti</button>
     </form>

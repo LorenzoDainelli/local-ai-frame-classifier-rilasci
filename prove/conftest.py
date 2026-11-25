@@ -25,6 +25,18 @@ def pytest_configure(config):
     _i_clienti_di_prova_entrano_come_la_finestra()
 
 
+def pytest_collection_modifyitems(config, items):
+    pezzo = os.environ.get("OFFICINA_PEZZO", "")
+    if not pezzo:
+        return
+    numero, quanti = (int(parte) for parte in pezzo.split("/"))
+    tenuti = [prova for indice, prova in enumerate(items) if indice % quanti == numero - 1]
+    lasciati = [prova for indice, prova in enumerate(items) if indice % quanti != numero - 1]
+    if lasciati:
+        config.hook.pytest_deselected(items=lasciati)
+    items[:] = tenuti
+
+
 def _segreto_del_dispositivo(indirizzo: str) -> str | None:
     import secrets
 

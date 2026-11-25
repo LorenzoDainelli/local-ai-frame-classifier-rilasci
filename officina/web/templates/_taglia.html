@@ -1,0 +1,41 @@
+{% from "_icone.html" import icona %}
+{% macro finestra_taglia(scatto_id) %}
+<dialog class="finestra tg" id="taglia" aria-labelledby="tg-titolo" data-taglia="{{ scatto_id }}">
+    <header><h2 id="tg-titolo">Taglia il video</h2>
+        <button class="tasto-comando nudo piccolo" type="button" data-tg-esci aria-label="Chiudi">{{ icona('x', 18) }}</button></header>
+    <div class="finestra-dentro tg-dentro">
+        <div class="tg-schermo">
+            <video playsinline preload="metadata" data-tg-video></video>
+            <p class="tg-stato piccolo" role="status" data-tg-stato>Preparo il video…</p>
+        </div>
+        <div class="tg-comandi">
+            <button class="tasto-comando piccolo" type="button" data-tg-gira disabled>{{ icona('gioca', 14) }} <span data-tg-gira-scritta>Guarda</span></button>
+            <span class="numeri piccolo" data-tg-tempo>0:00 / 0:00</span>
+            <span class="tg-spazio"></span>
+            <button class="tasto-comando piccolo" type="button" data-tg-inizio disabled title="Il pezzo comincia qui (I)">Inizio qui</button>
+            <button class="tasto-comando piccolo" type="button" data-tg-fine disabled title="Il pezzo finisce qui (O)">Fine qui</button>
+        </div>
+        <div class="tg-linea" role="slider" tabindex="0" aria-label="Dove sei nel video" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" data-tg-linea>
+            <div class="tg-chiavi" data-tg-chiavi></div>
+            <div class="tg-pezzi" data-tg-pezzi-linea></div>
+            <div class="tg-segno" data-tg-segno hidden></div>
+            <div class="tg-testina" data-tg-testina></div>
+        </div>
+        <p class="minuscolo tenue">I tagli cadono sulle tacche, i fotogrammi chiave: lì il video si copia così com'è, senza perdere niente.</p>
+        <section class="tg-elenco" aria-label="Pezzi da tenere">
+            <h3 class="piccolo">Pezzi da tenere</h3>
+            <ol data-tg-elenco></ol>
+            <p class="piccolo attenuato" data-tg-vuoto>Scegli dove comincia e dove finisce un pezzo. Puoi tenerne quanti vuoi: si uniscono in ordine in un video solo.</p>
+        </section>
+        <p class="piccolo tg-aperto" data-tg-aperto hidden></p>
+        <p class="piccolo tg-errore" role="alert" data-tg-errore hidden></p>
+        <div class="tg-piede">
+            <span class="piccolo attenuato numeri" data-tg-totale></span>
+            <span class="tg-spazio"></span>
+            <button class="tasto-comando" type="button" data-tg-annulla>Annulla</button>
+            <button class="tasto-comando principale" type="button" data-tg-crea disabled>Crea il video tagliato</button>
+        </div>
+        <p class="minuscolo tenue">L'originale resta com'è. Il video tagliato diventa uno scatto nuovo accanto a lui, con la stessa data, lo stesso luogo e i tuoi nodi.</p>
+    </div>
+</dialog>
+{% endmacro %}

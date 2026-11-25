@@ -36,6 +36,7 @@
 *.mkv
 
 # Esportazioni e pacchetti per il telefono (regole 85, 311, 67)
+/iphone/Prova/
 /esportazioni/
 /pacchetti/
 *.pacchetto

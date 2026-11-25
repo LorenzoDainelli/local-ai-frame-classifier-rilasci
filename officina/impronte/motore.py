@@ -153,6 +153,9 @@ class Passata:
         self._fermati.clear()
         self.avanzamento.totale = min(
             self.quanti_mancano(), quanti_al_massimo or 10 ** 9)
+        if self.avanzamento.totale == 0:
+            registro.evento("impronte.passata_gia_finita")
+            return self.avanzamento
 
         descrittore = apri_descrittore(self.carta.nome, self.archivio.dove.modelli)
         freno = torcia.Freno(self.intensita, fermato=lambda: self.fermata)
@@ -469,8 +472,20 @@ class Coda:
                 self.finite.append(self.passata.avanzamento)
                 self.passata = None
         if not self.fermata:
+            self._fai_i_pezzi()
             self._togli_le_superate()
         return self
+
+    def _fai_i_pezzi(self) -> None:
+        from officina.apprendimento import pezzi, proposte
+
+        try:
+            with self.archivio.lettura() as connessione:
+                nome, _ = proposte.scegli_descrittore(connessione)
+            if nome in self.nomi:
+                pezzi.Pezzi(self.archivio, nome).esegui(lambda: self.fermata)
+        except Exception as guasto:
+            registro.errore("impronte.pezzi_non_fatti", **registro.dove_si_e_rotto(guasto))
 
     def _togli_le_superate(self) -> None:
         from officina.descrittori import sgombero

@@ -788,6 +788,9 @@
             {% else %}
             <p class="piccolo tenue">Questa scelta si fa dal computer dove gira il programma.</p>
             {% endif %}
+            {% if forziere_acceso %}
+            <p style="margin-top:var(--s3)"><a class="tasto-comando" href="/chiavi">Le chiavi nel forziere</a></p>
+            {% endif %}
 
             <p class="sd" style="margin:var(--s6) 0 var(--s3)">
                 Il blocco automatico <span class="tenue"></span></p>
@@ -903,7 +906,7 @@
                         <span class="costo">qualche minuto · perdi solo
                             l'apprendimento, non il lavoro</span>
                     </div>
-                    {% if da_questo_computer %}
+                    {% if comanda %}
                     <button class="tasto-pericolo" type="button"
                             data-pericolo="Azzera l'addestramento|azzera|Le tue etichette e l'albero non si toccano: il sistema le rilegge da capo.|/impostazioni/azzera-addestramento">avvia</button>
                     {% else %}
@@ -947,7 +950,7 @@
                             tocca né i dati né l'albero.</p>
                         <span class="costo">immediato · nessun dato perso</span>
                     </div>
-                    {% if da_questo_computer %}
+                    {% if comanda %}
                     <button class="tasto-pericolo" type="button"
                             data-pericolo="Riporta le impostazioni come erano|reimposta|Torna tutto ai valori di partenza. Dati, albero ed etichette non si toccano.|/impostazioni/riporta-i-valori">avvia</button>
                     {% else %}
@@ -1005,9 +1008,9 @@
 {% endmacro %}
 
 {% block coda %}
-<script type="module" src="/statici/js/impostazioni.js"></script>
-<script type="module" src="/statici/js/copia_esterna.js"></script>
-<script type="module" src="/statici/js/impostazioni_versioni.js"></script>
-<script type="module" src="/statici/js/gara_video.js"></script>
-<script type="module" src="/statici/js/prova_veloce.js"></script>
+<script type="module" src="{{ statico('/statici/js/impostazioni.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/copia_esterna.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/impostazioni_versioni.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/gara_video.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/prova_veloce.js') }}"></script>
 {% endblock %}

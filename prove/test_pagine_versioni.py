@@ -139,51 +139,38 @@ def test_le_persone_hanno_le_loro_due_versioni(cliente, archivio_pieno):
     assert "pagina-persone persone-a" in pagina
     assert 'class="carta pe-invito"' in pagina and 'href="/persone/mazzo"' in pagina
     assert "persona 1" in pagina
-    assert "/statici/js/mazzo.js" not in pagina
+    assert 'src="/statici/js/mazzo.js' not in pagina
 
     aspetto.imposta("persone", "C")
     pagina = cliente.get("/persone").text
     assert "pagina-persone persone-c" in pagina
     assert 'data-persona="' in pagina and "data-senza-fuoco" in pagina
     assert "Non lo so, dopo" in pagina and 'id="dai-il-nome"' in pagina
-    assert "/statici/js/mazzo.js" in pagina
+    assert 'src="/statici/js/mazzo.js' in pagina
     assert "persona 1" in pagina
 
 
-def test_telefono_e_computer_hanno_le_loro_tre_versioni(cliente):
+def test_telefono_e_computer_hanno_la_loro_pagina(cliente):
     import re
-
-    from officina.programma import aspetto
 
     risposta = cliente.post("/telefono/nuovo", data={"nome": "telefono 1", "sistema": "ios"},
                             headers={"referer": "http://testserver/fuori"},
                             follow_redirects=False)
     assert risposta.headers["location"].startswith("/fuori?quale=")
     pagina = cliente.get("/fuori").text
-    assert "pagina-fuori fuori-a" in pagina
-    assert pagina.count('class="carta fu-carta') == 3
+    assert "fuori-a" not in pagina and "fuori-b" not in pagina
+    assert 'class="fu-griglia" style="--colonne: 2"' in pagina
+    assert pagina.count('class="carta fu-dev ') == 4
     assert 'href="/fuori?dove=portatile"' in pagina
     assert 'id="selezione"' in pagina and 'id="tasto-parti"' in pagina
-    assert 'id="peso-totale"' in pagina
+    assert "data-sfoglia" in pagina
+    assert 'id="peso-totale"' in pagina and 'id="non-etichettate" checked' in pagina
+    assert '<dialog class="finestra larga" id="scelte"' in pagina
+    assert len(re.findall(r'class="carta fu-passo[ "]', pagina)) == 3
     pagina = cliente.get("/fuori?dove=computer").text
     assert "Fai il pacchetto" in pagina and 'action="/sincronia/dove"' in pagina
     pagina = cliente.get("/fuori?dove=portatile").text
     assert 'action="/schermo/apri"' in pagina and 'id="selezione"' not in pagina
-
-    aspetto.imposta("collegamenti", "B")
-    pagina = cliente.get("/fuori").text
-    assert "pagina-fuori fuori-b" in pagina
-    assert pagina.count('class="carta fu-dev"') == 3
-    assert 'href="/telefono' not in pagina
-    assert '<dialog class="finestra larga" id="scelte"' in pagina
-
-    aspetto.imposta("collegamenti", "C")
-    pagina = cliente.get("/fuori").text
-    assert "pagina-fuori fuori-c" in pagina
-    assert len(re.findall(r'class="fu-passo[ "]', pagina)) == 4
-    assert '<dialog class="finestra larga" id="scelte"' in pagina
-    pagina = cliente.get("/fuori?dove=computer").text
-    assert len(re.findall(r'class="fu-passo[ "]', pagina)) == 3
 
 
 def test_i_tasti_premuti_da_telefono_e_computer_tornano_li(cliente, tmp_path):
@@ -200,7 +187,7 @@ def test_le_versioni_nuove_si_provano(cliente):
     from officina.programma import aspetto
     from officina.web import in_prova
 
-    for chiave in ("foto", "persone", "collegamenti", "doppioni",
+    for chiave in ("foto", "persone", "doppioni",
                    "miglioramento"):
         ultima = list(aspetto.VOCI[chiave]["versioni"])[-1]
         risposta = cliente.post("/prova/comincia", data={

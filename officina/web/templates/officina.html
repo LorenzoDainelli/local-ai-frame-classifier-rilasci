@@ -138,5 +138,5 @@
 
 {% block coda %}
 <script id="dati-officina" type="application/json">{{ dati|safe }}</script>
-<script type="module" src="/statici/js/officina.js"></script>
+<script type="module" src="{{ statico('/statici/js/officina.js') }}"></script>
 {% endblock %}

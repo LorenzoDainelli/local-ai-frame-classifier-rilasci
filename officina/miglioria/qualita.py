@@ -8,6 +8,7 @@ from pathlib import Path
 
 from officina.archivio import memoria
 from officina.importazione import gruppi
+from officina.importazione.metadati import NOME_SCHERMATA
 
 BASSA = "bassa"
 MEDIA = "media"
@@ -34,8 +35,7 @@ SOLO_VIDEO = "video"
 _WHATSAPP = re.compile(r"^(IMG|VID|PTT|AUD|STK)-\d{8}-WA\d+", re.IGNORECASE)
 _INSTAGRAM = re.compile(r"^\d{6,}_\d{6,}_\d{6,}_[no]\.", re.IGNORECASE)
 _IPHONE = re.compile(r"^IMG_(E)?\d{4}\.(heic|jpe?g|mov|png|mp4)$", re.IGNORECASE)
-_SCHERMATA = re.compile(r"^(screenshot|schermata|screen shot|screen_recording|"
-                        r"registrazione schermo)", re.IGNORECASE)
+_SCHERMATA = NOME_SCHERMATA
 
 
 def voto(larghezza: int | None, altezza: int | None) -> str | None:

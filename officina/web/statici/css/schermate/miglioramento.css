@@ -45,7 +45,6 @@
 
 .lu-punto.scelto .lu-punto-nome { color: var(--ink); font-weight: 500; }
 
-.fu-carta.scelta { outline: 2px solid var(--accento); outline-offset: -1px; }
 
 .pagina-miglioramento { display: grid; gap: 18px; align-content: start; }
 .pagina-miglioramento.mg-b { max-width: none; }

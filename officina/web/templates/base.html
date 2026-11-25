@@ -6,19 +6,22 @@
     <title>{% block titolo %}Local AI Frame Classifier{% endblock %}</title>
 
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3CclipPath id='c'%3E%3Crect width='200' height='200' rx='44'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23c)'%3E%3Crect width='200' height='200' fill='%23D97757'/%3E%3Crect x='34' y='114' width='132' height='132' rx='20' fill='%23FAF9F5' stroke='%23141413' stroke-width='5'/%3E%3Ccircle cx='140' cy='142' r='11' fill='%23D97757'/%3E%3Cellipse cx='78' cy='170' rx='8.8' ry='11' fill='%23141413'/%3E%3Cellipse cx='112' cy='170' rx='8.8' ry='11' fill='%23141413'/%3E%3C/g%3E%3C/svg%3E">
-    <link rel="stylesheet" href="/statici/css/fondamenta.css">
-    <link rel="stylesheet" href="/statici/css/componenti.css">
+    {{ mappa_dei_moduli() }}
+    <link rel="stylesheet" href="{{ statico('/statici/css/fondamenta.css') }}">
+    <link rel="stylesheet" href="{{ statico('/statici/css/componenti.css') }}">
     {% for foglio in fogli_delle_schermate %}
-    <link rel="stylesheet" href="/statici/css/schermate/{{ foglio }}.css">
+    <link rel="stylesheet" href="{{ statico('/statici/css/schermate/' ~ foglio ~ '.css') }}">
     {% endfor %}
-    <link rel="stylesheet" href="/statici/css/telaio.css">
-    <link rel="stylesheet" href="/statici/css/movimenti.css">
-    <script src="/statici/js/foto_aperta.js"></script>
-    <script src="/statici/js/fotina_scene.js" defer></script>
+    <link rel="stylesheet" href="{{ statico('/statici/css/telaio.css') }}">
+    <link rel="stylesheet" href="{{ statico('/statici/css/movimenti.css') }}">
+    <link rel="stylesheet" href="{{ statico('/statici/css/gesti.css') }}">
+    <script src="{{ statico('/statici/js/foto_aperta.js') }}"></script>
+    <script src="{{ statico('/statici/js/fotina_scene.js') }}" defer></script>
     <script type="speculationrules">{"prefetch": [{"where": {"and": [{"href_matches": "/*"}, {"not": {"href_matches": ["/fuori*", "/esci*", "/chiudi*", "/giro/*", "/immagine/*", "/video/*", "/api/*", "/prova/*", "/blocco*", "/una-foto*", "/originale/*", "/fotogramma/*", "/live/*", "/schermo/*", "/benvenuto*", "/novita*", "/sincronia*", "/volti/*", "/miniatura/*"]}}, {"not": {"selector_matches": "[data-no-prefetch], [download]"}}]}, "eagerness": "moderate"}]}</script>
-    <script type="module" src="/statici/js/torna.js"></script>
-    <script type="module" src="/statici/js/movimenti.js"></script>
-    <script type="module" src="/statici/js/movimenti_pagine.js"></script>
+    <script type="module" src="{{ statico('/statici/js/torna.js') }}"></script>
+    <script type="module" src="{{ statico('/statici/js/movimenti.js') }}"></script>
+    <script type="module" src="{{ statico('/statici/js/movimenti_pagine.js') }}"></script>
+    <script type="module" src="{{ statico('/statici/js/gesti.js') }}"></script>
 
 </head>
 
@@ -81,26 +84,27 @@
 </div>
 
 
-<script type="module" src="/statici/js/lente.js"></script>
-<script type="module" src="/statici/js/ingrandisci.js"></script>
+<script type="module" src="{{ statico('/statici/js/lente.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/ingrandisci.js') }}"></script>
 
 {% include "_novita.html" %}
 
 <div class="velo-albero" id="velo-albero" hidden
      role="dialog" aria-modal="true" aria-label="La mappa dell'albero"></div>
-<script type="module" src="/statici/js/albero_sopra.js"></script>
+<script type="module" src="{{ statico('/statici/js/albero_sopra.js') }}"></script>
 
-<script type="module" src="/statici/js/navigazione.js"></script>
-<script type="module" src="/statici/js/sei_qui.js"></script>
-<script type="module" src="/statici/js/programma.js"></script>
-<script type="module" src="/statici/js/spiega.js"></script>
-<script type="module" src="/statici/js/finestre.js"></script>
+<script type="module" src="{{ statico('/statici/js/navigazione.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/sei_qui.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/programma.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/spiega.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/finestre.js') }}"></script>
+<script type="module" src="{{ statico('/statici/js/scegli_cartella.js') }}"></script>
 
 {% if forziere_acceso and impostazioni.blocco_dopo_minuti %}
-<script type="module" src="/statici/js/blocco.js"></script>
+<script type="module" src="{{ statico('/statici/js/blocco.js') }}"></script>
 {% endif %}
 {% if aspetta_il_portatile %}
-<script type="module" src="/statici/js/arriva_il_portatile.js"></script>
+<script type="module" src="{{ statico('/statici/js/arriva_il_portatile.js') }}"></script>
 {% endif %}
 {% block coda %}{% endblock %}
 </body>

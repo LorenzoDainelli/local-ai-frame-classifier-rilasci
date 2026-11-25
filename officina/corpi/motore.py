@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from officina import registro
+from officina import anticipo, registro
 from officina.archivio.accesso import Archivio
 from officina.archivio.database import tutti, uno
 from officina.corpi import Interrotta, MancanoIModelli, NonSiAccende
@@ -91,6 +91,8 @@ class Passata:
         self.avanzamento.totale = len(da_fare)
         self._memoria = torcia.ContoDellaMemoria()
 
+        self._letture = anticipo.Letture(da_fare, self._leggi, lambda: self.fermata,
+                                         "corpi-legge")
         try:
             self._accendi(bool(da_fare))
             for gruppo in self._a_gruppi(da_fare):
@@ -105,6 +107,7 @@ class Passata:
                     al_passo(self.avanzamento)
                 freno.riposa(time.monotonic() - partito)
         finally:
+            self._letture.close()
             self.rilevatore.spegni()
         registro.evento("corpi.passata", fatti=self.avanzamento.fatti,
                         corpi=self.avanzamento.corpi)
@@ -195,24 +198,30 @@ class Passata:
             if tetto and letti and quadri_in_tutto >= tetto:
                 self._completa_e_salva(letti)
                 letti, quadri_in_tutto = [], 0
+            pezzi = self._letture.di(scatto_id)
             try:
-                file_id, quadri = self._leggi(scatto_id)
+                file_id = None
                 visti = []
-                for numero, lavoro, intera in quadri:
+                for file_id, (numero, lavoro, intera) in pezzi:
                     if self.fermata:
                         raise Interrotta()
                     visti.append((numero, *self._trova(lavoro, intera)))
             except (Interrotta, MancanoIModelli):
                 raise
+            except anticipo.Esaurite as finite:
+                raise Interrotta() from finite
             except NonSiAccende as guasto:
                 raise _non_si_accendono(guasto.__cause__ or guasto) from guasto
             except DaRifare as errore:
+                self._letture.scarta(scatto_id, pezzi)
                 self._rimanda(errore.codice)
                 continue
             except ErroreOfficina as errore:
+                self._letture.scarta(scatto_id, pezzi)
                 self._segnala(scatto_id, errore)
                 continue
             except Exception as guasto:          # noqa: BLE001
+                self._letture.scarta(scatto_id, pezzi)
                 if torcia.memoria_finita(guasto):
                     self._memoria.finita(scatto_id, guasto)
                 else:

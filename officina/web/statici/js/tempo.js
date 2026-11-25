@@ -579,6 +579,14 @@ function centraSuIPunti(durata = 320) {
     volaVerso(vistaPer(xMin, xMax, yMin, yMax), durata);
 }
 
+const postoChiesto = posti.find((p) => String(p.posto_id) === new URLSearchParams(window.location.search).get("posto")) || null;
+
+function centraSulPosto(posto, durata = 320) {
+    const metri = Math.max(Number(posto.raggio) || 0, 250) * 1.6;
+    const d = metri / (40075016 * Math.max(Math.cos(posto.la * Math.PI / 180), 0.01));
+    volaVerso(vistaPer(posto.x - d, posto.x + d, posto.y - d, posto.y + d), durata);
+}
+
 function sottoIlDito(sx, sy) {
     for (let i = gruppi.length - 1; i >= 0; i--) {
         const g = gruppi[i];
@@ -734,7 +742,8 @@ async function caricaIPunti() {
             : "Nessuno scatto sa ancora dove è stato fatto: quando le foto hanno il GPS, compaiono qui.");
         if (primoCentro) {
             primoCentro = false;
-            centraSuIPunti(0);
+            if (postoChiesto) centraSulPosto(postoChiesto, 0);
+            else centraSuIPunti(0);
         }
         chiediDisegno();
     } catch (errore) {

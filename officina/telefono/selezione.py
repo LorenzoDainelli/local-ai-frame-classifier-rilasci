@@ -53,12 +53,16 @@ def _guardato(ia: str) -> tuple[str, list]:
             [rilevatore.NOME, rilevatore.VERSIONE])
 
 
-def condizioni_di_pronto(ia: tuple[str, ...] = ()) -> tuple[list[str], list]:
+ETICHETTATA = ("EXISTS (SELECT 1 FROM etichette e JOIN nodi n ON n.id = e.nodo_id "
+               "WHERE e.scatto_id = s.id AND e.stato = 'si' AND n.stato = 'attivo')")
+
+
+def condizioni_di_pronto(ia: tuple[str, ...] = (),
+                         etichettate: bool = True) -> tuple[list[str], list]:
     from officina.miglioria import coda
 
-    pezzi = [
-        "EXISTS (SELECT 1 FROM etichette e JOIN nodi n ON n.id = e.nodo_id "
-        "WHERE e.scatto_id = s.id AND e.stato = 'si' AND n.stato = 'attivo')",
+    pezzi = [ETICHETTATA] if etichettate else []
+    pezzi += [
         "NOT EXISTS (SELECT 1 FROM migliorie m WHERE m.scatto_id = s.id "
         f"AND m.stato IN ({','.join(repr(a) for a in coda.ATTIVE)}))",
     ]
@@ -80,7 +84,8 @@ class Selezione:
     persone: list[int] = field(default_factory=list)
     persone_escluse: list[int] = field(default_factory=list)
     senza_data: bool = True
-
+    non_etichettate: bool = True
+    scatti_tolti: list[int] = field(default_factory=list)
 
     def a_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False, sort_keys=True)
@@ -102,7 +107,8 @@ class Selezione:
     def e_tutto(self) -> bool:
         return not any([self.nodi, self.nodi_esclusi, self.dal_giorno,
                         self.al_giorno, self.persone, self.persone_escluse,
-                        not self.senza_data])
+                        not self.senza_data, not self.non_etichettate,
+                        self.scatti_tolti])
 
     def a_parole(self) -> str:
         if self.e_tutto:
@@ -127,6 +133,11 @@ class Selezione:
                                            "ramo", "rami"))
         if not self.senza_data:
             pezzi.append("senza gli scatti senza data")
+        if not self.non_etichettate:
+            pezzi.append("solo quelle già etichettate")
+        if self.scatti_tolti:
+            pezzi.append("tranne " + conta(len(self.scatti_tolti), "scatto tolto a mano",
+                                           "scatti tolti a mano"))
         return ", ".join(pezzi) if pezzi else "tutto l'archivio"
 
 
@@ -150,8 +161,9 @@ def _condizione_persona(persona_id: int) -> tuple[str, list]:
 
 
 def condizioni(connessione, scelta: Selezione, ia: tuple[str, ...] = (),
-               pronti: bool = True) -> tuple[str, list]:
-    pronto, parametri = condizioni_di_pronto(ia) if pronti else ([], [])
+               pronti: bool = True, con_tolti: bool = True) -> tuple[str, list]:
+    pronto, parametri = (condizioni_di_pronto(ia, not scelta.non_etichettate)
+                         if pronti else ([], []))
     pezzi = [
         "s.fuori_archivio = 0",
         "s.sembra_schermata = 0",
@@ -189,6 +201,10 @@ def condizioni(connessione, scelta: Selezione, ia: tuple[str, ...] = (),
         sql, valori = _condizione_persona(persona_id)
         pezzi.append("NOT " + sql)
         parametri.extend(valori)
+
+    if con_tolti and scelta.scatti_tolti:
+        pezzi.append("s.id NOT IN (SELECT value FROM json_each(?))")
+        parametri.append(json.dumps(sorted(set(scelta.scatti_tolti))))
 
     return " AND ".join(pezzi), parametri
 
@@ -294,6 +310,57 @@ def a_misura(byte: int) -> str:
     return f"{byte} byte"
 
 
+PERCHE_IA = {"volti": "ancora da guardare per i volti",
+             "corpi": "ancora da guardare per le figure",
+             "scritte": "ancora da leggere per le scritte"}
+
+
+def perche_fuori(connessione, scelta: Selezione,
+                 ia: tuple[str, ...] = ()) -> tuple[int, list[tuple[str, int]]]:
+    from officina.miglioria import coda
+
+    def quanti(dove: str, parametri: list) -> int:
+        riga = uno(connessione, f"SELECT count(*) AS q FROM scatti s WHERE {dove}", *parametri)
+        return riga["q"] if riga else 0
+
+    con_data = Selezione(**{**scelta.__dict__, "senza_data": True})
+    passi: list[tuple[str, str, list]] = [
+        ("", "s.fuori_archivio = 0", []),
+        ("schermate", "s.fuori_archivio = 0 AND s.sembra_schermata = 0", []),
+        ("fuori dalla tua scelta (periodo, rami, persone)",
+         *condizioni(connessione, con_data, pronti=False)),
+        ("senza data", *condizioni(connessione, scelta, pronti=False)),
+    ]
+    dove, parametri = passi[-1][1], list(passi[-1][2])
+    aggiunte: list[tuple[str, str, list]] = []
+    if not scelta.non_etichettate:
+        aggiunte.append(("non ancora etichettate", ETICHETTATA, []))
+    aggiunte.append((
+        "ancora in miglioramento",
+        ("NOT EXISTS (SELECT 1 FROM migliorie m WHERE m.scatto_id = s.id "
+         f"AND m.stato IN ({','.join(repr(a) for a in coda.ATTIVE)}))"), []))
+    for chiave in ia:
+        sql, valori = _guardato(chiave)
+        aggiunte.append((PERCHE_IA[chiave], sql, valori))
+    for nome, sql, valori in aggiunte:
+        dove, parametri = f"{dove} AND {sql}", parametri + valori
+        passi.append((nome, dove, parametri))
+
+    conti = [quanti(d, p) for _, d, p in passi]
+    pezzi = [(passi[i][0], conti[i - 1] - conti[i])
+             for i in range(1, len(passi)) if conti[i - 1] > conti[i]]
+    return conti[0], pezzi
+
+
+def fuori_a_parole(totale: int, pezzi: list[tuple[str, int]]) -> str:
+    tolti = sum(n for _, n in pezzi)
+    if not tolti:
+        return f"Entrano tutti gli scatti dell'archivio ({a_numero(totale)})."
+    dettagli = ", ".join(f"{a_numero(n)} {nome}" for nome, n in pezzi)
+    return (f"Nell'archivio ci sono {a_numero(totale)} scatti: ne restano fuori "
+            f"{a_numero(tolti)} ({dettagli}).")
+
+
 def stima(connessione, scelta: Selezione,
           ia: tuple[str, ...] = ()) -> Stima:
     dove, parametri = condizioni(connessione, scelta, ia)
@@ -354,3 +421,47 @@ def stima(connessione, scelta: Selezione,
     conto.peso_database = cifratura.peso_cifrato(
         max(4096, conto.quanti_scatti * DATABASE_PER_SCATTO))
     return conto
+
+
+PESO_DI_CONTORNO = 60 * 1024
+
+
+def scatti_uno_per_uno(connessione, scelta: Selezione,
+                       ia: tuple[str, ...] = ()) -> list[dict]:
+    dove, parametri = condizioni(connessione, scelta, ia, con_tolti=False)
+    voci: dict[int, dict] = {}
+    contorno = cifratura.peso_cifrato(PESO_DI_CONTORNO) + DATABASE_PER_SCATTO
+    for r in tutti(connessione,
+                   f"SELECT s.id, s.genere, s.giorno, s.durata_ms FROM scatti s "
+                   f"WHERE {dove}", *parametri):
+        voci[r["id"]] = {"id": r["id"], "genere": r["genere"], "giorno": r["giorno"] or "",
+                         "durata_ms": r["durata_ms"] or 0,
+                         "peso": contorno,
+                         "file": None, "formato": "", "nome": "", "ramo": "",
+                         "_ruolo": None}
+    if not voci:
+        return []
+    for r in tutti(connessione,
+                   f"SELECT f.scatto_id, f.id, f.dimensione, f.formato, f.ruolo, "
+                   f"(SELECT min(p.nome) FROM percorsi p WHERE p.file_id = f.id) AS nome "
+                   f"FROM file_media f JOIN scatti s ON s.id = f.scatto_id "
+                   f"WHERE {dove}", *parametri):
+        voce = voci.get(r["scatto_id"])
+        if voce is None:
+            continue
+        voce["peso"] += cifratura.peso_cifrato(r["dimensione"] or 0)
+        primo = r["ruolo"] != "movimento"
+        if voce["file"] is None or (primo and voce["_ruolo"] == "movimento"):
+            voce["file"], voce["_ruolo"] = r["id"], r["ruolo"]
+            voce["formato"] = (r["formato"] or "").upper()
+            voce["nome"] = r["nome"] or ""
+    for r in tutti(connessione,
+                   f"SELECT e.scatto_id, min(n.nome) AS ramo FROM etichette e "
+                   f"JOIN nodi n ON n.id = e.nodo_id JOIN scatti s ON s.id = e.scatto_id "
+                   f"WHERE e.stato = 'si' AND n.stato = 'attivo' AND {dove} "
+                   f"GROUP BY e.scatto_id", *parametri):
+        if r["scatto_id"] in voci:
+            voci[r["scatto_id"]]["ramo"] = r["ramo"] or ""
+    for voce in voci.values():
+        del voce["_ruolo"]
+    return sorted(voci.values(), key=lambda v: (-v["peso"], v["id"]))

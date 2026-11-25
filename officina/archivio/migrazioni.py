@@ -1796,6 +1796,201 @@ def _versione_84(connessione: sqlite3.Connection) -> None:
         "HAVING max(id) IS NOT NULL")
 
 
+def _versione_85(connessione: sqlite3.Connection) -> None:
+    from officina.importazione.metadati import FORMATI_SCHERMATA, NOME_SCHERMATA
+    togliere = []
+    for riga in connessione.execute(
+            "SELECT s.id FROM scatti s WHERE s.sembra_schermata = 1").fetchall():
+        prove = connessione.execute(
+            "SELECT f.formato, p.nome FROM file_media f "
+            "LEFT JOIN percorsi p ON p.file_id = f.id "
+            "WHERE f.scatto_id = ?", (riga[0],)).fetchall()
+        if not prove:
+            continue
+        resta = any((formato or "").lower() in FORMATI_SCHERMATA
+                    or (nome and NOME_SCHERMATA.match(nome)) for formato, nome in prove)
+        if not resta:
+            togliere.append(riga[0])
+    for numero in togliere:
+        connessione.execute("UPDATE scatti SET sembra_schermata = 0 WHERE id = ?", (numero,))
+        connessione.execute(
+            "UPDATE file_media SET sembra_schermata = 0 WHERE scatto_id = ?", (numero,))
+        connessione.execute(
+            "UPDATE segnalazioni SET risolta = 1 WHERE tipo = 'schermata' AND scatto_id = ?",
+            (numero,))
+
+
+def _versione_86(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE TABLE gia_presenti ("
+        "id INTEGER PRIMARY KEY, "
+        "importazione_id INTEGER NOT NULL REFERENCES importazioni(id) ON DELETE CASCADE, "
+        "percorso TEXT NOT NULL, "
+        "motivo TEXT NOT NULL, "
+        "file_id INTEGER, "
+        "scatto_id INTEGER, "
+        "UNIQUE (importazione_id, percorso))")
+
+
+def indici_dei_legami(connessione: sqlite3.Connection) -> list[str]:
+    fatti = []
+    tabelle = [riga[0] for riga in connessione.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
+    for tabella in tabelle:
+        primi = set()
+        for indice in connessione.execute(f"PRAGMA index_list('{tabella}')").fetchall():
+            colonne = connessione.execute(f"PRAGMA index_info('{indice[1]}')").fetchall()
+            if colonne:
+                primi.add(colonne[0][2])
+        chiave = [riga[1] for riga in connessione.execute(f"PRAGMA table_info('{tabella}')")
+                  if riga[5] == 1]
+        if chiave:
+            primi.add(chiave[0])
+        for legame in connessione.execute(f"PRAGMA foreign_key_list('{tabella}')").fetchall():
+            colonna = legame[3]
+            if colonna in primi:
+                continue
+            nome = f"legame_{tabella}_{colonna}"
+            connessione.execute(
+                f'CREATE INDEX IF NOT EXISTS "{nome}" ON "{tabella}"("{colonna}") '
+                f'WHERE "{colonna}" IS NOT NULL')
+            primi.add(colonna)
+            fatti.append(nome)
+    return fatti
+
+
+def _versione_87(connessione: sqlite3.Connection) -> None:
+    indici_dei_legami(connessione)
+
+
+def _versione_88(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE TABLE tagli ("
+        "id INTEGER PRIMARY KEY, "
+        "scatto_id INTEGER NOT NULL REFERENCES scatti(id) ON DELETE CASCADE, "
+        "file_id INTEGER REFERENCES file_media(id) ON DELETE SET NULL, "
+        "da_scatto_id INTEGER REFERENCES scatti(id) ON DELETE SET NULL, "
+        "da_file_id INTEGER REFERENCES file_media(id) ON DELETE SET NULL, "
+        "da_impronta TEXT NOT NULL, "
+        "pezzi TEXT NOT NULL, "
+        "fatto_il TEXT NOT NULL, "
+        "UNIQUE (scatto_id))")
+    indici_dei_legami(connessione)
+
+
+def _versione_89(connessione: sqlite3.Connection) -> None:
+    connessione.execute("ALTER TABLE cartelle_sorgente ADD COLUMN conclusa_da INTEGER "
+                        "REFERENCES importazioni(id) ON DELETE SET NULL")
+    connessione.execute(
+        "CREATE TABLE cartelle_importazione ("
+        "importazione_id INTEGER NOT NULL REFERENCES importazioni(id) ON DELETE CASCADE, "
+        "cartella_id INTEGER NOT NULL REFERENCES cartelle_sorgente(id) ON DELETE CASCADE, "
+        "PRIMARY KEY (importazione_id, cartella_id))")
+    connessione.execute(
+        "CREATE INDEX cartelle_importazione_cartella ON cartelle_importazione(cartella_id)")
+    indici_dei_legami(connessione)
+    ultima = connessione.execute(
+        "SELECT id, iniziata_il FROM importazioni WHERE stato = 'finita' "
+        "ORDER BY id DESC LIMIT 1").fetchone()
+    if ultima is None:
+        return
+    connessione.execute(
+        "UPDATE cartelle_sorgente SET attiva = 0, conclusa_da = ? "
+        "WHERE attiva = 1 AND aggiunta_il <= ? "
+        "AND EXISTS (SELECT 1 FROM percorsi p WHERE p.cartella_id = cartelle_sorgente.id) "
+        "AND NOT EXISTS (SELECT 1 FROM importazioni i WHERE i.stato = 'in_corso')",
+        (ultima[0], ultima[1]))
+
+
+def _versione_90(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        "CREATE TABLE mosse_dei_luoghi ("
+        "id INTEGER PRIMARY KEY, "
+        "genere TEXT NOT NULL CHECK (genere IN ('unione', 'luogo', 'non_so')), "
+        "fatta_il TEXT NOT NULL, "
+        "da_id INTEGER REFERENCES posti(id) ON DELETE SET NULL, "
+        "verso_id INTEGER REFERENCES posti(id) ON DELETE SET NULL, "
+        "scatti INTEGER NOT NULL DEFAULT 0, "
+        "dati TEXT NOT NULL, "
+        "annullata_il TEXT)")
+    connessione.execute(
+        "CREATE INDEX mosse_dei_luoghi_per_arrivo ON mosse_dei_luoghi(verso_id, annullata_il)")
+    indici_dei_legami(connessione)
+
+
+def _versione_91(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE sagome (
+            id              INTEGER PRIMARY KEY,
+            scatto_id       INTEGER NOT NULL REFERENCES scatti(id) ON DELETE CASCADE,
+            file_id         INTEGER NOT NULL REFERENCES file_media(id) ON DELETE CASCADE,
+            fotogramma      INTEGER NOT NULL DEFAULT -1,
+            istante_ms      INTEGER,
+            nodo_id         INTEGER NOT NULL REFERENCES nodi(id) ON DELETE CASCADE,
+            maschera        BLOB NOT NULL,
+            x               REAL NOT NULL,
+            y               REAL NOT NULL,
+            w               REAL NOT NULL,
+            h               REAL NOT NULL,
+            area            REAL NOT NULL,
+            come            TEXT NOT NULL,
+            sicurezza       REAL,
+            da_controllare  INTEGER NOT NULL DEFAULT 0,
+            buona           INTEGER NOT NULL DEFAULT 1,
+            origine_id      INTEGER REFERENCES sagome(id) ON DELETE CASCADE,
+            parte_persa     INTEGER REFERENCES parti_del_corpo(id) ON DELETE SET NULL,
+            creata_il       TEXT NOT NULL,
+            cambiata_il     TEXT NOT NULL,
+            UNIQUE (file_id, fotogramma, nodo_id)
+        )
+        """)
+    connessione.execute("CREATE INDEX sagome_per_scatto ON sagome(scatto_id)")
+    connessione.execute("CREATE INDEX sagome_per_nodo ON sagome(nodo_id, buona)")
+    connessione.execute(
+        """
+        CREATE TABLE impronte_sagome (
+            sagoma_id    INTEGER NOT NULL REFERENCES sagome(id) ON DELETE CASCADE,
+            descrittore  TEXT NOT NULL,
+            versione     TEXT NOT NULL,
+            valori       BLOB NOT NULL,
+            calcolata_il TEXT NOT NULL,
+            PRIMARY KEY (sagoma_id, descrittore, versione)
+        )
+        """)
+    connessione.execute(
+        """
+        CREATE TABLE parti_imparate (
+            parte_id     INTEGER PRIMARY KEY REFERENCES parti_del_corpo(id) ON DELETE CASCADE,
+            descrittore  TEXT NOT NULL,
+            versione     TEXT NOT NULL,
+            pesi         BLOB NOT NULL,
+            esempi       INTEGER NOT NULL,
+            firma        TEXT NOT NULL,
+            misura       TEXT NOT NULL DEFAULT '{}',
+            allenata_il  TEXT NOT NULL
+        )
+        """)
+    connessione.execute(
+        """
+        CREATE TABLE parti_imparate_guardate (
+            scatto_id   INTEGER NOT NULL REFERENCES scatti(id) ON DELETE CASCADE,
+            parte_id    INTEGER NOT NULL REFERENCES parti_del_corpo(id) ON DELETE CASCADE,
+            firma       TEXT NOT NULL,
+            quante      INTEGER NOT NULL DEFAULT 0,
+            guardata_il TEXT NOT NULL,
+            PRIMARY KEY (scatto_id, parte_id)
+        )
+        """)
+    connessione.execute(
+        "ALTER TABLE parti_trovate ADD COLUMN come TEXT NOT NULL DEFAULT 'parola'")
+    connessione.execute(
+        "ALTER TABLE parti_trovate ADD COLUMN da_controllare INTEGER NOT NULL DEFAULT 0")
+    connessione.execute(
+        "ALTER TABLE parti_trovate ADD COLUMN maschera BLOB")
+    indici_dei_legami(connessione)
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -1950,6 +2145,20 @@ MIGRAZIONI: list[Migrazione] = [
                    "una volta sola", _versione_83),
     Migrazione(84, "con quale macchina e quale obiettivo è fatta ogni foto, per cercarle "
                    "e filtrarle", _versione_84),
+    Migrazione(85, "le foto salvate da Snapchat e simili non sono più prese per schermate",
+               _versione_85),
+    Migrazione(86, "di ogni importazione si ricorda quali file erano già presenti e perché",
+               _versione_86),
+    Migrazione(87, "annullare un'importazione o togliere scatti non rilegge più tutto "
+                   "l'archivio per ogni file", _versione_87),
+    Migrazione(88, "un video tagliato ricorda da quale video viene e quali pezzi tiene",
+               _versione_88),
+    Migrazione(89, "una cartella importata per intero passa nelle importazioni di prima",
+               _versione_89),
+    Migrazione(90, "unire due luoghi o dare un luogo a tanti scatti si può annullare",
+               _versione_90),
+    Migrazione(91, "le sagome disegnate sulle etichette e le parti del corpo imparate "
+                   "dalle sagome", _versione_91),
 ]
 
 
