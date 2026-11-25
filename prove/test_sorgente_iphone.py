@@ -3,7 +3,13 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 RADICE = Path(__file__).resolve().parent.parent / "iphone"
+
+pytestmark = pytest.mark.skipif(
+    not (RADICE / "strumenti" / "fai_sorgente.py").is_file(),
+    reason="la cartella iphone sta nel suo deposito e non viene copiata nei rilasci")
 
 
 def _fai_sorgente():
