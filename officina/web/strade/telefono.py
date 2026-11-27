@@ -221,6 +221,18 @@ async def telefono_selezione(richiesta: Request, telefono_id: int):
     return RedirectResponse(da_fuori(richiesta, _al_telefono(telefono_id)), status_code=303)
 
 
+@strada.get("/api/telefono/{telefono_id}/novita")
+def telefono_novita(telefono_id: int):
+    if telefono_web.in_corso.lavoro.sta_lavorando:
+        return JSONResponse({"a_parole": "", "tempo": ""})
+    archivio = accesso.aperto()
+    try:
+        return JSONResponse(telefono_web.novita(archivio, telefono_id,
+                                                lontano=base.dal_portatile()))
+    except ErroreOfficina as guaio:
+        return JSONResponse({"a_parole": "", "non_so": guaio.messaggio, "tempo": ""})
+
+
 @strada.get("/telefono/{telefono_id}/scatti")
 def telefono_scatti(telefono_id: int):
     return JSONResponse(telefono_web.scatti_del_pacchetto(accesso.aperto(), telefono_id))

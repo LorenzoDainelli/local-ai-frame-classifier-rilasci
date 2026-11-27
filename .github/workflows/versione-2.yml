@@ -46,17 +46,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  spazio:
+    name: Quanti pezzi di prove
+    if: github.event_name == 'push' || inputs.linux != 'no'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      quanti: ${{ steps.conta.outputs.quanti }}
+      pezzi: ${{ steps.conta.outputs.pezzi }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: strumenti/quanti_pezzi.py
+          sparse-checkout-cone-mode: false
+      - id: conta
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 strumenti/quanti_pezzi.py
+
   prove:
-    name: Prove su Linux, pezzo ${{ matrix.pezzo }} di 4
+    name: Prove su Linux, pezzo ${{ matrix.pezzo }} di ${{ needs.spazio.outputs.quanti }}
+    needs: spazio
     if: github.event_name == 'push' || inputs.linux != 'no'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        pezzo: [1, 2, 3, 4]
+        pezzo: ${{ fromJSON(needs.spazio.outputs.pezzi) }}
     env:
-      OFFICINA_PEZZO: ${{ matrix.pezzo }}/4
+      OFFICINA_PEZZO: ${{ matrix.pezzo }}/${{ needs.spazio.outputs.quanti }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

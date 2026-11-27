@@ -90,7 +90,7 @@
 <div class="fu-vivo" id="travaso-vivo" {{ 'hidden' if not in_corso.sta_lavorando }}>
     <span class="piccolo tenue" id="fase-travaso">{{ in_corso.fase if in_corso.sta_lavorando else '' }}</span>
     <span class="barretta" aria-hidden="true"><span id="barra-travaso" style="width: {{ in_corso.percentuale }}%"></span></span>
-    <p class="piccolo attenuato"><span id="conto-travaso">{% if in_corso.quanti %}{{ in_corso.fatti }} di {{ in_corso.quanti }}{% else %}sto contando cosa manca{% endif %}</span> · va avanti anche se cambi schermata o chiudi la finestra.</p>
+    <p class="piccolo attenuato"><span id="conto-travaso">{% if in_corso.quanti %}{{ in_corso.fatti }} di {{ in_corso.quanti }}{% else %}sto contando cosa manca{% endif %}</span><span id="tempo-travaso">{% if in_corso.mancano %} · {{ in_corso.mancano }}{% endif %}</span> · va avanti anche se cambi schermata o chiudi la finestra.</p>
     <form method="post" action="/telefono/ferma"><button class="tasto-comando piccolo" type="submit">Fermati</button></form>
 </div>
 <pre class="righe-lavoro" id="righe-travaso" {{ 'hidden' if not in_corso.righe }}>{{ in_corso.righe | join('\n') }}</pre>
@@ -157,6 +157,8 @@
         <span class="fu-etichetta">{{ "Pronto" if conto.quanti_scatti else "Il prossimo passo" }}</span>
         <h2>{% if telefono.sistema == 'ios' %}Attacca l'iPhone e copia{% else %}Prepara il pacchetto{% endif %}</h2>
         <p>{% if telefono.sistema == 'ios' %}iPhone sbloccato, Visore chiuso, blocco automatico su «Mai». {% endif %}Va avanti anche se chiudi la finestra. La prima volta porta tutto, poi solo quello che cambia.</p>
+        <p class="fu-novita" id="fu-novita" data-novita="{{ telefono.id }}"><span class="piccolo tenue">Guardo cosa è cambiato dall'ultima copia…</span></p>
+        <p class="piccolo tenue" id="fu-tempo" hidden></p>
     </div>
     {{ la_partenza() }}
     {% endif %}

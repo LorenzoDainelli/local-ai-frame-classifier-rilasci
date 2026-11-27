@@ -385,3 +385,56 @@ def test_fermato_mentre_vanno_due_strade_lo_dice(pronto):
 
     assert esito.interrotto
     assert not (_lassu(radice) / formato.CARTA).exists()
+
+
+class _CadeSenzaSalvare(cavo.FintoTelefono):
+
+    def __init__(self, radice, quanti):
+        super().__init__(radice)
+        self.quanti = quanti
+        self.caduto = False
+
+    def carica(self, da, posto):
+        if len(self.caricati) >= self.quanti:
+            self.caduto = True
+            raise cavo.GuastoDelCavo(posto)
+        super().carica(da, posto)
+
+    def scrivi(self, posto, dati):
+        if self.caduto:
+            raise cavo.GuastoDelCavo(posto)
+        super().scrivi(posto, dati)
+
+
+def test_ripartendo_dopo_una_caduta_non_rimanda_quello_che_e_gia_arrivato(pronto):
+    dove, radice = pronto
+    with pytest.raises(ErroreOfficina):
+        cavo.manda(_CadeSenzaSalvare(radice, 3), dove)
+    assert not (_lassu(radice) / cavo.MANIFESTO).exists()
+
+    finto = cavo.FintoTelefono(radice)
+    esito = cavo.manda(finto, dove)
+
+    assert esito.completo
+    assert esito.ritrovati == 3
+    assert "rimasti dalla copia interrotta" in esito.a_parole()
+    _uguali(dove, radice)
+
+
+def test_un_file_lassu_della_stessa_misura_ma_diverso_si_rimanda(pronto):
+    dove, radice = pronto
+    cavo.manda(cavo.FintoTelefono(radice), dove)
+    (_lassu(radice) / cavo.MANIFESTO).unlink()
+    foto = next(f for f in _lassu(radice).rglob("*")
+                if f.is_file() and f.relative_to(_lassu(radice)).parts[0] == formato.FOTO)
+    grezzo = bytearray(foto.read_bytes())
+    grezzo[-1] ^= 0xFF
+    foto.write_bytes(bytes(grezzo))
+
+    finto = cavo.FintoTelefono(radice)
+    esito = cavo.manda(finto, dove)
+
+    assert esito.completo
+    posto = foto.relative_to(_lassu(radice)).as_posix()
+    assert f"{cavo.PACCHETTO}/{posto}{cavo.PARZIALE}" in finto.caricati
+    _uguali(dove, radice)

@@ -44,6 +44,8 @@
 .fu-prossimo-testo { display: grid; gap: 4px; flex: 1 1 320px; min-width: 0; }
 .fu-prossimo-testo h2 { margin: 0; font: 400 21px/1.25 var(--serif); text-wrap: balance; }
 .fu-prossimo-testo p { margin: 0; color: var(--attenuato); font-size: var(--testo-minore); max-width: 62ch; }
+.fu-prossimo-testo p.fu-novita { color: var(--ink); font-weight: 500; }
+.fu-prossimo-testo p.fu-novita.aggiornato { color: var(--bene); }
 .fu-prossimo-vivo { flex: 1 0 100%; display: grid; gap: 8px; min-width: 0; }
 .fu-prossimo-vivo:not(:has(:not([hidden]))) { display: none; }
 .fu-parti { display: grid; gap: 8px; flex: 0 1 auto; min-width: 0; max-width: 100%; }

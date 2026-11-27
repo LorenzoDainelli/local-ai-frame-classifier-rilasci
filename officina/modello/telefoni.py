@@ -177,3 +177,22 @@ def peso_del_pacchetto(connessione: sqlite3.Connection,
     if not riga:
         return 0, 0
     return riga["quanti"] or 0, riga["peso"] or 0
+
+
+def ricorda_quello_che_ha(connessione: sqlite3.Connection, telefono_id: int,
+                          righe: list[tuple[int, str, str]]) -> None:
+    esegui(connessione, "DELETE FROM sul_telefono WHERE telefono_id = ?", telefono_id)
+    connessione.executemany(
+        "INSERT OR REPLACE INTO sul_telefono (telefono_id, scatto_id, file, dati) "
+        "VALUES (?, ?, ?, ?)",
+        [(telefono_id, s, f, d) for s, f, d in righe])
+    esegui(connessione, "UPDATE telefoni SET arrivato_il = ? WHERE id = ?",
+           adesso(), telefono_id)
+
+
+def quello_che_ha(connessione: sqlite3.Connection,
+                  telefono_id: int) -> dict[int, tuple[str, str]]:
+    return {r["scatto_id"]: (r["file"], r["dati"]) for r in tutti(
+        connessione,
+        "SELECT scatto_id, file, dati FROM sul_telefono WHERE telefono_id = ?",
+        telefono_id)}

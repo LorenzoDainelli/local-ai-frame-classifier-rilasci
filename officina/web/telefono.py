@@ -10,7 +10,7 @@ from officina.errori import ErroreOfficina, PasswordSbagliata
 from officina.modello import luoghi, nodi, persone, scatti, telefoni
 from officina.telefono import cavo as cavo_iphone
 from officina.telefono import cavo_lontano
-from officina.telefono import costruzione, formato, selezione
+from officina.telefono import costruzione, dati, formato, orologio, selezione
 from officina.web import lavori
 
 QUANTE_RIGHE_DI_DIARIO = 12
@@ -354,6 +354,7 @@ class InCorso:
         self.col_cavo = False
         self.lontano = False
         self.cavo: cavo_iphone.EsitoCavo | None = None
+        self.orologio: orologio.Orologio | None = None
 
 
     def parti(self, archivio, telefono_id: int, cartella: Path,
@@ -377,14 +378,26 @@ class InCorso:
         self.lontano = col_cavo and lontano
         self.cavo = None
         dimentica_la_cartella(cartella)
+        tempi = orologio.Orologio(dove_le_velocita(archivio), lontano=self.lontano)
+        self.orologio = tempi
+        ios = riga["sistema"] == "ios"
 
         travaso = costruzione.Travaso(archivio, telefono_id, cartella, password,
-                                      quando_cambia=self._a_che_punto)
+                                      quando_cambia=self._a_che_punto,
+                                      quanto_pesa=tempi.avanza)
         self.travaso = travaso
 
         def fallo() -> None:
+            try:
+                fallo_davvero()
+            finally:
+                tempi.fine()
+
+        def fallo_davvero() -> None:
             if not col_cavo:
                 travasa()
+                if self.esito and self.esito.completo and not ios:
+                    travaso.ricorda_sul_telefono(self.esito)
                 return
             self.fase = "collego"
             if self.lontano:
@@ -397,7 +410,7 @@ class InCorso:
                 cavo_iphone.controlla(iphone, cartella)
                 preso = cavo_iphone.prendi_il_ritorno(iphone, cartella)
                 self.lavoro.di(DAL_CAVO[preso])
-                travasa()
+                travasa(cavo_iphone.misure_lassu(iphone))
                 if not (self.esito and self.esito.completo):
                     self.lavoro.di("Il travaso non è finito: sull'iPhone non copio "
                                    "niente.")
@@ -405,8 +418,11 @@ class InCorso:
                 self.fase = "copio"
                 aiuto = iphone.aiuto() if self.lontano else cavo_iphone.collega
                 self.cavo = cavo_iphone.manda(iphone, cartella, self._a_che_punto,
-                                              travaso.fermati, aiuto)
+                                              travaso.fermati, aiuto,
+                                              quanto_pesa=tempi.avanza)
                 self.fase = "finito" if self.cavo.completo else "interrotto"
+                if self.cavo.completo:
+                    travaso.ricorda_sul_telefono(self.esito)
                 self.lavoro.di(self.cavo.a_parole())
                 for guasto in self.cavo.guasti[:20]:
                     self.lavoro.di(f"NON TORNA SULL'IPHONE — {guasto}")
@@ -415,8 +431,10 @@ class InCorso:
             finally:
                 iphone.chiudi()
 
-        def travasa() -> None:
+        def travasa(lassu: dict | None = None) -> None:
             piano = travaso.prepara()
+            for fase, quante in fasi_previste(piano, col_cavo, lassu).items():
+                tempi.prevedi(fase, quante)
             self.lavoro.di(f"Selezione: {piano.scelta.a_parole()}")
             self.lavoro.di(piano.stima.a_parole())
             if piano.ripresa:
@@ -493,7 +511,114 @@ class InCorso:
             "cavo_lontano": self.lontano,
             "cavo": self.cavo.a_parole() if self.cavo else "",
             "cavo_completo": bool(self.cavo and self.cavo.completo),
+            "mancano": self.mancano() if detto.get("sta_lavorando") else "",
         }
+
+    def mancano(self) -> str:
+        if self.orologio is None:
+            return ""
+        return orologio.mancano_a_parole(self.orologio.mancano())
+
+
+def dove_le_velocita(archivio) -> Path:
+    return archivio.dove.radice / "lavoro" / "velocita_del_travaso.json"
+
+
+def fasi_previste(piano: costruzione.Piano, col_cavo: bool,
+                  lassu: dict | None = None,
+                  cambiati: set | None = None) -> dict[str, int]:
+    nuovi = {id(c) for c in piano.da_scrivere}
+    base = orologio.unita(0)
+    fasi = {
+        "scrivo": sum(orologio.unita(c.dimensione) for c in piano.da_scrivere),
+        "verifico": sum(orologio.unita(c.dimensione) for c in piano.voluti) + base,
+    }
+    if not col_cavo:
+        return fasi
+    fasi["conto"] = fasi["scrivo"] + base
+    if lassu is not None:
+        da_copiare = [c for c in piano.voluti if id(c) in nuovi or c.posto not in lassu]
+    elif cambiati is not None:
+        da_copiare = [c for c in piano.voluti
+                      if id(c) in nuovi or c.scatto_id in cambiati]
+    else:
+        da_copiare = piano.voluti
+    fasi["copio"] = sum(orologio.unita(c.dimensione) for c in da_copiare) + 2 * base
+    return fasi
+
+
+def novita(archivio, telefono_id: int, lontano: bool = False) -> dict:
+    with archivio.lettura() as connessione:
+        riga = telefoni.per_id(connessione, telefono_id)
+        if riga is None:
+            raise ErroreOfficina("Questo telefono non c'è più.")
+        prima = telefoni.quello_che_ha(connessione, telefono_id)
+    cartella = (Path(riga["cartella"]) if (riga["cartella"] or "").strip()
+                else cartella_predefinita(archivio, riga["nome"]))
+    piano = costruzione.Travaso(archivio, telefono_id, cartella, "").prepara()
+    with archivio.lettura() as connessione:
+        adesso = dati.impronte_degli_scatti(connessione, piano.posti)
+
+    conosciuto = bool(riga["arrivato_il"])
+    nomi_prima = prima.pop(dati.NOMI, None)
+    nuove, migliorate, cambiate = set(), set(), set()
+    for scatto_id, file in piano.file_degli_scatti.items():
+        vecchio = prima.get(scatto_id)
+        if vecchio is None:
+            nuove.add(scatto_id)
+        elif vecchio[0] != file:
+            migliorate.add(scatto_id)
+        elif vecchio[1] != adesso.get(scatto_id, ""):
+            cambiate.add(scatto_id)
+    tolte = set(prima) - set(piano.file_degli_scatti)
+    nomi = conosciuto and nomi_prima is not None and nomi_prima[1] != adesso.get(dati.NOMI)
+
+    col_cavo = riga["sistema"] == "ios"
+    tempi = orologio.Orologio(dove_le_velocita(archivio), lontano=lontano)
+    fasi = fasi_previste(piano, col_cavo,
+                         cambiati=(nuove | migliorate) if conosciuto else None)
+    stima = tempi.stima(fasi)
+    gia_preparato = not piano.da_scrivere and not piano.da_togliere
+    aggiornato = conosciuto and not (nuove or migliorate or cambiate or tolte or nomi)
+    return {
+        "conosciuto": conosciuto,
+        "aggiornato": aggiornato,
+        "nuove": len(nuove),
+        "migliorate": len(migliorate),
+        "cambiate": len(cambiate),
+        "tolte": len(tolte),
+        "nomi": bool(nomi),
+        "a_parole": novita_a_parole(conosciuto, aggiornato, len(nuove), len(migliorate),
+                                    len(cambiate), len(tolte), bool(nomi),
+                                    riga["sistema"]),
+        "tempo": orologio.durata_a_parole(stima),
+        "tempo_a_occhio": not tempi.conosce(fasi),
+        "pronto_sul_fisso": gia_preparato,
+    }
+
+
+def novita_a_parole(conosciuto: bool, aggiornato: bool, nuove: int, migliorate: int,
+                    cambiate: int, tolte: int, nomi: bool, sistema: str) -> str:
+    dove = "L'iPhone" if sistema == "ios" else "Il telefono"
+    if not conosciuto:
+        return (f"{dove} non l'ho ancora visto finire una copia: questa volta porto "
+                "tutto quello che serve, poi ti dirò ogni volta cosa è cambiato.")
+    if aggiornato:
+        return f"{dove} è già aggiornato: dall'ultima copia non è cambiato niente."
+    pezzi = []
+    if nuove:
+        pezzi.append(selezione.conta(nuove, "foto nuova", "foto nuove"))
+    if migliorate:
+        pezzi.append(selezione.conta(migliorate, "foto migliorata", "foto migliorate"))
+    if cambiate:
+        pezzi.append(selezione.conta(
+            cambiate, "scatto con etichette, persone, data o luogo cambiati",
+            "scatti con etichette, persone, data o luogo cambiati"))
+    if tolte:
+        pezzi.append(selezione.conta(tolte, "da togliere", "da togliere"))
+    if nomi:
+        pezzi.append("nomi di rami, persone o luoghi cambiati")
+    return "Dall'ultima copia: " + ", ".join(pezzi) + "."
 
 
 in_corso = InCorso()

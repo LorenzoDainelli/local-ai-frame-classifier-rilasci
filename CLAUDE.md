@@ -18,6 +18,9 @@ Non chiederle di nuovo: se cambiano, l'utente lo dice.
 - Niente commenti nel codice, in nessuna lingua.
 - Niente prove a misura di telefono: il programma si usa sul fisso e sul portatile.
 - Qualità prima di quantità: ore di calcolo in più vanno bene se il risultato è migliore.
+- Prove sui computer di GitHub (Linux, Windows e Mac): si dividono sempre in pezzi secondo
+  quanti posti sono liberi in quel momento (più posti, più pezzi), mai un numero fisso.
+  Se un pezzo fallisce si rifà solo quel pezzo, non tutto da capo.
 - Gare con foto e video pubblici: le risposte giuste devono essere verificate (dati
   controllati, niente etichette sbagliate), e oltre ai casi facili ci devono essere casi
   difficili o molto difficili (buio, mosso, sfocato, di lato, coperti, piccoli, rumore,

@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import threading
+import time
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,6 +15,7 @@ from typing import Protocol
 
 from officina.errori import ErroreOfficina
 from officina.telefono import formato
+from officina.telefono.orologio import unita
 
 APP = "local.visore.app"
 PACCHETTO = "Pacchetto"
@@ -23,6 +25,7 @@ LOCALE = ".cavo-locale.json"
 PARZIALE = ".parziale"
 PEZZO = 4 * 1024 * 1024
 OGNI = 200
+OGNI_SECONDI = 60.0
 NOSTRI = re.compile(r"(?:(?:foto|mini)/[0-9a-f]{2}|volti)/[0-9a-f]{32}(?:\.parziale)?"
                     r"|(?:dati\.db|visore\.json|\.cavo\.json)\.parziale")
 
@@ -82,6 +85,7 @@ class EsitoCavo:
     mandati: int = 0
     peso: int = 0
     uguali: int = 0
+    ritrovati: int = 0
     tolti: int = 0
     ritorno: bool = False
     interrotto: bool = False
@@ -102,7 +106,9 @@ class EsitoCavo:
             return "Sull'iPhone era già tutto uguale: non ho copiato niente."
         return (f"Copiati sull'iPhone {self.mandati} file ({_misura(self.peso)}), "
                 f"riletti uno per uno e uguali. Tolti {self.tolti} vecchi, "
-                f"{self.uguali} erano già lì.")
+                f"{self.uguali} erano già lì"
+                + (f" (di cui {self.ritrovati} rimasti dalla copia interrotta "
+                   "e ricontrollati)" if self.ritrovati else "") + ".")
 
 
 def collega() -> Telefono:
@@ -153,9 +159,11 @@ def prendi_il_ritorno(telefono: Telefono, cartella: Path) -> str:
 
 
 def manda(telefono: Telefono, cartella: Path, quando_cambia=None,
-          fermati: threading.Event | None = None, aiuto=None) -> EsitoCavo:
+          fermati: threading.Event | None = None, aiuto=None,
+          quanto_pesa=None) -> EsitoCavo:
     cartella = Path(cartella)
     avanti = quando_cambia or (lambda *_: None)
+    pesa = quanto_pesa or (lambda *_: None)
     fermati = fermati or threading.Event()
     esito = EsitoCavo()
 
@@ -166,7 +174,7 @@ def manda(telefono: Telefono, cartella: Path, quando_cambia=None,
     controlla(telefono, cartella)
 
     avanti("conto", 0, 0)
-    locali = _locali(cartella, avanti, fermati)
+    locali = _locali(cartella, avanti, fermati, pesa)
     if fermati.is_set():
         esito.interrotto = True
         return esito
@@ -175,6 +183,14 @@ def manda(telefono: Telefono, cartella: Path, quando_cambia=None,
 
     da_mandare = [p for p, (misura, sha) in locali.items()
                   if manifesto.get(p) != [misura, sha] or sul_telefono.get(p) != misura]
+    ritrovati = _ritrova(telefono, da_mandare, locali, sul_telefono, manifesto,
+                         avanti, fermati)
+    if fermati.is_set():
+        esito.interrotto = True
+        return esito
+    if ritrovati:
+        da_mandare = [p for p in da_mandare if p not in ritrovati]
+        esito.ritrovati = len(ritrovati)
     esito.uguali = len(locali) - len(da_mandare)
     da_mandare.sort(key=_ordine)
 
@@ -191,7 +207,7 @@ def manda(telefono: Telefono, cartella: Path, quando_cambia=None,
 
     try:
         _copia(telefono, cartella, da_mandare, locali, manifesto, esito, avanti, fermati,
-               aiuto)
+               aiuto, pesa)
     except BaseException:
         try:
             _salva_il_manifesto(telefono, manifesto)
@@ -225,9 +241,13 @@ def manda(telefono: Telefono, cartella: Path, quando_cambia=None,
 class _Insieme:
 
     def __init__(self, cartella: Path, da_mandare: list[str], locali: dict,
-                 manifesto: dict, esito: EsitoCavo, avanti, fermati: threading.Event):
+                 manifesto: dict, esito: EsitoCavo, avanti, fermati: threading.Event,
+                 pesa=None):
         self.cartella = cartella
         self.quanti = len(da_mandare)
+        self.pesa = pesa or (lambda *_: None)
+        self.da_pesare = sum(unita(locali[p][0]) for p in da_mandare)
+        self.pesato = 0
         self.in_fila = [p for p in da_mandare if _ordine(p)[0] == 0]
         self.in_coda = [p for p in da_mandare if _ordine(p)[0] != 0]
         self.locali = locali
@@ -239,6 +259,7 @@ class _Insieme:
         self.rotto = threading.Event()
         self.fatti = 0
         self.dal_salvataggio = 0
+        self.salvato_il = time.monotonic()
 
     def prendi(self) -> str | None:
         with self.lucchetto:
@@ -269,10 +290,14 @@ class _Insieme:
                 self.esito.mandati += 1
                 self.esito.peso += dimensione
                 self.dal_salvataggio += 1
-                if self.dal_salvataggio >= OGNI:
+                if (self.dal_salvataggio >= OGNI
+                        or time.monotonic() - self.salvato_il >= OGNI_SECONDI):
                     _salva_il_manifesto(telefono, self.manifesto)
                     self.dal_salvataggio = 0
+                    self.salvato_il = time.monotonic()
+            self.pesato += unita(dimensione)
             self.avanti("copio", self.fatti, self.quanti)
+            self.pesa("copio", self.pesato, self.da_pesare)
 
     def lavora(self, telefono: Telefono) -> None:
         try:
@@ -305,9 +330,11 @@ class _Insieme:
 
 def _copia(telefono: Telefono, cartella: Path, da_mandare: list[str],
            locali: dict[str, tuple[int, str]], manifesto: dict, esito: EsitoCavo,
-           avanti, fermati: threading.Event, aiuto=None) -> None:
-    insieme = _Insieme(cartella, da_mandare, locali, manifesto, esito, avanti, fermati)
+           avanti, fermati: threading.Event, aiuto=None, pesa=None) -> None:
+    insieme = _Insieme(cartella, da_mandare, locali, manifesto, esito, avanti, fermati,
+                       pesa)
     avanti("copio", 0, insieme.quanti)
+    insieme.pesa("copio", 0, insieme.da_pesare)
     filo = None
     if aiuto is not None and len(insieme.in_fila) > 1:
         filo = threading.Thread(target=insieme.aiuta, args=(aiuto,),
@@ -332,6 +359,25 @@ def _copia(telefono: Telefono, cartella: Path, da_mandare: list[str],
     avanti("copio", insieme.quanti, insieme.quanti)
 
 
+def _ritrova(telefono: Telefono, da_mandare: list[str], locali: dict,
+             sul_telefono: dict, manifesto: dict, avanti,
+             fermati: threading.Event) -> set[str]:
+    forse = [p for p in da_mandare
+             if p != formato.CARTA and sul_telefono.get(p) == locali[p][0]]
+    ritrovati: set[str] = set()
+    for numero, posto in enumerate(forse, start=1):
+        if fermati.is_set():
+            break
+        avanti("ricontrollo", numero, len(forse))
+        dimensione, sha = locali[posto]
+        if telefono.impronta(f"{PACCHETTO}/{posto}") == sha:
+            manifesto[posto] = [dimensione, sha]
+            ritrovati.add(posto)
+    if ritrovati:
+        _salva_il_manifesto(telefono, manifesto)
+    return ritrovati
+
+
 def _ordine(posto: str) -> tuple[int, str]:
     if posto == formato.CARTA:
         return (2, posto)
@@ -349,6 +395,14 @@ def _carta_del_telefono(telefono: Telefono) -> dict | None:
     except (ValueError, UnicodeDecodeError):
         return None
     return carta if isinstance(carta, dict) else None
+
+
+def misure_lassu(telefono: Telefono) -> dict[str, int]:
+    try:
+        return {p: v[0] for p, v in _manifesto(telefono).items()
+                if isinstance(v[0], int)}
+    except Exception:
+        return {}
 
 
 def _manifesto(telefono: Telefono) -> dict[str, list]:
@@ -379,7 +433,9 @@ def _scrivi_sicuro(telefono: Telefono, posto: str, dati: bytes) -> None:
     telefono.sposta(provvisorio, posto)
 
 
-def _locali(cartella: Path, avanti, fermati: threading.Event) -> dict[str, tuple[int, str]]:
+def _locali(cartella: Path, avanti, fermati: threading.Event,
+            pesa=None) -> dict[str, tuple[int, str]]:
+    pesa = pesa or (lambda *_: None)
     ricordo = _ricordo_locale(cartella)
     nuovo: dict[str, list] = {}
     trovati: list[tuple[str, Path]] = []
@@ -394,16 +450,30 @@ def _locali(cartella: Path, avanti, fermati: threading.Event) -> dict[str, tuple
             continue
         trovati.append((posto, dove))
     locali: dict[str, tuple[int, str]] = {}
+    stati = {}
+    da_pesare = 0
+    for posto, dove in trovati:
+        stato = dove.stat()
+        vecchio = ricordo.get(posto)
+        gia = bool(vecchio and vecchio[0] == stato.st_size
+                   and vecchio[1] == stato.st_mtime_ns)
+        stati[posto] = (stato, gia)
+        if not gia:
+            da_pesare += unita(stato.st_size)
+    pesato = 0
+    pesa("conto", 0, da_pesare)
     for numero, (posto, dove) in enumerate(trovati, start=1):
         if fermati.is_set():
             break
         avanti("conto", numero, len(trovati))
-        stato = dove.stat()
+        stato, gia = stati[posto]
         vecchio = ricordo.get(posto)
-        if vecchio and vecchio[0] == stato.st_size and vecchio[1] == stato.st_mtime_ns:
+        if gia:
             sha = vecchio[2]
         else:
             sha = _sha_locale(dove)
+            pesato += unita(stato.st_size)
+            pesa("conto", pesato, da_pesare)
         nuovo[posto] = [stato.st_size, stato.st_mtime_ns, sha]
         locali[posto] = (stato.st_size, sha)
     _salva_il_ricordo(cartella, nuovo)

@@ -942,6 +942,8 @@ def comando_pacchetto(argomenti) -> int:
             return 0
 
         esito = travaso.esegui(piano)
+        if esito.completo and telefono["sistema"] != "ios":
+            travaso.ricorda_sul_telefono(esito)
 
     print()
     print(f"  Scritti {esito.scritti} file "

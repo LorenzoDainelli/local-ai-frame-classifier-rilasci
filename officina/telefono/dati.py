@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from collections import defaultdict
@@ -166,7 +167,7 @@ class Posto:
 
 def costruisci(connessione: sqlite3.Connection, posti: list[Posto],
                volti: dict[int, str], informazioni: dict, lavoro: Path,
-               scorta: dict | None = None) -> bytes:
+               scorta: dict | None = None, impronte: dict | None = None) -> bytes:
     scelti = [p.scatto_id for p in posti]
     _prepara_i_scelti(connessione, scelti)
     try:
@@ -181,12 +182,58 @@ def costruisci(connessione: sqlite3.Connection, posti: list[Posto],
             _scrivi_scorta(fuori, scorta or {})
             _scrivi_informazioni(fuori, informazioni, len(posti), usati)
             fuori.commit()
+            if impronte is not None:
+                impronte.update(_impronte(fuori))
             fuori.execute("VACUUM")
             return fuori.serialize()
         finally:
             fuori.close()
     finally:
         connessione.execute("DROP TABLE IF EXISTS temp.scelti")
+
+
+NOMI = -1
+
+
+def impronte_degli_scatti(connessione: sqlite3.Connection,
+                          posti: list[Posto]) -> dict[int, str]:
+    _prepara_i_scelti(connessione, [p.scatto_id for p in posti])
+    try:
+        fuori = sqlite3.connect(":memory:")
+        fuori.row_factory = sqlite3.Row
+        try:
+            fuori.executescript(SCHEMA)
+            _scrivi_scatti(fuori, connessione, posti)
+            _scrivi_nodi_e_etichette(fuori, connessione, [p.scatto_id for p in posti])
+            _scrivi_persone(fuori, connessione, {})
+            _scrivi_luoghi(fuori, connessione)
+            return _impronte(fuori)
+        finally:
+            fuori.close()
+    finally:
+        connessione.execute("DROP TABLE IF EXISTS temp.scelti")
+
+
+def _impronte(fuori) -> dict[int, str]:
+    pezzi: dict[int, list] = defaultdict(list)
+    for r in fuori.execute(
+            "SELECT id, giorno, data_locale, istante_utc, origine_data, larghezza, "
+            "altezza, durata_ms, latitudine, longitudine, luogo_id, nota "
+            "FROM scatti ORDER BY id"):
+        pezzi[r[0]].append(["s", *r[1:]])
+    for r in fuori.execute("SELECT scatto_id, nodo_id FROM etichette "
+                           "ORDER BY scatto_id, nodo_id"):
+        pezzi[r[0]].append(["e", r[1]])
+    for r in fuori.execute("SELECT scatto_id, persona_id FROM persone_negli_scatti "
+                           "ORDER BY scatto_id, persona_id"):
+        pezzi[r[0]].append(["p", r[1]])
+    nomi = [["n", *r] for r in fuori.execute(
+        "SELECT id, genitore_id, nome FROM nodi ORDER BY id")]
+    nomi += [["p", *r] for r in fuori.execute("SELECT id, nome FROM persone ORDER BY id")]
+    nomi += [["l", *r] for r in fuori.execute("SELECT id, nome FROM luoghi ORDER BY id")]
+    pezzi[NOMI] = nomi
+    return {s: hashlib.sha256(json.dumps(v, default=str).encode("utf-8")).hexdigest()[:32]
+            for s, v in pezzi.items()}
 
 
 def _prepara_i_scelti(connessione: sqlite3.Connection, scelti: list[int]) -> None:

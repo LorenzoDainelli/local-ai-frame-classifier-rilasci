@@ -54,6 +54,9 @@ def test_solo_chi_pubblica_puo_scrivere():
         if nome == "pubblica":
             assert permessi == {"contents": "write"}
             assert lavoro["environment"] == "rilascio"
+        elif nome == "spazio":
+            assert permessi == {"actions": "read", "contents": "read"}
+            assert "environment" not in lavoro
         else:
             assert permessi is None, nome
 

@@ -119,6 +119,10 @@ RACCOLTE = {
     "UPDATE file_media SET miniatura = NULL WHERE genere = 'video'":
         "una volta sola, nella migrazione 32: ripara le foto live e le copertine dei video già nell'archivio.",
     "SELECT * FROM scatti": "il pacchetto per il telefono: è l'archivio.",
+    "SELECT id, giorno, data_locale, istante_utc, origine_data, larghezza, altezza, "
+    "durata_ms, latitudine, longitudine, luogo_id, nota FROM scatti ORDER BY id":
+        "legge il database del pacchetto in memoria, non l'archivio: serve a dire "
+        "cosa è cambiato sul telefono.",
     "SELECT * FROM impronte": "idem, le impronte dentro il pacchetto.",
     "SELECT impronta FROM file_media WHERE miniatura IS NOT NULL":
         "la fusione di un pacchetto di sincronia, una volta prima di copiare: "

@@ -15,6 +15,7 @@ from officina.modello import file_media, persone, telefoni
 from officina.sicuro import dall_archivio
 from officina.sicuro.dall_archivio import DallArchivio
 from officina.telefono import cifratura, dati, formato, ritorno, selezione
+from officina.telefono.orologio import unita
 
 LATO_MINIATURA = 640
 LATO_VOLTO = 320
@@ -64,6 +65,8 @@ class Piano:
     stima: selezione.Stima = field(default_factory=selezione.Stima)
     saltati: list = field(default_factory=list)
     ripresa: bool = False
+    voluti: list = field(default_factory=list)
+    file_degli_scatti: dict = field(default_factory=dict)
 
     def a_parole(self) -> str:
         if not self.da_scrivere and not self.da_togliere:
@@ -140,12 +143,15 @@ class Esito:
 class Travaso:
 
     def __init__(self, archivio: Archivio, telefono_id: int, cartella: Path,
-                 password: str, quando_cambia=None):
+                 password: str, quando_cambia=None, quanto_pesa=None):
         self.archivio = archivio
         self.telefono_id = telefono_id
         self.cartella = Path(cartella)
         self.password = password
         self.quando_cambia = quando_cambia or (lambda *_: None)
+        self.quanto_pesa = quanto_pesa or (lambda *_: None)
+        self.da_ricordare: tuple[dict, dict] | None = None
+        self._voluti: list[Compito] = []
         self.fermati = threading.Event()
         self._chiave: cifratura.Chiave | None = None
         self._carta: formato.Carta | None = None
@@ -167,6 +173,12 @@ class Travaso:
 
             gia = telefoni.dentro_il_pacchetto(connessione, self.telefono_id)
             voluti = self._cosa_ci_va(connessione, scelta, piano, _riusabili(gia))
+        piano.voluti = voluti
+        file_degli: dict[int, list[str]] = {}
+        for compito in voluti:
+            if compito.genere == "originale" and compito.scatto_id is not None:
+                file_degli.setdefault(compito.scatto_id, []).append(compito.impronta)
+        piano.file_degli_scatti = {s: "|".join(sorted(v)) for s, v in file_degli.items()}
 
         guardabile = self.cartella.is_dir()
         for compito in voluti:
@@ -336,6 +348,21 @@ class Travaso:
     def ferma(self) -> None:
         self.fermati.set()
 
+    def ricorda_sul_telefono(self, esito: Esito) -> bool:
+        if self.da_ricordare is None or not esito.completo:
+            return False
+        file_degli, impronte = self.da_ricordare
+        saltati = {s.posto for s in esito.saltati}
+        via = {c.scatto_id for c in self._voluti
+               if c.posto in saltati and c.scatto_id is not None}
+        righe = [(s, f, impronte.get(s, "")) for s, f in file_degli.items()
+                 if s not in via]
+        if dati.NOMI in impronte:
+            righe.append((dati.NOMI, "", impronte[dati.NOMI]))
+        with self.archivio.scrittura_di_servizio() as connessione:
+            telefoni.ricorda_quello_che_ha(connessione, self.telefono_id, righe)
+        return True
+
 
     def _apri_la_cartella(self, piano: Piano) -> None:
         with self.archivio.scrittura_di_servizio() as connessione:
@@ -412,11 +439,17 @@ class Travaso:
     def _scrivi_tutti(self, piano: Piano, esito: Esito, in_attesa: list[tuple],
                       travaso_id: int) -> None:
         quanti = len(piano.da_scrivere)
+        pesa = sum(unita(c.dimensione) for c in piano.da_scrivere)
+        pesato = 0
+        self.quanto_pesa("scrivo", 0, pesa)
         for numero, compito in enumerate(piano.da_scrivere, start=1):
             if self.fermati.is_set():
                 esito.interrotto = True
                 return
             self.quando_cambia("scrivo", numero, quanti)
+            if numero > 1:
+                pesato += unita(piano.da_scrivere[numero - 2].dimensione)
+                self.quanto_pesa("scrivo", pesato, pesa)
             try:
                 with dall_archivio.attento(compito.sorgente):
                     scritto = self._scrivi_uno(compito)
@@ -516,6 +549,7 @@ class Travaso:
 
     def _scrivi_il_database(self, piano: Piano, esito: Esito) -> None:
         self.quando_cambia("database", 0, 1)
+        impronte: dict[int, str] = {}
         with self.archivio.lettura() as connessione:
             via = set(piano.da_togliere)
             volti = {}
@@ -538,7 +572,10 @@ class Travaso:
                      c.scatto_id for c in piano.da_scrivere
                      if c.genere == "originale" and c.scatto_id is not None})},
                 self.archivio.dove.radice / "lavoro",
-                ritorno.copia_di_scorta(connessione, self.telefono_id))
+                ritorno.copia_di_scorta(connessione, self.telefono_id),
+                impronte=impronte)
+        self.da_ricordare = (dict(piano.file_degli_scatti), impronte)
+        self._voluti = list(piano.voluti)
         scritto = self._chiave.scrivi_byte(
             grezzo, formato.dentro(self.cartella, formato.DATI), formato.DATI)
         with self.archivio.scrittura_di_servizio() as connessione:
@@ -566,11 +603,17 @@ class Travaso:
                            "FROM pacchetto_file WHERE telefono_id = ?",
                            self.telefono_id)
         quanti = len(elenco)
+        pesa = sum(unita(r["dimensione"]) for r in elenco)
+        pesato = 0
+        self.quanto_pesa("verifico", 0, pesa)
         for numero, riga in enumerate(elenco, start=1):
             if self.fermati.is_set():
                 esito.interrotto = True
                 return
             self.quando_cambia("verifico", numero, quanti)
+            if numero > 1:
+                pesato += unita(elenco[numero - 2]["dimensione"])
+                self.quanto_pesa("verifico", pesato, pesa)
             dove = formato.dentro(self.cartella, riga["posto"])
             if not dove.is_file():
                 esito.guasti.append(f"{riga['posto']}: non c'è più")

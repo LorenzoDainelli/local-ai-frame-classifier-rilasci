@@ -1996,6 +1996,22 @@ def _versione_92(connessione: sqlite3.Connection) -> None:
         "CREATE INDEX volti_decisi_da_te ON volti(persona_id) WHERE deciso_da = 'utente'")
 
 
+
+def _versione_93(connessione: sqlite3.Connection) -> None:
+    connessione.execute(
+        """
+        CREATE TABLE sul_telefono (
+            telefono_id INTEGER NOT NULL REFERENCES telefoni(id) ON DELETE CASCADE,
+            scatto_id   INTEGER NOT NULL,
+            file        TEXT NOT NULL,
+            dati        TEXT NOT NULL,
+            PRIMARY KEY (telefono_id, scatto_id)
+        ) WITHOUT ROWID
+        """
+    )
+    connessione.execute("ALTER TABLE telefoni ADD COLUMN arrivato_il TEXT")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -2166,6 +2182,8 @@ MIGRAZIONI: list[Migrazione] = [
                    "dalle sagome", _versione_91),
     Migrazione(92, "i volti si attaccano da soli solo se somigliano a quelli confermati da te",
                _versione_92),
+    Migrazione(93, "quello che c'è già sul telefono, per dire le novità prima di copiare",
+               _versione_93),
 ]
 
 
