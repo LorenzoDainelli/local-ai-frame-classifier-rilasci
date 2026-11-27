@@ -21,6 +21,11 @@ async function guardaIlTravaso() {
             scrivi("conto-travaso", dati.quanti ? `${dati.fatti} di ${dati.quanti}` : "sto contando cosa manca");
             scrivi("tempo-travaso", dati.mancano ? ` · ${dati.mancano}` : "");
             scrivi("fase-travaso", dati.fase);
+            const dettagli = document.getElementById("dettagli-travaso");
+            if (dettagli) {
+                dettagli.hidden = !dati.dettagli_per_claude;
+                scrivi("dettagli-travaso-testo", dati.dettagli_per_claude || "");
+            }
             if (righe && dati.righe && dati.righe.length) {
                 righe.hidden = false;
                 righe.textContent = dati.righe.join("\n");
@@ -54,6 +59,24 @@ async function guardaLeNovita() {
 }
 
 guardaLeNovita();
+
+const copiaDettagli = document.getElementById("dettagli-travaso-copia");
+if (copiaDettagli) {
+    copiaDettagli.addEventListener("click", async () => {
+        const testo = document.getElementById("dettagli-travaso-testo");
+        try {
+            await navigator.clipboard.writeText(testo.textContent);
+            copiaDettagli.textContent = "Copiato";
+        } catch (guasto) {
+            const scelta = document.createRange();
+            scelta.selectNodeContents(testo);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(scelta);
+            copiaDettagli.textContent = "Selezionato: premi Ctrl+C";
+        }
+    });
+}
 
 if (pannello) {
     guardaIlTravaso();

@@ -361,3 +361,6 @@ body.senza-movimento .ms-tessera, body.senza-movimento .ms-menu button { animati
 .ms-scatola .ms-riga1 { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 14px; }
 .ms-scatola .ms-riga1 > div { flex: 1; min-width: 0; }
 .ms-scatola .ms-riga1 p { margin: 3px 0 0; max-width: 60ch; font-size: 13px; line-height: 1.4; color: var(--tenue); }
+.fu-dettagli { display: grid; gap: 0.5rem; margin-top: 0.75rem; }
+.fu-dettagli summary { cursor: pointer; color: var(--ink); font-weight: 500; }
+.fu-dettagli pre { user-select: all; }

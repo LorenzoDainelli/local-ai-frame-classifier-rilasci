@@ -89,9 +89,12 @@ class Banco:
         esito = aspetto.esito
         if "errore" in esito:
             codice = str(esito.get("codice") or "cavo_staccato")
+            causa = str(esito.get("causa") or "")[:120]
             if codice == "cavo_staccato":
-                raise cavo.GuastoDelCavo(op)
-            raise ErroreOfficina(str(esito["errore"]), codice=codice)
+                raise cavo.GuastoDelCavo(op, causa=causa)
+            guaio = ErroreOfficina(str(esito["errore"]), codice=codice)
+            guaio.causa = causa
+            raise guaio
         return esito, aspetto.dati
 
     def prossimo(self, attesa: float | None = None) -> dict:
@@ -402,16 +405,18 @@ class Mani:
                 return {}, self._scarica(telefono, posto)
             return {"errore": NON_CAPITO, "codice": "cavo_non_capito"}, None
         except ErroreOfficina as errore:
-            return {"errore": errore.messaggio, "codice": errore.codice}, None
-        except Exception:
-            return {"errore": cavo.STACCATO, "codice": "cavo_staccato"}, None
+            return {"errore": errore.messaggio, "codice": errore.codice,
+                    "causa": cavo.causa_tecnica(errore)}, None
+        except Exception as guaio:
+            return {"errore": cavo.STACCATO, "codice": "cavo_staccato",
+                    "causa": cavo.causa_tecnica(guaio)}, None
 
     def _carica(self, telefono, posto: str, chiave: str, misura: int) -> None:
         dove = self._qui / f"su-{getattr(self._mia, 'numero', 0)}"
         try:
             stato, _ = self.al_fisso("GET", FILE + chiave, in_file=dove)
             if stato != 200 or not dove.is_file() or dove.stat().st_size != misura:
-                raise cavo.GuastoDelCavo(posto)
+                raise cavo.GuastoDelCavo(posto, causa=f"file dal fisso non arrivato (stato {stato})")
             telefono.carica(dove, posto)
         finally:
             dove.unlink(missing_ok=True)

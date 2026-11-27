@@ -345,6 +345,45 @@ def test_dalla_pagina_se_si_stacca_aspetta_e_riprende_da_solo(
     _uguali(dove, radice)
     lassu = json.loads((_lassu(radice) / formato.CARTA).read_text(encoding="utf-8"))
     assert lassu["stato"] == formato.COMPLETO
+    dettagli = detto["dettagli_per_claude"]
+    assert "caduto durante la copia · cavo_staccato" in dettagli
+    assert "riprovo a collegarmi · cavo_nessuno" in dettagli
+    assert "ricollegato, ripresa numero 1" in dettagli
+    assert "copia finita" in dettagli
+    assert str(dove) not in dettagli and str(radice) not in dettagli
+    assert cavo.STACCATO not in dettagli and cavo.NESSUNO not in dettagli
+    for file in dove.rglob("*"):
+        if len(file.name) >= 8:
+            assert file.name not in dettagli
+
+
+def test_i_dettagli_per_claude_non_dicono_niente_di_privato():
+    class AfcFinto(Exception):
+        pass
+
+    class Stato:
+        name = "OBJECT_NOT_FOUND"
+
+    guaio = AfcFinto("/Documents/Pacchetto/segreto/nome.jpg")
+    guaio.status = Stato()
+    assert cavo.causa_tecnica(guaio) == "AfcFinto OBJECT_NOT_FOUND"
+    rotto = OSError(5, "nome-segreto.jpg")
+    assert cavo.causa_tecnica(rotto) == "OSError errno 5"
+    assert cavo.causa_tecnica(cavo.GuastoDelCavo("/una/cartella/foto.jpg")) == (
+        "GuastoDelCavo cavo_staccato")
+
+
+def test_senza_guai_i_dettagli_restano_nascosti(archivio_pieno, telefono, tmp_path,
+                                                 monkeypatch):
+    radice = tmp_path / "iphone"
+    (radice / cavo.PACCHETTO).mkdir(parents=True)
+    monkeypatch.setattr(cavo, "collega", lambda: cavo.FintoTelefono(radice))
+    in_corso = pagina.InCorso()
+    assert in_corso.parti(archivio_pieno, telefono, tmp_path / "Visore-iPhone", PAROLA,
+                          col_cavo=True)
+    assert in_corso.lavoro.aspetta_che_finisca(120)
+    assert in_corso.come_va()["cavo_completo"]
+    assert in_corso.come_va()["dettagli_per_claude"] == ""
 
 
 def test_dalla_pagina_fermato_mentre_aspetta_lo_dice(

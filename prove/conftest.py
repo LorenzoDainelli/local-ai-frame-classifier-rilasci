@@ -152,6 +152,27 @@ def la_rete_non_resta_chiusa():
 
 
 @pytest.fixture(autouse=True)
+def i_lavori_di_sottofondo_non_restano_accesi():
+    import sys
+    import time
+
+    yield
+    comune = sys.modules.get("officina.web.strade.comune")
+    if comune is None:
+        return
+    if getattr(comune, "passata_volti", None) is not None:
+        try:
+            comune.passata_volti.ferma()
+        except Exception:
+            pass
+    for nome in ("lavoro_modelli", "lavoro_volti"):
+        lavoro = getattr(comune, nome, None)
+        scade = time.monotonic() + 15
+        while getattr(lavoro, "sta_lavorando", False) and time.monotonic() < scade:
+            time.sleep(0.01)
+
+
+@pytest.fixture(autouse=True)
 def il_giro_non_resta_aperto():
     import sys
 

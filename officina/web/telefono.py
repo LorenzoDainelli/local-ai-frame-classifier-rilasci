@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 import threading
 import time
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from officina import registro
@@ -357,6 +358,8 @@ class InCorso:
         self.lontano = False
         self.cavo: cavo_iphone.EsitoCavo | None = None
         self.orologio: orologio.Orologio | None = None
+        self.dettagli: list[str] = []
+        self._partito_il = 0.0
 
 
     def parti(self, archivio, telefono_id: int, cartella: Path,
@@ -379,6 +382,8 @@ class InCorso:
         self.col_cavo = col_cavo
         self.lontano = col_cavo and lontano
         self.cavo = None
+        self.dettagli = []
+        self._partito_il = time.monotonic()
         dimentica_la_cartella(cartella)
         tempi = orologio.Orologio(dove_le_velocita(archivio), lontano=self.lontano)
         self.orologio = tempi
@@ -392,6 +397,10 @@ class InCorso:
         def fallo() -> None:
             try:
                 fallo_davvero()
+            except BaseException as guaio:
+                if self.col_cavo:
+                    self._annota("finito con un errore", guaio)
+                raise
             finally:
                 tempi.fine()
 
@@ -402,6 +411,8 @@ class InCorso:
                     travaso.ricorda_sul_telefono(self.esito)
                 return
             self.fase = "collego"
+            self._annota(f"parto: {'iPhone sul portatile' if self.lontano else 'iPhone sul fisso'}"
+                         f", programma {_versione()}, {sys.platform}")
             if self.lontano:
                 iphone = cavo_lontano.collega()
                 self.lavoro.di(f"Collegato col cavo, dal portatile, a «{iphone.nome}».")
@@ -427,17 +438,22 @@ class InCorso:
                                                       quanto_pesa=tempi.avanza)
                         break
                     except ErroreOfficina as guaio:
+                        self._annota("caduto durante la copia", guaio)
                         if (guaio.codice not in DA_RIPRENDERE or travaso.fermati.is_set()
                                 or riprese >= MAI_PIU_DI):
                             raise
                         tempi.sosta()
                         iphone = self._riattacca(iphone, cartella, guaio, travaso.fermati)
                         riprese += 1
+                        self._annota(f"ricollegato, ripresa numero {riprese}")
                         self.fase = "copio"
                         self.lavoro.di(f"Ricollegato a «{iphone.nome}»: riprendo la copia "
                                        "da dove ero, senza rimandare quello che è già "
                                        "arrivato.")
                 self.fase = "finito" if self.cavo.completo else "interrotto"
+                self._annota(f"copia {'finita' if self.cavo.completo else 'non finita'}: "
+                             f"mandati {self.cavo.mandati}, uguali {self.cavo.uguali}, "
+                             f"ritrovati {self.cavo.ritrovati}, guasti {len(self.cavo.guasti)}")
                 if self.cavo.completo:
                     travaso.ricorda_sul_telefono(self.esito)
                 self.lavoro.di(self.cavo.a_parole())
@@ -513,6 +529,7 @@ class InCorso:
             except ErroreOfficina as ancora:
                 if ancora.codice not in DA_RIPRENDERE:
                     raise
+                self._annota("riprovo a collegarmi", ancora, solo_se_nuovo=True)
                 if ancora.codice != ultimo and ancora.codice not in GIA_DETTO:
                     ultimo = ancora.codice
                     self.lavoro.di(f"Aspetto ancora: {ancora}")
@@ -525,6 +542,7 @@ class InCorso:
                     nuovo.chiudi()
                 if ancora.codice not in DA_RIPRENDERE:
                     raise
+                self._annota("riprovo a collegarmi", ancora, solo_se_nuovo=True)
                 if ancora.codice != ultimo and ancora.codice not in GIA_DETTO:
                     ultimo = ancora.codice
                     self.lavoro.di(f"Aspetto ancora: {ancora}")
@@ -533,6 +551,26 @@ class InCorso:
             return nuovo
         raise ErroreOfficina(FERMATO_MENTRE_ASPETTAVO, codice=guaio.codice)
 
+
+    def _annota(self, evento: str, guaio: BaseException | None = None,
+                solo_se_nuovo: bool = False) -> None:
+        riga = evento
+        if guaio is not None:
+            codice = getattr(guaio, "codice", "")
+            riga += f" · {codice or type(guaio).__name__} · {cavo_iphone.causa_tecnica(guaio)}"
+        if solo_se_nuovo and self.dettagli and self.dettagli[-1].endswith(riga):
+            return
+        passati = int(time.monotonic() - self._partito_il)
+        self.dettagli.append(
+            f"{datetime.now():%H:%M:%S} · dopo {passati // 60}m{passati % 60:02d}s · "
+            f"fase {self.fase or '-'} · file {self.fatti}/{self.quanti} · {riga}")
+        del self.dettagli[:-MASSIMO_DETTAGLI]
+
+    def dettagli_per_claude(self) -> str:
+        if not self.col_cavo or not any(" · cavo_" in riga or "errore" in riga
+                                        for riga in self.dettagli):
+            return ""
+        return "\n".join(self.dettagli)
 
     def _a_che_punto(self, fase: str, fatti: int, quanti: int) -> None:
         self.fase = fase
@@ -574,6 +612,7 @@ class InCorso:
             "cavo": self.cavo.a_parole() if self.cavo else "",
             "cavo_completo": bool(self.cavo and self.cavo.completo),
             "mancano": self.mancano() if detto.get("sta_lavorando") else "",
+            "dettagli_per_claude": self.dettagli_per_claude(),
         }
 
     def mancano(self) -> str:
@@ -692,6 +731,7 @@ ASPETTO_AL_MASSIMO = 2 * 3600.0
 UNA_PROVA = 30.0
 PAUSA_TRA_LE_PROVE = 10.0
 MAI_PIU_DI = 50
+MASSIMO_DETTAGLI = 80
 ASPETTO_IL_PORTATILE = (
     "Il portatile ha smesso di rispondere a metà copia. Non serve ripartire: tieni aperto "
     "il programma sul portatile, collegato al fisso, con l'iPhone attaccato e sbloccato. "
@@ -702,6 +742,14 @@ ASPETTO_L_IPHONE = (
 FERMATO_MENTRE_ASPETTAVO = (
     "Fermato mentre aspettavo che tornasse il collegamento. Il Visore resta chiuso finché "
     "non finisci la copia: quando riparti copio solo quello che manca.")
+
+def _versione() -> str:
+    try:
+        from officina.programma import aggiornamenti
+        return aggiornamenti.versione_attuale()
+    except Exception:
+        return "?"
+
 
 DAL_CAVO = {
     "preso": "Preso dall'iPhone il file di preferiti, raccolte e diario.",

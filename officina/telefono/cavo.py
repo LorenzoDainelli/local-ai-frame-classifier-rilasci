@@ -74,9 +74,29 @@ class Telefono(Protocol):
 
 class GuastoDelCavo(ErroreOfficina):
 
-    def __init__(self, dove: str = ""):
+    def __init__(self, dove: str = "", causa: str = ""):
         super().__init__(STACCATO, codice="cavo_staccato")
         self.dove = dove
+        self.causa = causa
+
+
+def causa_tecnica(guaio: BaseException) -> str:
+    gia = getattr(guaio, "causa", "")
+    if isinstance(gia, str) and gia:
+        return gia[:120]
+    parti = [type(guaio).__name__]
+    stato = getattr(guaio, "status", None)
+    nome = getattr(stato, "name", None)
+    if isinstance(nome, str):
+        parti.append(nome)
+    elif isinstance(stato, int):
+        parti.append(f"stato {stato}")
+    numero = getattr(guaio, "errno", None)
+    if isinstance(numero, int):
+        parti.append(f"errno {numero}")
+    if isinstance(guaio, ErroreOfficina):
+        parti.append(guaio.codice)
+    return " ".join(p for p in parti if p)[:120]
 
 
 @dataclass
@@ -429,7 +449,7 @@ def _scrivi_sicuro(telefono: Telefono, posto: str, dati: bytes) -> None:
     telefono.scrivi(provvisorio, dati)
     if telefono.impronta(provvisorio) != hashlib.sha256(dati).hexdigest():
         telefono.togli(provvisorio)
-        raise GuastoDelCavo(posto)
+        raise GuastoDelCavo(posto, causa="impronta diversa dopo la scrittura")
     telefono.sposta(provvisorio, posto)
 
 
@@ -592,7 +612,7 @@ class IPhone:
             raise
         except Exception as guaio:
             if _staccato(guaio):
-                raise ErroreOfficina(STACCATO, codice="cavo_staccato") from None
+                raise GuastoDelCavo(causa=causa_tecnica(guaio)) from None
             raise
 
     async def _apri(self) -> None:
@@ -668,7 +688,7 @@ class IPhone:
                 while quanto > 0:
                     pezzo = await self._afc.fread(maniglia, min(PEZZO, quanto))
                     if not pezzo:
-                        raise GuastoDelCavo(posto)
+                        raise GuastoDelCavo(posto, causa="lettura finita prima del tempo")
                     f.write(pezzo)
                     quanto -= len(pezzo)
         finally:

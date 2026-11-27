@@ -100,6 +100,12 @@
 {% if in_corso.tornato %}<p class="piccolo attenuato">Dal telefono è tornato: {{ in_corso.tornato }}.</p>{% endif %}
 {% if in_corso.cavo %}<div class="avviso {{ '' if in_corso.cavo_completo else 'forte' }}">{{ in_corso.cavo }}</div>{% endif %}
 {% endif %}
+<details class="fu-dettagli" id="dettagli-travaso" {{ 'hidden' if not in_corso.dettagli_per_claude }}>
+    <summary>Dettagli per Claude</summary>
+    <p class="piccolo attenuato">Solo dati tecnici del collegamento: niente nomi di file, foto, rami, persone o luoghi. Se la copia si è interrotta, copiali e incollali a Claude.</p>
+    <pre class="righe-lavoro" id="dettagli-travaso-testo">{{ in_corso.dettagli_per_claude }}</pre>
+    <button class="tasto-comando piccolo" type="button" id="dettagli-travaso-copia">Copia</button>
+</details>
 {% endmacro %}
 
 {% macro la_partenza() %}
