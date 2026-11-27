@@ -297,6 +297,120 @@ def test_dalla_pagina_senza_iphone_lo_dice(archivio_pieno, telefono, tmp_path,
     assert not (tmp_path / "Visore-iPhone").exists()
 
 
+def _aspetta_la_fase(in_corso, inizio, secondi=60.0):
+    fino = time.monotonic() + secondi
+    while time.monotonic() < fino:
+        if str(in_corso.fase).startswith(inizio):
+            return True
+        time.sleep(0.02)
+    return False
+
+
+@pytest.fixture
+def riprende_presto(monkeypatch):
+    monkeypatch.setattr(pagina, "PAUSA_TRA_LE_PROVE", 0.05)
+
+
+def test_dalla_pagina_se_si_stacca_aspetta_e_riprende_da_solo(
+        archivio_pieno, telefono, tmp_path, monkeypatch, riprende_presto):
+    dove = tmp_path / "Visore-iPhone"
+    radice = tmp_path / "iphone"
+    (radice / cavo.PACCHETTO).mkdir(parents=True)
+    in_corso = pagina.InCorso()
+    prove = []
+    finti: list[cavo.FintoTelefono] = []
+
+    def collega():
+        if str(in_corso.fase).startswith("aspetto"):
+            prove.append(1)
+            if len(prove) < 3:
+                raise ErroreOfficina(cavo.NESSUNO, codice="cavo_nessuno")
+            finti.append(cavo.FintoTelefono(radice))
+        else:
+            finti.append(cavo.FintoTelefono(radice, stacca_dopo=3))
+        return finti[-1]
+
+    monkeypatch.setattr(cavo, "collega", collega)
+
+    assert in_corso.parti(archivio_pieno, telefono, dove, PAROLA, col_cavo=True)
+    assert in_corso.lavoro.aspetta_che_finisca(120)
+    detto = in_corso.come_va()
+    assert not detto["guasto"], detto["guasto"]
+    assert detto["cavo_completo"]
+    assert len(prove) >= 3
+    assert any(riga.startswith("L'iPhone si è staccato") for riga in detto["righe"])
+    assert any("Aspetto ancora" in riga for riga in detto["righe"])
+    assert any(riga.startswith("Ricollegato") for riga in detto["righe"])
+    assert all(finto.chiuso for finto in finti)
+    _uguali(dove, radice)
+    lassu = json.loads((_lassu(radice) / formato.CARTA).read_text(encoding="utf-8"))
+    assert lassu["stato"] == formato.COMPLETO
+
+
+def test_dalla_pagina_fermato_mentre_aspetta_lo_dice(
+        archivio_pieno, telefono, tmp_path, monkeypatch, riprende_presto):
+    dove = tmp_path / "Visore-iPhone"
+    radice = tmp_path / "iphone"
+    (radice / cavo.PACCHETTO).mkdir(parents=True)
+    in_corso = pagina.InCorso()
+
+    def collega():
+        if str(in_corso.fase).startswith("aspetto"):
+            raise ErroreOfficina(cavo.NESSUNO, codice="cavo_nessuno")
+        return cavo.FintoTelefono(radice, stacca_dopo=3)
+
+    monkeypatch.setattr(cavo, "collega", collega)
+
+    assert in_corso.parti(archivio_pieno, telefono, dove, PAROLA, col_cavo=True)
+    assert _aspetta_la_fase(in_corso, "aspetto")
+    in_corso.ferma()
+    assert in_corso.lavoro.aspetta_che_finisca(60)
+    assert in_corso.come_va()["guasto"] == pagina.FERMATO_MENTRE_ASPETTAVO
+    carta = _lassu(radice) / formato.CARTA
+    if carta.exists():
+        assert json.loads(carta.read_text(encoding="utf-8"))["stato"] != formato.COMPLETO
+
+
+def test_dalla_pagina_dopo_l_attesa_massima_si_arrende(
+        archivio_pieno, telefono, tmp_path, monkeypatch, riprende_presto):
+    monkeypatch.setattr(pagina, "ASPETTO_AL_MASSIMO", 0.5)
+    radice = tmp_path / "iphone"
+    (radice / cavo.PACCHETTO).mkdir(parents=True)
+    in_corso = pagina.InCorso()
+
+    def collega():
+        if str(in_corso.fase).startswith("aspetto"):
+            raise ErroreOfficina(cavo.NESSUNO, codice="cavo_nessuno")
+        return cavo.FintoTelefono(radice, stacca_dopo=3)
+
+    monkeypatch.setattr(cavo, "collega", collega)
+
+    assert in_corso.parti(archivio_pieno, telefono, tmp_path / "Visore-iPhone", PAROLA,
+                          col_cavo=True)
+    assert in_corso.lavoro.aspetta_che_finisca(60)
+    assert in_corso.come_va()["guasto"] == cavo.STACCATO
+    assert not in_corso.come_va()["cavo_completo"]
+
+
+def test_dalla_pagina_un_guaio_che_non_passa_non_si_aspetta(
+        archivio_pieno, telefono, tmp_path, monkeypatch, riprende_presto):
+    radice = tmp_path / "iphone"
+    (radice / cavo.PACCHETTO).mkdir(parents=True)
+    in_corso = pagina.InCorso()
+
+    def collega():
+        if str(in_corso.fase).startswith("aspetto"):
+            raise ErroreOfficina(cavo.SENZA_APP, codice="cavo_senza_app")
+        return cavo.FintoTelefono(radice, stacca_dopo=3)
+
+    monkeypatch.setattr(cavo, "collega", collega)
+
+    assert in_corso.parti(archivio_pieno, telefono, tmp_path / "Visore-iPhone", PAROLA,
+                          col_cavo=True)
+    assert in_corso.lavoro.aspetta_che_finisca(60)
+    assert in_corso.come_va()["guasto"] == cavo.SENZA_APP
+
+
 class _Lento(cavo.FintoTelefono):
 
     def carica(self, sorgente, posto):

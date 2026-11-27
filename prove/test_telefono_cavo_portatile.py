@@ -215,6 +215,9 @@ def test_se_il_portatile_muore_a_meta_il_visore_resta_chiuso_e_poi_riprende(
         file.write_bytes(b"corta")
 
     monkeypatch.setattr(cavo_lontano, "ATTESA_DI_UN_COMANDO", 1.0)
+    monkeypatch.setattr(pagina, "ASPETTO_AL_MASSIMO", 1.0)
+    monkeypatch.setattr(pagina, "UNA_PROVA", 0.3)
+    monkeypatch.setattr(pagina, "PAUSA_TRA_LE_PROVE", 0.05)
     assert in_corso.parti(archivio_pieno, telefono, dove, PAROLA, col_cavo=True,
                           lontano=True)
     _, filo, _ = _mani(iphone_sul_portatile, quanti=20)
@@ -234,6 +237,42 @@ def test_se_il_portatile_muore_a_meta_il_visore_resta_chiuso_e_poi_riprende(
     lassu = json.loads((_lassu(iphone_sul_portatile) / formato.CARTA).read_text("utf-8"))
     assert lassu["stato"] == formato.COMPLETO
     filo.join(30)
+
+
+def test_se_il_portatile_sparisce_e_torna_la_copia_riprende_da_sola(
+        porta_finta, archivio_pieno, telefono, iphone_sul_portatile, tmp_path, monkeypatch):
+    import time
+
+    monkeypatch.setattr(cavo_lontano, "ATTESA_DI_UN_COMANDO", 1.0)
+    monkeypatch.setattr(pagina, "UNA_PROVA", 0.5)
+    monkeypatch.setattr(pagina, "PAUSA_TRA_LE_PROVE", 0.05)
+    dove = tmp_path / "Visore-iPhone"
+    in_corso = _parti(archivio_pieno, telefono, dove)
+    _, filo, _ = _mani(iphone_sul_portatile, quanti=20)
+    filo.join(120)
+    fino = time.monotonic() + 60
+    while not str(in_corso.fase).startswith("aspetto") and time.monotonic() < fino:
+        time.sleep(0.02)
+    assert str(in_corso.fase).startswith("aspetto"), in_corso.come_va()
+    assert in_corso.lavoro.sta_lavorando
+    assert cavo_lontano.banco.aperto
+    time.sleep(1.5)
+    assert in_corso.lavoro.sta_lavorando
+
+    monkeypatch.setattr(cavo_lontano, "ATTESA_DI_UN_COMANDO", 120.0)
+    mani, filo, finti = _mani(iphone_sul_portatile)
+    assert in_corso.lavoro.aspetta_che_finisca(120)
+    detto = in_corso.come_va()
+    assert not detto["guasto"], detto["guasto"]
+    assert detto["cavo_completo"]
+    assert any(riga.startswith("Il portatile ha smesso") for riga in detto["righe"])
+    assert any(riga.startswith("Ricollegato") for riga in detto["righe"])
+    _uguali(dove, iphone_sul_portatile)
+    lassu = json.loads((_lassu(iphone_sul_portatile) / formato.CARTA).read_text("utf-8"))
+    assert lassu["stato"] == formato.COMPLETO
+    filo.join(30)
+    assert not filo.is_alive()
+    assert not cavo_lontano.banco.aperto
 
 
 def test_le_strade_del_cavo_sono_solo_del_portatile(porta_finta, archivio_pieno, telefono):

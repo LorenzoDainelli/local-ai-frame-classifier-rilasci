@@ -85,6 +85,11 @@ class Orologio:
             self.fatti = max(0, int(fatti))
             self.quanti = max(self.fatti, int(quanti))
 
+    def sosta(self) -> None:
+        with self.lucchetto:
+            self._chiudi_la_fase()
+            self.fase = None
+
     def fine(self) -> None:
         with self.lucchetto:
             self._chiudi_la_fase()

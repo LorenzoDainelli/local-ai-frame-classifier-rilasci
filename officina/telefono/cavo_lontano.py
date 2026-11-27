@@ -208,9 +208,21 @@ def collega(attesa: float | None = None) -> Lontano:
     if not banco.aperto:
         banco.apri()
     try:
+        return _saluta(attesa)
+    except ErroreOfficina:
+        banco.chiudi()
+        raise
+
+
+def ricollega(attesa: float | None = None) -> Lontano:
+    banco.apri()
+    return _saluta(attesa)
+
+
+def _saluta(attesa: float | None) -> Lontano:
+    try:
         esito, _ = banco.chiedi("collega", attesa or ATTESA_DEL_PORTATILE)
     except ErroreOfficina as errore:
-        banco.chiudi()
         if errore.codice == "cavo_portatile_perso":
             raise ErroreOfficina(PORTATILE_ZITTO, codice="cavo_portatile_zitto") from None
         raise

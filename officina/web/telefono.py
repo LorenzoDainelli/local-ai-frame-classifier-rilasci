@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
+import time
 from datetime import date
 from pathlib import Path
 
@@ -416,10 +418,25 @@ class InCorso:
                                    "niente.")
                     return
                 self.fase = "copio"
-                aiuto = iphone.aiuto() if self.lontano else cavo_iphone.collega
-                self.cavo = cavo_iphone.manda(iphone, cartella, self._a_che_punto,
-                                              travaso.fermati, aiuto,
-                                              quanto_pesa=tempi.avanza)
+                riprese = 0
+                while True:
+                    aiuto = iphone.aiuto() if self.lontano else cavo_iphone.collega
+                    try:
+                        self.cavo = cavo_iphone.manda(iphone, cartella, self._a_che_punto,
+                                                      travaso.fermati, aiuto,
+                                                      quanto_pesa=tempi.avanza)
+                        break
+                    except ErroreOfficina as guaio:
+                        if (guaio.codice not in DA_RIPRENDERE or travaso.fermati.is_set()
+                                or riprese >= MAI_PIU_DI):
+                            raise
+                        tempi.sosta()
+                        iphone = self._riattacca(iphone, cartella, guaio, travaso.fermati)
+                        riprese += 1
+                        self.fase = "copio"
+                        self.lavoro.di(f"Ricollegato a «{iphone.nome}»: riprendo la copia "
+                                       "da dove ero, senza rimandare quello che è già "
+                                       "arrivato.")
                 self.fase = "finito" if self.cavo.completo else "interrotto"
                 if self.cavo.completo:
                     travaso.ricorda_sul_telefono(self.esito)
@@ -470,6 +487,51 @@ class InCorso:
     def ferma(self) -> None:
         if self.travaso is not None:
             self.travaso.ferma()
+
+    def _riattacca(self, iphone, cartella: Path, guaio: ErroreOfficina,
+                   fermati: threading.Event):
+        self.fase = "aspetto che torni il collegamento"
+        if self.lontano:
+            self.lavoro.di(ASPETTO_IL_PORTATILE)
+        else:
+            self.lavoro.di(ASPETTO_L_IPHONE)
+            try:
+                iphone.chiudi()
+            except Exception:
+                pass
+        fino = time.monotonic() + ASPETTO_AL_MASSIMO
+        ultimo = guaio.codice
+        while not fermati.is_set():
+            resta = fino - time.monotonic()
+            if resta <= 0:
+                raise guaio
+            try:
+                if self.lontano:
+                    nuovo = cavo_lontano.ricollega(min(UNA_PROVA, max(1.0, resta)))
+                else:
+                    nuovo = cavo_iphone.collega()
+            except ErroreOfficina as ancora:
+                if ancora.codice not in DA_RIPRENDERE:
+                    raise
+                if ancora.codice != ultimo and ancora.codice not in GIA_DETTO:
+                    ultimo = ancora.codice
+                    self.lavoro.di(f"Aspetto ancora: {ancora}")
+                fermati.wait(PAUSA_TRA_LE_PROVE)
+                continue
+            try:
+                cavo_iphone.controlla(nuovo, cartella)
+            except ErroreOfficina as ancora:
+                if not self.lontano:
+                    nuovo.chiudi()
+                if ancora.codice not in DA_RIPRENDERE:
+                    raise
+                if ancora.codice != ultimo and ancora.codice not in GIA_DETTO:
+                    ultimo = ancora.codice
+                    self.lavoro.di(f"Aspetto ancora: {ancora}")
+                fermati.wait(PAUSA_TRA_LE_PROVE)
+                continue
+            return nuovo
+        raise ErroreOfficina(FERMATO_MENTRE_ASPETTAVO, codice=guaio.codice)
 
 
     def _a_che_punto(self, fase: str, fatti: int, quanti: int) -> None:
@@ -622,6 +684,24 @@ def novita_a_parole(conosciuto: bool, aggiornato: bool, nuove: int, migliorate: 
 
 
 in_corso = InCorso()
+
+DA_RIPRENDERE = frozenset({"cavo_portatile_perso", "cavo_portatile_zitto", "cavo_staccato",
+                           "cavo_nessuno", "cavo_fidati", "cavo_chiuso", "cavo_aprilo"})
+GIA_DETTO = frozenset({"cavo_portatile_perso", "cavo_portatile_zitto", "cavo_staccato"})
+ASPETTO_AL_MASSIMO = 2 * 3600.0
+UNA_PROVA = 30.0
+PAUSA_TRA_LE_PROVE = 10.0
+MAI_PIU_DI = 50
+ASPETTO_IL_PORTATILE = (
+    "Il portatile ha smesso di rispondere a metà copia. Non serve ripartire: tieni aperto "
+    "il programma sul portatile, collegato al fisso, con l'iPhone attaccato e sbloccato. "
+    "Appena torna riprendo da solo da dove ero (aspetto fino a 2 ore).")
+ASPETTO_L_IPHONE = (
+    "L'iPhone si è staccato o si è bloccato a metà copia. Non serve ripartire: riattaccalo "
+    "e tienilo sbloccato. Appena torna riprendo da solo da dove ero (aspetto fino a 2 ore).")
+FERMATO_MENTRE_ASPETTAVO = (
+    "Fermato mentre aspettavo che tornasse il collegamento. Il Visore resta chiuso finché "
+    "non finisci la copia: quando riparti copio solo quello che manca.")
 
 DAL_CAVO = {
     "preso": "Preso dall'iPhone il file di preferiti, raccolte e diario.",

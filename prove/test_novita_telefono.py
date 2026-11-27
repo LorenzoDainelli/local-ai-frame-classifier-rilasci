@@ -225,6 +225,24 @@ def test_orologio_col_cavo_dal_portatile_ricorda_a_parte(tmp_path):
     assert letto == {"copio_lontano": pytest.approx(2)}
 
 
+def test_orologio_in_sosta_non_conta_l_attesa(tmp_path):
+    tempo = _Orologio()
+    dove = tmp_path / "velocita.json"
+    fermo = orologio.Orologio(dove, adesso=tempo)
+    fermo.avanza("copio", 0, 1000)
+    tempo.ora = 50
+    fermo.avanza("copio", 500, 1000)
+    fermo.sosta()
+    assert fermo.mancano() is None
+    tempo.ora = 3650
+    fermo.avanza("copio", 0, 500)
+    tempo.ora = 3700
+    fermo.avanza("copio", 500, 500)
+    fermo.fine()
+
+    assert orologio.leggi(dove) == {"copio": pytest.approx(10)}
+
+
 def test_orologio_non_ricorda_le_fasi_troppo_corte(tmp_path):
     tempo = _Orologio()
     dove = tmp_path / "velocita.json"
