@@ -408,7 +408,7 @@ class Archivio:
 
     def nome_copia_video(self, impronta: str) -> str:
         chiave = hashlib.blake2b(
-            f"{impronta}:video:dritta".encode(), digest_size=16).hexdigest()
+            f"{impronta}:video:dritta:colori".encode(), digest_size=16).hexdigest()
         return f"{chiave[:2]}/{chiave}.mp4"
 
     def percorso_copia_video(self, nome: str) -> Path:

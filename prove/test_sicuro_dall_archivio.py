@@ -1104,6 +1104,9 @@ def test_un_video_dall_archivio_ha_il_fotogramma_e_la_copia_di_passaggio(
     assert copia.status_code == 200 and copia.headers["cache-control"] == "no-store"
     assert copia.content == fatta.read_bytes()
     assert quicktime.il_browser_lo_apre(quicktime.codec_video(fatta))
+    vero = pronta.cliente.get(f"/originale/{pronta.file_id}?vero=1",
+                              headers={"range": "bytes=0-99"})
+    assert vero.status_code == 206 and vero.content == pronta.dati[:100]
     assert pronta.casa.archivio.chiudi(ATTESA)
     archivio_sicuro.butta_le_copie_di_passaggio(dove)
     assert not fatta.exists()

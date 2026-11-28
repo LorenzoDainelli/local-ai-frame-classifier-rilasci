@@ -6,7 +6,7 @@ from pathlib import Path
 
 from officina import registro
 from officina.archivio.accesso import Archivio
-from officina.immagini import fotogrammi
+from officina.immagini import colori_video, fotogrammi
 from officina.importazione import quicktime
 from officina.sicuro.dall_archivio import per_av
 
@@ -159,6 +159,7 @@ def _ricodifica(originale: Path, verso: Path, al_passo=None) -> None:
         entrata_suono = dentro.streams.audio[0] if dentro.streams.audio else None
         uscita_suono = fuori.add_stream(SUONO) if entrata_suono else None
 
+        colori = colori_video.della_traccia(entrata)
         gradi = None
         quali = [entrata] + ([entrata_suono] if entrata_suono else [])
         for pacchetto in dentro.demux(quali):
@@ -168,10 +169,12 @@ def _ricodifica(originale: Path, verso: Path, al_passo=None) -> None:
                         gradi = fotogrammi.rotazione(fotogramma)
                         if gradi in (90, 270):
                             uscita.width, uscita.height = altezza, larghezza
+                        da_rifare = bool(gradi) or colori.hdr
+                        colori_video.segna(uscita, None if da_rifare else colori)
                     if al_passo is not None and fotogramma.time is not None:
                         al_passo(int(fotogramma.time * 1000))
-                    if gradi:
-                        fotogramma = _girato(fotogramma, gradi, larghezza, altezza)
+                    if gradi or colori.hdr:
+                        fotogramma = _girato(fotogramma, gradi, larghezza, altezza, colori)
                     for fatto in uscita.encode(fotogramma):
                         fuori.mux(fatto)
             elif uscita_suono is not None:
@@ -186,17 +189,15 @@ def _ricodifica(originale: Path, verso: Path, al_passo=None) -> None:
                 fuori.mux(fatto)
 
 
-def _girato(fotogramma, gradi: int, larghezza: int, altezza: int):
+def _girato(fotogramma, gradi: int, larghezza: int, altezza: int,
+            colori: colori_video.Colori):
     import numpy as np
 
     av = fotogrammi.decodificatore()
-    quadro = fotogramma.reformat(width=larghezza, height=altezza,
-                                 format="rgb24").to_ndarray()
-    nuovo = av.VideoFrame.from_ndarray(
-        np.ascontiguousarray(np.rot90(quadro, gradi // 90)), format="rgb24")
-    nuovo.pts = fotogramma.pts
-    nuovo.time_base = fotogramma.time_base
-    return nuovo
+    quadro = colori_video.in_rgb(fotogramma, colori, larghezza, altezza)
+    if gradi:
+        quadro = np.ascontiguousarray(np.rot90(quadro, gradi // 90))
+    return colori_video.rgb_in_yuv(av, quadro, fotogramma.pts, fotogramma.time_base)
 
 
 def _misure(larghezza: int, altezza: int) -> tuple[int, int]:

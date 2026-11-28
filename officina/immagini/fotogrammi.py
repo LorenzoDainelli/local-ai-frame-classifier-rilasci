@@ -10,6 +10,7 @@ from typing import Callable
 from PIL import Image
 
 from officina import istruzioni
+from officina.immagini import colori_video
 from officina.importazione import quicktime
 from officina.sicuro.dall_archivio import per_av
 
@@ -265,9 +266,15 @@ def raddrizza(immagine: Image.Image, gradi: int) -> Image.Image:
     return immagine.transpose(giro) if giro is not None else immagine
 
 
-def _quadro_a_immagine(quadro, lato: int | None) -> Image.Image:
+def _quadro_a_immagine(quadro, lato: int | None, traccia=None) -> Image.Image:
     larga, alta = quadro.width, quadro.height
-    if not lato or max(larga, alta) <= lato:
+    colori = colori_video.della_traccia(traccia) if traccia is not None else None
+    if colori is not None and colori.hdr:
+        if lato and max(larga, alta) > lato:
+            scala = lato / max(larga, alta)
+            larga, alta = max(2, round(larga * scala)), max(2, round(alta * scala))
+        immagine = Image.fromarray(colori_video.in_sdr(quadro, colori, larga, alta))
+    elif not lato or max(larga, alta) <= lato:
         immagine = quadro.to_image()
     else:
         scala = lato / max(larga, alta)
@@ -313,7 +320,7 @@ def _da_decodificatore(percorso: Path,
             if numero % passo:
                 continue
             istante = int((quadro.pts or 0) * base)
-            fuori.append(Fotogramma(numero, istante, _quadro_a_immagine(quadro, lato),
+            fuori.append(Fotogramma(numero, istante, _quadro_a_immagine(quadro, lato, traccia),
                                     quadro.pts))
             if len(fuori) >= CANDIDATI_MASSIMI:
                 break
@@ -344,7 +351,7 @@ def _in_fila(percorso: Path, numeri: set[int], lato: int | None) -> dict[int, Im
             return trovati
         for numero, quadro in enumerate(contenitore.decode(traccia)):
             if numero in numeri:
-                trovati[numero] = _quadro_a_immagine(quadro, lato)
+                trovati[numero] = _quadro_a_immagine(quadro, lato, traccia)
             if numero >= ultimo:
                 break
     return trovati
@@ -365,7 +372,7 @@ def _dal_decodificatore_a_misura(percorso: Path, scelti: list[Fotogramma],
                 continue
             quadro = _quadro_al_punto(contenitore, traccia, scelto.pts)
             if quadro is not None:
-                trovati[scelto.numero] = _quadro_a_immagine(quadro, lato)
+                trovati[scelto.numero] = _quadro_a_immagine(quadro, lato, traccia)
     mancano = {scelto.numero for scelto in scelti if scelto.numero not in trovati}
     if mancano:
         trovati.update(_in_fila(percorso, mancano, lato))
@@ -503,11 +510,11 @@ def _uno_col_decodificatore(percorso: Path, numero: int, istante_ms: int | None,
                 contenitore.seek(int(istante_ms / 1000 / base), stream=traccia)
                 for quadro in contenitore.decode(traccia):
                     if quadro.pts is None or quadro.pts * base * 1000 >= istante_ms - 0.5:
-                        return _quadro_a_immagine(quadro, lato)
+                        return _quadro_a_immagine(quadro, lato, traccia)
                 return None
             for indice, quadro in enumerate(contenitore.decode(traccia)):
                 if indice >= numero:
-                    return _quadro_a_immagine(quadro, lato)
+                    return _quadro_a_immagine(quadro, lato, traccia)
     except Exception:
         return None
     return None

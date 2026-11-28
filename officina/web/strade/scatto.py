@@ -504,7 +504,7 @@ async def _manda_un_fotogramma(richiesta: Request, percorso: Path, impronta: str
 
 
 @strada.get("/originale/{file_id}")
-def un_originale(richiesta: Request, file_id: int, sotto: int = 0):
+def un_originale(richiesta: Request, file_id: int, sotto: int = 0, vero: int = 0):
     archivio = accesso.aperto()
     with archivio.lettura() as connessione:
         riga = file_media.per_id(connessione, file_id)
@@ -516,10 +516,11 @@ def un_originale(richiesta: Request, file_id: int, sotto: int = 0):
         return Response(status_code=404)
 
     impronta = migliorata or _impronta_di(riga, percorso)
-    copia = compatibile.gia_fatta(archivio, impronta)
+    copia = None if vero else compatibile.gia_fatta(archivio, impronta)
     tipi = {"mov": "video/mp4", "mp4": "video/mp4", "m4v": "video/mp4"}
     if isinstance(percorso, DallArchivio):
-        copia = copia or compatibile.gia_fatta(archivio, impronta, passaggio=True)
+        if not vero:
+            copia = copia or compatibile.gia_fatta(archivio, impronta, passaggio=True)
         if copia is not None:
             return FileResponse(copia, media_type="video/mp4",
                                 headers={"Cache-Control": NON_SI_TIENE})

@@ -101,6 +101,7 @@
         {% else %}
         {% if scatto.genere == 'video' and principale %}
         <video id="lastra-video" {% if si_vede %}src="/originale/{{ principale.id }}"{% else %}data-sorgente="/originale/{{ principale.id }}" hidden{% endif %}
+               {% if copia_pronta and not si_riproduce %}data-vero="/originale/{{ principale.id }}?vero=1"{% endif %}
                poster="/immagine/{{ principale.id }}" controls playsinline preload="metadata"></video>
         <img id="lastra-principale" src="/immagine/{{ principale.id }}" alt="" {% if si_vede %}hidden{% endif %}>
         {% else %}
@@ -518,6 +519,20 @@
         if (stato.perche !== "si_apre") window.location.reload();
     };
     setInterval(guarda, 1500);
+})();
+
+(function () {
+    const video = document.getElementById("lastra-video");
+    if (!video || !video.dataset.vero) return;
+    if (!video.canPlayType('video/mp4; codecs="hvc1.2.4.L153.B0"')) return;
+    const copia = video.getAttribute("src");
+    const torna = () => {
+        if (video.getAttribute("src") === copia) return;
+        video.src = copia;
+        video.load();
+    };
+    video.addEventListener("error", torna, { once: true });
+    video.src = video.dataset.vero;
 })();
 
 (function () {

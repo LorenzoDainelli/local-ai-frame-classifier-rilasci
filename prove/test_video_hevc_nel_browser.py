@@ -73,3 +73,42 @@ def test_se_la_finestra_non_sa_l_hevc_il_riquadro_c_e_subito(
         assert pagina.locator("#lastra-video").get_attribute("src") is None
         assert not errori, errori
         browser.close()
+
+
+def test_se_la_finestra_sa_l_hevc_usa_l_originale_e_non_la_copia(
+        apri, importato, come_hevc, monkeypatch):  # noqa: F811
+    from officina.immagini import compatibile
+
+    monkeypatch.setattr(compatibile, "pronta", lambda *a, **k: True)
+    cliente = apri()
+    with sync_api.sync_playwright() as p:
+        browser, pagina, errori = _apri(p, cliente)
+        pagina.add_init_script(SA_HEVC)
+        pagina.route("http://prova/originale/**", lambda rotta: None)
+        file_id = _file_di(importato, "giro.mp4")
+        pagina.goto(f"http://prova/scatto/{_scatto_di(importato, file_id)}",
+                    wait_until="domcontentloaded")
+        pagina.wait_for_function(
+            "() => (document.getElementById('lastra-video').getAttribute('src') || '')"
+            ".endsWith('?vero=1')")
+        assert not errori, errori
+        browser.close()
+
+
+def test_se_la_finestra_non_sa_l_hevc_resta_la_copia(
+        apri, importato, come_hevc, monkeypatch):  # noqa: F811
+    from officina.immagini import compatibile
+
+    monkeypatch.setattr(compatibile, "pronta", lambda *a, **k: True)
+    cliente = apri()
+    with sync_api.sync_playwright() as p:
+        browser, pagina, errori = _apri(p, cliente)
+        pagina.add_init_script(NON_SA_HEVC)
+        pagina.route("http://prova/originale/**", lambda rotta: None)
+        file_id = _file_di(importato, "giro.mp4")
+        pagina.goto(f"http://prova/scatto/{_scatto_di(importato, file_id)}",
+                    wait_until="domcontentloaded")
+        sorgente = pagina.locator("#lastra-video").get_attribute("src")
+        assert sorgente == f"/originale/{file_id}"
+        assert not errori, errori
+        browser.close()
