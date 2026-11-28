@@ -25,7 +25,7 @@ def formato_in_cache() -> tuple[str, str]:
 def fai(archivio: Archivio, impronta: str, percorso: Path, genere: str,
         lato: int = 640) -> str | None:
     coda, formato = formato_in_cache()
-    nome = archivio.nome_miniatura(impronta if genere == "immagine" else f"{impronta}:chiara",
+    nome = archivio.nome_miniatura(impronta if genere == "immagine" else f"{impronta}:chiara:colori",
                                    lato, coda)
 
     if archivio.c_e_miniatura(nome):

@@ -2012,6 +2012,10 @@ def _versione_93(connessione: sqlite3.Connection) -> None:
     connessione.execute("ALTER TABLE telefoni ADD COLUMN arrivato_il TEXT")
 
 
+def _versione_94(connessione: sqlite3.Connection) -> None:
+    connessione.execute("UPDATE file_media SET miniatura = NULL WHERE genere = 'video'")
+
+
 MIGRAZIONI: list[Migrazione] = [
     Migrazione(1, "schema iniziale: file, scatti, percorsi, nodi, etichette", _versione_1),
     Migrazione(2, "i dispositivi autorizzati sulla rete di casa", _versione_2),
@@ -2184,6 +2188,8 @@ MIGRAZIONI: list[Migrazione] = [
                _versione_92),
     Migrazione(93, "quello che c'è già sul telefono, per dire le novità prima di copiare",
                _versione_93),
+    Migrazione(94, "le copertine dei video HDR dell'iPhone, rifatte con i colori veri",
+               _versione_94),
 ]
 
 

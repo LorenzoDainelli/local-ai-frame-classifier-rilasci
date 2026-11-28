@@ -136,3 +136,26 @@ def test_i_fotogrammi_per_l_ia_di_un_video_hdr_hanno_i_colori_giusti(tmp_path):
     assert presi
     r, g, b = presi.fotogrammi[0].immagine.convert("RGB").getpixel((32, 18))
     assert r >= 140 and r - max(g, b) >= 100
+
+
+def test_le_copertine_vecchie_dei_video_si_rifanno(archivio, tmp_path):
+    from officina.importazione import miniature
+
+    originale = _video_hdr(tmp_path / "bianco.mov", (0.75, 0.75, 0.75), colori_video.HLG)
+    coda, _ = miniature.formato_in_cache()
+    vecchio = archivio.nome_miniatura("impronta-hdr:chiara", 640, coda)
+    nome = miniature.fai(archivio, "impronta-hdr", originale, "video")
+    assert nome is not None and nome != vecchio
+
+
+def test_la_migrazione_toglie_le_copertine_dei_video():
+    import sqlite3
+
+    from officina.archivio import migrazioni
+
+    connessione = sqlite3.connect(":memory:")
+    connessione.execute("CREATE TABLE file_media (id INTEGER, genere TEXT, miniatura TEXT)")
+    connessione.executemany("INSERT INTO file_media VALUES (?, ?, ?)",
+                            [(1, "video", "a"), (2, "immagine", "b")])
+    migrazioni._versione_94(connessione)
+    assert dict(connessione.execute("SELECT id, miniatura FROM file_media")) == {1: None, 2: "b"}
